@@ -1,208 +1,313 @@
-// Motor de IA para gerar respostas inteligentes baseadas nos resultados
+// Motor de IA para gerar respostas inteligentes em linguagem natural
 
 const { extractKeywords, summarize, tokenize, removeStopwords } = require('./nlp');
 
 class AIEngine {
   constructor() {
-    this.contextWindow = [];
+    this.maxTokens = 2000;
   }
 
-  // Gerar resposta de IA baseada nos resultados
-  async generateResponse(query, results) {
+  // Gerar resposta completa de IA com streaming de tokens
+  async generateAIResponse(query, results) {
     if (!results || results.length === 0) {
-      return {
-        answer: `Não encontrei informações suficientes sobre "${query}". Tenta reformular a pergunta.`,
-        confidence: 0,
-        sources: []
-      };
+      return this.generateNoResultsResponse(query);
     }
 
-    // Extrair informação de todos os resultados
-    const allContent = results
-      .map(r => `${r.title}. ${r.snippet}. ${r.content}`)
-      .join(' ');
-
-    // Identificar tipo de pergunta
-    const questionType = this.identifyQuestionType(query);
+    // Extrair todo o contexto
+    const context = this.extractContext(results);
     
-    // Gerar resposta baseada no tipo
-    let answer = '';
-    let confidence = 0;
+    // Identificar intenção
+    const intent = this.identifyIntent(query);
+    
+    // Gerar resposta em linguagem natural
+    const response = await this.generateNaturalResponse(query, context, intent, results);
+    
+    return response;
+  }
 
-    switch (questionType) {
-      case 'definition':
-        answer = this.generateDefinition(query, results, allContent);
-        confidence = 0.85;
-        break;
-      case 'factual':
-        answer = this.generateFactualAnswer(query, results, allContent);
-        confidence = 0.75;
-        break;
-      case 'howto':
-        answer = this.generateHowToAnswer(query, results, allContent);
-        confidence = 0.70;
-        break;
-      case 'comparison':
-        answer = this.generateComparison(query, results, allContent);
-        confidence = 0.80;
-        break;
-      case 'opinion':
-        answer = this.generateOpinionAnswer(query, results, allContent);
-        confidence = 0.65;
-        break;
-      default:
-        answer = this.generateGeneralAnswer(query, results, allContent);
-        confidence = 0.60;
-    }
-
-    // Extrair fontes principais
-    const sources = results.slice(0, 3).map(r => ({
-      title: r.title,
-      url: r.url,
-      relevance: r.relevanceScore
-    }));
+  // Extrair contexto de todos os resultados
+  extractContext(results) {
+    const allText = results.map(r => {
+      return `Fonte: ${r.source}\nTítulo: ${r.title}\nConteúdo: ${r.snippet} ${r.content}`;
+    }).join('\n\n');
 
     return {
-      answer: answer.trim(),
-      confidence: Math.min(confidence * (results.length / 10), 0.95),
-      sources,
-      totalSources: results.length,
-      keywords: extractKeywords(query)
+      fullText: allText,
+      titles: results.map(r => r.title),
+      sources: results.map(r => ({ source: r.source, url: r.url })),
+      snippets: results.map(r => r.snippet)
     };
   }
 
-  // Identificar tipo de pergunta
-  identifyQuestionType(query) {
+  // Identificar intenção da pergunta
+  identifyIntent(query) {
     const lower = query.toLowerCase();
     
-    if (lower.match(/o que é|o que são|definição|significa|conceito/)) {
+    if (lower.match(/o que é|o que são|defin|significa|conceito/)) {
       return 'definition';
     }
-    if (lower.match(/como|tutorial|passo a passo|fazer/)) {
+    if (lower.match(/como|passo|tutorial|guia/)) {
       return 'howto';
     }
-    if (lower.match(/diferença|comparar|vs|versus|melhor/)) {
+    if (lower.match(/quando|data|ano|dia/)) {
+      return 'temporal';
+    }
+    if (lower.match(/onde|local|localização/)) {
+      return 'location';
+    }
+    if (lower.match(/quem|pessoa/)) {
+      return 'person';
+    }
+    if (lower.match(/por que|porque|razão|motivo/)) {
+      return 'reason';
+    }
+    if (lower.match(/quantos|quanto|número/)) {
+      return 'quantity';
+    }
+    if (lower.match(/melhor|pior|comparar|diferença/)) {
       return 'comparison';
     }
-    if (lower.match(/opinião|acha|pensa|recomenda/)) {
-      return 'opinion';
-    }
-    if (lower.match(/quando|onde|quem|quantos|qual/)) {
-      return 'factual';
+    if (lower.match(/notícias|hoje|recente|atual/)) {
+      return 'news';
     }
     
     return 'general';
   }
 
-  // Gerar definição
-  generateDefinition(query, results, allContent) {
-    const firstResult = results[0];
-    const sentences = allContent.split(/[.!?]+/).filter(s => s.trim().length > 30);
-    
-    // Pegar primeira frase relevante
-    const keywords = extractKeywords(query);
-    const relevantSentence = sentences.find(s => 
-      keywords.some(k => s.toLowerCase().includes(k))
-    ) || sentences[0];
+  // Gerar resposta em linguagem natural
+  async generateNaturalResponse(query, context, intent, results) {
+    let response = '';
+    const sentences = this.extractSentences(context.fullText);
+    const keywords = extractKeywords(query, 10);
 
-    return `Baseado em ${results.length} fontes: ${relevantSentence.trim()}. ` +
-           `Segundo ${firstResult.source}, isso está relacionado com ${keywords.join(', ')}. ` +
-           `Encontrei informações em fontes como ${results.slice(0, 2).map(r => r.source).join(' e ')}.`;
-  }
-
-  // Resposta factual
-  generateFactualAnswer(query, results, allContent) {
-    const sentences = allContent.split(/[.!?]+/).filter(s => s.trim().length > 20);
-    const keywords = extractKeywords(query);
-    
-    // Encontrar sentença mais relevante
-    const scored = sentences.map(s => ({
-      text: s,
-      score: keywords.filter(k => s.toLowerCase().includes(k)).length
-    })).sort((a, b) => b.score - a.score);
-
-    const topSentences = scored.slice(0, 3).map(s => s.text.trim());
-
-    return `Com base em ${results.length} fontes, aqui está o que encontrei: ` +
-           topSentences.join('. ') + '. ' +
-           `As principais fontes são ${results.slice(0, 2).map(r => r.source).join(' e ')}.`;
-  }
-
-  // Resposta How-to
-  generateHowToAnswer(query, results, allContent) {
-    const steps = this.extractSteps(allContent);
-    
-    if (steps.length > 0) {
-      return `Baseado nas fontes consultadas, aqui está um guia: ` +
-             steps.slice(0, 5).join('. ') + '. ' +
-             `Essas informações vêm de ${results.length} fontes incluindo ${results[0].source}.`;
+    switch (intent) {
+      case 'definition':
+        response = this.generateDefinitionResponse(query, sentences, keywords, results);
+        break;
+      case 'howto':
+        response = this.generateHowToResponse(query, sentences, keywords, results);
+        break;
+      case 'temporal':
+        response = this.generateTemporalResponse(query, sentences, keywords, results);
+        break;
+      case 'news':
+        response = this.generateNewsResponse(query, sentences, keywords, results);
+        break;
+      case 'comparison':
+        response = this.generateComparisonResponse(query, sentences, keywords, results);
+        break;
+      default:
+        response = this.generateGeneralResponse(query, sentences, keywords, results);
     }
 
-    return `Encontrei ${results.length} fontes sobre "${query}". ` +
-           `As principais informações sugerem que: ${summarize(allContent, 2)} ` +
-           `Para mais detalhes, consulta ${results[0].source}.`;
+    return {
+      answer: response,
+      markdown: this.formatAsMarkdown(response),
+      sources: results.slice(0, 5).map(r => ({
+        title: r.title,
+        url: r.url,
+        source: r.source
+      })),
+      confidence: this.calculateConfidence(results, keywords),
+      totalSources: results.length
+    };
   }
 
-  // Extrair passos de how-to
-  extractSteps(text) {
-    const sentences = text.split(/[.!?]+/);
-    const steps = [];
+  // Gerar resposta de definição
+  generateDefinitionResponse(query, sentences, keywords, results) {
+    const relevantSentences = this.findRelevantSentences(sentences, keywords, 5);
+    const mainSource = results[0];
+
+    let response = `**${query}**\n\n`;
     
-    sentences.forEach(s => {
-      const lower = s.toLowerCase();
-      if (lower.match(/primeiro|segundo|terceiro|passo|etapa|\d+\.|depois|em seguida/)) {
-        steps.push(s.trim());
+    if (relevantSentences.length > 0) {
+      response += `${relevantSentences[0]}\n\n`;
+      
+      if (relevantSentences.length > 1) {
+        response += `**Detalhes:**\n\n`;
+        relevantSentences.slice(1, 4).forEach(sent => {
+          response += `• ${sent}\n`;
+        });
       }
+    }
+
+    response += `\n**Fontes consultadas:**\n`;
+    results.slice(0, 3).forEach(r => {
+      response += `• ${r.source} - ${r.title}\n`;
     });
-    
-    return steps;
+
+    return response;
   }
 
-  // Comparação
-  generateComparison(query, results, allContent) {
-    const keywords = extractKeywords(query);
-    const sentences = allContent.split(/[.!?]+/).filter(s => s.trim().length > 30);
+  // Gerar resposta de notícias
+  generateNewsResponse(query, sentences, keywords, results) {
+    let response = `**Notícias recentes sobre ${keywords.join(', ')}:**\n\n`;
+
+    const newsResults = results.filter(r => r.source.includes('News')).slice(0, 5);
     
-    const comparisons = sentences.filter(s => 
-      s.match(/diferença|melhor|pior|enquanto|mas|porém|embora/)
+    if (newsResults.length > 0) {
+      newsResults.forEach((r, i) => {
+        response += `📰 **${r.title}**\n`;
+        response += `${r.snippet}\n`;
+        response += `_Fonte: ${r.source}_\n\n`;
+      });
+    } else {
+      const relevantSentences = this.findRelevantSentences(sentences, keywords, 5);
+      relevantSentences.forEach(sent => {
+        response += `• ${sent}\n\n`;
+      });
+    }
+
+    response += `\n_Baseado em ${results.length} fontes consultadas_`;
+
+    return response;
+  }
+
+  // Gerar resposta temporal
+  generateTemporalResponse(query, sentences, keywords, results) {
+    const datePatterns = /\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|hoje|ontem|recente|atual/gi;
+    const sentencesWithDates = sentences.filter(s => datePatterns.test(s));
+
+    let response = `**Informação temporal sobre ${keywords.join(', ')}:**\n\n`;
+
+    if (sentencesWithDates.length > 0) {
+      sentencesWithDates.slice(0, 5).forEach(sent => {
+        response += `• ${sent}\n`;
+      });
+    } else {
+      const relevantSentences = this.findRelevantSentences(sentences, keywords, 5);
+      relevantSentences.forEach(sent => {
+        response += `• ${sent}\n`;
+      });
+    }
+
+    response += `\n_Fontes: ${results.slice(0, 3).map(r => r.source).join(', ')}_`;
+
+    return response;
+  }
+
+  // Gerar resposta How-To
+  generateHowToResponse(query, sentences, keywords, results) {
+    const steps = this.extractSteps(sentences);
+
+    let response = `**Como ${query.replace(/como /gi, '')}:**\n\n`;
+
+    if (steps.length > 0) {
+      steps.forEach((step, i) => {
+        response += `${i + 1}. ${step}\n\n`;
+      });
+    } else {
+      const relevantSentences = this.findRelevantSentences(sentences, keywords, 6);
+      relevantSentences.forEach((sent, i) => {
+        response += `**Passo ${i + 1}:** ${sent}\n\n`;
+      });
+    }
+
+    response += `_Baseado em informações de ${results.length} fontes_`;
+
+    return response;
+  }
+
+  // Gerar resposta de comparação
+  generateComparisonResponse(query, sentences, keywords, results) {
+    let response = `**Comparação: ${keywords.join(' vs ')}**\n\n`;
+
+    const comparisonSentences = sentences.filter(s => 
+      s.match(/diferença|enquanto|mas|porém|embora|comparado|versus/i)
     );
 
-    if (comparisons.length > 0) {
-      return `Analisando ${results.length} fontes: ${comparisons.slice(0, 2).join('. ')}. ` +
-             `As informações vêm principalmente de ${results.slice(0, 2).map(r => r.source).join(' e ')}.`;
+    if (comparisonSentences.length > 0) {
+      comparisonSentences.slice(0, 5).forEach(sent => {
+        response += `• ${sent}\n\n`;
+      });
+    } else {
+      const relevantSentences = this.findRelevantSentences(sentences, keywords, 5);
+      relevantSentences.forEach(sent => {
+        response += `• ${sent}\n\n`;
+      });
     }
 
-    return `Com base em ${results.length} fontes sobre "${query}": ` +
-           `${summarize(allContent, 3)} ` +
-           `Consulta ${results[0].source} para mais detalhes.`;
+    response += `_Análise baseada em ${results.length} fontes_`;
+
+    return response;
   }
 
-  // Resposta de opinião
-  generateOpinionAnswer(query, results, allContent) {
-    return `Baseado em ${results.length} fontes, há diferentes perspectivas: ` +
-           `${summarize(allContent, 3)} ` +
-           `As opiniões variam entre as fontes consultadas, incluindo ${results.slice(0, 2).map(r => r.source).join(' e ')}.`;
+  // Gerar resposta geral
+  generateGeneralResponse(query, sentences, keywords, results) {
+    const relevantSentences = this.findRelevantSentences(sentences, keywords, 6);
+
+    let response = `**${query}**\n\n`;
+
+    if (relevantSentences.length > 0) {
+      response += `${relevantSentences[0]}\n\n`;
+      
+      if (relevantSentences.length > 1) {
+        response += `**Informações adicionais:**\n\n`;
+        relevantSentences.slice(1, 5).forEach(sent => {
+          response += `• ${sent}\n`;
+        });
+      }
+    }
+
+    response += `\n\n_Encontrado em ${results.length} fontes incluindo ${results.slice(0, 2).map(r => r.source).join(', ')}_`;
+
+    return response;
   }
 
-  // Resposta geral
-  generateGeneralAnswer(query, results, allContent) {
-    const summary = summarize(allContent, 3);
-    const keywords = extractKeywords(query);
-    
-    return `Encontrei ${results.length} fontes sobre "${query}". ` +
-           `${summary} ` +
-           `Os tópicos principais incluem: ${keywords.slice(0, 5).join(', ')}. ` +
-           `Fontes: ${results.slice(0, 3).map(r => r.source).join(', ')}.`;
+  // Sem resultados
+  generateNoResultsResponse(query) {
+    return {
+      answer: `Não consegui encontrar informações sobre "${query}". Tenta reformular a pergunta ou usar termos diferentes.`,
+      markdown: `**Nenhum resultado encontrado**\n\nNão consegui encontrar informações sobre "${query}".`,
+      sources: [],
+      confidence: 0,
+      totalSources: 0
+    };
   }
 
-  // Análise de confiança baseada em múltiplos fatores
-  calculateConfidence(results, query) {
-    let confidence = 0.5;
+  // Extrair sentenças relevantes
+  findRelevantSentences(sentences, keywords, limit = 5) {
+    const scored = sentences.map(sent => {
+      const score = keywords.filter(k => 
+        sent.toLowerCase().includes(k.toLowerCase())
+      ).length;
+      return { sentence: sent, score };
+    })
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(s => s.sentence.trim());
 
-    // Mais resultados = mais confiança
+    return scored;
+  }
+
+  // Extrair sentenças
+  extractSentences(text) {
+    return text
+      .split(/[.!?]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 30 && s.length < 300);
+  }
+
+  // Extrair passos
+  extractSteps(sentences) {
+    const stepPatterns = /primeiro|segundo|terceiro|passo|etapa|\d+\.|depois|em seguida|finalmente/i;
+    return sentences
+      .filter(s => stepPatterns.test(s))
+      .slice(0, 10)
+      .map(s => s.replace(/^(primeiro|segundo|terceiro|passo|etapa|\d+\.)\s*/i, '').trim());
+  }
+
+  // Formatar como Markdown
+  formatAsMarkdown(text) {
+    return text; // Já está em markdown
+  }
+
+  // Calcular confiança
+  calculateConfidence(results, keywords) {
+    let confidence = 0.4;
     confidence += Math.min(results.length * 0.05, 0.3);
-
-    // Fontes confiáveis aumentam confiança
+    
     const reliableSources = results.filter(r => 
       r.source.includes('Wikipedia') || 
       r.source.includes('News') ||
@@ -211,10 +316,6 @@ class AIEngine {
     ).length;
     
     confidence += reliableSources * 0.05;
-
-    // Relevância média alta
-    const avgRelevance = results.reduce((sum, r) => sum + (r.relevanceScore || 0), 0) / results.length;
-    confidence += avgRelevance * 0.2;
 
     return Math.min(confidence, 0.95);
   }
