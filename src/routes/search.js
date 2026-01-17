@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const crawler = require('../crawler');
-const { rankResults, analyzeText } = require('../ml/ranking');
+const { rankResults } = require('../ml/ranking');
 const { extractKeywords } = require('../ml/nlp');
 const aiEngine = require('../ml/ai_engine');
 
-// Busca simples
+// Busca com IA gerando resposta completa
 router.post('/', async (req, res) => {
   try {
     const { query, maxResults = 10 } = req.body;
@@ -16,32 +16,40 @@ router.post('/', async (req, res) => {
 
     console.log(`🔍 Buscando: ${query}`);
 
-    // Extrair palavras-chave da query
-    const keywords = extractKeywords(query);
-
     // Fazer crawling
     const rawResults = await crawler.search(query, maxResults);
 
-    // Rankear resultados com IA
+    if (rawResults.length === 0) {
+      return res.json({
+        success: true,
+        query,
+        aiResponse: {
+          answer: `Não encontrei resultados para "${query}". Tenta reformular a pergunta.`,
+          markdown: `**Nenhum resultado**\n\nNão encontrei informações sobre "${query}".`,
+          confidence: 0,
+          sources: [],
+          totalSources: 0
+        },
+        results: [],
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Extrair palavras-chave
+    const keywords = extractKeywords(query);
+
+    // Rankear resultados
     const rankedResults = rankResults(rawResults, keywords);
 
-    // Analisar sentimento e relevância
-    const enrichedResults = rankedResults.map(result => ({
-      ...result,
-      analysis: analyzeText(result.content, keywords)
-    }));
-
-    // Gerar resposta de IA
-    const aiResponse = await aiEngine.generateResponse(query, enrichedResults);
+    // GERAR RESPOSTA DE IA
+    const aiResponse = await aiEngine.generateAIResponse(query, rankedResults);
 
     res.json({
       success: true,
       query,
       keywords,
-      aiAnswer: aiResponse.answer,
-      confidence: aiResponse.confidence,
-      totalFound: enrichedResults.length,
-      results: enrichedResults,
+      aiResponse,
+      results: rankedResults,
       timestamp: new Date().toISOString()
     });
 
@@ -49,49 +57,6 @@ router.post('/', async (req, res) => {
     console.error('Erro na busca:', error);
     res.status(500).json({ 
       error: 'Erro ao processar busca',
-      details: error.message 
-    });
-  }
-});
-
-// Busca avançada
-router.post('/advanced', async (req, res) => {
-  try {
-    const { 
-      query, 
-      maxResults = 10,
-      language = 'pt',
-      dateFilter = null,
-      contentType = 'all'
-    } = req.body;
-
-    if (!query) {
-      return res.status(400).json({ error: 'Query é obrigatório' });
-    }
-
-    const keywords = extractKeywords(query);
-    const rawResults = await crawler.searchAdvanced(query, {
-      maxResults,
-      language,
-      dateFilter,
-      contentType
-    });
-
-    const rankedResults = rankResults(rawResults, keywords);
-
-    res.json({
-      success: true,
-      query,
-      filters: { language, dateFilter, contentType },
-      totalFound: rankedResults.length,
-      results: rankedResults,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Erro na busca avançada:', error);
-    res.status(500).json({ 
-      error: 'Erro ao processar busca avançada',
       details: error.message 
     });
   }
