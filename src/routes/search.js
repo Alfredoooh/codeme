@@ -3,6 +3,7 @@ const router = express.Router();
 const crawler = require('../crawler');
 const { rankResults, analyzeText } = require('../ml/ranking');
 const { extractKeywords } = require('../ml/nlp');
+const aiEngine = require('../ml/ai_engine');
 
 // Busca simples
 router.post('/', async (req, res) => {
@@ -30,10 +31,15 @@ router.post('/', async (req, res) => {
       analysis: analyzeText(result.content, keywords)
     }));
 
+    // Gerar resposta de IA
+    const aiResponse = await aiEngine.generateResponse(query, enrichedResults);
+
     res.json({
       success: true,
       query,
       keywords,
+      aiAnswer: aiResponse.answer,
+      confidence: aiResponse.confidence,
       totalFound: enrichedResults.length,
       results: enrichedResults,
       timestamp: new Date().toISOString()
