@@ -1,225 +1,162 @@
-# Deploy DeepSeek Playground no Render
+# 🔍 API de Busca com IA
 
-## 1. Estrutura do Projeto
+API completa de busca inteligente com processamento de linguagem natural e algoritmos de Machine Learning.
 
-Crie a seguinte estrutura de arquivos:
+## 🚀 Características
+
+- **Web Scraping próprio** - Sem APIs externas de busca
+- **Algoritmos de IA**:
+  - TF-IDF para relevância
+  - Análise de sentimento
+  - Extração de palavras-chave
+  - Sumarização automática
+  - Ranking inteligente
+- **Processamento de Linguagem Natural** em português
+- **API REST completa** com Express.js
+
+## 📁 Estrutura do Projeto
 
 ```
-deepseek-playground/
+busca-ia-api/
+├── src/
+│   ├── index.js              # Servidor principal
+│   ├── crawler.js            # Web scraping
+│   ├── routes/
+│   │   └── search.js         # Rotas de busca
+│   └── ml/
+│       ├── ranking.js        # Algoritmos de ranking
+│       └── nlp.js            # Processamento NLP
 ├── package.json
-├── vite.config.js
-├── index.html
-└── src/
-    ├── main.jsx
-    └── App.jsx
+└── README.md
 ```
 
-## 2. Arquivos de Configuração
+## 🛠️ Instalação no Spck Editor
 
-### `package.json`
+1. **Criar projeto**:
+   - Abrir Spck Editor
+   - Criar novo projeto "Express Server 4"
+   - Nome: `busca-ia-api`
+
+2. **Criar arquivos**:
+   - Copiar cada arquivo do artifact
+   - Criar as pastas `src/`, `src/routes/`, `src/ml/`
+
+3. **Instalar dependências**:
+   - O Spck instala automaticamente ao detectar `package.json`
+   - Ou usar: npm install
+
+## 🎯 Como Usar
+
+### Iniciar o servidor:
+```bash
+npm start
+```
+
+### Endpoints:
+
+#### 1. Busca Simples
+```http
+POST /api/search
+Content-Type: application/json
+
+{
+  "query": "inteligência artificial",
+  "maxResults": 10
+}
+```
+
+#### 2. Busca Avançada
+```http
+POST /api/search/advanced
+Content-Type: application/json
+
+{
+  "query": "machine learning",
+  "maxResults": 15,
+  "language": "pt",
+  "contentType": "academic"
+}
+```
+
+### Resposta Exemplo:
 ```json
 {
-  "name": "deepseek-playground",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lucide-react": "^0.263.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.0.0",
-    "vite": "^4.3.9",
-    "tailwindcss": "^3.3.0",
-    "postcss": "^8.4.24",
-    "autoprefixer": "^10.4.14"
-  }
-}
-```
-
-### `vite.config.js`
-```js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    outDir: 'dist',
-    assetsDir: 'assets'
-  }
-})
-```
-
-### `index.html`
-```html
-<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DeepSeek Playground</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-```
-
-### `src/main.jsx`
-```jsx
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
-```
-
-### `src/index.css`
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-```
-
-### `tailwind.config.js`
-```js
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,jsx}",
+  "success": true,
+  "query": "inteligência artificial",
+  "keywords": ["inteligência", "artificial"],
+  "totalFound": 8,
+  "results": [
+    {
+      "title": "Inteligência Artificial - Wikipedia",
+      "url": "https://pt.wikipedia.org/wiki/Intelig%C3%AAncia_artificial",
+      "snippet": "Descrição sobre IA...",
+      "relevanceScore": 0.8547,
+      "analysis": {
+        "sentiment": "positivo",
+        "keywordDensity": "3.45",
+        "readability": "médio",
+        "wordCount": 234
+      },
+      "metrics": {
+        "tfIdf": 0.4523,
+        "position": 0.3124,
+        "length": 0.8900
+      }
+    }
   ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
+  "timestamp": "2026-01-17T16:22:00.000Z"
 }
 ```
 
-### `postcss.config.js`
-```js
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}
-```
+## 🧠 Algoritmos de IA Implementados
 
-### `src/App.jsx`
-Cole o código React completo do playground aqui.
+### 1. TF-IDF (Term Frequency-Inverse Document Frequency)
+Calcula a importância de palavras nos documentos.
 
-## 3. Deploy no Render
+### 2. Análise de Sentimento
+Classifica texto como positivo, negativo ou neutro.
 
-### Opção 1: Via GitHub (Recomendado)
+### 3. Ranking Multi-critério
+Combina múltiplos scores:
+- Relevância TF-IDF (50%)
+- Posição das palavras-chave (30%)
+- Tamanho do conteúdo (20%)
 
-1. **Crie um repositório no GitHub** e faça push do código:
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/seu-usuario/deepseek-playground.git
-git push -u origin main
-```
+### 4. Processamento NLP
+- Tokenização
+- Remoção de stopwords
+- Stemming
+- Extração de entidades
+- Sumarização automática
 
-2. **No Render Dashboard**:
-   - Clique em "New +" → "Static Site"
-   - Conecte seu repositório GitHub
-   - Configure:
-     - **Name**: deepseek-playground
-     - **Branch**: main
-     - **Build Command**: `npm install && npm run build`
-     - **Publish Directory**: `dist`
+## 📊 Funcionalidades Futuras
 
-3. Clique em "Create Static Site"
+- [ ] Cache de resultados
+- [ ] Indexação persistente
+- [ ] Mais fontes de dados
+- [ ] Web scraping paralelo
+- [ ] Suporte a mais idiomas
+- [ ] API de análise de tendências
 
-### Opção 2: Via Render CLI
+## 🔧 Tecnologias
 
-```bash
-# Instalar Render CLI
-npm install -g render-cli
+- **Express.js** - Framework web
+- **Cheerio** - Web scraping
+- **Axios** - HTTP requests
+- **Natural** - NLP (opcional)
+- **Algoritmos próprios** - ML sem dependências externas
 
-# Login
-render login
+## 📝 Notas
 
-# Deploy
-render deploy
-```
+- API totalmente funcional no telemóvel via Spck Editor
+- Sem necessidade de APIs externas pagas
+- Todos os algoritmos implementados do zero
+- Otimizado para português brasileiro
 
-### Opção 3: Build Local + Upload Manual
+## 🤝 Contribuir
 
-```bash
-# Instalar dependências
-npm install
+Sinta-se livre para melhorar os algoritmos e adicionar novas funcionalidades!
 
-# Build para produção
-npm run build
+---
 
-# O build estará na pasta 'dist'
-# Faça upload manual no Render
-```
-
-## 4. Variáveis de Ambiente (Opcional)
-
-Se quiser proteger a API key:
-
-1. No Render Dashboard, vá em "Environment"
-2. Adicione: `VITE_DEEPSEEK_API_KEY` = sua-api-key
-3. No código, use: `import.meta.env.VITE_DEEPSEEK_API_KEY`
-
-## 5. Comandos Úteis
-
-```bash
-# Desenvolvimento local
-npm run dev
-
-# Build de produção
-npm run build
-
-# Preview do build
-npm run preview
-
-# Verificar build
-ls -la dist/
-```
-
-## 6. Troubleshooting
-
-**Erro de build?**
-- Verifique se todas as dependências estão no `package.json`
-- Confirme que o Node.js está na versão 16+
-
-**Deploy falhou?**
-- Verifique logs no Render Dashboard
-- Confirme que `dist` está sendo gerado
-- Teste o build localmente primeiro
-
-## 7. URL Final
-
-Após o deploy, sua aplicação estará em:
-`https://deepseek-playground.onrender.com`
-
-(ou o nome que você escolheu)
+**Desenvolvido com ❤️ para aprendizado de IA e Web Scraping**
