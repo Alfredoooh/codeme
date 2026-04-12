@@ -1,20 +1,19 @@
 {
-  "name": "busca-ia-api",
+  "name": "editor",
+  "private": true,
   "version": "1.0.0",
-  "description": "API de busca inteligente com IA própria",
-  "main": "src/index.js",
+  "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": ["api", "search", "ia", "ml"],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "cheerio": "^1.0.0-rc.12",
-    "axios": "^1.6.0",
-    "natural": "^6.10.0",
-    "compromise": "^14.10.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.2"
   }
 }
