@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useCustomSelection } from "./hooks/useCustomSelection";  // ← NOVO
 
 // ── INLINE SVG ICONS ──────────────────────────────────────
 const IC = {
@@ -63,7 +64,6 @@ const Icon = ({ name, size=18, sw=2, style, className }) => (
   />
 );
 
-// ── DATA ──────────────────────────────────────────────────
 const FONTS = [
   {l:"Lora",v:"'Lora',Georgia,serif",g:"Serif"},{l:"Playfair Display",v:"'Playfair Display',serif",g:"Serif"},
   {l:"Merriweather",v:"'Merriweather',serif",g:"Serif"},{l:"Georgia",v:"Georgia,serif",g:"Serif"},
@@ -79,162 +79,57 @@ const FONTS = [
 const COLORS = ["#000000","#34322d","#5e5e5b","#858481","#d1d5db","#ffffff","#dc2626","#ea580c","#d97706","#65a30d","#16a34a","#0891b2","#2563eb","#7c3aed","#9333ea","#db2777","#fca5a5","#fdba74","#fcd34d","#86efac","#93c5fd","#c4b5fd","#f9a8d4","#fde68a","#6ee7b7","#a5b4fc","#fbcfe8","#e9d5ff","#f3f4f6","#e5e7eb","#d1fae5","#dbeafe"];
 const SZP = [8,10,12,13,14,15,16,18,20,22,24,28,32,36,48,64,72];
 
-// ── CSS ───────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;700&family=Merriweather:wght@400;700&family=Open+Sans:wght@400;600&family=Montserrat:wght@400;600&family=Roboto:wght@400;500&family=Poppins:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;1,400&family=Dancing+Script:wght@400;700&family=Caveat:wght@400;700&family=Cinzel:wght@400;600&family=Pacifico&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
-
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body,#root{width:100%;height:100%;overflow:hidden;background:#f8f8f7}
-
 .er{width:100%;height:100%;display:flex;flex-direction:column;font-family:'DM Sans',sans-serif;background:#f8f8f7;-webkit-user-select:none;user-select:none;overflow:hidden}
-
-/* Topbar — fixed, never scrolls */
-.topbar{
-  position:relative;
-  height:52px;
-  flex-shrink:0;
-  display:flex;
-  align-items:center;
-  padding:0 6px;
-  background:#fff;
-  border-bottom:1px solid rgba(0,0,0,.08);
-  z-index:10;
-}
-
-/* Canvas — the only thing that scrolls */
-.canvas{
-  flex:1;
-  overflow-y:auto;
-  overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;
-  background:#f8f8f7;
-  padding:28px 16px 220px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-}
+.topbar{position:relative;height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 6px;background:#fff;border-bottom:1px solid rgba(0,0,0,.08);z-index:10}
+.canvas{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:#f8f8f7;padding:28px 16px 220px;display:flex;flex-direction:column;align-items:center}
 .canvas::-webkit-scrollbar{width:6px}
-.canvas::-webkit-scrollbar-track{background:transparent}
 .canvas::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
-
-/* Page wrapper */
 .pw{width:794px;transform-origin:top center;transition:transform .3s cubic-bezier(.22,1,.36,1),margin-bottom .3s}
-
-/* Scroll mode page */
 .page{width:794px;background:#fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 20px rgba(0,0,0,.06);padding:96px 88px 120px;min-height:1123px;transition:box-shadow .25s}
 .page.focused{box-shadow:0 2px 8px rgba(0,0,0,.08),0 8px 36px rgba(0,0,0,.12)}
-
-/* A4 mode */
-.pw.a4{display:flex;flex-direction:column;align-items:center;gap:24px}
 .a4page{width:794px;height:1123px;background:#fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 20px rgba(0,0,0,.06);padding:96px 88px;overflow:hidden;position:relative;flex-shrink:0}
-.a4page::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(to bottom,transparent,rgba(0,0,0,.06));pointer-events:none}
 .a4num{position:absolute;bottom:14px;right:20px;font-size:10px;font-weight:600;color:#858481;pointer-events:none}
-
-/* Editor content */
 .pc{outline:none;font-family:'Lora',Georgia,serif;font-size:16px;line-height:1.85;color:#34322d;min-height:600px;word-break:break-word;caret-color:#2563eb;-webkit-user-select:text;user-select:text;cursor:text}
-.a4page .pc{min-height:unset;height:100%}
 .pc::selection,.pc *::selection{background:#bfdbfe}
 .pc:empty::before{content:attr(data-placeholder);color:#858481;pointer-events:none}
-
-/* Topbar title */
 .tt:empty::before{content:'Sem título';color:#858481;pointer-events:none}
 .tt:focus{border-color:#2563eb!important;background:#eff6ff!important}
-
-/* Floating toolbar — fixed, never scrolls */
-.ftb{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  bottom:max(14px,env(safe-area-inset-bottom,14px));
-  width:min(96vw,460px);
-  z-index:20;
-}
-.pill{
-  height:54px;
-  background:rgba(255,255,255,.97);
-  border:1px solid rgba(0,0,0,.08);
-  border-radius:9999px;
-  box-shadow:0 4px 20px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.05);
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
-  display:flex;
-  align-items:center;
-  overflow:hidden;
-  position:relative;
-  transition:all 220ms;
-}
+.ftb{position:fixed;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom,14px));width:min(96vw,460px);z-index:20}
+.pill{height:54px;background:rgba(255,255,255,.97);border:1px solid rgba(0,0,0,.08);border-radius:9999px;box-shadow:0 4px 20px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.05);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;overflow:hidden;position:relative;transition:all 220ms}
 .pill::before{content:'';position:absolute;left:0;top:0;bottom:0;width:20px;background:linear-gradient(to right,rgba(255,255,255,.97),transparent);border-radius:9999px 0 0 9999px;z-index:2;pointer-events:none}
 .pill::after{content:'';position:absolute;right:52px;top:0;bottom:0;width:14px;background:linear-gradient(to left,rgba(255,255,255,.97),transparent);z-index:2;pointer-events:none}
 .pill.ai::before,.pill.ai::after{display:none}
-
 .tbtrack{display:flex;align-items:center;gap:1px;padding:0 6px;overflow-x:auto;overflow-y:hidden;flex:1;min-width:0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .tbtrack::-webkit-scrollbar{display:none}
-
-/* Selection menu */
-.sm{
-  position:fixed;
-  z-index:9999;
-  background:#1c1c1e;
-  border-radius:12px;
-  box-shadow:0 4px 24px rgba(0,0,0,.45);
-  overflow:visible;
-  pointer-events:auto;
-}
-.sm.show{animation:selIn .15s cubic-bezier(.34,1.56,.64,1) both}
-.sm-inner{display:flex;align-items:stretch;overflow-x:auto;border-radius:12px;scrollbar-width:none}
-.sm-inner::-webkit-scrollbar{display:none}
-.sm::after{content:'';position:absolute;width:0;height:0;left:var(--ax,50%);transform:translateX(-50%);pointer-events:none}
-.sm.adown::after{top:100%;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid #1c1c1e}
-.sm.aup::after{bottom:100%;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:7px solid #1c1c1e}
-
-/* Popup */
-.pop{
-  position:fixed;
-  background:#fff;
-  border:1px solid rgba(0,0,0,.08);
-  border-radius:14px;
-  box-shadow:0 8px 32px rgba(0,0,0,.13),0 2px 8px rgba(0,0,0,.07);
-  z-index:100;
-  overflow:visible;
-  animation:popIn .2s cubic-bezier(.34,1.56,.64,1) both;
-}
+.pop{position:fixed;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.13),0 2px 8px rgba(0,0,0,.07);z-index:100;overflow:visible;animation:popIn .2s cubic-bezier(.34,1.56,.64,1) both}
 .pop-inner{border-radius:14px;overflow:hidden}
 .pop-arrow{position:absolute;bottom:-9px;width:18px;height:9px;overflow:hidden;pointer-events:none;z-index:101}
 .pop-arrow::after{content:'';position:absolute;top:-7px;left:50%;transform:translateX(-50%) rotate(45deg);width:13px;height:13px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:3px 0 0 0}
-
-/* Font fullscreen */
 .ff{position:fixed;inset:0;z-index:500;background:#fff;display:flex;flex-direction:column;animation:popIn .2s cubic-bezier(.34,1.56,.64,1) both}
-
-/* Drawer */
 .drawer{position:fixed;top:0;left:0;width:260px;height:100%;background:#fff;z-index:30;box-shadow:2px 0 20px rgba(0,0,0,.10);display:flex;flex-direction:column;transform:translateX(-100%);transition:transform 400ms cubic-bezier(.22,1,.36,1)}
 .drawer.open{transform:translateX(0)}
-
-/* Font group labels */
 .fgl{padding:6px 14px 2px;font-size:10px;font-weight:700;color:#ccc;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid rgba(0,0,0,.08);margin-top:2px}
-
-/* AI dot */
 .aidot{width:5px;height:5px;border-radius:50%;background:#2563eb;animation:aiDot .9s ease infinite}
 .aidot:nth-child(2){animation-delay:.2s}.aidot:nth-child(3){animation-delay:.4s}
-
 .noscroll{scrollbar-width:none}
 .noscroll::-webkit-scrollbar{display:none}
-
 @keyframes popIn{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:scale(1)}}
-@keyframes selIn{from{opacity:0;transform:scale(.88) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes aiDot{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}
 `;
 
-// ── HELPERS ───────────────────────────────────────────────
-const S = (obj) => Object.entries(obj).reduce((a,[k,v])=>(a[k]=v,a),{});
-const TbBtn = ({children,active,onMouseDown,onClick,style})=>(
+const TbBtn=({children,active,onMouseDown,onClick,style})=>(
   <button onMouseDown={onMouseDown} onClick={onClick}
-    style={S({height:38,minWidth:38,padding:"0 7px",border:"none",background:active?"#eff6ff":"transparent",borderRadius:9999,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2,flexShrink:0,color:active?"#2563eb":"#5e5e5b",transition:"background .15s",...style})}>
+    style={{height:38,minWidth:38,padding:"0 7px",border:"none",background:active?"#eff6ff":"transparent",borderRadius:9999,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2,flexShrink:0,color:active?"#2563eb":"#5e5e5b",transition:"background .15s",...style}}>
     {children}
   </button>
 );
-const TbChip = ({children,active,onMouseDown,onClick,style})=>(
+const TbChip=({children,active,onMouseDown,onClick,style})=>(
   <button onMouseDown={onMouseDown} onClick={onClick}
-    style={S({height:32,border:`1.5px solid ${active?"#2563eb":"rgba(0,0,0,.08)"}`,borderRadius:9999,padding:"0 11px",fontFamily:"inherit",fontSize:12,fontWeight:600,color:active?"#2563eb":"#34322d",background:active?"#eff6ff":"transparent",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",...style})}>
+    style={{height:32,border:`1.5px solid ${active?"#2563eb":"rgba(0,0,0,.08)"}`,borderRadius:9999,padding:"0 11px",fontFamily:"inherit",fontSize:12,fontWeight:600,color:active?"#2563eb":"#34322d",background:active?"#eff6ff":"transparent",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap",flexShrink:0,transition:"all .15s",...style}}>
     {children}
   </button>
 );
@@ -242,13 +137,12 @@ const Div=()=><div style={{width:1,height:20,background:"rgba(0,0,0,.08)",flexSh
 const PH=({title})=><div style={{padding:"11px 14px",fontSize:10.5,fontWeight:700,color:"#858481",textTransform:"uppercase",letterSpacing:".07em",borderBottom:"1px solid rgba(0,0,0,.08)"}}>{title}</div>;
 const PI=({icon,label,danger,onClick})=>(
   <button onMouseDown={e=>e.preventDefault()} onClick={onClick}
-    style={S({display:"flex",alignItems:"center",gap:10,padding:"9px 14px",fontSize:13,fontWeight:500,color:danger?"#dc2626":"#34322d",cursor:"pointer",border:"none",background:"transparent",width:"100%",textAlign:"left",fontFamily:"inherit"})}
+    style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",fontSize:13,fontWeight:500,color:danger?"#dc2626":"#34322d",cursor:"pointer",border:"none",background:"transparent",width:"100%",textAlign:"left",fontFamily:"inherit"}}
     onMouseOver={e=>e.currentTarget.style.background="rgba(0,0,0,.04)"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
     <Icon name={icon} size={15} style={{color:danger?"#ef4444":"#858481",flexShrink:0}}/>{label}
   </button>
 );
 
-// ── POPUP CONTENTS ────────────────────────────────────────
 function ColorPopup({colors,hexIn,setHexIn,hexPv,setHexPv,onApply}){
   return<><PH title="Cor do texto"/>
     <div style={{display:"grid",gridTemplateColumns:"repeat(8,1fr)",gap:5,padding:"10px 14px"}}>
@@ -310,10 +204,8 @@ function FontPopup({fonts,curFont,search,setSearch,preview,setPreview,onExpand,o
 function SizePopup({szPv,onApply,onStep}){
   return<><PH title="Tamanho"/>
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px"}}>
-      {["−","+"].map((lbl,i)=>i===0?(
-        <button key={lbl} onMouseDown={e=>e.preventDefault()} onClick={()=>onStep(-1)}
-          style={{width:36,height:36,borderRadius:9,border:"1.5px solid rgba(0,0,0,.08)",background:"#fff",cursor:"pointer",fontSize:18,color:"#5e5e5b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{lbl}</button>
-      ):null)}
+      <button onMouseDown={e=>e.preventDefault()} onClick={()=>onStep(-1)}
+        style={{width:36,height:36,borderRadius:9,border:"1.5px solid rgba(0,0,0,.08)",background:"#fff",cursor:"pointer",fontSize:18,color:"#5e5e5b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
       <div style={{flex:1,textAlign:"center",fontSize:20,fontWeight:700,color:"#34322d"}}>{szPv}</div>
       <button onMouseDown={e=>e.preventDefault()} onClick={()=>onStep(1)}
         style={{width:36,height:36,borderRadius:9,border:"1.5px solid rgba(0,0,0,.08)",background:"#fff",cursor:"pointer",fontSize:18,color:"#5e5e5b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
@@ -393,8 +285,6 @@ export default function App(){
   const [a4Mode,setA4Mode]=useState(false);
   const [activePopup,setActivePopup]=useState(null);
   const [popupPos,setPopupPos]=useState({left:0,bottom:0,origX:0,w:240,arrLeft:0});
-  const [selVisible,setSelVisible]=useState(false);
-  const [selPos,setSelPos]=useState({left:0,top:0,ax:0,dir:"down"});
   const [ffOpen,setFfOpen]=useState(false);
   const [ffSearch,setFfSearch]=useState("");
   const [ffCat,setFfCat]=useState("Todas");
@@ -403,6 +293,7 @@ export default function App(){
   const [fontPreview,setFontPreview]=useState(null);
   const [hexIn,setHexIn]=useState("#34322d");
   const [hexPv,setHexPv]=useState("#34322d");
+  const [szPvState,setSzPvState]=useState(16);
   const [alignActive,setAlignActive]=useState("L");
   const [a4Html,setA4Html]=useState("");
 
@@ -413,15 +304,15 @@ export default function App(){
   const wrapRef=useRef(null);
   const aiRef=useRef(null);
 
-  // inject CSS
+  // ── CUSTOM SELECTION SYSTEM ──  ← NOVO (1 linha)
+  const { Overlay: SelectionOverlay } = useCustomSelection(edRef);
+
   useEffect(()=>{
-    const s=document.createElement("style");
-    s.textContent=CSS;
+    const s=document.createElement("style"); s.textContent=CSS;
     document.head.appendChild(s);
     return()=>document.head.removeChild(s);
   },[]);
 
-  // zoom
   const zoom=useCallback(()=>{
     if(!canvasRef.current||!wrapRef.current)return;
     const avail=canvasRef.current.clientWidth-32;
@@ -432,45 +323,13 @@ export default function App(){
   useEffect(()=>{zoom();window.addEventListener("resize",zoom);return()=>window.removeEventListener("resize",zoom);},[zoom]);
   useEffect(()=>{if(!canvasRef.current)return;const ro=new ResizeObserver(zoom);ro.observe(canvasRef.current);return()=>ro.disconnect();},[zoom]);
 
-  // sel helpers
-  const saveSel=useCallback(()=>{
-    const s=window.getSelection();
-    if(s&&s.rangeCount>0&&!s.isCollapsed)savedRange.current=s.getRangeAt(0).cloneRange();
-  },[]);
-  const restoreSel=useCallback(()=>{
-    if(!savedRange.current){edRef.current?.focus();return;}
-    edRef.current?.focus();
-    try{const s=window.getSelection();s.removeAllRanges();s.addRange(savedRange.current);}catch(_){}
-  },[]);
+  const saveSel=useCallback(()=>{const s=window.getSelection();if(s&&s.rangeCount>0&&!s.isCollapsed)savedRange.current=s.getRangeAt(0).cloneRange();},[]);
+  const restoreSel=useCallback(()=>{if(!savedRange.current){edRef.current?.focus();return;}edRef.current?.focus();try{const s=window.getSelection();s.removeAllRanges();s.addRange(savedRange.current);}catch(_){};},[]);
   const exec=useCallback((cmd,val)=>{restoreSel();document.execCommand(cmd,false,val||null);saveSel();},[restoreSel,saveSel]);
 
-  // smart sel menu position — never over selection
-  const tryShowSel=useCallback(()=>{
-    const s=window.getSelection();
-    if(!s||s.isCollapsed||!s.toString().trim()){setSelVisible(false);return;}
-    const r=s.getRangeAt(0).getBoundingClientRect();
-    if(!r.width&&!r.height){setSelVisible(false);return;}
-    const GAP=10,AH=7,MH=44,vw=window.innerWidth,vh=window.innerHeight;
-    const mw=Math.min(vw-16,480);
-    let left=r.left+r.width/2-mw/2;
-    left=Math.max(8,Math.min(vw-mw-8,left));
-    const ax=Math.max(16,Math.min(mw-16,r.left+r.width/2-left));
-    const spaceAbove=r.top-GAP-AH-MH;
-    const spaceBelow=vh-r.bottom-GAP-AH-MH;
-    let top,dir;
-    if(spaceAbove>=0){top=r.top-MH-GAP-AH;dir="down";}
-    else if(spaceBelow>=0){top=r.bottom+GAP+AH;dir="up";}
-    else if(spaceAbove>spaceBelow){top=Math.max(8,r.top-MH-GAP-AH);dir="down";}
-    else{top=r.bottom+GAP+AH;dir="up";}
-    setSelPos({left,top,ax,dir,mw});
-    setSelVisible(true);
-  },[]);
-
-  // popup — prevent focus steal with onMouseDown preventDefault
   const closePopup=useCallback(()=>{setActivePopup(null);setFontPreview(null);setFontSearch("");},[]);
   const openPopup=useCallback((type,trig)=>{
     if(activePopup===type){closePopup();return;}
-    // save selection before popup steals focus
     saveSel();
     const wMap={"color-text":254,font:240,size:220,styles:200,insert:240,format:240};
     const w=wMap[type]||240;
@@ -498,7 +357,6 @@ export default function App(){
     setAiLoading(false);setTimeout(()=>aiRef.current?.focus(),50);
   };
 
-  // insert helpers
   const insertImg=()=>{
     closePopup();
     const fi=document.createElement("input");fi.type="file";fi.accept="image/*";
@@ -511,7 +369,7 @@ export default function App(){
     h+="</tbody></table><p></p>";exec("insertHTML",h);closePopup();
   };
   const applySize=sz=>{
-    setSzPv(sz);setCurSz(sz);
+    setSzPv(sz);setSzPvState(sz);
     restoreSel();
     const s=window.getSelection();if(!s||!s.rangeCount)return;
     const r=s.getRangeAt(0);
@@ -520,21 +378,14 @@ export default function App(){
     const nr=document.createRange();nr.selectNodeContents(sp);s.removeAllRanges();s.addRange(nr);savedRange.current=nr.cloneRange();
   };
 
-  // A4 mode
-  const enableA4=()=>{
-    const html=edRef.current?.innerHTML||"";
-    setA4Html(html);setA4Mode(true);
-  };
-  const disableA4=()=>{
-    setA4Mode(false);
-    requestAnimationFrame(()=>{if(edRef.current&&a4Html)edRef.current.innerHTML=a4Html;});
-  };
+  const enableA4=()=>{setA4Html(edRef.current?.innerHTML||"");setA4Mode(true);};
+  const disableA4=()=>{setA4Mode(false);requestAnimationFrame(()=>{if(edRef.current&&a4Html)edRef.current.innerHTML=a4Html;});};
 
   const renderPopup=()=>{
     switch(activePopup){
       case"color-text":return<ColorPopup colors={COLORS} hexIn={hexIn} setHexIn={setHexIn} hexPv={hexPv} setHexPv={setHexPv} onApply={c=>{exec("foreColor",c);setColorBar(c);closePopup();}}/>;
       case"font":return<FontPopup fonts={FONTS} curFont={curFont} search={fontSearch} setSearch={setFontSearch} preview={fontPreview} setPreview={setFontPreview} onExpand={()=>{closePopup();setFfOpen(true);}} onApply={f=>{setCurFont(f.v);setFontLabel(f.l);exec("fontName",f.l);closePopup();}}/>;
-      case"size":return<SizePopup szPv={szPv} onApply={sz=>{applySize(sz);closePopup();}} onStep={d=>{const n=Math.max(6,Math.min(200,szPv+d));applySize(n);}}/>;
+      case"size":return<SizePopup szPv={szPvState} onApply={sz=>{applySize(sz);closePopup();}} onStep={d=>{const n=Math.max(6,Math.min(200,szPvState+d));applySize(n);}}/>;
       case"styles":return<StylesPopup exec={exec} onClose={closePopup}/>;
       case"insert":return<InsertPopup exec={exec} onClose={closePopup} insertImg={insertImg} insertTable={insertTable}/>;
       case"format":return<FormatPopup exec={exec} onClose={closePopup} edRef={edRef} restoreSel={restoreSel}/>;
@@ -542,23 +393,8 @@ export default function App(){
     }
   };
 
-  const selActions=[
-    {l:"Cortar",ic:"scissors",fn:async()=>{const s=window.getSelection();if(s&&!s.isCollapsed){try{await navigator.clipboard.writeText(s.toString())}catch(_){}exec("delete");}setSelVisible(false);}},
-    {l:"Copiar",ic:"copy",fn:async()=>{const s=window.getSelection();if(s&&!s.isCollapsed){try{await navigator.clipboard.writeText(s.toString())}catch(_){document.execCommand("copy");}}setSelVisible(false);}},
-    {l:"Colar",ic:"clipboard",fn:async()=>{setSelVisible(false);try{const t=await navigator.clipboard.readText();restoreSel();exec("insertText",t);}catch(_){edRef.current?.focus();}}},
-    {l:"Sel. tudo",ic:"check-square",fn:()=>{edRef.current?.focus();document.execCommand("selectAll");setSelVisible(false);setTimeout(tryShowSel,80);}},
-    {l:"Negrito",ic:"bold",fn:()=>{exec("bold");setSelVisible(false);}},
-    {l:"Itálico",ic:"italic",fn:()=>{exec("italic");setSelVisible(false);}},
-    {l:"Sublinhado",ic:"underline",fn:()=>{exec("underline");setSelVisible(false);}},
-    {l:"MAIÚSC.",ic:"case-upper",fn:()=>{restoreSel();const s=window.getSelection();if(s&&!s.isCollapsed)document.execCommand("insertText",false,s.toString().toUpperCase());setSelVisible(false);}},
-    {l:"Link",ic:"link",fn:()=>{setSelVisible(false);const u=prompt("URL:");if(u)exec("createLink",u);}},
-    {l:"Apagar",ic:"trash-2",fn:()=>{exec("delete");setSelVisible(false);},danger:true},
-  ];
-
   return(
     <div className="er">
-      {/* CSS already injected */}
-
       {/* DRAWER */}
       <div className={`drawer${drawerOpen?" open":""}`}>
         <div style={{padding:"52px 20px 14px",borderBottom:"1px solid rgba(0,0,0,.08)"}}>
@@ -566,13 +402,11 @@ export default function App(){
         </div>
         <div style={{flex:1,overflowY:"auto",padding:10}}>
           <div style={{paddingTop:8,paddingBottom:8,borderBottom:"1px solid rgba(0,0,0,.08)"}}>
-            {/* AI toggle */}
             <button onClick={()=>{setAiMode(v=>!v);setDrawerOpen(false);}}
               style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",fontSize:14,fontWeight:500,color:aiMode?"#2563eb":"#34322d",background:aiMode?"#eff6ff":"transparent",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"inherit"}}>
               <Icon name={aiMode?"bot":"keyboard"} size={18} style={{color:"#5e5e5b",flexShrink:0}}/>
               <span>{aiMode?"IA activa":"Toolbar / IA"}</span>
             </button>
-            {/* Page mode toggle */}
             <button onClick={()=>{a4Mode?disableA4():enableA4();setDrawerOpen(false);}}
               style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",fontSize:14,fontWeight:500,color:a4Mode?"#2563eb":"#34322d",background:a4Mode?"#eff6ff":"transparent",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"inherit"}}>
               <Icon name={a4Mode?"layout":"file-text"} size={18} style={{color:"#5e5e5b",flexShrink:0}}/>
@@ -583,7 +417,7 @@ export default function App(){
       </div>
       {drawerOpen&&<div onClick={()=>setDrawerOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.18)",zIndex:15}}/>}
 
-      {/* TOPBAR — fixed, does NOT scroll */}
+      {/* TOPBAR */}
       <div className="topbar" style={{transform:drawerOpen?"translateX(110px)":"none",transition:"transform 400ms cubic-bezier(.22,1,.36,1)"}}>
         <div style={{position:"absolute",left:6,display:"flex",gap:2}}>
           <button onClick={()=>setDrawerOpen(v=>!v)} style={{width:44,height:44,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:10,color:"#5e5e5b"}}>
@@ -602,41 +436,29 @@ export default function App(){
         </div>
       </div>
 
-      {/* CANVAS — only this scrolls */}
+      {/* CANVAS */}
       <div ref={canvasRef} className="canvas noscroll"
         style={{transform:drawerOpen?"translateX(110px)":"none",transition:"transform 400ms cubic-bezier(.22,1,.36,1)"}}
-        onClick={e=>{if(!e.target.closest(".pc")){savedRange.current=null;window.getSelection()?.removeAllRanges();setSelVisible(false);}}}>
+        onClick={e=>{if(!e.target.closest(".pc"))window.getSelection()?.removeAllRanges();}}>
         <div ref={wrapRef} className={`pw${a4Mode?" a4":""}`}>
           {a4Mode?(
-            // A4 pages
             <div className="a4page">
               <div className="pc" contentEditable spellCheck data-placeholder="Começa a escrever…"
-                style={{minHeight:"unset",height:"100%"}}
-                dangerouslySetInnerHTML={{__html:a4Html}}
-                onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
-                onMouseUp={()=>setTimeout(()=>{saveSel();tryShowSel();},20)}
-                onTouchEnd={()=>setTimeout(()=>{saveSel();tryShowSel();},120)}
-                onKeyUp={saveSel}
-                onContextMenu={e=>{e.preventDefault();saveSel();tryShowSel();}}
-              />
+                style={{minHeight:"unset",height:"100%"}} dangerouslySetInnerHTML={{__html:a4Html}}
+                onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onKeyUp={saveSel}/>
               <div className="a4num">1</div>
             </div>
           ):(
             <div className={`page${focused?" focused":""}`}>
               <div ref={edRef} className="pc" contentEditable spellCheck data-placeholder="Começa a escrever…"
-                onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
-                onMouseUp={()=>setTimeout(()=>{saveSel();tryShowSel();},20)}
-                onTouchEnd={()=>setTimeout(()=>{saveSel();tryShowSel();},120)}
-                onKeyUp={saveSel}
-                onContextMenu={e=>{e.preventDefault();saveSel();tryShowSel();}}
-              />
+                onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onKeyUp={saveSel}/>
             </div>
           )}
         </div>
       </div>
 
-      {/* FLOATING TOOLBAR — position:fixed, never moves */}
-      <nav className="ftb" style={{transform:drawerOpen?"translateX(55px)":"translateX(-50%)",left:drawerOpen?"calc(50% + 0px)":"50%",transition:"transform 400ms cubic-bezier(.22,1,.36,1)"}}>
+      {/* FLOATING TOOLBAR */}
+      <nav className="ftb" style={{transform:drawerOpen?"translateX(55px)":"translateX(-50%)",left:"50%",transition:"transform 400ms cubic-bezier(.22,1,.36,1)"}}>
         <div className={`pill${aiMode?" ai":""}`}>
           {aiMode?(
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 16px",flex:1,minWidth:0}}>
@@ -647,7 +469,6 @@ export default function App(){
             </div>
           ):(
             <div className="tbtrack noscroll">
-              {/* Color */}
               <TbBtn onMouseDown={e=>e.preventDefault()} onClick={e=>openPopup("color-text",e.currentTarget)}>
                 <span style={{fontSize:16,fontWeight:900,lineHeight:1}}>A</span>
                 <div style={{width:16,height:3,borderRadius:2,background:colorBar}}/>
@@ -689,32 +510,13 @@ export default function App(){
               </TbChip>
             </div>
           )}
-          {/* Confirm/Send */}
           <button onMouseDown={e=>e.preventDefault()}
             onClick={()=>{if(aiMode){if(!aiLoading)doAI();}else{closePopup();edRef.current?.focus();}}}
             style={{width:40,height:40,flexShrink:0,borderRadius:"50%",border:aiMode&&!aiLoading?"none":"1.5px solid rgba(0,0,0,.08)",background:aiMode&&!aiLoading?"#2563eb":"#fff",color:aiMode&&!aiLoading?"#fff":"#5e5e5b",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",marginRight:6,marginLeft:2,zIndex:3,transition:"all .2s"}}>
-            {aiLoading
-              ?<div style={{display:"flex",gap:3,alignItems:"center"}}><div className="aidot"/><div className="aidot"/><div className="aidot"/></div>
-              :aiMode?<Icon name="send" size={16}/>:<Icon name="check" size={16} sw={2.6}/>}
+            {aiLoading?<div style={{display:"flex",gap:3,alignItems:"center"}}><div className="aidot"/><div className="aidot"/><div className="aidot"/></div>:aiMode?<Icon name="send" size={16}/>:<Icon name="check" size={16} sw={2.6}/>}
           </button>
         </div>
       </nav>
-
-      {/* SELECTION MENU — smart position above/below */}
-      {selVisible&&(
-        <div className={`sm${selPos.dir==="down"?" adown":" aup"} show`}
-          style={{left:selPos.left,top:selPos.top,width:selPos.mw,"--ax":selPos.ax+"px"}}
-          onMouseDown={e=>e.preventDefault()}>
-          <div className="sm-inner noscroll">
-            {selActions.map(a=>(
-              <button key={a.l} onClick={a.fn} onMouseDown={e=>e.preventDefault()}
-                style={{flexShrink:0,padding:"10px 13px",border:"none",background:"transparent",color:a.danger?"#ff6b6b":"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:12.5,fontWeight:500,cursor:"pointer",borderRight:"1px solid rgba(255,255,255,.1)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}>
-                <Icon name={a.ic} size={13}/>{a.l}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* POPUP MASK */}
       {activePopup&&<div onMouseDown={closePopup} style={{position:"fixed",inset:0,zIndex:99,background:"transparent"}}/>}
@@ -727,7 +529,7 @@ export default function App(){
         </div>
       )}
 
-      {/* FULLSCREEN FONT BROWSER */}
+      {/* FONT FULLSCREEN */}
       {ffOpen&&(
         <div className="ff">
           <div style={{height:54,display:"flex",alignItems:"center",gap:10,padding:"0 14px",borderBottom:"1px solid rgba(0,0,0,.08)",flexShrink:0}}>
@@ -763,6 +565,9 @@ export default function App(){
           </div>
         </div>
       )}
+
+      {/* SELECTION OVERLAY — handles, lupa, menu ← NOVO (1 linha) */}
+      <SelectionOverlay />
     </div>
   );
 }
