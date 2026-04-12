@@ -103,10 +103,10 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#f0f0ef}
 .canvas::-webkit-scrollbar-track{background:transparent}
 .canvas::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:3px}
 .pw{width:794px;transform-origin:top center;transition:transform .3s cubic-bezier(.22,1,.36,1),margin-bottom .3s}
-.page{width:794px;background:#fff;border-radius:6px;border:1.5px solid #c8c8c8;box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);padding:96px 88px 120px;min-height:1123px;transition:box-shadow .25s,border-color .25s}
+.page{width:794px;background:#fff;border-radius:0;border:1.5px solid #c8c8c8;box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);padding:96px 88px 120px;min-height:1123px;transition:box-shadow .25s,border-color .25s}
 .page.focused{box-shadow:0 2px 10px rgba(0,0,0,.09),0 8px 32px rgba(0,0,0,.11);border-color:#b0b0b0}
 .pw.a4{display:flex;flex-direction:column;align-items:center;gap:24px}
-.a4page{width:794px;height:1123px;background:#fff;border-radius:6px;border:1.5px solid #c8c8c8;box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);padding:96px 88px;overflow:hidden;position:relative;flex-shrink:0}
+.a4page{width:794px;height:1123px;background:#fff;border-radius:0;border:1.5px solid #c8c8c8;box-shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.06);padding:96px 88px;overflow:hidden;position:relative;flex-shrink:0}
 .a4page::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(to bottom,transparent,rgba(0,0,0,.05));pointer-events:none}
 .a4num{position:absolute;bottom:14px;right:20px;font-size:10px;font-weight:600;color:#858481;pointer-events:none}
 .pc{outline:none;font-family:'Lora',Georgia,serif;font-size:16px;line-height:1.85;color:#34322d;min-height:600px;word-break:break-word;caret-color:#2563eb;-webkit-user-select:text;user-select:text;cursor:text}
@@ -463,42 +463,29 @@ export default function App() {
     setSelVisible(true);
   }, []);
 
-  // Detect empty line tap → show mini menu (Colar + Inserir)
-  const handleEditorClick = useCallback((e) => {
-    const target = e.target;
-    // If clicking an image wrapper, skip
-    if (target.closest && target.closest(".img-wrap")) return;
-    setTimeout(() => {
-      const s = window.getSelection();
-      if (!s || !s.isCollapsed) return;
-      // Get the block element
-      let node = s.anchorNode;
-      if (!node) return;
-      let block = node.nodeType === 3 ? node.parentElement : node;
-      while (block && block !== edRef.current && !["P","DIV","H1","H2","H3","H4","LI","BLOCKQUOTE","PRE"].includes(block.tagName)) {
-        block = block.parentElement;
-      }
-      const text = block?.innerText?.trim() || node?.textContent?.trim() || "";
-      if (text.length > 0) return; // not empty
-      // Position menu near caret
-      const range = s.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      const caretX = rect.left || e.clientX;
-      const caretY = rect.top || e.clientY;
+  // Long press (2s) on empty line → show mini menu
+  const longPressTimer = useRef(null);
+  const handleEditorPointerDown = useCallback((e) => {
+    if (e.target.closest && e.target.closest(".img-wrap")) return;
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+    const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+    longPressTimer.current = setTimeout(() => {
+      haptic("medium");
       const vw = window.innerWidth, vh = window.innerHeight;
       const mw = 200;
-      let left = caretX - mw / 2;
+      let left = clientX - mw / 2;
       left = Math.max(8, Math.min(vw - mw - 8, left));
-      const ax = Math.max(16, Math.min(mw - 16, caretX - left));
+      const ax = Math.max(16, Math.min(mw - 16, clientX - left));
       const MH = 44, GAP = 10, AH = 7;
-      const spaceAbove = caretY - GAP - AH - MH;
-      const spaceBelow = vh - caretY - GAP - AH - MH;
+      const spaceBelow = vh - clientY - GAP - AH - MH;
       let top, dir;
-      if (spaceBelow >= 0) { top = caretY + GAP + AH; dir = "up"; }
-      else { top = Math.max(8, caretY - MH - GAP - AH); dir = "down"; }
-      haptic("light");
+      if (spaceBelow >= 0) { top = clientY + GAP + AH; dir = "up"; }
+      else { top = Math.max(8, clientY - MH - GAP - AH); dir = "down"; }
       setEmptyLineMenu({ left, top, ax, dir, mw });
-    }, 60);
+    }, 2000);
+  }, []);
+  const handleEditorPointerUp = useCallback(() => {
+    clearTimeout(longPressTimer.current);
   }, []);
 
   const closePopup = useCallback(() => {
@@ -800,11 +787,11 @@ export default function App() {
       <div ref={canvasRef} className="canvas noscroll"
         style={{ transform: drawerOpen ? "translateX(110px)" : "none", transition: "transform 400ms cubic-bezier(.22,1,.36,1)" }}
         onClick={e => {
+          setEmptyLineMenu(null);
           if (!e.target.closest(".pc")) {
             savedRange.current = null;
             window.getSelection()?.removeAllRanges();
             setSelVisible(false);
-            setEmptyLineMenu(null);
           }
         }}>
         <div ref={wrapRef} className={`pw${a4Mode ? " a4" : ""}`}>
@@ -817,7 +804,9 @@ export default function App() {
                 onMouseUp={() => setTimeout(() => { saveSel(); tryShowSel(); }, 20)}
                 onTouchEnd={() => setTimeout(() => { saveSel(); tryShowSel(); }, 120)}
                 onKeyUp={saveSel}
-                onClick={handleEditorClick}
+                onPointerDown={handleEditorPointerDown}
+                onPointerUp={handleEditorPointerUp}
+                onPointerCancel={handleEditorPointerUp}
                 onContextMenu={e => { e.preventDefault(); saveSel(); tryShowSel(); }}
               />
               <div className="a4num">1</div>
@@ -829,7 +818,9 @@ export default function App() {
                 onMouseUp={() => setTimeout(() => { saveSel(); tryShowSel(); }, 20)}
                 onTouchEnd={() => setTimeout(() => { saveSel(); tryShowSel(); }, 120)}
                 onKeyUp={saveSel}
-                onClick={handleEditorClick}
+                onPointerDown={handleEditorPointerDown}
+                onPointerUp={handleEditorPointerUp}
+                onPointerCancel={handleEditorPointerUp}
                 onContextMenu={e => { e.preventDefault(); saveSel(); tryShowSel(); }}
               />
             </div>
