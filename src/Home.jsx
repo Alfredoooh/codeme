@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import AppLogo from "./assets/AppLogo";
-import { TwEmoji } from "./data/emojis.js";
+import { TwEmoji } from "./data/emojis.jsx";
 import {
   EmojiPickerOverlay,
   DocContextMenu,
