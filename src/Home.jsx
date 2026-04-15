@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import AppLogo from "assets/AppLogo";
-import { TwEmoji } from "data/emojis";
+import AppLogo from "./assets/AppLogo";
+import { TwEmoji } from "./data/emojis";
 import {
   EmojiPickerOverlay,
   DocContextMenu,
@@ -9,7 +9,7 @@ import {
   ThemeDialog,
   AiSheet,
   TemplatesSheet,
-} from "widgets/HomeWidgets";
+} from "./widgets/HomeWidgets";
 
 /* ── Tags ── */
 const TAGS = [
