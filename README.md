@@ -1,9 +1,9 @@
-# 🔍 API de Busca com IA
+# 🔍 API de Busca com AI
 
 API completa de busca inteligente com processamento de linguagem natural e algoritmos de Machine Learning.
 
 ## 🚀 Características
-
+ 
 - **Web Scraping próprio** - Sem APIs externas de busca
 - **Algoritmos de IA**:
   - TF-IDF para relevância
