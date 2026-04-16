@@ -48,10 +48,10 @@ Color _hexToColor(String hex) {
 class CodeMeApp extends StatefulWidget {
   const CodeMeApp({super.key});
   @override
-  State createState() => _CodeMeAppState();
+  State<CodeMeApp> createState() => _CodeMeAppState();
 }
 
-class _CodeMeAppState extends State {
+class _CodeMeAppState extends State<CodeMeApp> {
   @override
   void initState() {
     super.initState();
@@ -102,15 +102,15 @@ class _CodeMeAppState extends State {
 class WebViewPage extends StatefulWidget {
   const WebViewPage({super.key});
   @override
-  State createState() => _WebViewPageState();
+  State<WebViewPage> createState() => _WebViewPageState();
 }
 
-class _WebViewPageState extends State {
+class _WebViewPageState extends State<WebViewPage> {
   InAppWebViewController? _webViewController;
   bool _isLoading = true;
   bool _hasError = false;
   bool _isConnected = true;
-  late StreamSubscription> _connectivitySubscription;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
 
   final String _url = 'https://codeme-x1p1.onrender.com/';
 
@@ -157,7 +157,7 @@ class _WebViewPageState extends State {
     });
   }
 
-  Future _checkConnectivity() async {
+  Future<void> _checkConnectivity() async {
     final results = await Connectivity().checkConnectivity();
     if (mounted) {
       setState(
@@ -172,8 +172,6 @@ class _WebViewPageState extends State {
       _isLoading = true;
     });
   }
-
-  // ── JavaScript Handlers ───────────────────────────────────────────────────
 
   void _registerHandlers(InAppWebViewController controller) {
     controller.addJavaScriptHandler(
@@ -200,8 +198,8 @@ class _WebViewPageState extends State {
       callback: (args) async {
         final title = args.isNotEmpty ? args[0].toString() : '';
         final body = args.length > 1 ? args[1].toString() : '';
-        final List actions =
-            args.length > 2 ? (args[2] as List) : [];
+        final List<dynamic> actions =
+            args.length > 2 ? (args[2] as List<dynamic>) : [];
         return await _showModal(title, body, actions);
       },
     );
@@ -221,8 +219,8 @@ class _WebViewPageState extends State {
       handlerName: 'flutterSetTheme',
       callback: (args) {
         if (args.isEmpty) return null;
-        final Map params =
-            Map.from(args[0] as Map);
+        final Map<String, dynamic> params =
+            Map<String, dynamic>.from(args[0] as Map);
         appTheme.applyTheme(
           primary: params['primaryColor'] != null
               ? _hexToColor(params['primaryColor'].toString())
@@ -236,8 +234,6 @@ class _WebViewPageState extends State {
       },
     );
   }
-
-  // ── Native Widgets ────────────────────────────────────────────────────────
 
   void _showAlert(String title, String message) {
     showDialog(
@@ -257,8 +253,8 @@ class _WebViewPageState extends State {
     );
   }
 
-  Future _showConfirm(String title, String message) async {
-    final result = await showDialog(
+  Future<bool> _showConfirm(String title, String message) async {
+    final result = await showDialog<bool>(
       context: context,
       barrierColor: Colors.black54,
       builder: (_) => _NativeDialog(
@@ -281,10 +277,10 @@ class _WebViewPageState extends State {
     return result ?? false;
   }
 
-  Future _showModal(
-      String title, String body, List actions) async {
+  Future<String?> _showModal(
+      String title, String body, List<dynamic> actions) async {
     final List<_DialogAction> dialogActions = actions.map((a) {
-      final Map action = Map.from(a as Map);
+      final Map<String, dynamic> action = Map<String, dynamic>.from(a as Map);
       final label = action['label']?.toString() ?? '';
       final styleStr = action['style']?.toString() ?? 'primary';
       _ActionStyle style;
@@ -310,7 +306,7 @@ class _WebViewPageState extends State {
       ));
     }
 
-    return showDialog(
+    return showDialog<String>(
       context: context,
       barrierColor: Colors.black54,
       builder: (_) =>
@@ -332,9 +328,7 @@ class _WebViewPageState extends State {
     });
   }
 
-  // ── Inject Bridge Script ──────────────────────────────────────────────────
-
-  Future _injectBridge(InAppWebViewController controller) async {
+  Future<void> _injectBridge(InAppWebViewController controller) async {
     await controller.evaluateJavascript(source: r"""
       window.FlutterBridge = {
         alert: function(title, message) {
@@ -365,7 +359,7 @@ class _WebViewPageState extends State {
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: appTheme.backgroundColor,
         statusBarIconBrightness:
@@ -451,8 +445,7 @@ class _WebViewPageState extends State {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.wifi_off_rounded,
-                size: 64,
-                color: appTheme.primaryColor.withOpacity(0.5)),
+                size: 64, color: appTheme.primaryColor.withOpacity(0.5)),
             const SizedBox(height: 16),
             Text('Erro ao carregar a página',
                 style: TextStyle(
@@ -463,8 +456,7 @@ class _WebViewPageState extends State {
             Text('Verifique sua conexão e tente novamente.',
                 style: TextStyle(
                     fontSize: 14,
-                    color:
-                        appTheme.isDark ? Colors.white54 : Colors.black54),
+                    color: appTheme.isDark ? Colors.white54 : Colors.black54),
                 textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -493,8 +485,7 @@ class _WebViewPageState extends State {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.signal_wifi_off_rounded,
-                size: 64,
-                color: appTheme.primaryColor.withOpacity(0.5)),
+                size: 64, color: appTheme.primaryColor.withOpacity(0.5)),
             const SizedBox(height: 16),
             Text('Sem conexão à internet',
                 style: TextStyle(
@@ -505,8 +496,7 @@ class _WebViewPageState extends State {
             Text('Conecte-se à internet para usar o app.',
                 style: TextStyle(
                     fontSize: 14,
-                    color:
-                        appTheme.isDark ? Colors.white54 : Colors.black54),
+                    color: appTheme.isDark ? Colors.white54 : Colors.black54),
                 textAlign: TextAlign.center),
           ],
         ),
@@ -542,8 +532,7 @@ class _NativeDialog extends StatelessWidget {
     final bg = appTheme.isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final textColor = appTheme.isDark ? Colors.white : Colors.black;
     final subColor = appTheme.isDark ? Colors.white60 : Colors.black54;
-    final divider =
-        appTheme.isDark ? Colors.white12 : Colors.black12;
+    final divider = appTheme.isDark ? Colors.white12 : Colors.black12;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -569,8 +558,8 @@ class _NativeDialog extends StatelessWidget {
                   if (body.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(body,
-                        style: TextStyle(
-                            fontSize: 14, color: subColor, height: 1.5),
+                        style:
+                            TextStyle(fontSize: 14, color: subColor, height: 1.5),
                         textAlign: TextAlign.center),
                   ],
                 ],
@@ -606,8 +595,8 @@ class _NativeDialog extends StatelessWidget {
                         border: isLast
                             ? null
                             : Border(
-                                right: BorderSide(
-                                    width: 0.5, color: divider)),
+                                right:
+                                    BorderSide(width: 0.5, color: divider)),
                       ),
                       child: Text(action.label,
                           style: TextStyle(
@@ -643,7 +632,7 @@ class _NativeToast extends StatefulWidget {
 class _NativeToastState extends State<_NativeToast>
     with SingleTickerProviderStateMixin {
   late AnimationController _ac;
-  late Animation _fade;
+  late Animation<double> _fade;
 
   @override
   void initState() {
