@@ -173,6 +173,8 @@ class _WebViewPageState extends State<WebViewPage> {
     });
   }
 
+  // ── JavaScript Handlers ───────────────────────────────────────────────────
+
   void _registerHandlers(InAppWebViewController controller) {
     controller.addJavaScriptHandler(
       handlerName: 'flutterAlert',
@@ -234,6 +236,8 @@ class _WebViewPageState extends State<WebViewPage> {
       },
     );
   }
+
+  // ── Native Widgets ────────────────────────────────────────────────────────
 
   void _showAlert(String title, String message) {
     showDialog(
@@ -327,6 +331,8 @@ class _WebViewPageState extends State<WebViewPage> {
       _toastEntry = null;
     });
   }
+
+  // ── Inject Bridge Script ──────────────────────────────────────────────────
 
   Future<void> _injectBridge(InAppWebViewController controller) async {
     await controller.evaluateJavascript(source: r"""
@@ -445,7 +451,8 @@ class _WebViewPageState extends State<WebViewPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.wifi_off_rounded,
-                size: 64, color: appTheme.primaryColor.withOpacity(0.5)),
+                size: 64,
+                color: appTheme.primaryColor.withOpacity(0.5)),
             const SizedBox(height: 16),
             Text('Erro ao carregar a página',
                 style: TextStyle(
@@ -456,7 +463,8 @@ class _WebViewPageState extends State<WebViewPage> {
             Text('Verifique sua conexão e tente novamente.',
                 style: TextStyle(
                     fontSize: 14,
-                    color: appTheme.isDark ? Colors.white54 : Colors.black54),
+                    color:
+                        appTheme.isDark ? Colors.white54 : Colors.black54),
                 textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -485,7 +493,8 @@ class _WebViewPageState extends State<WebViewPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.signal_wifi_off_rounded,
-                size: 64, color: appTheme.primaryColor.withOpacity(0.5)),
+                size: 64,
+                color: appTheme.primaryColor.withOpacity(0.5)),
             const SizedBox(height: 16),
             Text('Sem conexão à internet',
                 style: TextStyle(
@@ -496,7 +505,8 @@ class _WebViewPageState extends State<WebViewPage> {
             Text('Conecte-se à internet para usar o app.',
                 style: TextStyle(
                     fontSize: 14,
-                    color: appTheme.isDark ? Colors.white54 : Colors.black54),
+                    color:
+                        appTheme.isDark ? Colors.white54 : Colors.black54),
                 textAlign: TextAlign.center),
           ],
         ),
@@ -532,7 +542,8 @@ class _NativeDialog extends StatelessWidget {
     final bg = appTheme.isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final textColor = appTheme.isDark ? Colors.white : Colors.black;
     final subColor = appTheme.isDark ? Colors.white60 : Colors.black54;
-    final divider = appTheme.isDark ? Colors.white12 : Colors.black12;
+    final divider =
+        appTheme.isDark ? Colors.white12 : Colors.black12;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -558,8 +569,8 @@ class _NativeDialog extends StatelessWidget {
                   if (body.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(body,
-                        style:
-                            TextStyle(fontSize: 14, color: subColor, height: 1.5),
+                        style: TextStyle(
+                            fontSize: 14, color: subColor, height: 1.5),
                         textAlign: TextAlign.center),
                   ],
                 ],
@@ -595,8 +606,8 @@ class _NativeDialog extends StatelessWidget {
                         border: isLast
                             ? null
                             : Border(
-                                right:
-                                    BorderSide(width: 0.5, color: divider)),
+                                right: BorderSide(
+                                    width: 0.5, color: divider)),
                       ),
                       child: Text(action.label,
                           style: TextStyle(
