@@ -533,7 +533,7 @@ export default function Home({ visible, docs, setDocs, projects, setProjects, on
         transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform .36s cubic-bezier(.32,1,.56,1)",
         boxShadow: drawerOpen ? "4px 0 32px rgba(0,0,0,.18)" : "none",
-        borderRight: `1px solid ${T.brd}`,
+        borderRight: drawerOpen ? `1px solid ${T.brd}` : 'none',
       }}>
         <div style={{
           paddingTop: 48, paddingBottom: 16, paddingLeft: 18, paddingRight: 18,
