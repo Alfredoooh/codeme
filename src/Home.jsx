@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect, useCallback } from "react";
 import AppLogo from "./assets/AppLogo";
 import { TwEmoji } from "./data/emojis.jsx";
@@ -883,4 +882,3 @@ export default function Home({ visible, docs, setDocs, projects, setProjects, on
     </div>
   );
 }
-</pre>
