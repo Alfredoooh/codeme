@@ -2,8 +2,8 @@ services:
   - type: web
     name: nexa-react
     runtime: static
-    buildCommand: echo "Sem build — ficheiros estáticos servidos tal como estão"
-    staticPublishPath: .
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     pullRequestPreviewsEnabled: false
     headers:
       - path: /*
