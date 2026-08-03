@@ -16,9 +16,9 @@ const useStyles = makeStyles({
 });
 
 const TAB_TITLES = {
-  home: 'Início',
   create: 'Criar',
   projects: 'Projetos',
+  templates: 'Templates',
   me: 'Eu',
 };
 

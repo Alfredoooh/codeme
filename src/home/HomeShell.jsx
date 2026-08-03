@@ -2,9 +2,10 @@ import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import AppHeader from './AppHeader.jsx';
 import BottomTabBar from './BottomTabBar.jsx';
-import HomeTab from './HomeTab.jsx';
+import AiFab from './AiFab.jsx';
 import CreateTab from './CreateTab.jsx';
 import ProjectsTab from './ProjectsTab.jsx';
+import TemplatesTab from './TemplatesTab.jsx';
 import MeTab from './MeTab.jsx';
 
 const useStyles = makeStyles({
@@ -27,28 +28,38 @@ const useStyles = makeStyles({
 });
 
 const TABS = [
-  { id: 'home', label: 'Início', icon: 'Home24Regular', iconFilled: 'Home24Filled' },
   { id: 'create', label: 'Criar', icon: 'Add24Regular', iconFilled: 'Add24Filled' },
   { id: 'projects', label: 'Projetos', icon: 'Folder24Regular', iconFilled: 'Folder24Filled' },
-  { id: 'me', label: 'Eu', icon: 'Person24Regular', iconFilled: 'Person24Filled' },
+  { id: 'templates', label: 'Templates', icon: 'Grid24Regular', iconFilled: 'Grid24Filled' },
+  { id: 'me', label: 'Eu', isAvatar: true },
 ];
 
-export default function HomeShell() {
+export default function HomeShell({ user, onOpenAI }) {
   const styles = useStyles();
-  const [activeTab, setActiveTab] = React.useState('home');
+  const [activeTab, setActiveTab] = React.useState('create');
+  const scrollContainerRef = React.useRef(null);
   
   return (
     <div className={styles.root}>
-      <AppHeader activeTab={activeTab} />
+      {activeTab !== 'create' && <AppHeader activeTab={activeTab} />}
 
-      <div className={styles.content}>
-        {activeTab === 'home' && <HomeTab />}
-        {activeTab === 'create' && <CreateTab />}
+      <div className={styles.content} ref={scrollContainerRef}>
+        {activeTab === 'create' && <CreateTab scrollContainerRef={scrollContainerRef} />}
         {activeTab === 'projects' && <ProjectsTab />}
-        {activeTab === 'me' && <MeTab />}
+        {activeTab === 'templates' && <TemplatesTab />}
+        {activeTab === 'me' && <MeTab user={user} />}
       </div>
 
-      <BottomTabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+      <AiFab onClick={onOpenAI} />
+
+      <BottomTabBar
+        tabs={TABS}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        avatarUrl={user?.avatarUrl}
+        avatarColor={user?.avatarColor}
+        userInitial={user?.initial}
+      />
     </div>
   );
 }

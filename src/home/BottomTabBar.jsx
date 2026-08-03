@@ -4,63 +4,140 @@ import { makeStyles, tokens } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   root: {
-    flexShrink: 0,
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 20,
     display: 'flex',
     alignItems: 'stretch',
     justifyContent: 'space-around',
     backgroundColor: tokens.colorNeutralBackground2,
     borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
-    paddingTop: tokens.spacingVerticalSNudge,
+    paddingTop: '6px',
     paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6px)',
-    paddingLeft: tokens.spacingHorizontalXS,
-    paddingRight: tokens.spacingHorizontalXS,
+    paddingLeft: '6px',
+    paddingRight: '6px',
+    touchAction: 'pan-y',
+    WebkitUserSelect: 'none',
+    userSelect: 'none',
   },
-  tabButton: {
+  tabBtn: {
+    position: 'relative',
+    zIndex: 1,
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '3px',
-    paddingTop: tokens.spacingVerticalSNudge,
-    paddingBottom: tokens.spacingVerticalSNudge,
-    background: 'none',
+    justifyContent: 'center',
+    gap: '2px',
+    height: '42px',
     border: 'none',
-    cursor: 'pointer',
+    background: 'transparent',
     color: tokens.colorNeutralForeground3,
-    transitionProperty: 'color',
-    transitionDuration: tokens.durationFaster,
-    transitionTimingFunction: tokens.curveEasyEase,
+    cursor: 'pointer',
+    WebkitTapHighlightColor: 'transparent',
   },
-  tabButtonActive: {
+  tabBtnActive: {
     color: tokens.colorBrandForeground1,
   },
-  label: {
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightRegular,
+  tabIcon: {
+    position: 'relative',
+    width: '24px',
+    height: '24px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transitionProperty: 'transform',
+    transitionDuration: '0.18s',
+    transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)',
   },
-  labelActive: {
+  tabLabel: {
+    fontSize: '10px',
     fontWeight: tokens.fontWeightSemibold,
+    letterSpacing: '-0.1px',
+    opacity: 0.7,
+  },
+  tabLabelActive: {
+    opacity: 1,
+    fontWeight: tokens.fontWeightBold,
+  },
+  avatarWrap: {
+    width: '26px',
+    height: '26px',
+    borderRadius: tokens.borderRadiusCircular,
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1.5px solid transparent',
+    transitionProperty: 'border-color',
+    transitionDuration: '0.18s',
+  },
+  avatarWrapActive: {
+    borderColor: tokens.colorBrandForeground1,
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  avatarInitial: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '11px',
+    fontWeight: tokens.fontWeightBold,
+    color: '#fff',
   },
 });
 
-export default function BottomTabBar({ tabs, activeTab, onChange }) {
+function buzz() {
+  try { navigator.vibrate && navigator.vibrate(6); } catch (e) {}
+}
+
+export default function BottomTabBar({ tabs, activeTab, onChange, avatarUrl, avatarColor = '#FF3B30', userInitial = 'U' }) {
   const styles = useStyles();
+  
+  function select(tab) {
+    buzz();
+    if (tab.id === activeTab) return;
+    onChange(tab.id);
+  }
+  
   return (
-    <div className={styles.root}>
+    <nav className={styles.root}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
-        const IconComp = Icons[isActive ? tab.iconFilled : tab.icon] || Icons.Circle24Regular;
+        const IconComp = !tab.isAvatar ? (Icons[isActive ? tab.iconFilled : tab.icon] || Icons.Circle24Regular) : null;
         return (
           <button
             key={tab.id}
-            onClick={() => onChange(tab.id)}
-            className={`${styles.tabButton} ${isActive ? styles.tabButtonActive : ''}`}
+            className={`${styles.tabBtn} ${isActive ? styles.tabBtnActive : ''}`}
+            onClick={() => select(tab)}
+            aria-label={tab.label}
+            aria-current={isActive ? 'page' : undefined}
           >
-            <IconComp fontSize={24} />
-            <span className={`${styles.label} ${isActive ? styles.labelActive : ''}`}>{tab.label}</span>
+            <span className={styles.tabIcon}>
+              {tab.isAvatar ? (
+                <span className={`${styles.avatarWrap} ${isActive ? styles.avatarWrapActive : ''}`}>
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={tab.label} className={styles.avatarImg} />
+                  ) : (
+                    <span className={styles.avatarInitial} style={{ backgroundColor: avatarColor }}>{userInitial}</span>
+                  )}
+                </span>
+              ) : (
+                <IconComp fontSize={24} />
+              )}
+            </span>
+            <span className={`${styles.tabLabel} ${isActive ? styles.tabLabelActive : ''}`}>{tab.label}</span>
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }

@@ -1,12 +1,4 @@
-import { webLightTheme, webDarkTheme } from '@fluentui/react-components';
-
-// Fluent puro: sem paleta de marca custom, sem overrides de token.
-// getNexaTheme devolve exatamente webLightTheme ou webDarkTheme sem
-// qualquer alteração — o FluentProvider aplica isto globalmente e
-// todos os componentes abaixo consomem tokens.* diretamente, por
-// isso já não existe getRawColors nenhum: a cor certa para cada
-// contexto (fundo, texto, divisor, etc.) vem sempre do token Fluent
-// equivalente, que já reage sozinho ao tema ativo.
+import { webLightTheme, webDarkTheme, tokens } from '@fluentui/react-components';
 
 const THEME_STORAGE_KEY = 'nexa_theme';
 
@@ -42,4 +34,21 @@ export function syncThemeMode(isDark) {
 
 export function getNexaTheme(isDark) {
   return isDark ? webDarkTheme : webLightTheme;
+}
+
+// Azul "Microsoft" que muda por tema — usado no Svelte original em
+// switches, segmented controls e no FAB de logout (#0078D4 no claro,
+// #4CC2FF no escuro). No Fluent v9 isto corresponde a
+// colorBrandForeground1/colorCompoundBrandBackground consoante o
+// tema ativo, por isso aqui expomos como função direta em vez de
+// depender do valor de tokens.* (que já muda sozinho com o
+// FluentProvider, mas os componentes desta função podem ser usados
+// fora de um contexto React puro, como veremos no cálculo de cor
+// do avatar).
+export function getMsBlue(isDark) {
+  return isDark ? '#4CC2FF' : '#0078D4';
+}
+
+export function getMsBluePressed(isDark) {
+  return isDark ? '#005A9E' : '#005A9E';
 }
