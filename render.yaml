@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: nexa-react
+    runtime: static
+    buildCommand: echo "Sem build — ficheiros estáticos servidos tal como estão"
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: false
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
