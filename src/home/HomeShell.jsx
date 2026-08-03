@@ -3,6 +3,7 @@ import { makeStyles, tokens } from '@fluentui/react-components';
 import AppHeader from './AppHeader.jsx';
 import BottomTabBar from './BottomTabBar.jsx';
 import AiFab from './AiFab.jsx';
+import AiSheet from './AiSheet.jsx';
 import CreateTab from './CreateTab.jsx';
 import ProjectsTab from './ProjectsTab.jsx';
 import TemplatesTab from './TemplatesTab.jsx';
@@ -15,7 +16,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: tokens.colorNeutralBackground2,
     color: tokens.colorNeutralForeground1,
   },
   content: {
@@ -30,13 +31,14 @@ const useStyles = makeStyles({
 const TABS = [
   { id: 'create', label: 'Criar', icon: 'Add24Regular', iconFilled: 'Add24Filled' },
   { id: 'projects', label: 'Projetos', icon: 'Folder24Regular', iconFilled: 'Folder24Filled' },
-  { id: 'templates', label: 'Templates', icon: 'Grid24Regular', iconFilled: 'Grid24Filled' },
+  { id: 'templates', label: 'Templates', icon: 'Table24Regular', iconFilled: 'Table24Filled' },
   { id: 'me', label: 'Eu', isAvatar: true },
 ];
 
-export default function HomeShell({ user, onOpenAI }) {
+export default function HomeShell({ user }) {
   const styles = useStyles();
   const [activeTab, setActiveTab] = React.useState('create');
+  const [aiOpen, setAiOpen] = React.useState(false);
   const scrollContainerRef = React.useRef(null);
   
   return (
@@ -50,7 +52,8 @@ export default function HomeShell({ user, onOpenAI }) {
         {activeTab === 'me' && <MeTab user={user} />}
       </div>
 
-      <AiFab onClick={onOpenAI} />
+      <AiFab onClick={() => setAiOpen(true)} />
+      <AiSheet open={aiOpen} onOpenChange={setAiOpen} />
 
       <BottomTabBar
         tabs={TABS}

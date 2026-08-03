@@ -71,6 +71,7 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     border: '1.5px solid transparent',
+    backgroundColor: tokens.colorNeutralBackground3,
     transitionProperty: 'border-color',
     transitionDuration: '0.18s',
   },
@@ -93,13 +94,23 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightBold,
     color: '#fff',
   },
+  // Fallback oficial do Fluent quando não há avatarUrl nem userInitial —
+  // ícone de pessoa em vez de círculo colorido com letra.
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground3,
+  },
 });
 
 function buzz() {
   try { navigator.vibrate && navigator.vibrate(6); } catch (e) {}
 }
 
-export default function BottomTabBar({ tabs, activeTab, onChange, avatarUrl, avatarColor = '#FF3B30', userInitial = 'U' }) {
+export default function BottomTabBar({ tabs, activeTab, onChange, avatarUrl, avatarColor, userInitial }) {
   const styles = useStyles();
   
   function select(tab) {
@@ -126,8 +137,14 @@ export default function BottomTabBar({ tabs, activeTab, onChange, avatarUrl, ava
                 <span className={`${styles.avatarWrap} ${isActive ? styles.avatarWrapActive : ''}`}>
                   {avatarUrl ? (
                     <img src={avatarUrl} alt={tab.label} className={styles.avatarImg} />
+                  ) : userInitial ? (
+                    <span className={styles.avatarInitial} style={{ backgroundColor: avatarColor || tokens.colorBrandBackground }}>
+                      {userInitial}
+                    </span>
                   ) : (
-                    <span className={styles.avatarInitial} style={{ backgroundColor: avatarColor }}>{userInitial}</span>
+                    <span className={styles.avatarFallback}>
+                      <Icons.Person24Regular fontSize={16} />
+                    </span>
                   )}
                 </span>
               ) : (

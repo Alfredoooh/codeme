@@ -6,7 +6,6 @@ const useStyles = makeStyles({
   fab: {
     position: 'fixed',
     right: tokens.spacingHorizontalL,
-    // 42px altura da bottom bar + 6px padding topo + safe-area + folga
     bottom: 'calc(env(safe-area-inset-bottom, 0px) + 42px + 6px + 16px)',
     zIndex: 25,
     width: '56px',

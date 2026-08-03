@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search24Regular, Alert24Regular } from '@fluentui/react-icons';
-import { makeStyles, tokens, Text, Caption1, Card } from '@fluentui/react-components';
+import { Search24Regular, Alert24Regular, Sparkle24Filled } from '@fluentui/react-icons';
+import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components';
 import { ALL_APPS } from '../shared/apps.js';
 
 const SKELETON_COUNT = 4;
@@ -41,7 +41,7 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    color: tokens.colorBrandForeground1,
+    color: tokens.colorNeutralForeground1,
   },
   headerActions: {
     display: 'flex',
@@ -64,8 +64,11 @@ const useStyles = makeStyles({
     flexShrink: 0,
     padding: 0,
     color: tokens.colorNeutralForeground1,
-    transitionProperty: 'opacity, transform',
+    transitionProperty: 'opacity, transform, background-color',
     transitionDuration: '0.2s',
+    ':active': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
   },
   iconBtnHidden: {
     opacity: 0,
@@ -84,29 +87,60 @@ const useStyles = makeStyles({
   },
   root: {
     width: '100%',
+    paddingBottom: tokens.spacingVerticalXXL,
   },
+
+  // --- Hero: agora com profundidade real, não é mais um bloco transparente ---
   heroBg: {
     position: 'relative',
     width: '100%',
-    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 68px)',
-    paddingBottom: tokens.spacingVerticalS,
+    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+    paddingBottom: tokens.spacingVerticalL,
+    paddingLeft: tokens.spacingHorizontalXXL,
+    paddingRight: tokens.spacingHorizontalXXL,
+    backgroundImage: `radial-gradient(120% 100% at 50% 0%, ${tokens.colorBrandBackground2} 0%, transparent 60%)`,
+  },
+  heroEyebrow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    color: tokens.colorBrandForeground1,
+    marginBottom: '4px',
+  },
+  heroTitle: {
+    fontSize: '28px',
+    fontWeight: '800',
+    letterSpacing: '-0.6px',
+    lineHeight: '1.15',
+    margin: '0 0 4px 0',
+    color: tokens.colorNeutralForeground1,
+  },
+  heroSubtitle: {
+    color: tokens.colorNeutralForeground3,
+    marginBottom: tokens.spacingVerticalL,
+    display: 'block',
   },
   searchBar: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
-    width: `calc(100% - ${tokens.spacingHorizontalXXL} * 2)`,
-    height: '44px',
-    marginLeft: tokens.spacingHorizontalXXL,
-    marginRight: tokens.spacingHorizontalXXL,
+    width: '100%',
+    height: '48px',
     paddingLeft: tokens.spacingHorizontalM,
     paddingRight: tokens.spacingHorizontalM,
-    border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusCircular,
-    backgroundColor: tokens.colorNeutralBackground2,
+    border: 'none',
+    borderRadius: tokens.borderRadiusXLarge,
+    backgroundColor: tokens.colorNeutralBackground1,
+    boxShadow: tokens.shadow4,
     cursor: 'pointer',
     position: 'relative',
     zIndex: 1,
+    transitionProperty: 'transform, box-shadow',
+    transitionDuration: '0.15s',
+    ':active': {
+      transform: 'scale(0.98)',
+      boxShadow: tokens.shadow2,
+    },
   },
   searchBarIcon: {
     color: tokens.colorNeutralForeground3,
@@ -115,77 +149,88 @@ const useStyles = makeStyles({
   searchBarPlaceholder: {
     color: tokens.colorNeutralForeground3,
   },
-  cardTitle: {
-    display: 'block',
-    marginTop: '18px',
-    marginBottom: tokens.spacingVerticalS,
-    marginLeft: tokens.spacingHorizontalXXL,
-    marginRight: tokens.spacingHorizontalXXL,
-    color: tokens.colorNeutralForeground3,
+
+  // --- Secção "Comece a criar com": eyebrow + grid de cards com hierarquia ---
+  sectionHead: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: tokens.spacingVerticalXXL,
+    marginBottom: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalXXL,
+    paddingRight: tokens.spacingHorizontalXXL,
   },
-  appsCard: {
-    marginLeft: tokens.spacingHorizontalL,
-    marginRight: tokens.spacingHorizontalL,
-    padding: tokens.spacingVerticalL,
+  sectionEyebrow: {
+    textTransform: 'uppercase',
+    letterSpacing: '0.6px',
+    fontSize: '11px',
+    fontWeight: tokens.fontWeightBold,
+    color: tokens.colorNeutralForeground3,
   },
   appsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '20px 8px',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '4px',
+    paddingLeft: tokens.spacingHorizontalL,
+    paddingRight: tokens.spacingHorizontalL,
   },
   appItem: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: tokens.spacingVerticalS,
+    gap: '8px',
     border: 'none',
     background: 'transparent',
-    padding: 0,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalXS}`,
+    borderRadius: tokens.borderRadiusLarge,
     cursor: 'pointer',
+    transitionProperty: 'transform, background-color',
+    transitionDuration: '0.15s',
+    transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)',
+    ':active': {
+      transform: 'scale(0.94)',
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
   },
   appIconWrap: {
-    width: '40px',
-    height: '40px',
+    width: '52px',
+    height: '52px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    borderRadius: tokens.borderRadiusMedium,
+    borderRadius: tokens.borderRadiusXLarge,
+    boxShadow: `inset 0 0 0 1px ${tokens.colorNeutralStroke3}`,
   },
   appIconImg: {
-    width: '100%',
-    height: '100%',
+    width: '52%',
+    height: '52%',
     objectFit: 'contain',
     display: 'block',
   },
   appLabel: {
     textAlign: 'center',
-    maxWidth: '88px',
+    fontSize: '11px',
+    lineHeight: '1.25',
+    maxWidth: '76px',
+    color: tokens.colorNeutralForeground2,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     display: '-webkit-box',
     WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical',
   },
+
   skeletonBlock: {
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
   },
+
+  // --- Recentes: thumbs maiores, overlay com gradiente + título sobreposto ---
   recentSection: {
-    marginTop: '28px',
-  },
-  recentSectionHead: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: tokens.spacingHorizontalXXL,
-    paddingRight: tokens.spacingHorizontalXXL,
-    paddingBottom: tokens.spacingVerticalM,
-  },
-  recentCta: {
-    color: tokens.colorBrandForeground1,
+    marginTop: tokens.spacingVerticalXXL,
   },
   recentRow: {
     display: 'flex',
@@ -194,26 +239,31 @@ const useStyles = makeStyles({
     WebkitOverflowScrolling: 'touch',
     paddingLeft: tokens.spacingHorizontalXXL,
     paddingRight: tokens.spacingHorizontalXXL,
+    scrollSnapType: 'x proximity',
   },
   recentCard: {
     flex: '0 0 auto',
-    width: '132px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalXS,
+    width: '148px',
     border: 'none',
     background: 'transparent',
     padding: 0,
     textAlign: 'left',
     cursor: 'pointer',
+    scrollSnapAlign: 'start',
+    transitionProperty: 'transform',
+    transitionDuration: '0.15s',
+    ':active': {
+      transform: 'scale(0.96)',
+    },
   },
   recentThumb: {
-    width: '132px',
-    height: '132px',
+    position: 'relative',
+    width: '148px',
+    height: '148px',
     borderRadius: tokens.borderRadiusXLarge,
     overflow: 'hidden',
     backgroundColor: tokens.colorNeutralBackground3,
-    border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: tokens.shadow4,
     flexShrink: 0,
   },
   recentThumbImg: {
@@ -222,9 +272,33 @@ const useStyles = makeStyles({
     objectFit: 'cover',
     display: 'block',
   },
-  recentCardTime: {
-    color: tokens.colorNeutralForeground3,
+  recentThumbOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: '28px',
+    paddingBottom: tokens.spacingVerticalS,
+    paddingLeft: tokens.spacingHorizontalS,
+    paddingRight: tokens.spacingHorizontalS,
+    backgroundImage: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.72) 100%)',
   },
+  recentThumbTitle: {
+    color: '#fff',
+    fontSize: '13px',
+    fontWeight: tokens.fontWeightSemibold,
+    display: 'block',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  recentThumbTime: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: '11px',
+    display: 'block',
+    marginTop: '1px',
+  },
+
   emptyState: {
     display: 'flex',
     flexDirection: 'column',
@@ -273,7 +347,7 @@ function timeAgo(updatedAt) {
 // existir uma fonte de dados real. Assim que houver um endpoint ou
 // storage local para projetos, troca este valor por esse resultado
 // e o componente já sabe desenhar tudo sozinho (skeleton → lista →
-// estado vazio, exatamente como no Svelte original).
+// estado vazio).
 const MOCK_RECENT_PROJECTS = null;
 
 export default function CreateTab({ scrollContainerRef }) {
@@ -286,8 +360,7 @@ export default function CreateTab({ scrollContainerRef }) {
   // visível, 1 quando já saiu do ecrã pelo scroll — controla o
   // encolher/opacidade da search bar e o aparecimento do botão de
   // pesquisa no header fixo. Calculado a partir do scroll do
-  // container pai (o mesmo <div> que já faz overflowY: auto no
-  // HomeShell), medido em ~80px de curso total.
+  // container pai, medido em ~80px de curso total.
   React.useEffect(() => {
     const el = scrollContainerRef?.current;
     if (!el) return;
@@ -349,6 +422,12 @@ export default function CreateTab({ scrollContainerRef }) {
 
       <div className={styles.root}>
         <div className={styles.heroBg}>
+          <div className={styles.heroEyebrow}>
+            <Sparkle24Filled fontSize={16} />
+            <Caption1 weight="bold">Estúdio Nexa</Caption1>
+          </div>
+          <h2 className={styles.heroTitle}>O que vamos criar hoje?</h2>
+          <Caption1 block className={styles.heroSubtitle}>Escolhe uma ferramenta ou continua um projeto recente</Caption1>
           <button
             className={styles.searchBar}
             style={{
@@ -358,36 +437,34 @@ export default function CreateTab({ scrollContainerRef }) {
             }}
             onClick={handleOpenSearch}
           >
-            <Search24Regular fontSize={17} className={styles.searchBarIcon} />
+            <Search24Regular fontSize={18} className={styles.searchBarIcon} />
             <Caption1 className={styles.searchBarPlaceholder}>Pesquisar designs, projetos, modelos…</Caption1>
           </button>
         </div>
 
-        <Caption1 block weight="semibold" className={styles.cardTitle}>Comece a criar com</Caption1>
-        <Card className={styles.appsCard}>
-          <div className={styles.appsGrid}>
-            {ALL_APPS.map((app) => (
-              <button key={app.id} className={styles.appItem} onClick={() => openApp(app)}>
-                <span className={styles.appIconWrap} style={{ backgroundColor: app.color + '26' }}>
-                  <img src={app.iconPath} alt={app.label} className={styles.appIconImg} />
-                </span>
-                <Caption1 className={styles.appLabel}>{app.label}</Caption1>
-              </button>
-            ))}
-          </div>
-        </Card>
+        <div className={styles.sectionHead}>
+          <Text className={styles.sectionEyebrow}>Comece a criar com</Text>
+        </div>
+        <div className={styles.appsGrid}>
+          {ALL_APPS.map((app) => (
+            <button key={app.id} className={styles.appItem} onClick={() => openApp(app)}>
+              <span className={styles.appIconWrap} style={{ backgroundColor: app.color + '22' }}>
+                <img src={app.iconPath} alt={app.label} className={styles.appIconImg} />
+              </span>
+              <Caption1 className={styles.appLabel}>{app.label}</Caption1>
+            </button>
+          ))}
+        </div>
 
         {recentProjects === null && (
           <div className={styles.recentSection}>
-            <div className={styles.recentSectionHead}>
+            <div className={styles.sectionHead}>
               <div className={styles.skeletonBlock} style={{ width: '160px', height: '17px' }} />
             </div>
             <div className={styles.recentRow}>
               {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
                 <div key={i} className={styles.recentCard}>
                   <div className={styles.recentThumb} />
-                  <div className={styles.skeletonBlock} style={{ width: '70%', height: '11px' }} />
-                  <div className={styles.skeletonBlock} style={{ width: '45%', height: '11px' }} />
                 </div>
               ))}
             </div>
@@ -396,9 +473,9 @@ export default function CreateTab({ scrollContainerRef }) {
 
         {recentProjects !== null && recentProjects.length > 0 && (
           <div className={styles.recentSection}>
-            <div className={styles.recentSectionHead}>
+            <div className={styles.sectionHead}>
               <Text weight="semibold" size={400}>Continue a criar designs</Text>
-              <Caption1 className={styles.recentCta}>Ver tudo</Caption1>
+              <Caption1 style={{ color: tokens.colorBrandForeground1 }}>Ver tudo</Caption1>
             </div>
             <div className={styles.recentRow}>
               {recentProjects.map((p) => (
@@ -409,9 +486,11 @@ export default function CreateTab({ scrollContainerRef }) {
                     ) : (
                       <div style={{ width: '100%', height: '100%', backgroundColor: p.color || tokens.colorNeutralBackground3 }} />
                     )}
+                    <div className={styles.recentThumbOverlay}>
+                      <Text className={styles.recentThumbTitle}>{p.title}</Text>
+                      {p.updatedAt && <Caption1 className={styles.recentThumbTime}>{timeAgo(p.updatedAt)}</Caption1>}
+                    </div>
                   </div>
-                  <Text weight="semibold" size={300}>{p.title}</Text>
-                  {p.updatedAt && <Caption1 className={styles.recentCardTime}>{timeAgo(p.updatedAt)}</Caption1>}
                 </button>
               ))}
             </div>

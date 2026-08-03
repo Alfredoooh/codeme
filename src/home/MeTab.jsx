@@ -2,10 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronRight24Regular,
-  ArrowDownload24Regular,
+  WeatherSunny24Regular,
+  WeatherMoon24Regular,
   Alert24Regular,
-  QuestionCircle24Regular,
   Settings24Regular,
+  QuestionCircle24Regular,
   ArrowExit24Regular,
 } from '@fluentui/react-icons';
 import {
@@ -14,7 +15,6 @@ import {
   Text,
   Caption1,
   Avatar,
-  Switch,
   Button,
   Dialog,
   DialogSurface,
@@ -23,11 +23,11 @@ import {
   DialogContent,
   DialogActions,
 } from '@fluentui/react-components';
-import { getStoredThemeMode, setStoredThemeMode, syncThemeMode } from '../shared/theme.js';
+import { getStoredThemeMode } from '../shared/theme.js';
 
 const useStyles = makeStyles({
   root: {
-    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 4px)',
+    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 20px)',
     paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 54px + 88px)',
   },
   avatarBlock: {
@@ -48,6 +48,7 @@ const useStyles = makeStyles({
     minWidth: 0,
   },
   name: {
+    color: tokens.colorNeutralForeground1,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -64,24 +65,6 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     flexShrink: 0,
   },
-  installRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    width: `calc(100% - ${tokens.spacingHorizontalXXL} * 2)`,
-    marginLeft: tokens.spacingHorizontalXXL,
-    marginRight: tokens.spacingHorizontalXXL,
-    marginBottom: tokens.spacingVerticalL,
-    padding: tokens.spacingVerticalM,
-    borderRadius: tokens.borderRadiusLarge,
-    border: `${tokens.strokeWidthThin} solid ${tokens.colorBrandStroke2}`,
-    backgroundColor: tokens.colorBrandBackground2,
-    cursor: 'pointer',
-  },
-  installLabel: {
-    color: tokens.colorBrandForeground1,
-    fontWeight: tokens.fontWeightSemibold,
-  },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -96,9 +79,15 @@ const useStyles = makeStyles({
     background: 'transparent',
     cursor: 'pointer',
     textAlign: 'left',
+    color: tokens.colorNeutralForeground1,
+  },
+  rowIcon: {
+    color: tokens.colorNeutralForeground1,
+    flexShrink: 0,
   },
   rowLabel: {
     flex: 1,
+    color: tokens.colorNeutralForeground1,
   },
   logoutFab: {
     position: 'fixed',
@@ -113,35 +102,8 @@ const useStyles = makeStyles({
 export default function MeTab({ user }) {
   const styles = useStyles();
   const navigate = useNavigate();
-  const [isDark, setIsDarkLocal] = React.useState(() => getStoredThemeMode() === 'dark');
+  const isDark = getStoredThemeMode() === 'dark';
   const [logoutOpen, setLogoutOpen] = React.useState(false);
-  const [showInstall, setShowInstall] = React.useState(false);
-  
-  React.useEffect(() => {
-    function handler(e) {
-      e.preventDefault();
-      window.__deferredInstallPrompt = e;
-      setShowInstall(true);
-    }
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-  
-  function toggleDarkMode(checked) {
-    setIsDarkLocal(checked);
-    setStoredThemeMode(checked ? 'dark' : 'light');
-    syncThemeMode(checked);
-    window.location.reload();
-  }
-  
-  async function handleInstall() {
-    const promptEvent = window.__deferredInstallPrompt;
-    if (!promptEvent) return;
-    promptEvent.prompt();
-    await promptEvent.userChoice;
-    window.__deferredInstallPrompt = null;
-    setShowInstall(false);
-  }
   
   function confirmLogout() {
     setLogoutOpen(false);
@@ -161,9 +123,8 @@ export default function MeTab({ user }) {
         <Avatar
           image={avatarUrl ? { src: avatarUrl } : undefined}
           name={avatarUrl ? undefined : userInitial}
-          color={avatarUrl ? undefined : 'colorful'}
           size={60}
-          style={!avatarUrl ? { backgroundColor: avatarColor } : undefined}
+          style={!avatarUrl ? { backgroundColor: avatarColor, color: '#fff' } : undefined}
         />
         <div className={styles.identity}>
           <Text weight="bold" size={500} block className={styles.name}>{userName}</Text>
@@ -172,31 +133,23 @@ export default function MeTab({ user }) {
         <ChevronRight24Regular className={styles.chevron} />
       </button>
 
-      {showInstall && (
-        <button className={styles.installRow} onClick={handleInstall}>
-          <ArrowDownload24Regular fontSize={22} style={{ color: tokens.colorBrandForeground1 }} />
-          <Text className={styles.installLabel}>Instalar app</Text>
-        </button>
-      )}
-
-      <button className={styles.row} type="button">
-        <Settings24Regular fontSize={24} style={{ opacity: isDark ? 1 : 0.85 }} />
+      <button className={styles.row} onClick={() => navigate('/home/settings')}>
+        {isDark ? <WeatherMoon24Regular className={styles.rowIcon} fontSize={24} /> : <WeatherSunny24Regular className={styles.rowIcon} fontSize={24} />}
         <Text weight="medium" className={styles.rowLabel}>Modo escuro</Text>
-        <Switch checked={isDark} onChange={(_, data) => toggleDarkMode(data.checked)} />
       </button>
 
-      <button className={styles.row} onClick={() => navigate('/home/settings?section=notifications')}>
-        <Alert24Regular fontSize={24} />
+      <button className={styles.row} onClick={() => navigate('/home/notifications')}>
+        <Alert24Regular className={styles.rowIcon} fontSize={24} />
         <Text weight="medium" className={styles.rowLabel}>Notificações</Text>
       </button>
 
       <button className={styles.row} onClick={() => navigate('/home/settings')}>
-        <Settings24Regular fontSize={24} />
+        <Settings24Regular className={styles.rowIcon} fontSize={24} />
         <Text weight="medium" className={styles.rowLabel}>Definições</Text>
       </button>
 
       <button className={styles.row} onClick={() => navigate('/home/settings?section=help')}>
-        <QuestionCircle24Regular fontSize={24} />
+        <QuestionCircle24Regular className={styles.rowIcon} fontSize={24} />
         <Text weight="medium" className={styles.rowLabel}>Ajuda e suporte</Text>
       </button>
 
