@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: editor
-    runtime: node
-    buildCommand: npm install && npm run build
-    startCommand: npx serve dist
-    envVars:
-      - key: NODE_VERSION
-        value: 20
