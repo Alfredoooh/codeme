@@ -12,13 +12,6 @@ import SlidesApp from './slides/App.jsx';
 import ProfileApp from './profile/App.jsx';
 import AuthApp from './auth/App.jsx';
 
-// Ponto de entrada único do Nexa em React. Espelha a estrutura de
-// "shell raiz + mini-apps por pasta" que já existe na versão Svelte
-// (ver src/App.svelte de lá): cada pasta é a sua própria mini-app com
-// o seu próprio App.jsx, e este ficheiro só decide qual delas montar
-// consoante a rota. Por agora, só 'home' está completa; as restantes
-// são stubs "Em breve" (ver cada App.jsx respetivo) até serem
-// reconstruídas nesta base React uma de cada vez.
 function Root() {
   const [isDark, setIsDark] = React.useState(() => getStoredThemeMode() === 'dark');
   

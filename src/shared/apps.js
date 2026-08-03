@@ -1,11 +1,3 @@
-// Lista central de mini-apps do Nexa — equivalente direto ao
-// ALL_APPS de shared/plans.js na versão Svelte. Usado pelo HomeTab
-// (grid "Criar"), pela BottomTabBar, e por qualquer sítio que precise
-// de navegar entre apps de forma consistente. `ready: true` marca
-// quais já estão implementadas nesta base React; as restantes
-// mostram um badge "Em breve" e abrem na mesma o stub da respetiva
-// pasta, para já poderes navegar e ver a estrutura mesmo sem a
-// funcionalidade completa.
 export const ALL_APPS = [
   { id: 'home', label: 'Início', icon: 'Home', path: '/home', color: '#D9D9D9', ready: true },
   { id: 'ai', label: 'Assistente de IA', icon: 'Sparkle', path: '/ai', color: '#862CD4', ready: false },

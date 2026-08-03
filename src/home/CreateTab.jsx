@@ -1,45 +1,69 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getRawColors } from '../shared/theme.js';
+import { makeStyles, tokens, Title2, Text, Caption1, Card } from '@fluentui/react-components';
 import { ALL_APPS } from '../shared/apps.js';
 
-// Tab "Criar": grid focado em criação de conteúdo, um botão por app
-// de conteúdo. Estruturalmente igual à CreateTab.svelte (grid de
-// ícones coloridos por app), sem os templates ainda porque essa
-// lógica (DOC_MODELS, etc.) ainda não foi portada para esta base.
-export default function CreateTab({ isDark }) {
-  const c = getRawColors(isDark);
+const useStyles = makeStyles({
+  root: {
+    paddingLeft: tokens.spacingHorizontalXXL,
+    paddingRight: tokens.spacingHorizontalXXL,
+    paddingTop: tokens.spacingVerticalXXL,
+  },
+  title: {
+    marginBottom: tokens.spacingVerticalXL,
+  },
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    paddingBottom: tokens.spacingVerticalXL,
+  },
+  item: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalM,
+    paddingBottom: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalL,
+    paddingRight: tokens.spacingHorizontalL,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  swatch: {
+    width: '40px',
+    height: '40px',
+    borderRadius: tokens.borderRadiusMedium,
+    flexShrink: 0,
+  },
+  itemBody: {
+    flex: 1,
+  },
+  itemSubtitle: {
+    display: 'block',
+    marginTop: tokens.spacingVerticalXXS,
+    color: tokens.colorNeutralForeground3,
+  },
+});
+
+export default function CreateTab() {
+  const styles = useStyles();
   const navigate = useNavigate();
   const creationApps = ALL_APPS.filter((a) => a.id !== 'home');
   
   return (
-    <div style={{ padding: '20px 20px 0' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 20px', color: c.textPrimary }}>O que queres criar?</h1>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 20 }}>
+    <div className={styles.root}>
+      <Title2 as="h1" block className={styles.title}>O que queres criar?</Title2>
+      <div className={styles.list}>
         {creationApps.map((app) => (
-          <button
-            key={app.id}
-            onClick={() => navigate(app.path)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-              padding: '14px 16px',
-              borderRadius: 14,
-              border: `1px solid ${c.divider}`,
-              background: c.surface,
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-          >
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: app.color, flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: c.textPrimary }}>{app.label}</div>
-              <div style={{ fontSize: 12, color: c.textSecondary, marginTop: 2 }}>
+          <Card key={app.id} className={styles.item} onClick={() => navigate(app.path)}>
+            <div className={styles.swatch} style={{ backgroundColor: app.color }} />
+            <div className={styles.itemBody}>
+              <Text weight="bold" block>{app.label}</Text>
+              <Caption1 block className={styles.itemSubtitle}>
                 {app.ready ? 'Toca para começar' : 'Em breve'}
-              </div>
+              </Caption1>
             </div>
-          </button>
+          </Card>
         ))}
       </div>
     </div>

@@ -1,21 +1,42 @@
 import React from 'react';
 import { Folder24Regular } from '@fluentui/react-icons';
-import { getRawColors } from '../shared/theme.js';
+import { makeStyles, tokens, Text, Body1 } from '@fluentui/react-components';
 
-// Tab "Projetos": placeholder de estado vazio nesta primeira versão.
-// A listagem real de projetos guardados (docs/sheets/whiteboard) só
-// faz sentido depois de essas apps existirem nesta base React com
-// persistência própria — por agora mostra apenas o estado vazio para
-// a navegação/estrutura ficar completa.
-export default function ProjectsTab({ isDark }) {
-  const c = getRawColors(isDark);
+const useStyles = makeStyles({
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    paddingTop: '60px',
+    paddingBottom: '60px',
+    paddingLeft: tokens.spacingHorizontalXXL,
+    paddingRight: tokens.spacingHorizontalXXL,
+    textAlign: 'center',
+  },
+  icon: {
+    color: tokens.colorNeutralForeground3,
+    marginBottom: tokens.spacingVerticalL,
+  },
+  title: {
+    marginBottom: tokens.spacingVerticalXS,
+  },
+  subtitle: {
+    color: tokens.colorNeutralForeground3,
+    lineHeight: tokens.lineHeightBase300,
+  },
+});
+
+export default function ProjectsTab() {
+  const styles = useStyles();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '60px 30px', textAlign: 'center' }}>
-      <Folder24Regular fontSize={48} style={{ color: c.textSecondary, marginBottom: 16 }} />
-      <div style={{ fontSize: 16, fontWeight: 700, color: c.textPrimary, marginBottom: 6 }}>Ainda sem projetos</div>
-      <div style={{ fontSize: 13.5, color: c.textSecondary, lineHeight: 1.5 }}>
+    <div className={styles.root}>
+      <Folder24Regular fontSize={48} className={styles.icon} />
+      <Text weight="bold" size={500} block className={styles.title}>Ainda sem projetos</Text>
+      <Body1 block className={styles.subtitle}>
         Os teus documentos, folhas de cálculo e designs vão aparecer aqui assim que os criares.
-      </div>
+      </Body1>
     </div>
   );
 }

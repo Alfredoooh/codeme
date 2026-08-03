@@ -1,27 +1,52 @@
 import React from 'react';
 import * as Icons from '@fluentui/react-icons';
-import { getRawColors } from '../shared/theme.js';
+import { makeStyles, tokens } from '@fluentui/react-components';
 
-// Bottom tab bar fixo. Usa @fluentui/react-icons dinamicamente pelo
-// nome (Icons[iconName]) para não ter de importar cada ícone
-// individualmente aqui — troca automaticamente entre a variante
-// regular e a filled consoante a tab está ativa, tal como o padrão
-// de ícones "regular vs filled" que já usavas no Svelte
-// (/icons/svg/regular/ vs /icons/svg/filled/).
-export default function BottomTabBar({ isDark, tabs, activeTab, onChange }) {
-  const c = getRawColors(isDark);
+const useStyles = makeStyles({
+  root: {
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'stretch',
+    justifyContent: 'space-around',
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+    paddingTop: tokens.spacingVerticalSNudge,
+    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6px)',
+    paddingLeft: tokens.spacingHorizontalXS,
+    paddingRight: tokens.spacingHorizontalXS,
+  },
+  tabButton: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '3px',
+    paddingTop: tokens.spacingVerticalSNudge,
+    paddingBottom: tokens.spacingVerticalSNudge,
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: tokens.colorNeutralForeground3,
+    transitionProperty: 'color',
+    transitionDuration: tokens.durationFaster,
+    transitionTimingFunction: tokens.curveEasyEase,
+  },
+  tabButtonActive: {
+    color: tokens.colorBrandForeground1,
+  },
+  label: {
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightRegular,
+  },
+  labelActive: {
+    fontWeight: tokens.fontWeightSemibold,
+  },
+});
+
+export default function BottomTabBar({ tabs, activeTab, onChange }) {
+  const styles = useStyles();
   return (
-    <div
-      style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'stretch',
-        justifyContent: 'space-around',
-        background: c.surface,
-        borderTop: `1px solid ${c.divider}`,
-        padding: '6px 4px calc(env(safe-area-inset-bottom, 0px) + 6px)',
-      }}
-    >
+    <div className={styles.root}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const IconComp = Icons[isActive ? tab.iconFilled : tab.icon] || Icons.Circle24Regular;
@@ -29,22 +54,10 @@ export default function BottomTabBar({ isDark, tabs, activeTab, onChange }) {
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-              padding: '6px 4px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: isActive ? c.accent : c.textSecondary,
-              transition: 'color 0.15s ease',
-            }}
+            className={`${styles.tabButton} ${isActive ? styles.tabButtonActive : ''}`}
           >
             <IconComp fontSize={24} />
-            <span style={{ fontSize: 11, fontWeight: isActive ? 700 : 500 }}>{tab.label}</span>
+            <span className={`${styles.label} ${isActive ? styles.labelActive : ''}`}>{tab.label}</span>
           </button>
         );
       })}

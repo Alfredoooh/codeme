@@ -1,5 +1,5 @@
 import React from 'react';
-import { getRawColors } from '../shared/theme.js';
+import { makeStyles, tokens } from '@fluentui/react-components';
 import AppHeader from './AppHeader.jsx';
 import BottomTabBar from './BottomTabBar.jsx';
 import HomeTab from './HomeTab.jsx';
@@ -7,11 +7,25 @@ import CreateTab from './CreateTab.jsx';
 import ProjectsTab from './ProjectsTab.jsx';
 import MeTab from './MeTab.jsx';
 
-// Shell principal do 'home': appbar fixo + conteúdo da tab ativa +
-// bottom tab bar fixo. Mantém o estado de qual tab está ativa em
-// memória local (não precisa de estar na URL, tal como no Svelte o
-// HomeTab/CreateTab/ProjectsTab/MeTab eram trocados por uma variável
-// local `activeTab`, não por rota).
+const useStyles = makeStyles({
+  root: {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+  },
+  content: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    paddingBottom: '88px',
+  },
+});
+
 const TABS = [
   { id: 'home', label: 'Início', icon: 'Home24Regular', iconFilled: 'Home24Filled' },
   { id: 'create', label: 'Criar', icon: 'Add24Regular', iconFilled: 'Add24Filled' },
@@ -19,22 +33,22 @@ const TABS = [
   { id: 'me', label: 'Eu', icon: 'Person24Regular', iconFilled: 'Person24Filled' },
 ];
 
-export default function HomeShell({ isDark }) {
+export default function HomeShell() {
+  const styles = useStyles();
   const [activeTab, setActiveTab] = React.useState('home');
-  const c = getRawColors(isDark);
   
   return (
-    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: c.background, color: c.textPrimary }}>
-      <AppHeader isDark={isDark} activeTab={activeTab} />
+    <div className={styles.root}>
+      <AppHeader activeTab={activeTab} />
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 88 }}>
-        {activeTab === 'home' && <HomeTab isDark={isDark} />}
-        {activeTab === 'create' && <CreateTab isDark={isDark} />}
-        {activeTab === 'projects' && <ProjectsTab isDark={isDark} />}
-        {activeTab === 'me' && <MeTab isDark={isDark} />}
+      <div className={styles.content}>
+        {activeTab === 'home' && <HomeTab />}
+        {activeTab === 'create' && <CreateTab />}
+        {activeTab === 'projects' && <ProjectsTab />}
+        {activeTab === 'me' && <MeTab />}
       </div>
 
-      <BottomTabBar isDark={isDark} tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+      <BottomTabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
     </div>
   );
 }

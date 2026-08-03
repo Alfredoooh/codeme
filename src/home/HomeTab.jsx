@@ -1,16 +1,96 @@
 import React from 'react';
-import { Sparkle24Filled, ChevronRight24Regular } from '@fluentui/react-icons';
-import { getRawColors } from '../shared/theme.js';
-import { ALL_APPS } from '../shared/apps.js';
 import { useNavigate } from 'react-router-dom';
+import { Sparkle24Filled, ChevronRight24Regular } from '@fluentui/react-icons';
+import { makeStyles, tokens, Title1, Body1, Caption1, Text, Button, Card } from '@fluentui/react-components';
+import { ALL_APPS } from '../shared/apps.js';
 
-// Tab "Início": saudação + acesso rápido ao Assistente de IA + grid
-// de apps (mesma ideia da HomeTab.svelte, simplificada para esta
-// primeira passagem em React já que o resto do conteúdo real dessa
-// tab no Svelte — templates recentes, sugestões — ainda não existe
-// nesta base nova).
-export default function HomeTab({ isDark }) {
-  const c = getRawColors(isDark);
+const useStyles = makeStyles({
+  root: {
+    paddingLeft: tokens.spacingHorizontalXXL,
+    paddingRight: tokens.spacingHorizontalXXL,
+    paddingTop: tokens.spacingVerticalXXL,
+  },
+  greeting: {
+    marginBottom: tokens.spacingVerticalXXS,
+  },
+  subtitle: {
+    display: 'block',
+    marginBottom: tokens.spacingVerticalXL,
+    color: tokens.colorNeutralForeground3,
+  },
+  aiButton: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    height: 'auto',
+    paddingTop: tokens.spacingVerticalL,
+    paddingBottom: tokens.spacingVerticalL,
+    paddingLeft: tokens.spacingHorizontalL,
+    paddingRight: tokens.spacingHorizontalL,
+    marginBottom: tokens.spacingVerticalXXL,
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground}, ${tokens.colorPaletteGrapeBackground2})`,
+    border: 'none',
+  },
+  aiButtonText: {
+    flex: 1,
+    textAlign: 'left',
+  },
+  sectionLabel: {
+    display: 'block',
+    marginBottom: tokens.spacingVerticalM,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: tokens.colorNeutralForeground3,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: tokens.spacingHorizontalM,
+    paddingBottom: tokens.spacingVerticalXL,
+  },
+  appCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: tokens.spacingVerticalS,
+    paddingTop: tokens.spacingVerticalL,
+    paddingBottom: tokens.spacingVerticalL,
+    paddingLeft: tokens.spacingHorizontalS,
+    paddingRight: tokens.spacingHorizontalS,
+    cursor: 'pointer',
+    position: 'relative',
+    textAlign: 'center',
+  },
+  iconWrap: {
+    width: '44px',
+    height: '44px',
+    borderRadius: tokens.borderRadiusLarge,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconDot: {
+    width: '22px',
+    height: '22px',
+    borderRadius: tokens.borderRadiusMedium,
+  },
+  badge: {
+    position: 'absolute',
+    top: '6px',
+    right: '6px',
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+    backgroundColor: tokens.colorBrandBackground2,
+    paddingTop: '2px',
+    paddingBottom: '2px',
+    paddingLeft: tokens.spacingHorizontalSNudge,
+    paddingRight: tokens.spacingHorizontalSNudge,
+    borderRadius: tokens.borderRadiusCircular,
+  },
+});
+
+export default function HomeTab() {
+  const styles = useStyles();
   const navigate = useNavigate();
   const greeting = (() => {
     const h = new Date().getHours();
@@ -18,65 +98,34 @@ export default function HomeTab({ isDark }) {
   })();
   
   return (
-    <div style={{ padding: '20px 20px 0' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, margin: '0 0 4px', color: c.textPrimary }}>{greeting}</h1>
-      <p style={{ fontSize: 14, margin: '0 0 20px', color: c.textSecondary }}>Bem-vindo de volta ao Nexa</p>
+    <div className={styles.root}>
+      <Title1 as="h1" block className={styles.greeting}>{greeting}</Title1>
+      <Body1 block className={styles.subtitle}>Bem-vindo de volta ao Nexa</Body1>
 
-      <button
+      <Button
+        appearance="primary"
+        className={styles.aiButton}
+        icon={<Sparkle24Filled fontSize={26} />}
+        iconPosition="before"
         onClick={() => navigate('/ai')}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '16px 18px',
-          borderRadius: 16,
-          border: 'none',
-          background: `linear-gradient(135deg, ${c.accent}, #862CD4)`,
-          color: '#fff',
-          cursor: 'pointer',
-          marginBottom: 24,
-        }}
       >
-        <Sparkle24Filled fontSize={26} />
-        <div style={{ textAlign: 'left', flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Assistente de IA</div>
-          <div style={{ fontSize: 12.5, opacity: 0.9 }}>Pergunta qualquer coisa</div>
+        <div className={styles.aiButtonText}>
+          <Text weight="bold" block>Assistente de IA</Text>
+          <Caption1 block>Pergunta qualquer coisa</Caption1>
         </div>
         <ChevronRight24Regular />
-      </button>
+      </Button>
 
-      <div style={{ fontSize: 13, fontWeight: 700, color: c.textSecondary, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
-        Apps
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, paddingBottom: 20 }}>
+      <Caption1 block className={styles.sectionLabel}>Apps</Caption1>
+      <div className={styles.grid}>
         {ALL_APPS.filter((a) => a.id !== 'home').map((app) => (
-          <button
-            key={app.id}
-            onClick={() => navigate(app.path)}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 8,
-              padding: '16px 8px',
-              borderRadius: 16,
-              border: `1px solid ${c.divider}`,
-              background: c.surface,
-              cursor: 'pointer',
-              position: 'relative',
-            }}
-          >
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: app.color + '26', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: app.color }} />
+          <Card key={app.id} className={styles.appCard} onClick={() => navigate(app.path)}>
+            <div className={styles.iconWrap} style={{ backgroundColor: app.color + '26' }}>
+              <div className={styles.iconDot} style={{ backgroundColor: app.color }} />
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: c.textPrimary, textAlign: 'center' }}>{app.label}</span>
-            {!app.ready && (
-              <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 9, fontWeight: 700, color: c.accent, background: c.accent + '1a', padding: '2px 6px', borderRadius: 8 }}>
-                Em breve
-              </span>
-            )}
-          </button>
+            <Caption1 weight="semibold">{app.label}</Caption1>
+            {!app.ready && <span className={styles.badge}>Em breve</span>}
+          </Card>
         ))}
       </div>
     </div>

@@ -1,5 +1,19 @@
 import React from 'react';
-import { getRawColors } from '../shared/theme.js';
+import { makeStyles, tokens, Title2 } from '@fluentui/react-components';
+
+const useStyles = makeStyles({
+  root: {
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 14px)',
+    paddingBottom: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalXXL,
+    paddingRight: tokens.spacingHorizontalXXL,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+  },
+});
 
 const TAB_TITLES = {
   home: 'Início',
@@ -8,24 +22,11 @@ const TAB_TITLES = {
   me: 'Eu',
 };
 
-// Appbar fixo do topo. Simples de propósito nesta primeira versão
-// React: apenas o título da tab ativa, com o mesmo respeito por
-// safe-area-inset-top que a versão Svelte já tinha em todos os
-// appbars (env(safe-area-inset-top)).
-export default function AppHeader({ isDark, activeTab }) {
-  const c = getRawColors(isDark);
+export default function AppHeader({ activeTab }) {
+  const styles = useStyles();
   return (
-    <div
-      style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        padding: 'calc(env(safe-area-inset-top, 0px) + 14px) 20px 14px',
-        background: c.background,
-        borderBottom: `1px solid ${c.divider}`,
-      }}
-    >
-      <span style={{ fontSize: 22, fontWeight: 700, color: c.textPrimary }}>{TAB_TITLES[activeTab] || 'Nexa'}</span> <
-    /div>
+    <div className={styles.root}>
+      <Title2>{TAB_TITLES[activeTab] || 'Nexa'}</Title2>
+    </div>
   );
 }
