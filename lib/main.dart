@@ -12,26 +12,74 @@ void main() async {
   runApp(const CodeMeApp());
 }
 
-// ── Design Tokens ────────────────────────────────────────────────────────────
+// ── M3 Color Scheme ──────────────────────────────────────────────────────
+// Seed: #2F7BF6 (azul accent original do projeto)
+// Tonal palettes geradas a partir do seed, seguindo os tons oficiais M3
+// Light usa tons 40/90/100/10 | Dark usa tons 80/30/20/90 (mais vivos, não cinza morto)
 
-class AppColors {
+class AppColorScheme {
   final bool isDark;
-  const AppColors(this.isDark);
+  const AppColorScheme(this.isDark);
 
-  Color get background => isDark ? const Color(0xFF0E0E10) : const Color(0xFFF7F7F8);
-  Color get surface => isDark ? const Color(0xFF1A1A1D) : const Color(0xFFFFFFFF);
-  Color get surfaceElevated => isDark ? const Color(0xFF232326) : const Color(0xFFFFFFFF);
-  Color get border => isDark ? const Color(0xFF2C2C30) : const Color(0xFFE6E6E9);
-  Color get textPrimary => isDark ? const Color(0xFFF2F2F3) : const Color(0xFF17171A);
-  Color get textSecondary => isDark ? const Color(0xFF9A9AA1) : const Color(0xFF6B6B72);
-  Color get textTertiary => isDark ? const Color(0xFF5C5C63) : const Color(0xFFAFAFB5);
-  Color get accent => const Color(0xFF2F7BF6);
-  Color get accentOn => const Color(0xFFFFFFFF);
-  Color get barrier => Colors.black.withOpacity(0.4);
-  Color get hover => isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04);
+  // Primary (azul, alto chroma)
+  Color get primary => isDark ? const Color(0xFFA9C7FF) : const Color(0xFF2F7BF6);
+  Color get onPrimary => isDark ? const Color(0xFF00325C) : const Color(0xFFFFFFFF);
+  Color get primaryContainer => isDark ? const Color(0xFF00497E) : const Color(0xFFD8E2FF);
+  Color get onPrimaryContainer => isDark ? const Color(0xFFD8E2FF) : const Color(0xFF001B3E);
+
+  // Secondary (azul dessaturado, para elementos de apoio)
+  Color get secondary => isDark ? const Color(0xFFBAC6E0) : const Color(0xFF565F71);
+  Color get onSecondary => isDark ? const Color(0xFF283041) : const Color(0xFFFFFFFF);
+  Color get secondaryContainer => isDark ? const Color(0xFF3E4759) : const Color(0xFFDAE2F9);
+  Color get onSecondaryContainer => isDark ? const Color(0xFFDAE2F9) : const Color(0xFF131C2B);
+
+  // Tertiary (roxo-azulado, accent secundário)
+  Color get tertiary => isDark ? const Color(0xFFD3BCE4) : const Color(0xFF6E5677);
+  Color get onTertiary => isDark ? const Color(0xFF3D2947) : const Color(0xFFFFFFFF);
+  Color get tertiaryContainer => isDark ? const Color(0xFF553F5F) : const Color(0xFFF4D9FF);
+  Color get onTertiaryContainer => isDark ? const Color(0xFFF4D9FF) : const Color(0xFF271430);
+
+  // Error
+  Color get error => isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A);
+  Color get onError => isDark ? const Color(0xFF690005) : const Color(0xFFFFFFFF);
+  Color get errorContainer => isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6);
+  Color get onErrorContainer => isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002);
+
+  // Surface (neutral, tom 10 no dark — escuro mas não preto, tom 98 no light)
+  Color get surface => isDark ? const Color(0xFF11141B) : const Color(0xFFF9F9FF);
+  Color get onSurface => isDark ? const Color(0xFFE1E2E9) : const Color(0xFF191C20);
+  Color get surfaceVariant => isDark ? const Color(0xFF43474E) : const Color(0xFFDFE2EB);
+  Color get onSurfaceVariant => isDark ? const Color(0xFFC3C6CF) : const Color(0xFF43474E);
+
+  // Surface containers (substituem a antiga elevação por opacidade)
+  Color get surfaceContainerLowest => isDark ? const Color(0xFF0C0E14) : const Color(0xFFFFFFFF);
+  Color get surfaceContainerLow => isDark ? const Color(0xFF191C23) : const Color(0xFFF3F3FA);
+  Color get surfaceContainer => isDark ? const Color(0xFF1D2027) : const Color(0xFFEDEDF4);
+  Color get surfaceContainerHigh => isDark ? const Color(0xFF272A31) : const Color(0xFFE7E8EE);
+  Color get surfaceContainerHighest => isDark ? const Color(0xFF32353C) : const Color(0xFFE2E2E9);
+
+  Color get surfaceDim => isDark ? const Color(0xFF11141B) : const Color(0xFFD9D9E0);
+  Color get surfaceBright => isDark ? const Color(0xFF373A41) : const Color(0xFFF9F9FF);
+
+  // Outline
+  Color get outline => isDark ? const Color(0xFF8D9199) : const Color(0xFF73777F);
+  Color get outlineVariant => isDark ? const Color(0xFF43474E) : const Color(0xFFC3C6CF);
+
+  // Inverse (para snackbars, tooltips)
+  Color get inverseSurface => isDark ? const Color(0xFFE2E2E9) : const Color(0xFF2E3036);
+  Color get onInverseSurface => isDark ? const Color(0xFF2E3036) : const Color(0xFFF0F0F7);
+  Color get inversePrimary => isDark ? const Color(0xFF2F7BF6) : const Color(0xFFA9C7FF);
+
+  // Scrim / shadow
+  Color get scrim => const Color(0xFF000000);
+  Color get shadow => const Color(0xFF000000);
+
+  Color get barrier => scrim.withOpacity(0.4);
+  Color get hover => onSurface.withOpacity(isDark ? 0.08 : 0.06);
+  Color get pressed => onSurface.withOpacity(isDark ? 0.12 : 0.10);
 }
 
-// ── Theme Notifier ────────────────────────────────────────────────────────────
+// ── Theme Notifier ────────────────────────────────────────────────────────
 
 class AppThemeNotifier extends ChangeNotifier {
   bool isDark = false;
@@ -60,7 +108,7 @@ class ConversationItem {
 
 final List<ConversationItem> mockConversations = [];
 
-// ── App Root ──────────────────────────────────────────────────────────────────
+// ── App Root ──────────────────────────────────────────────────────────────
 
 class CodeMeApp extends StatefulWidget {
   const CodeMeApp({super.key});
@@ -77,47 +125,102 @@ class _CodeMeAppState extends State<CodeMeApp> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors(appTheme.isDark);
+    final scheme = AppColorScheme(appTheme.isDark);
 
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: appTheme.isDark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor: colors.background,
-      systemNavigationBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
-    ));
-
-    return WidgetsApp(
+    return MaterialApp(
       title: 'CodeMe',
-      color: colors.accent,
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        color: colors.background,
-        child: DefaultTextStyle(
-          style: TextStyle(color: colors.textPrimary, fontSize: 15),
-          child: child ?? const SizedBox.shrink(),
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.light,
+        colorScheme: ColorScheme(
+          brightness: Brightness.light,
+          primary: const AppColorScheme(false).primary,
+          onPrimary: const AppColorScheme(false).onPrimary,
+          primaryContainer: const AppColorScheme(false).primaryContainer,
+          onPrimaryContainer: const AppColorScheme(false).onPrimaryContainer,
+          secondary: const AppColorScheme(false).secondary,
+          onSecondary: const AppColorScheme(false).onSecondary,
+          secondaryContainer: const AppColorScheme(false).secondaryContainer,
+          onSecondaryContainer: const AppColorScheme(false).onSecondaryContainer,
+          tertiary: const AppColorScheme(false).tertiary,
+          onTertiary: const AppColorScheme(false).onTertiary,
+          tertiaryContainer: const AppColorScheme(false).tertiaryContainer,
+          onTertiaryContainer: const AppColorScheme(false).onTertiaryContainer,
+          error: const AppColorScheme(false).error,
+          onError: const AppColorScheme(false).onError,
+          errorContainer: const AppColorScheme(false).errorContainer,
+          onErrorContainer: const AppColorScheme(false).onErrorContainer,
+          surface: const AppColorScheme(false).surface,
+          onSurface: const AppColorScheme(false).onSurface,
+          surfaceContainerHighest: const AppColorScheme(false).surfaceContainerHighest,
+          onSurfaceVariant: const AppColorScheme(false).onSurfaceVariant,
+          outline: const AppColorScheme(false).outline,
+          outlineVariant: const AppColorScheme(false).outlineVariant,
+          shadow: const AppColorScheme(false).shadow,
+          scrim: const AppColorScheme(false).scrim,
+          inverseSurface: const AppColorScheme(false).inverseSurface,
+          onInverseSurface: const AppColorScheme(false).onInverseSurface,
+          inversePrimary: const AppColorScheme(false).inversePrimary,
+          surfaceTint: const AppColorScheme(false).primary,
         ),
       ),
-      home: const RootShell(),
-      pageRouteBuilder: <T>(settings, builder) => PageRouteBuilder<T>(
-        settings: settings,
-        pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1, 0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-            child: child,
-          );
-        },
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme(
+          brightness: Brightness.dark,
+          primary: const AppColorScheme(true).primary,
+          onPrimary: const AppColorScheme(true).onPrimary,
+          primaryContainer: const AppColorScheme(true).primaryContainer,
+          onPrimaryContainer: const AppColorScheme(true).onPrimaryContainer,
+          secondary: const AppColorScheme(true).secondary,
+          onSecondary: const AppColorScheme(true).onSecondary,
+          secondaryContainer: const AppColorScheme(true).secondaryContainer,
+          onSecondaryContainer: const AppColorScheme(true).onSecondaryContainer,
+          tertiary: const AppColorScheme(true).tertiary,
+          onTertiary: const AppColorScheme(true).onTertiary,
+          tertiaryContainer: const AppColorScheme(true).tertiaryContainer,
+          onTertiaryContainer: const AppColorScheme(true).onTertiaryContainer,
+          error: const AppColorScheme(true).error,
+          onError: const AppColorScheme(true).onError,
+          errorContainer: const AppColorScheme(true).errorContainer,
+          onErrorContainer: const AppColorScheme(true).onErrorContainer,
+          surface: const AppColorScheme(true).surface,
+          onSurface: const AppColorScheme(true).onSurface,
+          surfaceContainerHighest: const AppColorScheme(true).surfaceContainerHighest,
+          onSurfaceVariant: const AppColorScheme(true).onSurfaceVariant,
+          outline: const AppColorScheme(true).outline,
+          outlineVariant: const AppColorScheme(true).outlineVariant,
+          shadow: const AppColorScheme(true).shadow,
+          scrim: const AppColorScheme(true).scrim,
+          inverseSurface: const AppColorScheme(true).inverseSurface,
+          onInverseSurface: const AppColorScheme(true).onInverseSurface,
+          inversePrimary: const AppColorScheme(true).inversePrimary,
+          surfaceTint: const AppColorScheme(true).primary,
+        ),
       ),
+      themeMode: appTheme.isDark ? ThemeMode.dark : ThemeMode.light,
+      builder: (context, child) {
+        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: appTheme.isDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: scheme.surface,
+          systemNavigationBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
+        ));
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          color: scheme.surface,
+          child: child,
+        );
+      },
+      home: const RootShell(),
     );
   }
 }
 
-// ── Reusable SVG Icon Helper ─────────────────────────────────────────────────
+// ── Reusable SVG Icon Helper ─────────────────────────────────────────────
 
 class AppIcon extends StatelessWidget {
   final String asset;
@@ -142,7 +245,7 @@ class AppIcon extends StatelessWidget {
   }
 }
 
-// ── Root Shell (Drawer + Bottom Tabs) ───────────────────────────────────────
+// ── Root Shell (Drawer + Bottom Tabs) ───────────────────────────────────
 
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -153,7 +256,7 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   bool _drawerOpen = false;
   int _tabIndex = 0; // 0 = AI, 1 = Edit
-  EditorType _editorType = EditorType.docs; // sempre ativo em Documento por defeito
+  EditorType _editorType = EditorType.docs;
 
   void _openDrawer() => setState(() => _drawerOpen = true);
   void _closeDrawer() => setState(() => _drawerOpen = false);
@@ -184,7 +287,7 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors(appTheme.isDark);
+    final scheme = AppColorScheme(appTheme.isDark);
 
     return Material(
       type: MaterialType.transparency,
@@ -193,12 +296,12 @@ class _RootShellState extends State<RootShell> {
           Column(
             children: [
               _Header(
-                colors: colors,
+                scheme: scheme,
                 title: _tabTitle,
                 onMenuTap: _openDrawer,
                 trailing: _tabIndex == 1
                     ? _EditActionsButton(
-                        colors: colors,
+                        scheme: scheme,
                         current: _editorType,
                         onSelect: _setEditorType,
                       )
@@ -214,14 +317,13 @@ class _RootShellState extends State<RootShell> {
                 ),
               ),
               _BottomTabBar(
-                colors: colors,
+                scheme: scheme,
                 currentIndex: _tabIndex,
                 onChanged: (i) => setState(() => _tabIndex = i),
               ),
             ],
           ),
 
-          // Barrier
           if (_drawerOpen)
             Positioned.fill(
               child: GestureDetector(
@@ -229,12 +331,11 @@ class _RootShellState extends State<RootShell> {
                 child: AnimatedOpacity(
                   opacity: _drawerOpen ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: Container(color: colors.barrier),
+                  child: Container(color: scheme.barrier),
                 ),
               ),
             ),
 
-          // Drawer panel — over everything, full height
           AnimatedPositioned(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
@@ -243,7 +344,7 @@ class _RootShellState extends State<RootShell> {
             left: _drawerOpen ? 0 : -280,
             width: 280,
             child: _ConversationsDrawer(
-              colors: colors,
+              scheme: scheme,
               onClose: _closeDrawer,
               onOpenSettings: _openSettings,
             ),
@@ -257,13 +358,13 @@ class _RootShellState extends State<RootShell> {
 // ── Header ────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final String title;
   final VoidCallback onMenuTap;
   final Widget? trailing;
 
   const _Header({
-    required this.colors,
+    required this.scheme,
     required this.title,
     required this.onMenuTap,
     this.trailing,
@@ -274,15 +375,15 @@ class _Header extends StatelessWidget {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 6, bottom: 10, left: 6, right: 10),
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(bottom: BorderSide(color: colors.border, width: 1)),
+        color: scheme.surfaceContainerLow,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant, width: 1)),
       ),
       child: Row(
         children: [
           _IconTapArea(
             onTap: onMenuTap,
-            colors: colors,
-            child: AppIcon('menu.svg', color: colors.textPrimary, size: 20),
+            scheme: scheme,
+            child: AppIcon('menu.svg', color: scheme.onSurface, size: 20),
           ),
           const SizedBox(width: 8),
           Text(
@@ -290,7 +391,7 @@ class _Header extends StatelessWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
+              color: scheme.onSurface,
             ),
           ),
           const Spacer(),
@@ -305,14 +406,14 @@ class _Header extends StatelessWidget {
 
 class _IconTapArea extends StatefulWidget {
   final VoidCallback onTap;
-  final AppColors colors;
+  final AppColorScheme scheme;
   final Widget child;
   final double size;
 
   const _IconTapArea({
     super.key,
     required this.onTap,
-    required this.colors,
+    required this.scheme,
     required this.child,
     this.size = 36,
   });
@@ -337,7 +438,7 @@ class _IconTapAreaState extends State<_IconTapArea> {
         height: widget.size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _pressed ? widget.colors.hover : Colors.transparent,
+          color: _pressed ? widget.scheme.pressed : Colors.transparent,
           borderRadius: BorderRadius.circular(widget.size / 2),
         ),
         child: widget.child,
@@ -349,12 +450,12 @@ class _IconTapAreaState extends State<_IconTapArea> {
 // ── Drawer: Conversations list + account pill ───────────────────────────────
 
 class _ConversationsDrawer extends StatelessWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final VoidCallback onClose;
   final VoidCallback onOpenSettings;
 
   const _ConversationsDrawer({
-    required this.colors,
+    required this.scheme,
     required this.onClose,
     required this.onOpenSettings,
   });
@@ -363,8 +464,8 @@ class _ConversationsDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(right: BorderSide(color: colors.border, width: 1)),
+        color: scheme.surfaceContainerLow,
+        border: Border(right: BorderSide(color: scheme.outlineVariant, width: 1)),
       ),
       child: SafeArea(
         child: Column(
@@ -379,34 +480,34 @@ class _ConversationsDrawer extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: colors.textPrimary,
+                      color: scheme.onSurface,
                     ),
                   ),
                   const Spacer(),
                   _IconTapArea(
                     onTap: onClose,
-                    colors: colors,
+                    scheme: scheme,
                     size: 32,
-                    child: AppIcon('close.svg', color: colors.textSecondary, size: 14),
+                    child: AppIcon('close.svg', color: scheme.onSurfaceVariant, size: 14),
                   ),
                 ],
               ),
             ),
             Expanded(
               child: mockConversations.isEmpty
-                  ? _EmptyConversations(colors: colors)
+                  ? _EmptyConversations(scheme: scheme)
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       itemCount: mockConversations.length,
                       itemBuilder: (context, i) {
-                        return _ConversationTile(colors: colors, item: mockConversations[i]);
+                        return _ConversationTile(scheme: scheme, item: mockConversations[i]);
                       },
                     ),
             ),
-            Container(height: 1, color: colors.border, margin: const EdgeInsets.symmetric(horizontal: 12)),
+            Container(height: 1, color: scheme.outlineVariant, margin: const EdgeInsets.symmetric(horizontal: 12)),
             Padding(
               padding: const EdgeInsets.all(10),
-              child: _AccountPill(colors: colors, onTap: onOpenSettings),
+              child: _AccountPill(scheme: scheme, onTap: onOpenSettings),
             ),
           ],
         ),
@@ -416,8 +517,8 @@ class _ConversationsDrawer extends StatelessWidget {
 }
 
 class _EmptyConversations extends StatelessWidget {
-  final AppColors colors;
-  const _EmptyConversations({required this.colors});
+  final AppColorScheme scheme;
+  const _EmptyConversations({required this.scheme});
 
   @override
   Widget build(BuildContext context) {
@@ -427,11 +528,11 @@ class _EmptyConversations extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AppIcon('chat_empty.svg', color: colors.textTertiary, size: 32),
+            AppIcon('chat_empty.svg', color: scheme.onSurfaceVariant, size: 32),
             const SizedBox(height: 12),
             Text(
               'Sem conversas ainda',
-              style: TextStyle(fontSize: 14, color: colors.textSecondary),
+              style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -442,9 +543,9 @@ class _EmptyConversations extends StatelessWidget {
 }
 
 class _ConversationTile extends StatefulWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final ConversationItem item;
-  const _ConversationTile({required this.colors, required this.item});
+  const _ConversationTile({required this.scheme, required this.item});
 
   @override
   State<_ConversationTile> createState() => _ConversationTileState();
@@ -466,7 +567,7 @@ class _ConversationTileState extends State<_ConversationTile> {
           duration: const Duration(milliseconds: 120),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: _hover ? widget.colors.hover : Colors.transparent,
+            color: _hover ? widget.scheme.hover : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Column(
@@ -474,14 +575,14 @@ class _ConversationTileState extends State<_ConversationTile> {
             children: [
               Text(
                 widget.item.title,
-                style: TextStyle(fontSize: 14, color: widget.colors.textPrimary),
+                style: TextStyle(fontSize: 14, color: widget.scheme.onSurface),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
               Text(
                 widget.item.preview,
-                style: TextStyle(fontSize: 12, color: widget.colors.textSecondary),
+                style: TextStyle(fontSize: 12, color: widget.scheme.onSurfaceVariant),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -494,9 +595,9 @@ class _ConversationTileState extends State<_ConversationTile> {
 }
 
 class _AccountPill extends StatefulWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final VoidCallback onTap;
-  const _AccountPill({required this.colors, required this.onTap});
+  const _AccountPill({required this.scheme, required this.onTap});
 
   @override
   State<_AccountPill> createState() => _AccountPillState();
@@ -516,7 +617,7 @@ class _AccountPillState extends State<_AccountPill> {
         duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _pressed ? widget.colors.hover : Colors.transparent,
+          color: _pressed ? widget.scheme.hover : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Row(
@@ -526,13 +627,13 @@ class _AccountPillState extends State<_AccountPill> {
               height: 30,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: widget.colors.accent,
+                color: widget.scheme.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Text(
+              child: Text(
                 'U',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: widget.scheme.onPrimary,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -542,11 +643,11 @@ class _AccountPillState extends State<_AccountPill> {
             Expanded(
               child: Text(
                 'Utilizador',
-                style: TextStyle(fontSize: 14, color: widget.colors.textPrimary),
+                style: TextStyle(fontSize: 14, color: widget.scheme.onSurface),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            AppIcon('settings.svg', color: widget.colors.textSecondary, size: 16),
+            AppIcon('settings.svg', color: widget.scheme.onSurfaceVariant, size: 16),
           ],
         ),
       ),
@@ -557,12 +658,12 @@ class _AccountPillState extends State<_AccountPill> {
 // ── Bottom Tab Bar ───────────────────────────────────────────────────────
 
 class _BottomTabBar extends StatelessWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
   const _BottomTabBar({
-    required this.colors,
+    required this.scheme,
     required this.currentIndex,
     required this.onChanged,
   });
@@ -571,8 +672,8 @@ class _BottomTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(top: BorderSide(color: colors.border, width: 1)),
+        color: scheme.surfaceContainerLow,
+        border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
       ),
       child: SafeArea(
         top: false,
@@ -581,14 +682,14 @@ class _BottomTabBar extends StatelessWidget {
           child: Row(
             children: [
               _BottomTabItem(
-                colors: colors,
+                scheme: scheme,
                 asset: 'ai_tab.svg',
                 label: 'AI',
                 selected: currentIndex == 0,
                 onTap: () => onChanged(0),
               ),
               _BottomTabItem(
-                colors: colors,
+                scheme: scheme,
                 asset: 'edit_tab.svg',
                 label: 'Editar',
                 selected: currentIndex == 1,
@@ -603,14 +704,14 @@ class _BottomTabBar extends StatelessWidget {
 }
 
 class _BottomTabItem extends StatelessWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final String asset;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   const _BottomTabItem({
-    required this.colors,
+    required this.scheme,
     required this.asset,
     required this.label,
     required this.selected,
@@ -619,7 +720,7 @@ class _BottomTabItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? colors.accent : colors.textSecondary;
+    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -644,7 +745,7 @@ class _BottomTabItem extends StatelessWidget {
   }
 }
 
-// ── Tab 1: AI Chat ───────────────────────────────────────────────────────────
+// ── Tab 1: AI Chat ───────────────────────────────────────────────────────
 
 class _ChatTab extends StatefulWidget {
   const _ChatTab();
@@ -674,7 +775,7 @@ class _ChatTabState extends State<_ChatTab> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors(appTheme.isDark);
+    final scheme = AppColorScheme(appTheme.isDark);
 
     return Column(
       children: [
@@ -684,11 +785,11 @@ class _ChatTabState extends State<_ChatTab> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      AppIcon('robot.svg', color: colors.textTertiary, size: 40),
+                      AppIcon('robot.svg', color: scheme.onSurfaceVariant, size: 40),
                       const SizedBox(height: 12),
                       Text(
                         'Como posso ajudar?',
-                        style: TextStyle(fontSize: 14, color: colors.textSecondary),
+                        style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -706,24 +807,23 @@ class _ChatTabState extends State<_ChatTab> {
                           maxWidth: MediaQuery.of(context).size.width * 0.75,
                         ),
                         decoration: BoxDecoration(
-                          color: colors.accent,
+                          color: scheme.primaryContainer,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           _messages[i],
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          style: TextStyle(color: scheme.onPrimaryContainer, fontSize: 14),
                         ),
                       ),
                     );
                   },
                 ),
         ),
-        // Input colado ao bottom tab bar
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           decoration: BoxDecoration(
-            color: colors.surface,
-            border: Border(top: BorderSide(color: colors.border, width: 1)),
+            color: scheme.surfaceContainerLow,
+            border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -733,21 +833,21 @@ class _ChatTabState extends State<_ChatTab> {
                   constraints: const BoxConstraints(minHeight: 40, maxHeight: 120),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: colors.background,
+                    color: scheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: colors.border, width: 1),
+                    border: Border.all(color: scheme.outlineVariant, width: 1),
                   ),
                   child: TextField(
                     controller: _controller,
                     minLines: 1,
                     maxLines: 5,
-                    style: TextStyle(fontSize: 14, color: colors.textPrimary),
-                    cursorColor: colors.accent,
+                    style: TextStyle(fontSize: 14, color: scheme.onSurface),
+                    cursorColor: scheme.primary,
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
                       hintText: 'Escreva uma mensagem...',
-                      hintStyle: TextStyle(fontSize: 14, color: colors.textTertiary),
+                      hintStyle: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
                     ),
                     onSubmitted: (_) => _send(),
                   ),
@@ -756,14 +856,14 @@ class _ChatTabState extends State<_ChatTab> {
               const SizedBox(width: 8),
               _IconTapArea(
                 onTap: _send,
-                colors: colors,
+                scheme: scheme,
                 size: 40,
                 child: Container(
                   width: 34,
                   height: 34,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
-                  child: AppIcon('send.svg', color: Colors.white, size: 16),
+                  decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+                  child: AppIcon('send.svg', color: scheme.onPrimary, size: 16),
                 ),
               ),
             ],
@@ -784,8 +884,6 @@ class _EditTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Só o Documento tem editor real (WebView com o HTML A4).
-    // As outras opções mostram um placeholder até serem implementadas.
     if (editorType == EditorType.docs) {
       return const _DocumentEditorView();
     }
@@ -852,21 +950,21 @@ class _EditorPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors(appTheme.isDark);
+    final scheme = AppColorScheme(appTheme.isDark);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AppIcon(_asset, color: colors.accent, size: 44),
+          AppIcon(_asset, color: scheme.primary, size: 44),
           const SizedBox(height: 16),
           Text(
             _label,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: colors.textPrimary),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: scheme.onSurface),
           ),
           const SizedBox(height: 8),
           Text(
             'Editor de $_label ainda por implementar.',
-            style: TextStyle(fontSize: 13, color: colors.textSecondary),
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -877,12 +975,12 @@ class _EditorPlaceholder extends StatelessWidget {
 // ── Edit tab: top-right popup button ───────────────────────────────
 
 class _EditActionsButton extends StatefulWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final EditorType current;
   final ValueChanged<EditorType> onSelect;
 
   const _EditActionsButton({
-    required this.colors,
+    required this.scheme,
     required this.current,
     required this.onSelect,
   });
@@ -922,7 +1020,7 @@ class _EditActionsButtonState extends State<_EditActionsButton> {
             top: offset.dy + size.height + 6,
             right: MediaQuery.of(context).size.width - offset.dx - size.width,
             child: _EditPopupCard(
-              colors: widget.colors,
+              scheme: widget.scheme,
               current: widget.current,
               onSelect: (type) {
                 widget.onSelect(type);
@@ -952,19 +1050,19 @@ class _EditActionsButtonState extends State<_EditActionsButton> {
     return _IconTapArea(
       key: _buttonKey,
       onTap: _toggleMenu,
-      colors: widget.colors,
-      child: AppIcon('add.svg', color: widget.colors.textPrimary, size: 20),
+      scheme: widget.scheme,
+      child: AppIcon('add.svg', color: widget.scheme.onSurface, size: 20),
     );
   }
 }
 
 class _EditPopupCard extends StatelessWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final EditorType current;
   final ValueChanged<EditorType> onSelect;
 
   const _EditPopupCard({
-    required this.colors,
+    required this.scheme,
     required this.current,
     required this.onSelect,
   });
@@ -977,12 +1075,12 @@ class _EditPopupCard extends StatelessWidget {
         width: 220,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: colors.surfaceElevated,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border, width: 1),
+          border: Border.all(color: scheme.outlineVariant, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.18),
+              color: scheme.shadow.withOpacity(0.18),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
@@ -992,28 +1090,28 @@ class _EditPopupCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _PopupOption(
-              colors: colors,
+              scheme: scheme,
               asset: 'doc.svg',
               label: 'Documento',
               selected: current == EditorType.docs,
               onTap: () => onSelect(EditorType.docs),
             ),
             _PopupOption(
-              colors: colors,
+              scheme: scheme,
               asset: 'sheet.svg',
               label: 'Folha de cálculo',
               selected: current == EditorType.sheets,
               onTap: () => onSelect(EditorType.sheets),
             ),
             _PopupOption(
-              colors: colors,
+              scheme: scheme,
               asset: 'slide.svg',
               label: 'Apresentação',
               selected: current == EditorType.slides,
               onTap: () => onSelect(EditorType.slides),
             ),
             _PopupOption(
-              colors: colors,
+              scheme: scheme,
               asset: 'whiteboard.svg',
               label: 'Quadro branco',
               selected: current == EditorType.whiteboard,
@@ -1027,14 +1125,14 @@ class _EditPopupCard extends StatelessWidget {
 }
 
 class _PopupOption extends StatefulWidget {
-  final AppColors colors;
+  final AppColorScheme scheme;
   final String asset;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   const _PopupOption({
-    required this.colors,
+    required this.scheme,
     required this.asset,
     required this.label,
     required this.selected,
@@ -1050,7 +1148,7 @@ class _PopupOptionState extends State<_PopupOption> {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = widget.selected ? widget.colors.accent : widget.colors.textPrimary;
+    final iconColor = widget.selected ? widget.scheme.primary : widget.scheme.onSurface;
     return GestureDetector(
       onTapDown: (_) => setState(() => _hover = true),
       onTapCancel: () => setState(() => _hover = false),
@@ -1062,9 +1160,9 @@ class _PopupOptionState extends State<_PopupOption> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
           color: _hover
-              ? widget.colors.hover
+              ? widget.scheme.hover
               : widget.selected
-                  ? widget.colors.accent.withOpacity(0.1)
+                  ? widget.scheme.primaryContainer.withOpacity(0.5)
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
@@ -1076,7 +1174,7 @@ class _PopupOptionState extends State<_PopupOption> {
               widget.label,
               style: TextStyle(
                 fontSize: 14,
-                color: widget.selected ? widget.colors.accent : widget.colors.textPrimary,
+                color: widget.selected ? widget.scheme.primary : widget.scheme.onSurface,
                 fontWeight: widget.selected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -1087,7 +1185,7 @@ class _PopupOptionState extends State<_PopupOption> {
   }
 }
 
-// ── Settings Page ────────────────────────────────────────────────────────────
+// ── Settings Page ────────────────────────────────────────────────────────
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -1113,12 +1211,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors(appTheme.isDark);
+    final scheme = AppColorScheme(appTheme.isDark);
 
     return Material(
       type: MaterialType.transparency,
       child: Container(
-        color: colors.background,
+        color: scheme.surface,
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1126,20 +1224,20 @@ class _SettingsPageState extends State<SettingsPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                 decoration: BoxDecoration(
-                  color: colors.surface,
-                  border: Border(bottom: BorderSide(color: colors.border, width: 1)),
+                  color: scheme.surfaceContainerLow,
+                  border: Border(bottom: BorderSide(color: scheme.outlineVariant, width: 1)),
                 ),
                 child: Row(
                   children: [
                     _IconTapArea(
                       onTap: () => Navigator.of(context).pop(),
-                      colors: colors,
-                      child: AppIcon('back.svg', color: colors.textPrimary, size: 18),
+                      scheme: scheme,
+                      child: AppIcon('back.svg', color: scheme.onSurface, size: 18),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       'Definições',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.textPrimary),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: scheme.onSurface),
                     ),
                   ],
                 ),
@@ -1150,23 +1248,23 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: [
                     Text(
                       'Aparência',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textSecondary),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: colors.surface,
+                        color: scheme.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: colors.border, width: 1),
+                        border: Border.all(color: scheme.outlineVariant, width: 1),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Modo escuro', style: TextStyle(fontSize: 14, color: colors.textPrimary)),
+                          Text('Modo escuro', style: TextStyle(fontSize: 14, color: scheme.onSurface)),
                           _CustomSwitch(
                             value: appTheme.isDark,
-                            colors: colors,
+                            scheme: scheme,
                             onChanged: (_) => appTheme.toggleDark(),
                           ),
                         ],
@@ -1185,12 +1283,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
 class _CustomSwitch extends StatelessWidget {
   final bool value;
-  final AppColors colors;
+  final AppColorScheme scheme;
   final ValueChanged<bool> onChanged;
 
   const _CustomSwitch({
     required this.value,
-    required this.colors,
+    required this.scheme,
     required this.onChanged,
   });
 
@@ -1204,15 +1302,15 @@ class _CustomSwitch extends StatelessWidget {
         height: 26,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: value ? colors.accent : colors.border,
+          color: value ? scheme.primary : scheme.outlineVariant,
           borderRadius: BorderRadius.circular(13),
         ),
         alignment: value ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
           width: 20,
           height: 20,
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: value ? scheme.onPrimary : scheme.surface,
             shape: BoxShape.circle,
           ),
         ),
