@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart' show WidgetsFlutterBinding;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -311,6 +310,7 @@ class _IconTapArea extends StatefulWidget {
   final double size;
 
   const _IconTapArea({
+    super.key,
     required this.onTap,
     required this.colors,
     required this.child,
