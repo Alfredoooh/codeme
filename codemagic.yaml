@@ -96,7 +96,7 @@ workflows:
       - name: Generate Gradle Wrapper
         script: |
           cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.6
+          gradle wrapper --gradle-version 8.7
           chmod +x gradlew
 
       - name: Get Flutter packages
@@ -214,7 +214,7 @@ workflows:
       - name: Generate Gradle Wrapper
         script: |
           cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.6
+          gradle wrapper --gradle-version 8.7
           chmod +x gradlew
 
       - name: Get Flutter packages
