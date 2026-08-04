@@ -1,0 +1,226 @@
+workflows:
+  android-release:
+    name: Android Release Build
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      java: 17
+      groups:
+        - codeme_keystore
+    scripts:
+      - name: Restore keystore from encrypted variable
+        script: |
+          KEYSTORE_DIR="${CM_BUILD_DIR}/keystore"
+          mkdir -p "$KEYSTORE_DIR"
+          echo "$CM_KEYSTORE" | base64 --decode > "$KEYSTORE_DIR/codeme-release.jks"
+          echo "✅ Keystore restaurado em $KEYSTORE_DIR/codeme-release.jks"
+
+      - name: Generate key.properties
+        script: |
+          cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=../keystore/codeme-release.jks
+          EOF
+          echo "✅ key.properties gerado"
+
+      - name: Install Pillow
+        script: pip3 install Pillow --quiet
+
+      - name: Process launcher and splash icons (Fluent style)
+        script: |
+          python3 << 'PYEOF'
+          import os, shutil
+          from PIL import Image, ImageDraw
+          CM  = os.environ["CM_BUILD_DIR"]
+          RES = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER = os.path.join(CM, "ic_launcher.png")
+          SPLASH   = os.path.join(CM, "splash_icon.png")
+
+          if not os.path.exists(LAUNCHER):
+              raise FileNotFoundError("ic_launcher.png nao encontrado na raiz do repo!")
+
+          DENSITIES = {
+              "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
+              "mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192
+          }
+          FG_SIZES = {
+              "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
+              "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
+          }
+
+          # Fluent Design: cantos mais suaves (estilo Windows 11 / Mica)
+          def fluent_rounded(img, size, ratio=0.22):
+              img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
+              mask = Image.new("L", (size, size), 0)
+              ImageDraw.Draw(mask).rounded_rectangle(
+                  [0, 0, size-1, size-1], radius=int(size*ratio), fill=255)
+              out = Image.new("RGBA", (size, size), (0,0,0,0))
+              out.paste(img, (0, 0), mask)
+              return out
+
+          def save(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          src = Image.open(LAUNCHER)
+          for d, sz in DENSITIES.items():
+              save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
+              save(fluent_rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
+
+          for d, fg in FG_SIZES.items():
+              icon_sz = int(fg * 0.66)
+              fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
+              canvas  = Image.new("RGBA", (fg, fg), (0,0,0,0))
+              off     = (fg - icon_sz) // 2
+              canvas.paste(fg_img, (off, off), fg_img)
+              save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
+
+          if os.path.exists(SPLASH):
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              shutil.copy2(SPLASH, dest)
+              print(f"  -> {dest}")
+          else:
+              print("AVISO: splash_icon.png nao encontrado, a usar placeholder...")
+              placeholder = Image.new("RGBA", (192, 192), (0,0,0,0))
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              placeholder.save(dest, "PNG")
+
+          print("Icones e splash processados com sucesso!")
+          PYEOF
+
+      - name: Get Flutter packages
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter packages pub get
+
+      - name: Enable R8 + resource shrinking
+        script: |
+          GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
+          if ! grep -q "shrinkResources true" "$GRADLE_FILE"; then
+            sed -i 's/minifyEnabled false/minifyEnabled true/' "$GRADLE_FILE"
+            sed -i 's/shrinkResources false/shrinkResources true/' "$GRADLE_FILE"
+            echo "✅ R8 + shrinkResources ativados"
+          else
+            echo "✅ shrinkResources já configurado"
+          fi
+
+      - name: Build release APK (split per ABI)
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
+
+      - name: Build release AAB
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
+
+    artifacts:
+      - build/app/outputs/apk/release/*.apk
+      - build/app/outputs/bundle/release/*.aab
+      - build/symbols/*
+    publishing:
+      email:
+        recipients:
+          - dev@example.com
+        notify:
+          success: true
+          failure: true
+
+  android-debug:
+    name: Android Debug Build
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Install Pillow
+        script: pip3 install Pillow --quiet
+
+      - name: Process launcher and splash icons (Fluent style)
+        script: |
+          python3 << 'PYEOF'
+          import os, shutil
+          from PIL import Image, ImageDraw
+          CM  = os.environ["CM_BUILD_DIR"]
+          RES = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER = os.path.join(CM, "ic_launcher.png")
+          SPLASH   = os.path.join(CM, "splash_icon.png")
+
+          if not os.path.exists(LAUNCHER):
+              raise FileNotFoundError("ic_launcher.png nao encontrado na raiz do repo!")
+
+          DENSITIES = {
+              "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
+              "mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192
+          }
+          FG_SIZES = {
+              "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
+              "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
+          }
+
+          def fluent_rounded(img, size, ratio=0.22):
+              img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
+              mask = Image.new("L", (size, size), 0)
+              ImageDraw.Draw(mask).rounded_rectangle(
+                  [0, 0, size-1, size-1], radius=int(size*ratio), fill=255)
+              out = Image.new("RGBA", (size, size), (0,0,0,0))
+              out.paste(img, (0, 0), mask)
+              return out
+
+          def save(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          src = Image.open(LAUNCHER)
+          for d, sz in DENSITIES.items():
+              save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
+              save(fluent_rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
+
+          for d, fg in FG_SIZES.items():
+              icon_sz = int(fg * 0.66)
+              fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
+              canvas  = Image.new("RGBA", (fg, fg), (0,0,0,0))
+              off     = (fg - icon_sz) // 2
+              canvas.paste(fg_img, (off, off), fg_img)
+              save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
+
+          if os.path.exists(SPLASH):
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              shutil.copy2(SPLASH, dest)
+              print(f"  -> {dest}")
+          else:
+              print("AVISO: splash_icon.png nao encontrado, a usar placeholder...")
+              placeholder = Image.new("RGBA", (192, 192), (0,0,0,0))
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              placeholder.save(dest, "PNG")
+
+          print("Icones e splash processados com sucesso!")
+          PYEOF
+
+      - name: Get Flutter packages
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter packages pub get
+
+      - name: Build debug APK
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter build apk --debug
+
+    artifacts:
+      - build/app/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - dev@example.com
+        notify:
+          success: false
+          failure: true
