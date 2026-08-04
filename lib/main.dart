@@ -14,8 +14,9 @@ void main() async {
 
 // ── M3 Color Scheme ──────────────────────────────────────────────────────
 // Seed: #2F7BF6 (azul accent original do projeto)
-// Tonal palettes geradas a partir do seed, seguindo os tons oficiais M3
-// Light usa tons 40/90/100/10 | Dark usa tons 80/30/20/90 (mais vivos, não cinza morto)
+// Dark surface base: #1C1C1C — neutro quente, não azulado, não preto absoluto.
+// Escala de containers sobe em luminosidade a partir daí para dar profundidade
+// sem depender de bordas sólidas.
 
 class AppColorScheme {
   final bool isDark;
@@ -27,10 +28,10 @@ class AppColorScheme {
   Color get primaryContainer => isDark ? const Color(0xFF00497E) : const Color(0xFFD8E2FF);
   Color get onPrimaryContainer => isDark ? const Color(0xFFD8E2FF) : const Color(0xFF001B3E);
 
-  // Secondary (azul dessaturado, para elementos de apoio)
+  // Secondary
   Color get secondary => isDark ? const Color(0xFFBAC6E0) : const Color(0xFF565F71);
   Color get onSecondary => isDark ? const Color(0xFF283041) : const Color(0xFFFFFFFF);
-  Color get secondaryContainer => isDark ? const Color(0xFF3E4759) : const Color(0xFFDAE2F9);
+  Color get secondaryContainer => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFDAE2F9);
   Color get onSecondaryContainer => isDark ? const Color(0xFFDAE2F9) : const Color(0xFF131C2B);
 
   // Tertiary (roxo-azulado, accent secundário)
@@ -45,38 +46,47 @@ class AppColorScheme {
   Color get errorContainer => isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6);
   Color get onErrorContainer => isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002);
 
-  // Surface (neutral, tom 10 no dark — escuro mas não preto, tom 98 no light)
-  Color get surface => isDark ? const Color(0xFF11141B) : const Color(0xFFF9F9FF);
-  Color get onSurface => isDark ? const Color(0xFFE1E2E9) : const Color(0xFF191C20);
-  Color get surfaceVariant => isDark ? const Color(0xFF43474E) : const Color(0xFFDFE2EB);
-  Color get onSurfaceVariant => isDark ? const Color(0xFFC3C6CF) : const Color(0xFF43474E);
+  // Surface — base #1C1C1C no dark, neutra e quente
+  Color get surface => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFF9F9FF);
+  Color get onSurface => isDark ? const Color(0xFFECECEC) : const Color(0xFF191C20);
+  Color get surfaceVariant => isDark ? const Color(0xFF444444) : const Color(0xFFDFE2EB);
+  Color get onSurfaceVariant => isDark ? const Color(0xFFC7C7C7) : const Color(0xFF43474E);
 
-  // Surface containers (substituem a antiga elevação por opacidade)
-  Color get surfaceContainerLowest => isDark ? const Color(0xFF0C0E14) : const Color(0xFFFFFFFF);
-  Color get surfaceContainerLow => isDark ? const Color(0xFF191C23) : const Color(0xFFF3F3FA);
-  Color get surfaceContainer => isDark ? const Color(0xFF1D2027) : const Color(0xFFEDEDF4);
-  Color get surfaceContainerHigh => isDark ? const Color(0xFF272A31) : const Color(0xFFE7E8EE);
-  Color get surfaceContainerHighest => isDark ? const Color(0xFF32353C) : const Color(0xFFE2E2E9);
+  // Surface containers — escala de luminosidade crescente a partir do #1C1C1C,
+  // é isto que separa camadas visualmente em vez de bordas sólidas
+  Color get surfaceContainerLowest => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
+  Color get surfaceContainerLow => isDark ? const Color(0xFF242424) : const Color(0xFFF3F3FA);
+  Color get surfaceContainer => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEDEDF4);
+  Color get surfaceContainerHigh => isDark ? const Color(0xFF343434) : const Color(0xFFE7E8EE);
+  Color get surfaceContainerHighest => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE2E2E9);
 
-  Color get surfaceDim => isDark ? const Color(0xFF11141B) : const Color(0xFFD9D9E0);
-  Color get surfaceBright => isDark ? const Color(0xFF373A41) : const Color(0xFFF9F9FF);
+  Color get surfaceDim => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFD9D9E0);
+  Color get surfaceBright => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFF9F9FF);
 
-  // Outline
-  Color get outline => isDark ? const Color(0xFF8D9199) : const Color(0xFF73777F);
-  Color get outlineVariant => isDark ? const Color(0xFF43474E) : const Color(0xFFC3C6CF);
+  // Outline — usado só para casos de contorno funcional (foco, inputs), não como divisor decorativo
+  Color get outline => isDark ? const Color(0xFF8F8F8F) : const Color(0xFF73777F);
+  Color get outlineVariant => isDark ? const Color(0xFF444444) : const Color(0xFFC3C6CF);
 
-  // Inverse (para snackbars, tooltips)
+  // Inverse
   Color get inverseSurface => isDark ? const Color(0xFFE2E2E9) : const Color(0xFF2E3036);
   Color get onInverseSurface => isDark ? const Color(0xFF2E3036) : const Color(0xFFF0F0F7);
   Color get inversePrimary => isDark ? const Color(0xFF2F7BF6) : const Color(0xFFA9C7FF);
 
-  // Scrim / shadow
   Color get scrim => const Color(0xFF000000);
   Color get shadow => const Color(0xFF000000);
 
-  Color get barrier => scrim.withOpacity(0.4);
+  Color get barrier => scrim.withOpacity(0.5);
   Color get hover => onSurface.withOpacity(isDark ? 0.08 : 0.06);
   Color get pressed => onSurface.withOpacity(isDark ? 0.12 : 0.10);
+
+  // Sombra de elementos flutuantes (pill nav, pill input)
+  List<BoxShadow> get floatingShadow => [
+        BoxShadow(
+          color: shadow.withOpacity(isDark ? 0.4 : 0.12),
+          blurRadius: 20,
+          offset: const Offset(0, 6),
+        ),
+      ];
 }
 
 // ── Theme Notifier ────────────────────────────────────────────────────────
@@ -316,12 +326,22 @@ class _RootShellState extends State<RootShell> {
                   ],
                 ),
               ),
-              _BottomTabBar(
+            ],
+          ),
+
+          // Nav flutuante — pill com bordas 100% curvas, sem borda sólida
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 14,
+            child: SafeArea(
+              top: false,
+              child: _FloatingTabBar(
                 scheme: scheme,
                 currentIndex: _tabIndex,
                 onChanged: (i) => setState(() => _tabIndex = i),
               ),
-            ],
+            ),
           ),
 
           if (_drawerOpen)
@@ -374,10 +394,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 6, bottom: 10, left: 6, right: 10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border(bottom: BorderSide(color: scheme.outlineVariant, width: 1)),
-      ),
+      color: scheme.surface,
       child: Row(
         children: [
           _IconTapArea(
@@ -463,10 +480,7 @@ class _ConversationsDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border(right: BorderSide(color: scheme.outlineVariant, width: 1)),
-      ),
+      color: scheme.surfaceContainerLow,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,7 +518,6 @@ class _ConversationsDrawer extends StatelessWidget {
                       },
                     ),
             ),
-            Container(height: 1, color: scheme.outlineVariant, margin: const EdgeInsets.symmetric(horizontal: 12)),
             Padding(
               padding: const EdgeInsets.all(10),
               child: _AccountPill(scheme: scheme, onTap: onOpenSettings),
@@ -568,7 +581,7 @@ class _ConversationTileState extends State<_ConversationTile> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: _hover ? widget.scheme.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,8 +630,8 @@ class _AccountPillState extends State<_AccountPill> {
         duration: const Duration(milliseconds: 120),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _pressed ? widget.scheme.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
+          color: _pressed ? widget.scheme.hover : widget.scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
           children: [
@@ -655,14 +668,14 @@ class _AccountPillState extends State<_AccountPill> {
   }
 }
 
-// ── Bottom Tab Bar ───────────────────────────────────────────────────────
+// ── Floating Tab Bar — pill flutuante, bordas 100% curvas, sem borda sólida ──
 
-class _BottomTabBar extends StatelessWidget {
+class _FloatingTabBar extends StatelessWidget {
   final AppColorScheme scheme;
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  const _BottomTabBar({
+  const _FloatingTabBar({
     required this.scheme,
     required this.currentIndex,
     required this.onChanged,
@@ -671,46 +684,42 @@ class _BottomTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 62,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: scheme.floatingShadow,
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            children: [
-              _BottomTabItem(
-                scheme: scheme,
-                asset: 'ai_tab.svg',
-                label: 'AI',
-                selected: currentIndex == 0,
-                onTap: () => onChanged(0),
-              ),
-              _BottomTabItem(
-                scheme: scheme,
-                asset: 'edit_tab.svg',
-                label: 'Editar',
-                selected: currentIndex == 1,
-                onTap: () => onChanged(1),
-              ),
-            ],
+      child: Row(
+        children: [
+          _FloatingTabItem(
+            scheme: scheme,
+            asset: 'ai_tab.svg',
+            label: 'AI',
+            selected: currentIndex == 0,
+            onTap: () => onChanged(0),
           ),
-        ),
+          _FloatingTabItem(
+            scheme: scheme,
+            asset: 'edit_tab.svg',
+            label: 'Editar',
+            selected: currentIndex == 1,
+            onTap: () => onChanged(1),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _BottomTabItem extends StatelessWidget {
+class _FloatingTabItem extends StatelessWidget {
   final AppColorScheme scheme;
   final String asset;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _BottomTabItem({
+  const _FloatingTabItem({
     required this.scheme,
     required this.asset,
     required this.label,
@@ -725,20 +734,31 @@ class _BottomTabItem extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AppIcon(asset, color: color, size: 21),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-              ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: selected ? scheme.primaryContainer : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
             ),
-          ],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AppIcon(asset, color: selected ? scheme.onPrimaryContainer : color, size: 20),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: selected ? scheme.onPrimaryContainer : color,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -777,99 +797,129 @@ class _ChatTabState extends State<_ChatTab> {
   Widget build(BuildContext context) {
     final scheme = AppColorScheme(appTheme.isDark);
 
-    return Column(
+    // Espaço reservado no fundo para: input flutuante (≈64) + gap (10) + nav flutuante (62) + margem (14) + safe area
+    final bottomReserved = 64 + 10 + 62 + 14 + MediaQuery.of(context).padding.bottom;
+
+    return Stack(
       children: [
-        Expanded(
-          child: _messages.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppIcon('robot.svg', color: scheme.onSurfaceVariant, size: 40),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Como posso ajudar?',
-                        style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, i) {
-                    return Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          _messages[i],
-                          style: TextStyle(color: scheme.onPrimaryContainer, fontSize: 14),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            border: Border(top: BorderSide(color: scheme.outlineVariant, width: 1)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 40, maxHeight: 120),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: scheme.outlineVariant, width: 1),
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: 5,
-                    style: TextStyle(fontSize: 14, color: scheme.onSurface),
-                    cursorColor: scheme.primary,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Escreva uma mensagem...',
-                      hintStyle: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+        // Lista de mensagens — scrolla por baixo do input e do nav flutuantes
+        _messages.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppIcon('robot.svg', color: scheme.onSurfaceVariant, size: 40),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Como posso ajudar?',
+                      style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
                     ),
-                    onSubmitted: (_) => _send(),
-                  ),
+                  ],
                 ),
+              )
+            : ListView.builder(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomReserved),
+                itemCount: _messages.length,
+                itemBuilder: (context, i) {
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.75,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _messages[i],
+                        style: TextStyle(color: scheme.onPrimaryContainer, fontSize: 14),
+                      ),
+                    ),
+                  );
+                },
               ),
-              const SizedBox(width: 8),
-              _IconTapArea(
-                onTap: _send,
-                scheme: scheme,
-                size: 40,
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
-                  child: AppIcon('send.svg', color: scheme.onPrimary, size: 16),
-                ),
-              ),
-            ],
+
+        // Input flutuante — pill própria, por cima do nav flutuante
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 14 + 62 + 10, // margem do nav + altura do nav + gap
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: _FloatingChatInput(
+              scheme: scheme,
+              controller: _controller,
+              onSend: _send,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FloatingChatInput extends StatelessWidget {
+  final AppColorScheme scheme;
+  final TextEditingController controller;
+  final VoidCallback onSend;
+
+  const _FloatingChatInput({
+    required this.scheme,
+    required this.controller,
+    required this.onSend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 58, maxHeight: 140),
+      padding: const EdgeInsets.fromLTRB(18, 4, 6, 4),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: scheme.floatingShadow,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: TextField(
+                controller: controller,
+                minLines: 1,
+                maxLines: 5,
+                style: TextStyle(fontSize: 14, color: scheme.onSurface),
+                cursorColor: scheme.primary,
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: 'Escreva uma mensagem...',
+                  hintStyle: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                ),
+                onSubmitted: (_) => onSend(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _IconTapArea(
+            onTap: onSend,
+            scheme: scheme,
+            size: 44,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+              child: AppIcon('send.svg', color: scheme.onPrimary, size: 16),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1076,15 +1126,8 @@ class _EditPopupCard extends StatelessWidget {
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: scheme.outlineVariant, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: scheme.shadow.withOpacity(0.18),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: scheme.floatingShadow,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1157,14 +1200,14 @@ class _PopupOptionState extends State<_PopupOption> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: _hover
               ? widget.scheme.hover
               : widget.selected
                   ? widget.scheme.primaryContainer.withOpacity(0.5)
                   : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
           children: [
@@ -1223,10 +1266,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  border: Border(bottom: BorderSide(color: scheme.outlineVariant, width: 1)),
-                ),
+                color: scheme.surface,
                 child: Row(
                   children: [
                     _IconTapArea(
@@ -1255,8 +1295,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         color: scheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: scheme.outlineVariant, width: 1),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
