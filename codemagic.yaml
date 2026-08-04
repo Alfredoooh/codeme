@@ -214,7 +214,7 @@ workflows:
       - name: Generate Gradle Wrapper
         script: |
           cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.7
+          gradle wrapper --gradle-version 8.14
           chmod +x gradlew
 
       - name: Get Flutter packages
@@ -229,6 +229,32 @@ workflows:
 
     artifacts:
       - build/app/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - dev@example.com
+        notify:
+          success: false
+          failure: true
+
+  web-release:
+    name: Web Release Build
+    max_build_duration: 30
+    environment:
+      flutter: stable
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter packages pub get
+
+      - name: Build web release
+        script: |
+          cd "${CM_BUILD_DIR}"
+          flutter build web --release
+
+    artifacts:
+      - build/web/**
     publishing:
       email:
         recipients:
