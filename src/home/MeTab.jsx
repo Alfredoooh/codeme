@@ -12,6 +12,10 @@ import {
   tokens,
   Avatar,
   Button,
+  Title3,
+  Subtitle2,
+  Caption1,
+  Divider,
   Dialog,
   DialogSurface,
   DialogBody,
@@ -21,155 +25,101 @@ import {
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
-  header: {
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    height: 'calc(env(safe-area-inset-top, 0px) + 60px)',
-    paddingTop: 'env(safe-area-inset-top, 0px)',
+  root: {
+    paddingTop: 'calc(env(safe-area-inset-top, 0px) + 28px)',
+    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 54px + 88px)',
     paddingLeft: tokens.spacingHorizontalXXL,
     paddingRight: tokens.spacingHorizontalXXL,
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
-  },
-  headerTitle: {
-    // Mesma escala tipográfica dos outros ecrãs (Projects, Templates):
-    // título grande, peso 600, para consistência entre todas as tabs.
-    fontSize: '26px',
-    fontWeight: '600',
-    letterSpacing: '-0.3px',
-    margin: 0,
-    color: tokens.colorNeutralForeground1,
   },
   
-  root: {
-    paddingTop: tokens.spacingVerticalXL,
-    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 54px + 88px)',
-    paddingLeft: tokens.spacingHorizontalL,
-    paddingRight: tokens.spacingHorizontalL,
-  },
-  
-  // --- Bloco de identidade: cartão próprio, não texto solto ---
-  identityCard: {
+  // --- Identidade: sem appbar, o avatar grande é o próprio título
+  // do ecrã. É a lógica de perfil da Apple/Google — a foto e o
+  // nome carregam a função que noutras tabs cabe ao <h1>. ---
+  identityBlock: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: tokens.spacingHorizontalM,
-    width: '100%',
-    padding: tokens.spacingVerticalM,
-    marginBottom: tokens.spacingVerticalXL,
-    borderRadius: tokens.borderRadiusXLarge,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow4,
+    textAlign: 'center',
+    marginBottom: tokens.spacingVerticalXXL,
     background: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    textAlign: 'left',
+    width: '100%',
+  },
+  avatarBtn: {
+    marginBottom: tokens.spacingVerticalM,
     transitionProperty: 'transform',
     transitionDuration: '0.15s',
-    ':active': {
-      transform: 'scale(0.98)',
-    },
-  },
-  identity: {
-    flex: 1,
-    minWidth: 0,
   },
   name: {
-    fontSize: '17px',
-    fontWeight: '700',
-    letterSpacing: '-0.2px',
-    color: tokens.colorNeutralForeground1,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    display: 'block',
+    marginBottom: '2px',
   },
   email: {
-    fontSize: '13px',
-    display: 'block',
-    marginTop: '2px',
     color: tokens.colorNeutralForeground3,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
-  chevron: {
-    color: tokens.colorNeutralForeground3,
-    flexShrink: 0,
+  editRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+    marginTop: tokens.spacingVerticalXS,
+    color: tokens.colorBrandForeground1,
   },
   
-  // --- Grupo de definições: cartão único com linhas separadas por
-  // divisórias internas, ao estilo Android Settings / Google Account,
-  // em vez de botões soltos flutuando no fundo. ---
+  // --- Grupo de definições: hierarquia Fluent — Subtitle2 como
+  // rótulo de secção (não caption pequena e apagada), linhas
+  // separadas por Divider real do Fluent em vez de borderBottom
+  // manual, sem caixa/cartão envolvente — o espaço em torno já
+  // separa o grupo do resto, ao estilo Fluent 2 (que usa menos
+  // "boxing" que Material). ---
   sectionLabel: {
-    fontSize: '12px',
-    fontWeight: tokens.fontWeightBold,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    color: tokens.colorNeutralForeground3,
+    display: 'block',
     marginBottom: tokens.spacingVerticalS,
-    marginLeft: tokens.spacingHorizontalXS,
+    color: tokens.colorNeutralForeground2,
   },
   group: {
-    borderRadius: tokens.borderRadiusXLarge,
-    backgroundColor: tokens.colorNeutralBackground1,
-    boxShadow: tokens.shadow4,
-    overflow: 'hidden',
-    marginBottom: tokens.spacingVerticalXL,
+    marginBottom: tokens.spacingVerticalXXL,
   },
   row: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalM,
     width: '100%',
-    minHeight: '56px',
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
-    paddingLeft: tokens.spacingHorizontalM,
-    paddingRight: tokens.spacingHorizontalM,
+    minHeight: '52px',
     border: 'none',
-    borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
     background: 'transparent',
     cursor: 'pointer',
     textAlign: 'left',
+    padding: 0,
     color: tokens.colorNeutralForeground1,
-    ':active': {
-      backgroundColor: tokens.colorNeutralBackground3,
-    },
   },
-  rowLast: {
-    borderBottom: 'none',
-  },
-  rowIconWrap: {
-    width: '32px',
-    height: '32px',
-    borderRadius: tokens.borderRadiusMedium,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    backgroundColor: tokens.colorNeutralBackground3,
+  rowIcon: {
     color: tokens.colorNeutralForeground2,
+    flexShrink: 0,
   },
   rowLabel: {
     flex: 1,
-    fontSize: '15px',
-    fontWeight: '500',
-    color: tokens.colorNeutralForeground1,
   },
   rowChevron: {
     color: tokens.colorNeutralForeground3,
     flexShrink: 0,
   },
+  divider: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
   
   logoutBtn: {
     width: '100%',
-    height: '48px',
-    borderRadius: tokens.borderRadiusXLarge,
-    fontSize: '15px',
-    fontWeight: tokens.fontWeightSemibold,
+    height: '44px',
+    borderRadius: tokens.borderRadiusLarge,
   },
 });
+
+const SETTINGS_ROWS = [
+  { key: 'notifications', icon: Alert24Regular, label: 'Notificações', path: '/home/notifications' },
+  { key: 'settings', icon: Settings24Regular, label: 'Definições', path: '/home/settings' },
+  { key: 'help', icon: QuestionCircle24Regular, label: 'Ajuda e suporte', path: '/home/settings?section=help' },
+];
 
 export default function MeTab({ user }) {
   const styles = useStyles();
@@ -190,50 +140,39 @@ export default function MeTab({ user }) {
   
   return (
     <>
-      <div className={styles.header}>
-        <h1 className={styles.headerTitle}>Eu</h1>
-      </div>
-
       <div className={styles.root}>
-        <button className={styles.identityCard} onClick={() => navigate('/profile')}>
-          <Avatar
-            image={avatarUrl ? { src: avatarUrl } : undefined}
-            name={avatarUrl ? undefined : userInitial}
-            size={56}
-            style={!avatarUrl ? { backgroundColor: avatarColor, color: '#fff' } : undefined}
-          />
-          <div className={styles.identity}>
-            <span className={styles.name}>{userName}</span>
-            {userEmail && <span className={styles.email}>{userEmail}</span>}
-          </div>
-          <ChevronRight24Regular className={styles.chevron} />
+        <button className={styles.identityBlock} onClick={() => navigate('/profile')}>
+          <span className={styles.avatarBtn}>
+            <Avatar
+              image={avatarUrl ? { src: avatarUrl } : undefined}
+              name={avatarUrl ? undefined : userInitial}
+              size={88}
+              style={!avatarUrl ? { backgroundColor: avatarColor, color: '#fff' } : undefined}
+            />
+          </span>
+          <Title3 as="h1" block className={styles.name}>{userName}</Title3>
+          {userEmail && <Caption1 block className={styles.email}>{userEmail}</Caption1>}
+          <span className={styles.editRow}>
+            <Caption1 weight="semibold">Editar perfil</Caption1>
+            <ChevronRight24Regular fontSize={14} />
+          </span>
         </button>
 
-        <div className={styles.sectionLabel}>Conta</div>
         <div className={styles.group}>
-          <button className={styles.row} onClick={() => navigate('/home/notifications')}>
-            <span className={styles.rowIconWrap}>
-              <Alert24Regular fontSize={18} />
-            </span>
-            <span className={styles.rowLabel}>Notificações</span>
-            <ChevronRight24Regular fontSize={18} className={styles.rowChevron} />
-          </button>
-
-          <button className={styles.row} onClick={() => navigate('/home/settings')}>
-            <span className={styles.rowIconWrap}>
-              <Settings24Regular fontSize={18} />
-            </span>
-            <span className={styles.rowLabel}>Definições</span>
-            <ChevronRight24Regular fontSize={18} className={styles.rowChevron} />
-          </button>
-
-          <button className={`${styles.row} ${styles.rowLast}`} onClick={() => navigate('/home/settings?section=help')}>
-            <span className={styles.rowIconWrap}>
-              <QuestionCircle24Regular fontSize={18} />
-            </span>
-            <span className={styles.rowLabel}>Ajuda e suporte</span>
-            <ChevronRight24Regular fontSize={18} className={styles.rowChevron} />
-          </button>
+          <Subtitle2 as="h2" block className={styles.sectionLabel}>Conta</Subtitle2>
+          {SETTINGS_ROWS.map((item, i) => {
+            const RowIcon = item.icon;
+            return (
+              <React.Fragment key={item.key}>
+                <button className={styles.row} onClick={() => navigate(item.path)}>
+                  <RowIcon fontSize={20} className={styles.rowIcon} />
+                  <span className={styles.rowLabel}>{item.label}</span>
+                  <ChevronRight24Regular fontSize={18} className={styles.rowChevron} />
+                </button>
+                {i < SETTINGS_ROWS.length - 1 && <Divider className={styles.divider} />}
+              </React.Fragment>
+            );
+          })}
         </div>
 
         <Button
