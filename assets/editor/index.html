@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
+<title>Editor</title>
+<style>
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  #canvasScroll {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
+    touch-action: pan-y;
+    padding: 20px 0 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #pagesStack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    transform-origin: top center;
+  }
+
+  .page-a4 {
+    background: #FFFFFF;
+    width: 794px;
+    height: 1123px;
+    padding: 96px 72px;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.16);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .conteudo {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #1a1a1a;
+    outline: none;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    position: relative;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .conteudo p {
+    margin: 0;
+  }
+
+  .page-number {
+    position: absolute;
+    bottom: 14px;
+    right: 0;
+    left: 0;
+    text-align: center;
+    font-size: 10px;
+    color: #9a9a9a;
+    pointer-events: none;
+  }
+
+  .doc-table { border-collapse: collapse; width: 100%; margin: 4px 0; }
+  .doc-table td { border: 1px solid #d0d0d0; padding: 8px; min-width: 32px; height: 26px; vertical-align: top; }
+  .doc-table-wrap { position: relative; display: block; margin: 8px 0; }
+
+  a { color: #2F7BF6; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div id="canvasScroll">
+  <div id="pagesStack"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var PAGE_W = 794;
+  var PAGE_H = 1123;
+
+  var pagesStack = document.getElementById('pagesStack');
+  var canvasScroll = document.getElementById('canvasScroll');
+
+  var folhas = [];        // array de { id, pageEl, contentEl }
+  var nextFolhaId = 0;
+  var fitScale = 1;
+  var saveTimeout = null;
+  var isRebalancing = false;
+
+  // ── Ajuste de zoom para caber na largura do WebView ────────────
+  function ajustarZoom() {
+    var margem = 24;
+    var largura = canvasScroll.clientWidth;
+    var escala = Math.min((largura - margem) / PAGE_W, 1);
+    fitScale = (escala > 0 && isFinite(escala)) ? escala : 1;
+    pagesStack.style.transform = 'scale(' + fitScale + ')';
+  }
+
+  // ── Criação de folhas ────────────────────────────────────────
+  function criarFolha() {
+    var id = nextFolhaId++;
+
+    var pageEl = document.createElement('div');
+    pageEl.className = 'page-a4';
+    pageEl.style.width = PAGE_W + 'px';
+    pageEl.style.height = PAGE_H + 'px';
+
+    var contentEl = document.createElement('div');
+    contentEl.className = 'conteudo';
+    contentEl.setAttribute('contenteditable', 'true');
+    contentEl.setAttribute('spellcheck', 'true');
+    contentEl.innerHTML = '<p><br></p>';
+
+    contentEl.addEventListener('input', handleInput);
+    contentEl.addEventListener('paste', aoColar);
+
+    var pageNumberEl = document.createElement('div');
+    pageNumberEl.className = 'page-number';
+
+    pageEl.appendChild(contentEl);
+    pageEl.appendChild(pageNumberEl);
+    pagesStack.appendChild(pageEl);
+
+    var folha = { id: id, pageEl: pageEl, contentEl: contentEl, pageNumberEl: pageNumberEl };
+    folhas.push(folha);
+    atualizarNumerosPagina();
+    return folha;
+  }
+
+  function atualizarNumerosPagina() {
+    for (var i = 0; i < folhas.length; i++) {
+      folhas[i].pageNumberEl.textContent = String(i + 1);
+    }
+  }
+
+  function getConteudoEl(idx) {
+    return folhas[idx] ? folhas[idx].contentEl : null;
+  }
+
+  // ── Normalização de nós soltos (texto direto sem <p>) ──────────
+  function normalizarFilhosSoltos(conteudo) {
+    var noAtual = conteudo.firstChild;
+    while (noAtual) {
+      var proximo = noAtual.nextSibling;
+      if (noAtual.nodeType === 3) {
+        if (noAtual.textContent.trim() !== '') {
+          var p = document.createElement('p');
+          conteudo.insertBefore(p, noAtual);
+          p.appendChild(noAtual);
+        } else {
+          conteudo.removeChild(noAtual);
+        }
+      }
+      noAtual = proximo;
+    }
+    if (!conteudo.firstElementChild) {
+      conteudo.innerHTML = '<p><br></p>';
+    }
+  }
+
+  function obterOuCriarProximaPagina(idxAtual) {
+    if (idxAtual + 1 < folhas.length) {
+      return idxAtual + 1;
+    }
+    criarFolha();
+    return idxAtual + 1;
+  }
+
+  // ── Empurra conteúdo que transborda para a página seguinte ─────
+  function empurrarTransbordoDaPagina(idx) {
+    var empurrouAlgo = false;
+    var guarda = 0;
+    var conteudo = getConteudoEl(idx);
+    if (!conteudo) return false;
+
+    while (conteudo.scrollHeight > conteudo.clientHeight + 1 && conteudo.children.length > 1 && guarda < 500) {
+      var ultimoElemento = conteudo.lastElementChild;
+      var proximoIdx = obterOuCriarProximaPagina(idx);
+      var proximaConteudo = getConteudoEl(proximoIdx);
+      if (!proximaConteudo) break;
+
+      if (proximaConteudo.firstChild) {
+        proximaConteudo.insertBefore(ultimoElemento, proximaConteudo.firstChild);
+      } else {
+        proximaConteudo.appendChild(ultimoElemento);
+      }
+
+      empurrouAlgo = true;
+      guarda++;
+      conteudo = getConteudoEl(idx);
+    }
+
+    return empurrouAlgo;
+  }
+
+  // ── Puxa conteúdo da página seguinte se houver espaço ──────────
+  function puxarConteudoDaProximaPagina(idx) {
+    if (idx + 1 >= folhas.length) return false;
+    var conteudo = getConteudoEl(idx);
+    var proximaConteudo = getConteudoEl(idx + 1);
+    if (!conteudo || !proximaConteudo || !proximaConteudo.firstElementChild) return false;
+
+    var puxouAlgo = false;
+    var guarda = 0;
+
+    while (proximaConteudo.firstElementChild && guarda < 500) {
+      var candidato = proximaConteudo.firstElementChild;
+
+      conteudo.appendChild(candidato);
+      var causaOverflow = conteudo.scrollHeight > conteudo.clientHeight + 1;
+
+      if (causaOverflow) {
+        if (proximaConteudo.firstChild) {
+          proximaConteudo.insertBefore(candidato, proximaConteudo.firstChild);
+        } else {
+          proximaConteudo.appendChild(candidato);
+        }
+        break;
+      } else {
+        puxouAlgo = true;
+      }
+
+      guarda++;
+    }
+
+    return puxouAlgo;
+  }
+
+  // ── Remove páginas vazias no fim do documento ───────────────────
+  function removerPaginasVaziasNoFim() {
+    for (var i = folhas.length - 1; i > 0; i--) {
+      var conteudo = getConteudoEl(i);
+      if (conteudo && conteudo.children.length === 0) {
+        var folha = folhas.pop();
+        folha.pageEl.remove();
+      } else {
+        break;
+      }
+    }
+    atualizarNumerosPagina();
+  }
+
+  // ── Preserva e restaura a posição do cursor durante o rebalance ─
+  function obterPosicaoSelecao() {
+    var selecao = window.getSelection();
+    if (selecao.rangeCount === 0) return null;
+    var range = selecao.getRangeAt(0);
+    return {
+      startContainer: range.startContainer,
+      startOffset: range.startOffset,
+      endContainer: range.endContainer,
+      endOffset: range.endOffset
+    };
+  }
+
+  function restaurarSelecao(posicao) {
+    if (!posicao) return;
+    if (!document.contains(posicao.startContainer)) return;
+
+    try {
+      var range = document.createRange();
+      range.setStart(posicao.startContainer, posicao.startOffset);
+      range.setEnd(posicao.endContainer, posicao.endOffset);
+      var selecao = window.getSelection();
+      selecao.removeAllRanges();
+      selecao.addRange(range);
+    } catch (erro) {
+      // Silenciosamente ignora — perder a posição exata do cursor num
+      // rebalance raro não é crítico, o utilizador só perde o foco fino.
+    }
+  }
+
+  // ── Motor de reequilíbrio de páginas ────────────────────────────
+  function reequilibrarDocumento() {
+    if (isRebalancing) return;
+    isRebalancing = true;
+
+    var posicaoSelecao = obterPosicaoSelecao();
+
+    for (var i = 0; i < folhas.length; i++) {
+      normalizarFilhosSoltos(folhas[i].contentEl);
+    }
+
+    var mudouEmpurrando = true;
+    var guardaGeral = 0;
+    while (mudouEmpurrando && guardaGeral < 100) {
+      mudouEmpurrando = false;
+      for (var j = 0; j < folhas.length; j++) {
+        if (empurrarTransbordoDaPagina(j)) mudouEmpurrando = true;
+      }
+      guardaGeral++;
+    }
+
+    var mudouPuxando = true;
+    var guardaPuxar = 0;
+    while (mudouPuxando && guardaPuxar < 100) {
+      mudouPuxando = false;
+      for (var k = 0; k < folhas.length - 1; k++) {
+        if (puxarConteudoDaProximaPagina(k)) mudouPuxando = true;
+      }
+      guardaPuxar++;
+    }
+
+    removerPaginasVaziasNoFim();
+    restaurarSelecao(posicaoSelecao);
+
+    isRebalancing = false;
+  }
+
+  var timeoutReequilibrio;
+  function agendarReequilibrio() {
+    clearTimeout(timeoutReequilibrio);
+    timeoutReequilibrio = setTimeout(reequilibrarDocumento, 150);
+  }
+
+  // ── Colagem de conteúdo (mantém HTML se disponível) ─────────────
+  function aoColar(evento) {
+    evento.preventDefault();
+    var htmlColado = evento.clipboardData ? evento.clipboardData.getData('text/html') : '';
+    var textoColado = evento.clipboardData ? evento.clipboardData.getData('text/plain') : '';
+
+    if (htmlColado) {
+      document.execCommand('insertHTML', false, htmlColado);
+    } else {
+      var linhas = textoColado.split(/\n+/).filter(function (l) { return l.trim() !== ''; });
+      var htmlParagrafos = linhas.map(function (l) { return '<p>' + l + '</p>'; }).join('');
+      document.execCommand('insertHTML', false, htmlParagrafos || '<p>' + textoColado + '</p>');
+    }
+
+    handleInput();
+  }
+
+  // ── Handler de input: notifica mudanças + agenda reequilíbrio ──
+  function handleInput() {
+    agendarReequilibrio();
+    agendarGravacao();
+  }
+
+  // ── Debounce de gravação para o Kotlin (evita escrever a cada tecla) ─
+  function agendarGravacao() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(function () {
+      var html = getContent();
+      if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
+        window.AndroidBridge.saveDocument(html);
+      }
+    }, 500);
+  }
+
+  // ── Serialização / hidratação do documento completo ─────────────
+  function getContent() {
+    return folhas.map(function (f) { return f.contentEl.innerHTML; })
+      .join('<div class="page-break-marker"></div>');
+  }
+
+  function setContent(html) {
+    // Limpa páginas existentes
+    folhas.forEach(function (f) { f.pageEl.remove(); });
+    folhas = [];
+    nextFolhaId = 0;
+
+    var parts = (html || '').split('<div class="page-break-marker"></div>');
+    var htmls = parts.length ? parts : ['<p><br></p>'];
+
+    htmls.forEach(function (h) {
+      var folha = criarFolha();
+      folha.contentEl.innerHTML = h || '<p><br></p>';
+    });
+
+    reequilibrarDocumento();
+  }
+
+  // ── API de formatação exposta ao toolbar nativo (Kotlin) ────────
+  function getActiveContentEl() {
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      var node = sel.anchorNode;
+      var base = node && node.nodeType === 3 ? node.parentElement : node;
+      var conteudoPai = base && base.closest ? base.closest('.conteudo') : null;
+      if (conteudoPai) return conteudoPai;
+    }
+    return folhas.length ? folhas[0].contentEl : null;
+  }
+
+  function focarSePreciso() {
+    var el = getActiveContentEl();
+    if (el && document.activeElement !== el) {
+      el.focus();
+    }
+  }
+
+  function exec(command) {
+    focarSePreciso();
+    switch (command) {
+      case 'bold':
+        document.execCommand('bold');
+        break;
+      case 'italic':
+        document.execCommand('italic');
+        break;
+      case 'underline':
+        document.execCommand('underline');
+        break;
+      case 'insertTable':
+        insertTable(2, 2);
+        break;
+      case 'insertImage':
+        // A seleção de imagem em si (galeria/câmara) fica do lado nativo
+        // Kotlin, que depois chama window.editorApi.insertImageAtCursor
+        // com o dataURL resultante — este comando aqui só é o gatilho
+        // que o botão do toolbar despoleta.
+        break;
+      default:
+        break;
+    }
+    handleInput();
+  }
+
+  function setColor(hexColor) {
+    focarSePreciso();
+    document.execCommand('foreColor', false, hexColor);
+    handleInput();
+  }
+
+  function insertTable(rows, cols) {
+    focarSePreciso();
+    var r = Math.max(1, Math.min(20, rows || 2));
+    var c = Math.max(1, Math.min(10, cols || 2));
+    var html = '<div class="doc-table-wrap" contenteditable="false"><table class="doc-table"><tbody>';
+    for (var ri = 0; ri < r; ri++) {
+      html += '<tr>';
+      for (var ci = 0; ci < c; ci++) {
+        html += '<td contenteditable="true"><br></td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div><p><br></p>';
+    document.execCommand('insertHTML', false, html);
+  }
+
+  function insertImageAtCursor(dataUrl) {
+    focarSePreciso();
+    var html = '<p><img src="' + dataUrl + '" style="max-width:100%; height:auto;" /></p>';
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+  }
+
+  // ── Exposição da API global para o toolbar Kotlin chamar ────────
+  window.editorApi = {
+    exec: exec,
+    setColor: setColor,
+    insertTable: insertTable,
+    insertImageAtCursor: insertImageAtCursor,
+    getContent: getContent,
+    setContent: setContent
+  };
+
+  // ── Arranque ─────────────────────────────────────────────────
+  function iniciar() {
+    ajustarZoom();
+    window.addEventListener('resize', ajustarZoom);
+    window.addEventListener('orientationchange', ajustarZoom);
+
+    document.execCommand('defaultParagraphSeparator', false, 'p');
+
+    var conteudoInicial = '';
+    if (window.AndroidBridge && window.AndroidBridge.loadDocument) {
+      try {
+        conteudoInicial = window.AndroidBridge.loadDocument() || '';
+      } catch (e) {
+        conteudoInicial = '';
+      }
+    }
+
+    if (conteudoInicial) {
+      setContent(conteudoInicial);
+    } else {
+      criarFolha();
+      reequilibrarDocumento();
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', iniciar);
+  } else {
+    iniciar();
+  }
+})();
+</script>
+
+</body>
+</html>

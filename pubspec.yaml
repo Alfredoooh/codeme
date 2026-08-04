@@ -1,5 +1,5 @@
 name: codeme_app
-description: CodeMe App - Fluent UI Native
+description: CodeMe App - Custom UI Native
 
 publish_to: 'none'
 
@@ -12,7 +12,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  fluent_ui: ^4.9.2
+  flutter_inappwebview: ^6.1.5
+  flutter_svg: ^2.0.10+1
 
 flutter:
   uses-material-design: false
+  assets:
+    - assets/icons/
+    - assets/editor/index.html
