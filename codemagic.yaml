@@ -93,6 +93,12 @@ workflows:
           print("Icones e splash processados com sucesso!")
           PYEOF
 
+      - name: Generate Gradle Wrapper
+        script: |
+          cd "${CM_BUILD_DIR}/android"
+          gradle wrapper --gradle-version 8.6
+          chmod +x gradlew
+
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
@@ -204,6 +210,12 @@ workflows:
 
           print("Icones e splash processados com sucesso!")
           PYEOF
+
+      - name: Generate Gradle Wrapper
+        script: |
+          cd "${CM_BUILD_DIR}/android"
+          gradle wrapper --gradle-version 8.6
+          chmod +x gradlew
 
       - name: Get Flutter packages
         script: |
