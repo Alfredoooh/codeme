@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search24Regular, Alert24Regular, Sparkle24Filled } from '@fluentui/react-icons';
+import { Search24Regular, Alert24Regular } from '@fluentui/react-icons';
 import { makeStyles, tokens, Text, Caption1 } from '@fluentui/react-components';
 import { ALL_APPS } from '../shared/apps.js';
 
@@ -14,9 +14,23 @@ const useStyles = makeStyles({
     right: 0,
     zIndex: 15,
     height: 'calc(env(safe-area-inset-top, 0px) + 56px)',
-    backgroundColor: 'transparent',
     pointerEvents: 'auto',
     overflow: 'hidden',
+    // backgroundColor e backdropFilter são aplicados inline via
+    // heroProgress — o appbar começa totalmente transparente e
+    // fica sólido/frosted à medida que se desliza (efeito "silver").
+    transitionProperty: 'background-color',
+    transitionDuration: '0.1s',
+  },
+  headerBorder: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '1px',
+    backgroundColor: tokens.colorNeutralStroke2,
+    // A linha divisória só aparece quando o appbar já está
+    // praticamente sólido, senão fica visível sobre o hero transparente.
   },
   headerInner: {
     display: 'flex',
@@ -32,9 +46,9 @@ const useStyles = makeStyles({
     paddingRight: tokens.spacingHorizontalL,
   },
   headerTitle: {
-    fontSize: '22px',
-    fontWeight: '900',
-    letterSpacing: '-0.4px',
+    fontSize: '17px',
+    fontWeight: '800',
+    letterSpacing: '-0.2px',
     margin: 0,
     flex: 1,
     minWidth: 0,
@@ -42,6 +56,8 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     color: tokens.colorNeutralForeground1,
+    transitionProperty: 'opacity, transform',
+    transitionDuration: '0.2s',
   },
   headerActions: {
     display: 'flex',
@@ -90,7 +106,7 @@ const useStyles = makeStyles({
     paddingBottom: tokens.spacingVerticalXXL,
   },
 
-  // --- Hero: agora com profundidade real, não é mais um bloco transparente ---
+  // --- Hero: profundidade real via gradiente radial do brand ---
   heroBg: {
     position: 'relative',
     width: '100%',
@@ -99,13 +115,6 @@ const useStyles = makeStyles({
     paddingLeft: tokens.spacingHorizontalXXL,
     paddingRight: tokens.spacingHorizontalXXL,
     backgroundImage: `radial-gradient(120% 100% at 50% 0%, ${tokens.colorBrandBackground2} 0%, transparent 60%)`,
-  },
-  heroEyebrow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    color: tokens.colorBrandForeground1,
-    marginBottom: '4px',
   },
   heroTitle: {
     fontSize: '28px',
@@ -150,7 +159,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
 
-  // --- Secção "Comece a criar com": eyebrow + grid de cards com hierarquia ---
+  // --- Secção "Comece a criar com" ---
   sectionHead: {
     display: 'flex',
     alignItems: 'baseline',
@@ -192,6 +201,9 @@ const useStyles = makeStyles({
       backgroundColor: tokens.colorNeutralBackground3,
     },
   },
+  // Sem pill de cor atrás do ícone — apenas o ícone puro, maior,
+  // sem fundo tingido. É a mudança pedida explicitamente: "não
+  // tenha pills nos icones dos apps".
   appIconWrap: {
     width: '52px',
     height: '52px',
@@ -199,12 +211,10 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    borderRadius: tokens.borderRadiusXLarge,
-    boxShadow: `inset 0 0 0 1px ${tokens.colorNeutralStroke3}`,
   },
   appIconImg: {
-    width: '52%',
-    height: '52%',
+    width: '100%',
+    height: '100%',
     objectFit: 'contain',
     display: 'block',
   },
@@ -221,14 +231,35 @@ const useStyles = makeStyles({
     WebkitBoxOrient: 'vertical',
   },
 
+  // --- Skeleton real: gradiente animado em vez de bloco estático ---
   skeletonBlock: {
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundImage: `linear-gradient(90deg, transparent, ${tokens.colorNeutralBackground1} 50%, transparent)`,
+      transform: 'translateX(-100%)',
+      animationName: {
+        '0%': { transform: 'translateX(-100%)' },
+        '100%': { transform: 'translateX(100%)' },
+      },
+      animationDuration: '1.4s',
+      animationIterationCount: 'infinite',
+      animationTimingFunction: 'ease-in-out',
+    },
+  },
+  skeletonThumb: {
+    width: '148px',
+    height: '148px',
+    borderRadius: tokens.borderRadiusXLarge,
+    flexShrink: 0,
   },
 
-  // --- Recentes: thumbs maiores, overlay com gradiente + título sobreposto ---
+  // --- Recentes ---
   recentSection: {
     marginTop: tokens.spacingVerticalXXL,
   },
@@ -356,11 +387,12 @@ export default function CreateTab({ scrollContainerRef }) {
   const [heroProgress, setHeroProgress] = React.useState(0);
   const recentProjects = MOCK_RECENT_PROJECTS;
 
-  // heroProgress: 0 quando a search bar do hero está totalmente
-  // visível, 1 quando já saiu do ecrã pelo scroll — controla o
-  // encolher/opacidade da search bar e o aparecimento do botão de
-  // pesquisa no header fixo. Calculado a partir do scroll do
-  // container pai, medido em ~80px de curso total.
+  // heroProgress: 0 quando o topo do ecrã está visível, 1 quando já
+  // se deslizou ~80px. Controla três coisas ao mesmo tempo:
+  // 1) encolher/opacidade da search bar do hero
+  // 2) aparecimento do botão de pesquisa no appbar fixo
+  // 3) opacidade de fundo + blur do próprio appbar (efeito "silver"
+  //    progressivo — começa transparente, fica sólido e frosted)
   React.useEffect(() => {
     const el = scrollContainerRef?.current;
     if (!el) return;
@@ -376,6 +408,13 @@ export default function CreateTab({ scrollContainerRef }) {
   const searchBarScale = 1 - 0.08 * heroProgress;
   const searchBarInert = heroProgress > 0.9;
   const searchBtnVisible = searchBarOpacity <= 0;
+
+  // Cor de fundo do appbar interpolada: 0 → totalmente transparente,
+  // 1 → colorNeutralBackground1 quase opaco. O blur acompanha, dando
+  // a sensação de vidro fosco ("silver") que só endurece com o scroll.
+  const headerBg = `color-mix(in srgb, ${tokens.colorNeutralBackground1} ${Math.round(heroProgress * 92)}%, transparent)`;
+  const headerBlur = `blur(${heroProgress * 14}px)`;
+  const headerBorderOpacity = Math.max(0, (heroProgress - 0.7) / 0.3);
 
   function handleOpenSearch() {
     buzz();
@@ -399,9 +438,16 @@ export default function CreateTab({ scrollContainerRef }) {
 
   return (
     <>
-      <div className={styles.header}>
+      <div
+        className={styles.header}
+        style={{
+          backgroundColor: headerBg,
+          backdropFilter: headerBlur,
+          WebkitBackdropFilter: headerBlur,
+        }}
+      >
         <div className={styles.headerInner}>
-          <h1 className={styles.headerTitle}>Criar</h1>
+          <h1 className={styles.headerTitle} style={{ opacity: heroProgress }}>Criar</h1>
           <div className={styles.headerActions}>
             <button
               className={`${styles.iconBtn} ${!searchBtnVisible ? styles.iconBtnHidden : ''}`}
@@ -418,14 +464,11 @@ export default function CreateTab({ scrollContainerRef }) {
             </button>
           </div>
         </div>
+        <div className={styles.headerBorder} style={{ opacity: headerBorderOpacity }} />
       </div>
 
       <div className={styles.root}>
         <div className={styles.heroBg}>
-          <div className={styles.heroEyebrow}>
-            <Sparkle24Filled fontSize={16} />
-            <Caption1 weight="bold">Estúdio Nexa</Caption1>
-          </div>
           <h2 className={styles.heroTitle}>O que vamos criar hoje?</h2>
           <Caption1 block className={styles.heroSubtitle}>Escolhe uma ferramenta ou continua um projeto recente</Caption1>
           <button
@@ -448,7 +491,7 @@ export default function CreateTab({ scrollContainerRef }) {
         <div className={styles.appsGrid}>
           {ALL_APPS.map((app) => (
             <button key={app.id} className={styles.appItem} onClick={() => openApp(app)}>
-              <span className={styles.appIconWrap} style={{ backgroundColor: app.color + '22' }}>
+              <span className={styles.appIconWrap}>
                 <img src={app.iconPath} alt={app.label} className={styles.appIconImg} />
               </span>
               <Caption1 className={styles.appLabel}>{app.label}</Caption1>
@@ -459,12 +502,12 @@ export default function CreateTab({ scrollContainerRef }) {
         {recentProjects === null && (
           <div className={styles.recentSection}>
             <div className={styles.sectionHead}>
-              <div className={styles.skeletonBlock} style={{ width: '160px', height: '17px' }} />
+              <div className={`${styles.skeletonBlock}`} style={{ width: '160px', height: '17px' }} />
             </div>
             <div className={styles.recentRow}>
               {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
                 <div key={i} className={styles.recentCard}>
-                  <div className={styles.recentThumb} />
+                  <div className={`${styles.skeletonBlock} ${styles.skeletonThumb}`} />
                 </div>
               ))}
             </div>

@@ -1,6 +1,27 @@
 import React from 'react';
-import * as Icons from '@fluentui/react-icons';
+import {
+  CollectionsAdd24Regular,
+  CollectionsAdd24Filled,
+  Folder24Regular,
+  Folder24Filled,
+  Board24Regular,
+  Board24Filled,
+  Circle24Regular,
+  Person24Regular,
+} from '@fluentui/react-icons';
 import { makeStyles, tokens } from '@fluentui/react-components';
+
+// Mapa explícito nome-de-string → componente, com imports nomeados
+// diretos (não `import * as Icons`) — um nome errado rebenta o
+// build em vez de cair em silêncio no fallback.
+const ICON_MAP = {
+  CollectionsAdd24Regular,
+  CollectionsAdd24Filled,
+  Folder24Regular,
+  Folder24Filled,
+  Board24Regular,
+  Board24Filled,
+};
 
 const useStyles = makeStyles({
   root: {
@@ -94,8 +115,6 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightBold,
     color: '#fff',
   },
-  // Fallback oficial do Fluent quando não há avatarUrl nem userInitial —
-  // ícone de pessoa em vez de círculo colorido com letra.
   avatarFallback: {
     width: '100%',
     height: '100%',
@@ -123,7 +142,9 @@ export default function BottomTabBar({ tabs, activeTab, onChange, avatarUrl, ava
     <nav className={styles.root}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
-        const IconComp = !tab.isAvatar ? (Icons[isActive ? tab.iconFilled : tab.icon] || Icons.Circle24Regular) : null;
+        const IconComp = !tab.isAvatar
+          ? (ICON_MAP[isActive ? tab.iconFilled : tab.icon] || Circle24Regular)
+          : null;
         return (
           <button
             key={tab.id}
@@ -143,7 +164,7 @@ export default function BottomTabBar({ tabs, activeTab, onChange, avatarUrl, ava
                     </span>
                   ) : (
                     <span className={styles.avatarFallback}>
-                      <Icons.Person24Regular fontSize={16} />
+                      <Person24Regular fontSize={16} />
                     </span>
                   )}
                 </span>

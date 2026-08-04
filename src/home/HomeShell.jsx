@@ -1,6 +1,5 @@
 import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
-import AppHeader from './AppHeader.jsx';
 import BottomTabBar from './BottomTabBar.jsx';
 import AiFab from './AiFab.jsx';
 import AiSheet from './AiSheet.jsx';
@@ -28,10 +27,12 @@ const useStyles = makeStyles({
   },
 });
 
+// CollectionsAdd para "Criar" e Board para "Templates" — os ícones
+// pedidos explicitamente, não substitutos.
 const TABS = [
-  { id: 'create', label: 'Criar', icon: 'Add24Regular', iconFilled: 'Add24Filled' },
+  { id: 'create', label: 'Criar', icon: 'CollectionsAdd24Regular', iconFilled: 'CollectionsAdd24Filled' },
   { id: 'projects', label: 'Projetos', icon: 'Folder24Regular', iconFilled: 'Folder24Filled' },
-  { id: 'templates', label: 'Templates', icon: 'Table24Regular', iconFilled: 'Table24Filled' },
+  { id: 'templates', label: 'Templates', icon: 'Board24Regular', iconFilled: 'Board24Filled' },
   { id: 'me', label: 'Eu', isAvatar: true },
 ];
 
@@ -41,10 +42,10 @@ export default function HomeShell({ user }) {
   const [aiOpen, setAiOpen] = React.useState(false);
   const scrollContainerRef = React.useRef(null);
   
+  // Cada tab é dona do seu próprio appbar — nenhuma delas depende
+  // de um AppHeader partilhado no shell.
   return (
     <div className={styles.root}>
-      {activeTab !== 'create' && <AppHeader activeTab={activeTab} />}
-
       <div className={styles.content} ref={scrollContainerRef}>
         {activeTab === 'create' && <CreateTab scrollContainerRef={scrollContainerRef} />}
         {activeTab === 'projects' && <ProjectsTab />}
