@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show Colors, Brightness;
+import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -47,16 +47,16 @@ class _CodeMeAppState extends State<CodeMeApp> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = appTheme.isDark ? Brightness.dark : Brightness.light;
+    final brightness = appTheme.isDark ? material.Brightness.dark : material.Brightness.light;
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness:
-          appTheme.isDark ? Brightness.light : Brightness.dark,
+          appTheme.isDark ? material.Brightness.light : material.Brightness.dark,
       statusBarBrightness: brightness,
       systemNavigationBarColor:
           appTheme.isDark ? const Color(0xFF202020) : Colors.white,
       systemNavigationBarIconBrightness:
-          appTheme.isDark ? Brightness.light : Brightness.dark,
+          appTheme.isDark ? material.Brightness.light : material.Brightness.dark,
     ));
 
     return ListenableBuilder(
@@ -67,12 +67,12 @@ class _CodeMeAppState extends State<CodeMeApp> {
         themeMode: appTheme.isDark ? ThemeMode.dark : ThemeMode.light,
         theme: FluentThemeData(
           accentColor: appTheme.accent,
-          brightness: Brightness.light,
+          brightness: material.Brightness.light,
           visualDensity: VisualDensity.standard,
         ),
         darkTheme: FluentThemeData(
           accentColor: appTheme.accent,
-          brightness: Brightness.dark,
+          brightness: material.Brightness.dark,
           visualDensity: VisualDensity.standard,
         ),
         home: const RootShell(),
@@ -159,8 +159,8 @@ class _RootShellState extends State<RootShell> {
             bottom: 0,
             left: _drawerOpen ? 0 : -260,
             width: 260,
-            child: Material(
-              type: MaterialType.transparency,
+            child: material.Material(
+              type: material.MaterialType.transparency,
               child: Container(
                 decoration: BoxDecoration(
                   color: theme.micaBackgroundColor,
