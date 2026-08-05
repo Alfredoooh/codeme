@@ -28,6 +28,13 @@ extension QuickActionX on QuickAction {
         QuickAction.slide:      'Criar apresentação',
         QuickAction.whiteboard: 'Criar com o canvas',
       }[this]!;
+
+  Color get tint => const {
+        QuickAction.doc:        Color(0xFF2B579A), // azul Word
+        QuickAction.sheet:      Color(0xFF217346), // verde Excel
+        QuickAction.slide:      Color(0xFFD24726), // laranja/vermelho PowerPoint
+        QuickAction.whiteboard: Color(0xFFE1306C), // vermelho/rosa
+      }[this]!;
 }
 
 class _AiTabState extends State<AiTab> {
@@ -89,6 +96,7 @@ class _EmptyState extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Wrap(
             alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             runSpacing: 8,
             children: QuickAction.values
@@ -137,27 +145,28 @@ class _QuickActionChipState extends State<_QuickActionChip> {
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+            color: widget.action.tint.withOpacity(s.isDark ? 0.16 : 0.10),
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Image.asset(
-                'assets/${widget.action.asset}',
-                width: 18,
-                height: 18,
+                'assets/icons/png/${widget.action.asset}',
+                width: 16,
+                height: 16,
                 fit: BoxFit.contain,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
                 widget.action.label,
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: s.onSurface,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: widget.action.tint,
                 ),
               ),
             ],
