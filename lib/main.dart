@@ -111,7 +111,7 @@ class AppThemeNotifier extends ChangeNotifier {
 final AppThemeNotifier appTheme = AppThemeNotifier();
 
 class AppTheme extends InheritedNotifier<AppThemeNotifier> {
-  const AppTheme({super.key, required super.child}) : super(notifier: appTheme);
+  AppTheme({super.key, required super.child}) : super(notifier: appTheme);
 
   static AppColorScheme of(BuildContext context) {
     final notifier = context.dependOnInheritedWidgetOfExactType<AppTheme>()?.notifier;
