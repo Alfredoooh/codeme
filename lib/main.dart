@@ -263,7 +263,7 @@ class AppIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SvgPicture.asset(
-      'assets/icons/$asset',
+      'assets/icons/svg/$asset',
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
@@ -1952,7 +1952,7 @@ class _SlidesToolbar extends StatelessWidget {
         ),
         _ToolbarCategory(
           label: 'Inserir',
-          icon: 'add.svg',
+          icon: 'more.svg',
           actions: [
             _ToolbarAction(label: 'Novo slide', icon: 'add_slide.svg', onTap: () => _js("editorApi.addSlide()")),
             _ToolbarAction(label: 'Caixa de texto', icon: 'text_box.svg', onTap: () => _js("editorApi.insertTextBox()")),
@@ -2216,7 +2216,7 @@ class _EditActionsButtonState extends State<_EditActionsButton>
       key: _buttonKey,
       onTap: _toggleMenu,
       scheme: widget.scheme,
-      child: AppIcon('add.svg', color: widget.scheme.onSurface, size: 20),
+      child: AppIcon('more.svg', color: widget.scheme.onSurface, size: 20),
     );
   }
 }
