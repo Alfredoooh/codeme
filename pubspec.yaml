@@ -1,4 +1,4 @@
-name: codeme_app
+name: nexa
 description: CodeMe App - Custom UI Native
 
 publish_to: 'none'
@@ -16,7 +16,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
 
 flutter:
-  uses-material-design: false
+  uses-material-design: true
   assets:
     - assets/icons/
     - assets/editor/index.html

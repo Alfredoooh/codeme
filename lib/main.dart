@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -13,47 +14,36 @@ void main() async {
 }
 
 // ── M3 Color Scheme ──────────────────────────────────────────────────────
-// Seed: #2F7BF6 (azul accent original do projeto)
-// Dark surface base: #1C1C1C — neutro quente, não azulado, não preto absoluto.
-// Escala de containers sobe em luminosidade a partir daí para dar profundidade
-// sem depender de bordas sólidas.
 
 class AppColorScheme {
   final bool isDark;
   const AppColorScheme(this.isDark);
 
-  // Primary (azul, alto chroma)
   Color get primary => isDark ? const Color(0xFFA9C7FF) : const Color(0xFF2F7BF6);
   Color get onPrimary => isDark ? const Color(0xFF00325C) : const Color(0xFFFFFFFF);
   Color get primaryContainer => isDark ? const Color(0xFF00497E) : const Color(0xFFD8E2FF);
   Color get onPrimaryContainer => isDark ? const Color(0xFFD8E2FF) : const Color(0xFF001B3E);
 
-  // Secondary
   Color get secondary => isDark ? const Color(0xFFBAC6E0) : const Color(0xFF565F71);
   Color get onSecondary => isDark ? const Color(0xFF283041) : const Color(0xFFFFFFFF);
   Color get secondaryContainer => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFDAE2F9);
   Color get onSecondaryContainer => isDark ? const Color(0xFFDAE2F9) : const Color(0xFF131C2B);
 
-  // Tertiary (roxo-azulado, accent secundário)
   Color get tertiary => isDark ? const Color(0xFFD3BCE4) : const Color(0xFF6E5677);
   Color get onTertiary => isDark ? const Color(0xFF3D2947) : const Color(0xFFFFFFFF);
   Color get tertiaryContainer => isDark ? const Color(0xFF553F5F) : const Color(0xFFF4D9FF);
   Color get onTertiaryContainer => isDark ? const Color(0xFFF4D9FF) : const Color(0xFF271430);
 
-  // Error
   Color get error => isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A);
   Color get onError => isDark ? const Color(0xFF690005) : const Color(0xFFFFFFFF);
   Color get errorContainer => isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6);
   Color get onErrorContainer => isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002);
 
-  // Surface — base #1C1C1C no dark, neutra e quente
   Color get surface => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFF9F9FF);
   Color get onSurface => isDark ? const Color(0xFFECECEC) : const Color(0xFF191C20);
   Color get surfaceVariant => isDark ? const Color(0xFF444444) : const Color(0xFFDFE2EB);
   Color get onSurfaceVariant => isDark ? const Color(0xFFC7C7C7) : const Color(0xFF43474E);
 
-  // Surface containers — escala de luminosidade crescente a partir do #1C1C1C,
-  // é isto que separa camadas visualmente em vez de bordas sólidas
   Color get surfaceContainerLowest => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
   Color get surfaceContainerLow => isDark ? const Color(0xFF242424) : const Color(0xFFF3F3FA);
   Color get surfaceContainer => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEDEDF4);
@@ -63,11 +53,9 @@ class AppColorScheme {
   Color get surfaceDim => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFD9D9E0);
   Color get surfaceBright => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFF9F9FF);
 
-  // Outline — usado só para casos de contorno funcional (foco, inputs), não como divisor decorativo
   Color get outline => isDark ? const Color(0xFF8F8F8F) : const Color(0xFF73777F);
   Color get outlineVariant => isDark ? const Color(0xFF444444) : const Color(0xFFC3C6CF);
 
-  // Inverse
   Color get inverseSurface => isDark ? const Color(0xFFE2E2E9) : const Color(0xFF2E3036);
   Color get onInverseSurface => isDark ? const Color(0xFF2E3036) : const Color(0xFFF0F0F7);
   Color get inversePrimary => isDark ? const Color(0xFF2F7BF6) : const Color(0xFFA9C7FF);
@@ -79,7 +67,6 @@ class AppColorScheme {
   Color get hover => onSurface.withOpacity(isDark ? 0.08 : 0.06);
   Color get pressed => onSurface.withOpacity(isDark ? 0.12 : 0.10);
 
-  // Sombra de elementos flutuantes (pill nav, pill input)
   List<BoxShadow> get floatingShadow => [
         BoxShadow(
           color: shadow.withOpacity(isDark ? 0.4 : 0.12),
@@ -101,6 +88,33 @@ class AppThemeNotifier extends ChangeNotifier {
 }
 
 final AppThemeNotifier appTheme = AppThemeNotifier();
+
+// ── Spring Curve — física real de mola para transições, não easing linear ──
+// Usado em vez de Curves.easeOut* simples para dar sensação de peso/inércia.
+
+class SpringCurve extends Curve {
+  final double mass;
+  final double stiffness;
+  final double damping;
+
+  const SpringCurve({this.mass = 1, this.stiffness = 380, this.damping = 28});
+
+  @override
+  double transform(double t) {
+    final spring = SpringDescription(mass: mass, stiffness: stiffness, damping: damping);
+    final simulation = SpringSimulation(spring, 0, 1, 0);
+    return simulation.x(t * _durationScale(spring));
+  }
+
+  double _durationScale(SpringDescription spring) {
+    // Aproximação: escala o tempo para que t=1 corresponda a ~settle da mola
+    return 0.62;
+  }
+}
+
+// A curva de spring "canónica" usada em todo o app para consistência
+const Curve kSpringCurve = Cubic(0.34, 1.56, 0.64, 1.0); // overshoot suave, sensação de mola
+const Curve kSmoothCurve = Cubic(0.16, 1.0, 0.3, 1.0); // "expo-out", sem overshoot
 
 // ── Conversation Model (mock) ───────────────────────────────────────────────
 
@@ -219,8 +233,8 @@ class _CodeMeAppState extends State<CodeMeApp> {
           systemNavigationBarColor: scheme.surface,
           systemNavigationBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
         ));
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        // SEM animação de cor aqui — troca de tema é instantânea, sem crossfade.
+        return ColoredBox(
           color: scheme.surface,
           child: child,
         );
@@ -275,18 +289,30 @@ class _RootShellState extends State<RootShell> {
     _closeDrawer();
     Navigator.of(context).push(
       PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 420),
+        reverseTransitionDuration: const Duration(milliseconds: 320),
         pageBuilder: (context, animation, secondaryAnimation) => const SettingsPage(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(parent: animation, curve: kSmoothCurve, reverseCurve: kSmoothCurve);
           return SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1, 0),
               end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-            child: child,
+            ).animate(curved),
+            child: FadeTransition(
+              opacity: curved,
+              child: child,
+            ),
           );
         },
       ),
     );
+  }
+
+  // Chamado diretamente pelo tap — sem indireção extra que possa perder o evento.
+  void _selectTab(int i) {
+    if (i == _tabIndex) return;
+    setState(() => _tabIndex = i);
   }
 
   void _setEditorType(EditorType type) {
@@ -303,33 +329,37 @@ class _RootShellState extends State<RootShell> {
       type: MaterialType.transparency,
       child: Stack(
         children: [
-          Column(
-            children: [
-              _Header(
-                scheme: scheme,
-                title: _tabTitle,
-                onMenuTap: _openDrawer,
-                trailing: _tabIndex == 1
-                    ? _EditActionsButton(
-                        scheme: scheme,
-                        current: _editorType,
-                        onSelect: _setEditorType,
-                      )
-                    : null,
-              ),
-              Expanded(
-                child: IndexedStack(
-                  index: _tabIndex,
-                  children: [
-                    const _ChatTab(),
-                    _EditTab(editorType: _editorType),
-                  ],
+          // Corpo — appbar e conteúdo partilham EXATAMENTE a mesma cor (scheme.surface)
+          ColoredBox(
+            color: scheme.surface,
+            child: Column(
+              children: [
+                _Header(
+                  scheme: scheme,
+                  title: _tabTitle,
+                  onMenuTap: _openDrawer,
+                  trailing: _tabIndex == 1
+                      ? _EditActionsButton(
+                          scheme: scheme,
+                          current: _editorType,
+                          onSelect: _setEditorType,
+                        )
+                      : null,
                 ),
-              ),
-            ],
+                Expanded(
+                  child: _TabTransitionSwitcher(
+                    index: _tabIndex,
+                    children: [
+                      const _ChatTab(),
+                      _EditTab(editorType: _editorType),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
 
-          // Nav flutuante — pill com bordas 100% curvas, sem borda sólida
+          // Nav flutuante — recebe o índice atual e o callback DIRETO, sem camadas extra
           Positioned(
             left: 16,
             right: 16,
@@ -339,7 +369,7 @@ class _RootShellState extends State<RootShell> {
               child: _FloatingTabBar(
                 scheme: scheme,
                 currentIndex: _tabIndex,
-                onChanged: (i) => setState(() => _tabIndex = i),
+                onChanged: _selectTab,
               ),
             ),
           ),
@@ -350,15 +380,16 @@ class _RootShellState extends State<RootShell> {
                 onTap: _closeDrawer,
                 child: AnimatedOpacity(
                   opacity: _drawerOpen ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 220),
+                  curve: kSmoothCurve,
                   child: Container(color: scheme.barrier),
                 ),
               ),
             ),
 
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
+            duration: const Duration(milliseconds: 380),
+            curve: kSpringCurve,
             top: 0,
             bottom: 0,
             left: _drawerOpen ? 0 : -280,
@@ -370,6 +401,55 @@ class _RootShellState extends State<RootShell> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Transição entre tabs: fade + scale coordenado, com spring curve ────────
+// Substitui IndexedStack por AnimatedSwitcher para eliminar qualquer ambiguidade
+// de hit-testing entre camadas empilhadas, e entrega a transição suave pedida.
+
+class _TabTransitionSwitcher extends StatelessWidget {
+  final int index;
+  final List<Widget> children;
+
+  const _TabTransitionSwitcher({required this.index, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 340),
+      switchInCurve: kSmoothCurve,
+      switchOutCurve: kSmoothCurve,
+      transitionBuilder: (child, animation) {
+        final slideIn = Tween<Offset>(
+          begin: const Offset(0, 0.04),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: slideIn,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.985, end: 1.0).animate(animation),
+              child: child,
+            ),
+          ),
+        );
+      },
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<int>(index),
+        child: children[index],
       ),
     );
   }
@@ -394,6 +474,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 6, bottom: 10, left: 6, right: 10),
+      // Mesma cor do corpo — sem container próprio, sem contraste tonal com o conteúdo
       color: scheme.surface,
       child: Row(
         children: [
@@ -403,12 +484,25 @@ class _Header extends StatelessWidget {
             child: AppIcon('menu.svg', color: scheme.onSurface, size: 20),
           ),
           const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurface,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: kSmoothCurve,
+            switchOutCurve: kSmoothCurve,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              title,
+              key: ValueKey<String>(title),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
             ),
           ),
           const Spacer(),
@@ -439,26 +533,33 @@ class _IconTapArea extends StatefulWidget {
   State<_IconTapArea> createState() => _IconTapAreaState();
 }
 
-class _IconTapAreaState extends State<_IconTapArea> {
+class _IconTapAreaState extends State<_IconTapArea> with SingleTickerProviderStateMixin {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) => setState(() => _pressed = true),
       onTapCancel: () => setState(() => _pressed = false),
       onTapUp: (_) => setState(() => _pressed = false),
       onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        width: widget.size,
-        height: widget.size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _pressed ? widget.scheme.pressed : Colors.transparent,
-          borderRadius: BorderRadius.circular(widget.size / 2),
+      child: AnimatedScale(
+        scale: _pressed ? 0.88 : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: kSpringCurve,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: kSmoothCurve,
+          width: widget.size,
+          height: widget.size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _pressed ? widget.scheme.pressed : Colors.transparent,
+            borderRadius: BorderRadius.circular(widget.size / 2),
+          ),
+          child: widget.child,
         ),
-        child: widget.child,
       ),
     );
   }
@@ -572,12 +673,14 @@ class _ConversationTileState extends State<_ConversationTile> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTapDown: (_) => setState(() => _hover = true),
         onTapCancel: () => setState(() => _hover = false),
         onTapUp: (_) => setState(() => _hover = false),
         onTap: () {},
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: const Duration(milliseconds: 140),
+          curve: kSmoothCurve,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: _hover ? widget.scheme.hover : Colors.transparent,
@@ -622,53 +725,60 @@ class _AccountPillState extends State<_AccountPill> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) => setState(() => _pressed = true),
       onTapCancel: () => setState(() => _pressed = false),
       onTapUp: (_) => setState(() => _pressed = false),
       onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: _pressed ? widget.scheme.hover : widget.scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: widget.scheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                'U',
-                style: TextStyle(
-                  color: widget.scheme.onPrimary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: kSpringCurve,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: kSmoothCurve,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: _pressed ? widget.scheme.hover : widget.scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: widget.scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  'U',
+                  style: TextStyle(
+                    color: widget.scheme.onPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Utilizador',
-                style: TextStyle(fontSize: 14, color: widget.scheme.onSurface),
-                overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Utilizador',
+                  style: TextStyle(fontSize: 14, color: widget.scheme.onSurface),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-            AppIcon('settings.svg', color: widget.scheme.onSurfaceVariant, size: 16),
-          ],
+              AppIcon('settings.svg', color: widget.scheme.onSurfaceVariant, size: 16),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Floating Tab Bar — pill flutuante, bordas 100% curvas, sem borda sólida ──
+// ── Floating Tab Bar — pill flutuante, indicador animado com spring ────────
 
 class _FloatingTabBar extends StatelessWidget {
   final AppColorScheme scheme;
@@ -681,32 +791,65 @@ class _FloatingTabBar extends StatelessWidget {
     required this.onChanged,
   });
 
+  static const _items = [
+    (asset: 'ai_tab.svg', label: 'AI'),
+    (asset: 'edit_tab.svg', label: 'Editar'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 62,
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: scheme.floatingShadow,
-      ),
-      child: Row(
-        children: [
-          _FloatingTabItem(
-            scheme: scheme,
-            asset: 'ai_tab.svg',
-            label: 'AI',
-            selected: currentIndex == 0,
-            onTap: () => onChanged(0),
+    return Material(
+      // Material próprio garante hit-testing correto em toda a área,
+      // incluindo InkWell ripple nativo por cima do fundo custom.
+      color: Colors.transparent,
+      child: Container(
+        height: 62,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: scheme.floatingShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth / _items.length;
+              return Stack(
+                children: [
+                  // Indicador — pill que desliza com spring física real por baixo do item selecionado
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 420),
+                    curve: kSpringCurve,
+                    left: itemWidth * currentIndex + 6,
+                    top: 8,
+                    bottom: 8,
+                    width: itemWidth - 12,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: List.generate(_items.length, (i) {
+                      final item = _items[i];
+                      return Expanded(
+                        child: _FloatingTabItem(
+                          scheme: scheme,
+                          asset: item.asset,
+                          label: item.label,
+                          selected: currentIndex == i,
+                          onTap: () => onChanged(i),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              );
+            },
           ),
-          _FloatingTabItem(
-            scheme: scheme,
-            asset: 'edit_tab.svg',
-            label: 'Editar',
-            selected: currentIndex == 1,
-            onTap: () => onChanged(1),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -729,36 +872,34 @@ class _FloatingTabItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: selected ? scheme.primaryContainer : Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
+    final color = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+    return InkWell(
+      onTap: onTap,
+      // InkWell com Material ancestor garante hit-test + feedback nativo,
+      // eliminando qualquer chance do toque não ser reconhecido.
+      customBorder: const StadiumBorder(),
+      child: SizedBox.expand(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedScale(
+              scale: selected ? 1.08 : 1.0,
+              duration: const Duration(milliseconds: 320),
+              curve: kSpringCurve,
+              child: AppIcon(asset, color: color, size: 20),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AppIcon(asset, color: selected ? scheme.onPrimaryContainer : color, size: 20),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: selected ? scheme.onPrimaryContainer : color,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 2),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: kSmoothCurve,
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              child: Text(label),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -797,56 +938,44 @@ class _ChatTabState extends State<_ChatTab> {
   Widget build(BuildContext context) {
     final scheme = AppColorScheme(appTheme.isDark);
 
-    // Espaço reservado no fundo para: input flutuante (≈64) + gap (10) + nav flutuante (62) + margem (14) + safe area
     final bottomReserved = 64 + 10 + 62 + 14 + MediaQuery.of(context).padding.bottom;
 
     return Stack(
       children: [
-        // Lista de mensagens — scrolla por baixo do input e do nav flutuantes
-        _messages.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AppIcon('robot.svg', color: scheme.onSurfaceVariant, size: 40),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Como posso ajudar?',
-                      style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-                    ),
-                  ],
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: kSmoothCurve,
+          switchOutCurve: kSmoothCurve,
+          transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+          child: _messages.isEmpty
+              ? Center(
+                  key: const ValueKey('empty'),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppIcon('robot.svg', color: scheme.onSurfaceVariant, size: 40),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Como posso ajudar?',
+                        style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  key: const ValueKey('list'),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, bottomReserved),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, i) {
+                    return _ChatBubble(scheme: scheme, text: _messages[i]);
+                  },
                 ),
-              )
-            : ListView.builder(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomReserved),
-                itemCount: _messages.length,
-                itemBuilder: (context, i) {
-                  return Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.75,
-                      ),
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _messages[i],
-                        style: TextStyle(color: scheme.onPrimaryContainer, fontSize: 14),
-                      ),
-                    ),
-                  );
-                },
-              ),
+        ),
 
-        // Input flutuante — pill própria, por cima do nav flutuante
         Positioned(
           left: 16,
           right: 16,
-          bottom: 14 + 62 + 10, // margem do nav + altura do nav + gap
+          bottom: 14 + 62 + 10,
           child: SafeArea(
             top: false,
             bottom: false,
@@ -858,6 +987,70 @@ class _ChatTabState extends State<_ChatTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// Bolha de mensagem entra com spring + fade, não aparece instantaneamente
+class _ChatBubble extends StatefulWidget {
+  final AppColorScheme scheme;
+  final String text;
+  const _ChatBubble({required this.scheme, required this.text});
+
+  @override
+  State<_ChatBubble> createState() => _ChatBubbleState();
+}
+
+class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+    _scale = Tween<double>(begin: 0.85, end: 1.0).animate(CurvedAnimation(parent: _controller, curve: kSpringCurve));
+    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _controller, curve: const Interval(0, 0.5, curve: Curves.easeOut)));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => Opacity(
+        opacity: _opacity.value.clamp(0.0, 1.0),
+        child: Transform.scale(
+          scale: _scale.value,
+          alignment: Alignment.centerRight,
+          child: child,
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
+          ),
+          decoration: BoxDecoration(
+            color: widget.scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            widget.text,
+            style: TextStyle(color: widget.scheme.onPrimaryContainer, fontSize: 14),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1056,30 +1249,47 @@ class _EditActionsButtonState extends State<_EditActionsButton> {
     final offset = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
 
+    late AnimationController controller;
+
     _overlayEntry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _closeMenu,
-              behavior: HitTestBehavior.opaque,
-              child: Container(color: Colors.transparent),
-            ),
-          ),
-          Positioned(
-            top: offset.dy + size.height + 6,
-            right: MediaQuery.of(context).size.width - offset.dx - size.width,
-            child: _EditPopupCard(
-              scheme: widget.scheme,
-              current: widget.current,
-              onSelect: (type) {
-                widget.onSelect(type);
-                _closeMenu();
-              },
-            ),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return _AnimatedPopupWrapper(
+          onControllerReady: (c) => controller = c,
+          builder: (context, animation) {
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: _closeMenu,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+                Positioned(
+                  top: offset.dy + size.height + 6,
+                  right: MediaQuery.of(context).size.width - offset.dx - size.width,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.85, end: 1.0)
+                          .animate(CurvedAnimation(parent: animation, curve: kSpringCurve)),
+                      alignment: Alignment.topRight,
+                      child: _EditPopupCard(
+                        scheme: widget.scheme,
+                        current: widget.current,
+                        onSelect: (type) {
+                          widget.onSelect(type);
+                          _closeMenu();
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     Overlay.of(context).insert(_overlayEntry!);
   }
@@ -1104,6 +1314,38 @@ class _EditActionsButtonState extends State<_EditActionsButton> {
       child: AppIcon('add.svg', color: widget.scheme.onSurface, size: 20),
     );
   }
+}
+
+// Wrapper que dá um AnimationController próprio a overlays, para entrada animada
+class _AnimatedPopupWrapper extends StatefulWidget {
+  final void Function(AnimationController) onControllerReady;
+  final Widget Function(BuildContext, Animation<double>) builder;
+
+  const _AnimatedPopupWrapper({required this.onControllerReady, required this.builder});
+
+  @override
+  State<_AnimatedPopupWrapper> createState() => _AnimatedPopupWrapperState();
+}
+
+class _AnimatedPopupWrapperState extends State<_AnimatedPopupWrapper> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+    widget.onControllerReady(_controller);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _controller);
 }
 
 class _EditPopupCard extends StatelessWidget {
@@ -1193,12 +1435,14 @@ class _PopupOptionState extends State<_PopupOption> {
   Widget build(BuildContext context) {
     final iconColor = widget.selected ? widget.scheme.primary : widget.scheme.onSurface;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) => setState(() => _hover = true),
       onTapCancel: () => setState(() => _hover = false),
       onTapUp: (_) => setState(() => _hover = false),
       onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
+        duration: const Duration(milliseconds: 140),
+        curve: kSmoothCurve,
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
@@ -1258,7 +1502,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Material(
       type: MaterialType.transparency,
-      child: Container(
+      child: ColoredBox(
         color: scheme.surface,
         child: SafeArea(
           child: Column(
@@ -1334,9 +1578,11 @@ class _CustomSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: const Duration(milliseconds: 260),
+        curve: kSpringCurve,
         width: 46,
         height: 26,
         padding: const EdgeInsets.all(3),
