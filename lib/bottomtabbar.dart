@@ -20,7 +20,7 @@ extension AppTabX on AppTab {
         AppTab.ai:        'ai_tab_filled.svg',
         AppTab.edit:      'edit_tab_filled.svg',
         AppTab.templates: 'templates_filled.svg',
-        AppTab.projects:  'projects.svg',      // mesmo ícone — azul sólido
+        AppTab.projects:  'projects_filled.svg',
       }[this]!;
 
   String get label => const {
@@ -36,9 +36,11 @@ extension AppTabX on AppTab {
 // ══════════════════════════════════════════════════════════════
 // FLOATING BOTTOM TAB BAR
 // ──────────────────────────────────────────────────────────────
-// • Pill flutuante — branco no tema claro, #2C2C2E no escuro
-// • Tabs IA / Editor / Templates com label animado
-// • Tab Projetos: pill azul sólido à direita (sempre)
+// • Pill flutuante única — branco no tema claro, #2C2C2E no escuro
+// • Todas as 4 tabs (IA / Editor / Templates / Projetos) na mesma pill
+// • Projetos mantém o destaque azul sólido quando seleccionado,
+//   e troca para o ícone filled ao ser clicado, como as outras tabs
+// • Barra centralizada no eixo horizontal, ícones maiores
 // • Animações: scale, opacity, AnimatedSize no label, spring
 // ══════════════════════════════════════════════════════════════
 
@@ -60,45 +62,33 @@ class BottomTabBar extends StatefulWidget {
 
 class _BottomTabBarState extends State<BottomTabBar>
     with SingleTickerProviderStateMixin {
-  // Tabs do lado esquerdo (pill principal)
-  static const _mainTabs = [AppTab.ai, AppTab.edit, AppTab.templates];
+  static const _allTabs = [
+    AppTab.ai,
+    AppTab.edit,
+    AppTab.templates,
+    AppTab.projects,
+  ];
 
-  static const double _height = 54.0;
+  static const double _height = 58.0;
   static const double _pad    =  5.0;
-
-  // Spring para o botão de projetos (scale press)
-  bool _projectsPressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // ── Pill principal (IA / Editor / Templates) ───────────
-        _MainPill(
-          s: widget.s,
-          tabs: _mainTabs,
-          current: widget.current,
-          onChanged: widget.onChanged,
-          height: _height,
-          pad: _pad,
-        ),
-
-        // ── Pill projetos ──────────────────────────────────────
-        _ProjectsPill(
-          s: widget.s,
-          selected: widget.current == AppTab.projects,
-          onTap: () => widget.onChanged(AppTab.projects),
-          size: _height,
-        ),
-      ],
+    return Center(
+      child: _MainPill(
+        s: widget.s,
+        tabs: _allTabs,
+        current: widget.current,
+        onChanged: widget.onChanged,
+        height: _height,
+        pad: _pad,
+      ),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// PILL PRINCIPAL — IA | Editor | Templates
+// PILL PRINCIPAL — IA | Editor | Templates | Projetos
 // ══════════════════════════════════════════════════════════════
 
 class _MainPill extends StatelessWidget {
@@ -127,7 +117,6 @@ class _MainPill extends StatelessWidget {
         curve: kCupertinoOut,
         height: height,
         decoration: BoxDecoration(
-          // ← CORRECÇÃO PRINCIPAL: usa navBarBg que varia com o tema
           color: s.navBarBg,
           borderRadius: BorderRadius.circular(999),
           boxShadow: s.navBarShadow,
@@ -139,14 +128,23 @@ class _MainPill extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(width: pad),
-                ...tabs.map((tab) => _MainTab(
-                      s: s,
-                      tab: tab,
-                      selected: current == tab,
-                      onTap: () => onChanged(tab),
-                      height: height,
-                      pad: pad,
-                    )),
+                for (final tab in tabs)
+                  tab.isProjects
+                      ? _ProjectsTab(
+                          s: s,
+                          selected: current == tab,
+                          onTap: () => onChanged(tab),
+                          height: height,
+                          pad: pad,
+                        )
+                      : _MainTab(
+                          s: s,
+                          tab: tab,
+                          selected: current == tab,
+                          onTap: () => onChanged(tab),
+                          height: height,
+                          pad: pad,
+                        ),
                 SizedBox(width: pad),
               ],
             ),
@@ -158,7 +156,7 @@ class _MainPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB ITEM (dentro da pill principal)
+// TAB ITEM (IA / Editor / Templates)
 // ══════════════════════════════════════════════════════════════
 
 class _MainTab extends StatefulWidget {
@@ -218,7 +216,7 @@ class _MainTabState extends State<_MainTab> {
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
-                width:  28,
+                width:  32,
                 height: widget.height - widget.pad * 2,
                 child: Center(
                   child: AnimatedScale(
@@ -228,12 +226,11 @@ class _MainTabState extends State<_MainTab> {
                     child: AppIcon(
                       sel ? widget.tab.svgFilled : widget.tab.svg,
                       color: iconColor,
-                      size: 20,
+                      size: 24,
                     ),
                   ),
                 ),
               ),
-              // Label cresce suavemente quando seleccionado
               AnimatedSize(
                 duration: const Duration(milliseconds: 280),
                 curve: kCupertinoOut,
@@ -260,33 +257,38 @@ class _MainTabState extends State<_MainTab> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PILL PROJETOS — azul sólido, sempre à direita
+// TAB PROJETOS — dentro da mesma pill; troca para ícone filled
+// e cápsula azul quando seleccionado, igual às outras tabs
 // ══════════════════════════════════════════════════════════════
 
-class _ProjectsPill extends StatefulWidget {
+class _ProjectsTab extends StatefulWidget {
   final AppColorScheme s;
   final bool selected;
   final VoidCallback onTap;
-  final double size;
+  final double height;
+  final double pad;
 
-  const _ProjectsPill({
+  const _ProjectsTab({
     required this.s,
     required this.selected,
     required this.onTap,
-    required this.size,
+    required this.height,
+    required this.pad,
   });
 
   @override
-  State<_ProjectsPill> createState() => _ProjectsPillState();
+  State<_ProjectsTab> createState() => _ProjectsTabState();
 }
 
-class _ProjectsPillState extends State<_ProjectsPill> {
+class _ProjectsTabState extends State<_ProjectsTab> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final s   = widget.s;
     final sel = widget.selected;
+
+    final double innerHeight = widget.height - widget.pad * 2;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -301,34 +303,64 @@ class _ProjectsPillState extends State<_ProjectsPill> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: kCupertinoOut,
-          width:  widget.size,
-          height: widget.size,
+          margin: EdgeInsets.symmetric(vertical: widget.pad),
+          padding: EdgeInsets.symmetric(
+            horizontal: sel ? 14.0 : 8.0,
+            vertical: 0,
+          ),
+          height: innerHeight,
           decoration: BoxDecoration(
-            color: s.projectsTabBg,
+            color: sel ? s.projectsTabBg : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
-            // Anel branco quando seleccionado
             border: sel
-                ? Border.all(color: Colors.white.withOpacity(0.45), width: 2.5)
+                ? Border.all(color: Colors.white.withOpacity(0.45), width: 2.0)
                 : null,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2F7BF6).withOpacity(sel ? 0.40 : 0.22),
-                blurRadius: sel ? 18 : 10,
-                offset: const Offset(0, 4),
+            boxShadow: sel
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF2F7BF6).withOpacity(0.40),
+                      blurRadius: 16,
+                      offset: const Offset(0, 3),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.16),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: sel ? 1.1 : 1.0,
+                duration: const Duration(milliseconds: 260),
+                curve: kCupertinoOut,
+                child: AppIcon(
+                  sel ? AppTab.projects.svgFilled : AppTab.projects.svg,
+                  color: sel ? s.projectsTabFg : s.navIconInactive,
+                  size: 24,
+                ),
               ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.18),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 280),
+                curve: kCupertinoOut,
+                child: sel
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: Text(
+                          AppTab.projects.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: s.projectsTabFg,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ],
-          ),
-          alignment: Alignment.center,
-          child: AnimatedScale(
-            scale: sel ? 1.1 : 1.0,
-            duration: const Duration(milliseconds: 260),
-            curve: kCupertinoOut,
-            child: AppIcon(AppTab.projects.svg, color: s.projectsTabFg, size: 22),
           ),
         ),
       ),
