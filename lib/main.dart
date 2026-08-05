@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -21,62 +22,62 @@ class AppColorScheme {
 
   Color get primary => isDark ? const Color(0xFFA9C7FF) : const Color(0xFF2F7BF6);
   Color get onPrimary => isDark ? const Color(0xFF00325C) : const Color(0xFFFFFFFF);
-  Color get primaryContainer => isDark ? const Color(0xFF00497E) : const Color(0xFFD8E2FF);
-  Color get onPrimaryContainer => isDark ? const Color(0xFFD8E2FF) : const Color(0xFF001B3E);
+  Color get primaryContainer => isDark ? const Color(0xFF00497E) : const Color(0xFFDDE8FF);
+  Color get onPrimaryContainer => isDark ? const Color(0xFFD8E2FF) : const Color(0xFF0A3D82);
 
   Color get secondary => isDark ? const Color(0xFFBAC6E0) : const Color(0xFF565F71);
   Color get onSecondary => isDark ? const Color(0xFF283041) : const Color(0xFFFFFFFF);
-  Color get secondaryContainer => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFDAE2F9);
-  Color get onSecondaryContainer => isDark ? const Color(0xFFDAE2F9) : const Color(0xFF131C2B);
+  Color get secondaryContainer => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE8ECF7);
+  Color get onSecondaryContainer => isDark ? const Color(0xFFDAE2F9) : const Color(0xFF3D4759);
 
   Color get tertiary => isDark ? const Color(0xFFD3BCE4) : const Color(0xFF6E5677);
   Color get onTertiary => isDark ? const Color(0xFF3D2947) : const Color(0xFFFFFFFF);
-  Color get tertiaryContainer => isDark ? const Color(0xFF553F5F) : const Color(0xFFF4D9FF);
-  Color get onTertiaryContainer => isDark ? const Color(0xFFF4D9FF) : const Color(0xFF271430);
+  Color get tertiaryContainer => isDark ? const Color(0xFF553F5F) : const Color(0xFFF3E3F8);
+  Color get onTertiaryContainer => isDark ? const Color(0xFFF4D9FF) : const Color(0xFF57405F);
 
   Color get error => isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A);
   Color get onError => isDark ? const Color(0xFF690005) : const Color(0xFFFFFFFF);
   Color get errorContainer => isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6);
   Color get onErrorContainer => isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002);
 
-  Color get surface => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFF9F9FF);
-  Color get onSurface => isDark ? const Color(0xFFECECEC) : const Color(0xFF191C20);
-  Color get surfaceVariant => isDark ? const Color(0xFF444444) : const Color(0xFFDFE2EB);
-  Color get onSurfaceVariant => isDark ? const Color(0xFFC7C7C7) : const Color(0xFF43474E);
+  Color get surface => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFFAFAFC);
+  Color get onSurface => isDark ? const Color(0xFFECECEC) : const Color(0xFF1B1B1D);
+  Color get surfaceVariant => isDark ? const Color(0xFF444444) : const Color(0xFFE4E3E8);
+  Color get onSurfaceVariant => isDark ? const Color(0xFFC7C7C7) : const Color(0xFF56565C);
 
   Color get surfaceContainerLowest => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
-  Color get surfaceContainerLow => isDark ? const Color(0xFF242424) : const Color(0xFFF3F3FA);
-  Color get surfaceContainer => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEDEDF4);
-  Color get surfaceContainerHigh => isDark ? const Color(0xFF343434) : const Color(0xFFE7E8EE);
-  Color get surfaceContainerHighest => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE2E2E9);
+  Color get surfaceContainerLow => isDark ? const Color(0xFF242424) : const Color(0xFFF3F2F7);
+  Color get surfaceContainer => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEDECF3);
+  Color get surfaceContainerHigh => isDark ? const Color(0xFF343434) : const Color(0xFFE7E5EE);
+  Color get surfaceContainerHighest => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE1DFEA);
 
-  Color get surfaceDim => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFD9D9E0);
-  Color get surfaceBright => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFF9F9FF);
+  Color get surfaceDim => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFDBD9E3);
+  Color get surfaceBright => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFFAFAFC);
 
-  Color get outline => isDark ? const Color(0xFF8F8F8F) : const Color(0xFF73777F);
-  Color get outlineVariant => isDark ? const Color(0xFF444444) : const Color(0xFFC3C6CF);
+  Color get outline => isDark ? const Color(0xFF8F8F8F) : const Color(0xFF787680);
+  Color get outlineVariant => isDark ? const Color(0xFF444444) : const Color(0xFFC9C6D0);
 
-  Color get inverseSurface => isDark ? const Color(0xFFE2E2E9) : const Color(0xFF2E3036);
-  Color get onInverseSurface => isDark ? const Color(0xFF2E3036) : const Color(0xFFF0F0F7);
+  Color get inverseSurface => isDark ? const Color(0xFFE2E2E9) : const Color(0xFF303032);
+  Color get onInverseSurface => isDark ? const Color(0xFF2E3036) : const Color(0xFFF3F0F4);
   Color get inversePrimary => isDark ? const Color(0xFF2F7BF6) : const Color(0xFFA9C7FF);
 
   Color get scrim => const Color(0xFF000000);
   Color get shadow => const Color(0xFF000000);
 
   Color get barrier => scrim.withOpacity(0.5);
-  Color get hover => onSurface.withOpacity(isDark ? 0.08 : 0.06);
-  Color get pressed => onSurface.withOpacity(isDark ? 0.12 : 0.10);
+  Color get hover => onSurface.withOpacity(isDark ? 0.08 : 0.05);
+  Color get pressed => onSurface.withOpacity(isDark ? 0.12 : 0.08);
 
   List<BoxShadow> get floatingShadow => [
         BoxShadow(
-          color: shadow.withOpacity(isDark ? 0.4 : 0.12),
+          color: shadow.withOpacity(isDark ? 0.4 : 0.10),
           blurRadius: 20,
           offset: const Offset(0, 6),
         ),
       ];
 }
 
-// ── Theme Notifier ────────────────────────────────────────────────────────
+// ── Theme via InheritedNotifier — troca instantânea garantida ──────────────
 
 class AppThemeNotifier extends ChangeNotifier {
   bool isDark = false;
@@ -89,8 +90,14 @@ class AppThemeNotifier extends ChangeNotifier {
 
 final AppThemeNotifier appTheme = AppThemeNotifier();
 
-// ── Spring Curve — física real de mola para transições, não easing linear ──
-// Usado em vez de Curves.easeOut* simples para dar sensação de peso/inércia.
+class AppTheme extends InheritedNotifier<AppThemeNotifier> {
+  const AppTheme({super.key, required super.child}) : super(notifier: appTheme);
+
+  static AppColorScheme of(BuildContext context) {
+    final notifier = context.dependOnInheritedWidgetOfExactType<AppTheme>()?.notifier;
+    return AppColorScheme(notifier?.isDark ?? false);
+  }
+}
 
 class SpringCurve extends Curve {
   final double mass;
@@ -107,14 +114,12 @@ class SpringCurve extends Curve {
   }
 
   double _durationScale(SpringDescription spring) {
-    // Aproximação: escala o tempo para que t=1 corresponda a ~settle da mola
     return 0.62;
   }
 }
 
-// A curva de spring "canónica" usada em todo o app para consistência
-const Curve kSpringCurve = Cubic(0.34, 1.56, 0.64, 1.0); // overshoot suave, sensação de mola
-const Curve kSmoothCurve = Cubic(0.16, 1.0, 0.3, 1.0); // "expo-out", sem overshoot
+const Curve kSpringCurve = Cubic(0.34, 1.35, 0.64, 1.0);
+const Curve kSmoothCurve = Cubic(0.16, 1.0, 0.3, 1.0);
 
 // ── Conversation Model (mock) ───────────────────────────────────────────────
 
@@ -134,112 +139,104 @@ final List<ConversationItem> mockConversations = [];
 
 // ── App Root ──────────────────────────────────────────────────────────────
 
-class CodeMeApp extends StatefulWidget {
+class CodeMeApp extends StatelessWidget {
   const CodeMeApp({super.key});
-  @override
-  State<CodeMeApp> createState() => _CodeMeAppState();
-}
-
-class _CodeMeAppState extends State<CodeMeApp> {
-  @override
-  void initState() {
-    super.initState();
-    appTheme.addListener(() => setState(() {}));
-  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppColorScheme(appTheme.isDark);
+    return AppTheme(
+      child: Builder(
+        builder: (context) {
+          final scheme = AppTheme.of(context);
 
-    return MaterialApp(
-      title: 'CodeMe',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme(
-          brightness: Brightness.light,
-          primary: const AppColorScheme(false).primary,
-          onPrimary: const AppColorScheme(false).onPrimary,
-          primaryContainer: const AppColorScheme(false).primaryContainer,
-          onPrimaryContainer: const AppColorScheme(false).onPrimaryContainer,
-          secondary: const AppColorScheme(false).secondary,
-          onSecondary: const AppColorScheme(false).onSecondary,
-          secondaryContainer: const AppColorScheme(false).secondaryContainer,
-          onSecondaryContainer: const AppColorScheme(false).onSecondaryContainer,
-          tertiary: const AppColorScheme(false).tertiary,
-          onTertiary: const AppColorScheme(false).onTertiary,
-          tertiaryContainer: const AppColorScheme(false).tertiaryContainer,
-          onTertiaryContainer: const AppColorScheme(false).onTertiaryContainer,
-          error: const AppColorScheme(false).error,
-          onError: const AppColorScheme(false).onError,
-          errorContainer: const AppColorScheme(false).errorContainer,
-          onErrorContainer: const AppColorScheme(false).onErrorContainer,
-          surface: const AppColorScheme(false).surface,
-          onSurface: const AppColorScheme(false).onSurface,
-          surfaceContainerHighest: const AppColorScheme(false).surfaceContainerHighest,
-          onSurfaceVariant: const AppColorScheme(false).onSurfaceVariant,
-          outline: const AppColorScheme(false).outline,
-          outlineVariant: const AppColorScheme(false).outlineVariant,
-          shadow: const AppColorScheme(false).shadow,
-          scrim: const AppColorScheme(false).scrim,
-          inverseSurface: const AppColorScheme(false).inverseSurface,
-          onInverseSurface: const AppColorScheme(false).onInverseSurface,
-          inversePrimary: const AppColorScheme(false).inversePrimary,
-          surfaceTint: const AppColorScheme(false).primary,
-        ),
+          return MaterialApp(
+            title: 'CodeMe',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              useMaterial3: true,
+              brightness: Brightness.light,
+              colorScheme: ColorScheme(
+                brightness: Brightness.light,
+                primary: const AppColorScheme(false).primary,
+                onPrimary: const AppColorScheme(false).onPrimary,
+                primaryContainer: const AppColorScheme(false).primaryContainer,
+                onPrimaryContainer: const AppColorScheme(false).onPrimaryContainer,
+                secondary: const AppColorScheme(false).secondary,
+                onSecondary: const AppColorScheme(false).onSecondary,
+                secondaryContainer: const AppColorScheme(false).secondaryContainer,
+                onSecondaryContainer: const AppColorScheme(false).onSecondaryContainer,
+                tertiary: const AppColorScheme(false).tertiary,
+                onTertiary: const AppColorScheme(false).onTertiary,
+                tertiaryContainer: const AppColorScheme(false).tertiaryContainer,
+                onTertiaryContainer: const AppColorScheme(false).onTertiaryContainer,
+                error: const AppColorScheme(false).error,
+                onError: const AppColorScheme(false).onError,
+                errorContainer: const AppColorScheme(false).errorContainer,
+                onErrorContainer: const AppColorScheme(false).onErrorContainer,
+                surface: const AppColorScheme(false).surface,
+                onSurface: const AppColorScheme(false).onSurface,
+                surfaceContainerHighest: const AppColorScheme(false).surfaceContainerHighest,
+                onSurfaceVariant: const AppColorScheme(false).onSurfaceVariant,
+                outline: const AppColorScheme(false).outline,
+                outlineVariant: const AppColorScheme(false).outlineVariant,
+                shadow: const AppColorScheme(false).shadow,
+                scrim: const AppColorScheme(false).scrim,
+                inverseSurface: const AppColorScheme(false).inverseSurface,
+                onInverseSurface: const AppColorScheme(false).onInverseSurface,
+                inversePrimary: const AppColorScheme(false).inversePrimary,
+                surfaceTint: const AppColorScheme(false).primary,
+              ),
+            ),
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              brightness: Brightness.dark,
+              colorScheme: ColorScheme(
+                brightness: Brightness.dark,
+                primary: const AppColorScheme(true).primary,
+                onPrimary: const AppColorScheme(true).onPrimary,
+                primaryContainer: const AppColorScheme(true).primaryContainer,
+                onPrimaryContainer: const AppColorScheme(true).onPrimaryContainer,
+                secondary: const AppColorScheme(true).secondary,
+                onSecondary: const AppColorScheme(true).onSecondary,
+                secondaryContainer: const AppColorScheme(true).secondaryContainer,
+                onSecondaryContainer: const AppColorScheme(true).onSecondaryContainer,
+                tertiary: const AppColorScheme(true).tertiary,
+                onTertiary: const AppColorScheme(true).onTertiary,
+                tertiaryContainer: const AppColorScheme(true).tertiaryContainer,
+                onTertiaryContainer: const AppColorScheme(true).onTertiaryContainer,
+                error: const AppColorScheme(true).error,
+                onError: const AppColorScheme(true).onError,
+                errorContainer: const AppColorScheme(true).errorContainer,
+                onErrorContainer: const AppColorScheme(true).onErrorContainer,
+                surface: const AppColorScheme(true).surface,
+                onSurface: const AppColorScheme(true).onSurface,
+                surfaceContainerHighest: const AppColorScheme(true).surfaceContainerHighest,
+                onSurfaceVariant: const AppColorScheme(true).onSurfaceVariant,
+                outline: const AppColorScheme(true).outline,
+                outlineVariant: const AppColorScheme(true).outlineVariant,
+                shadow: const AppColorScheme(true).shadow,
+                scrim: const AppColorScheme(true).scrim,
+                inverseSurface: const AppColorScheme(true).inverseSurface,
+                onInverseSurface: const AppColorScheme(true).onInverseSurface,
+                inversePrimary: const AppColorScheme(true).inversePrimary,
+                surfaceTint: const AppColorScheme(true).primary,
+              ),
+            ),
+            themeMode: scheme.isDark ? ThemeMode.dark : ThemeMode.light,
+            builder: (context, child) {
+              SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: scheme.isDark ? Brightness.light : Brightness.dark,
+                statusBarBrightness: scheme.isDark ? Brightness.dark : Brightness.light,
+                systemNavigationBarColor: scheme.surface,
+                systemNavigationBarIconBrightness: scheme.isDark ? Brightness.light : Brightness.dark,
+              ));
+              return ColoredBox(color: scheme.surface, child: child);
+            },
+            home: const RootShell(),
+          );
+        },
       ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme(
-          brightness: Brightness.dark,
-          primary: const AppColorScheme(true).primary,
-          onPrimary: const AppColorScheme(true).onPrimary,
-          primaryContainer: const AppColorScheme(true).primaryContainer,
-          onPrimaryContainer: const AppColorScheme(true).onPrimaryContainer,
-          secondary: const AppColorScheme(true).secondary,
-          onSecondary: const AppColorScheme(true).onSecondary,
-          secondaryContainer: const AppColorScheme(true).secondaryContainer,
-          onSecondaryContainer: const AppColorScheme(true).onSecondaryContainer,
-          tertiary: const AppColorScheme(true).tertiary,
-          onTertiary: const AppColorScheme(true).onTertiary,
-          tertiaryContainer: const AppColorScheme(true).tertiaryContainer,
-          onTertiaryContainer: const AppColorScheme(true).onTertiaryContainer,
-          error: const AppColorScheme(true).error,
-          onError: const AppColorScheme(true).onError,
-          errorContainer: const AppColorScheme(true).errorContainer,
-          onErrorContainer: const AppColorScheme(true).onErrorContainer,
-          surface: const AppColorScheme(true).surface,
-          onSurface: const AppColorScheme(true).onSurface,
-          surfaceContainerHighest: const AppColorScheme(true).surfaceContainerHighest,
-          onSurfaceVariant: const AppColorScheme(true).onSurfaceVariant,
-          outline: const AppColorScheme(true).outline,
-          outlineVariant: const AppColorScheme(true).outlineVariant,
-          shadow: const AppColorScheme(true).shadow,
-          scrim: const AppColorScheme(true).scrim,
-          inverseSurface: const AppColorScheme(true).inverseSurface,
-          onInverseSurface: const AppColorScheme(true).onInverseSurface,
-          inversePrimary: const AppColorScheme(true).inversePrimary,
-          surfaceTint: const AppColorScheme(true).primary,
-        ),
-      ),
-      themeMode: appTheme.isDark ? ThemeMode.dark : ThemeMode.light,
-      builder: (context, child) {
-        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
-          statusBarBrightness: appTheme.isDark ? Brightness.dark : Brightness.light,
-          systemNavigationBarColor: scheme.surface,
-          systemNavigationBarIconBrightness: appTheme.isDark ? Brightness.light : Brightness.dark,
-        ));
-        // SEM animação de cor aqui — troca de tema é instantânea, sem crossfade.
-        return ColoredBox(
-          color: scheme.surface,
-          child: child,
-        );
-      },
-      home: const RootShell(),
     );
   }
 }
@@ -279,7 +276,7 @@ class RootShell extends StatefulWidget {
 
 class _RootShellState extends State<RootShell> {
   bool _drawerOpen = false;
-  int _tabIndex = 0; // 0 = AI, 1 = Edit
+  int _tabIndex = 0;
   EditorType _editorType = EditorType.docs;
 
   void _openDrawer() => setState(() => _drawerOpen = true);
@@ -289,27 +286,20 @@ class _RootShellState extends State<RootShell> {
     _closeDrawer();
     Navigator.of(context).push(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 420),
-        reverseTransitionDuration: const Duration(milliseconds: 320),
+        transitionDuration: const Duration(milliseconds: 380),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
         pageBuilder: (context, animation, secondaryAnimation) => const SettingsPage(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curved = CurvedAnimation(parent: animation, curve: kSmoothCurve, reverseCurve: kSmoothCurve);
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1, 0),
-              end: Offset.zero,
-            ).animate(curved),
-            child: FadeTransition(
-              opacity: curved,
-              child: child,
-            ),
+            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(curved),
+            child: FadeTransition(opacity: curved, child: child),
           );
         },
       ),
     );
   }
 
-  // Chamado diretamente pelo tap — sem indireção extra que possa perder o evento.
   void _selectTab(int i) {
     if (i == _tabIndex) return;
     setState(() => _tabIndex = i);
@@ -323,43 +313,52 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppColorScheme(appTheme.isDark);
+    final scheme = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
       child: Stack(
         children: [
-          // Corpo — appbar e conteúdo partilham EXATAMENTE a mesma cor (scheme.surface)
-          ColoredBox(
-            color: scheme.surface,
-            child: Column(
-              children: [
-                _Header(
-                  scheme: scheme,
-                  title: _tabTitle,
-                  onMenuTap: _openDrawer,
-                  trailing: _tabIndex == 1
-                      ? _EditActionsButton(
-                          scheme: scheme,
-                          current: _editorType,
-                          onSelect: _setEditorType,
-                        )
-                      : null,
+          AnimatedSlide(
+            offset: _drawerOpen ? const Offset(0.68, 0) : Offset.zero,
+            duration: const Duration(milliseconds: 320),
+            curve: kSmoothCurve,
+            child: AnimatedScale(
+              scale: _drawerOpen ? 0.92 : 1.0,
+              duration: const Duration(milliseconds: 320),
+              curve: kSmoothCurve,
+              alignment: Alignment.centerLeft,
+              child: ColoredBox(
+                color: scheme.surface,
+                child: Column(
+                  children: [
+                    _Header(
+                      scheme: scheme,
+                      title: _tabTitle,
+                      onMenuTap: _openDrawer,
+                      trailing: _tabIndex == 1
+                          ? _EditActionsButton(
+                              scheme: scheme,
+                              current: _editorType,
+                              onSelect: _setEditorType,
+                            )
+                          : null,
+                    ),
+                    Expanded(
+                      child: _TabTransitionSwitcher(
+                        index: _tabIndex,
+                        children: [
+                          const _ChatTab(),
+                          _EditTab(editorType: _editorType),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: _TabTransitionSwitcher(
-                    index: _tabIndex,
-                    children: [
-                      const _ChatTab(),
-                      _EditTab(editorType: _editorType),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
 
-          // Nav flutuante — recebe o índice atual e o callback DIRETO, sem camadas extra
           Positioned(
             left: 16,
             right: 16,
@@ -380,7 +379,7 @@ class _RootShellState extends State<RootShell> {
                 onTap: _closeDrawer,
                 child: AnimatedOpacity(
                   opacity: _drawerOpen ? 1 : 0,
-                  duration: const Duration(milliseconds: 220),
+                  duration: const Duration(milliseconds: 260),
                   curve: kSmoothCurve,
                   child: Container(color: scheme.barrier),
                 ),
@@ -388,8 +387,8 @@ class _RootShellState extends State<RootShell> {
             ),
 
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 380),
-            curve: kSpringCurve,
+            duration: const Duration(milliseconds: 320),
+            curve: kSmoothCurve,
             top: 0,
             bottom: 0,
             left: _drawerOpen ? 0 : -280,
@@ -406,10 +405,6 @@ class _RootShellState extends State<RootShell> {
   }
 }
 
-// ── Transição entre tabs: fade + scale coordenado, com spring curve ────────
-// Substitui IndexedStack por AnimatedSwitcher para eliminar qualquer ambiguidade
-// de hit-testing entre camadas empilhadas, e entrega a transição suave pedida.
-
 class _TabTransitionSwitcher extends StatelessWidget {
   final int index;
   final List<Widget> children;
@@ -419,34 +414,10 @@ class _TabTransitionSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 340),
+      duration: const Duration(milliseconds: 200),
       switchInCurve: kSmoothCurve,
       switchOutCurve: kSmoothCurve,
-      transitionBuilder: (child, animation) {
-        final slideIn = Tween<Offset>(
-          begin: const Offset(0, 0.04),
-          end: Offset.zero,
-        ).animate(animation);
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: slideIn,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.985, end: 1.0).animate(animation),
-              child: child,
-            ),
-          ),
-        );
-      },
-      layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
-        );
-      },
+      transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
       child: KeyedSubtree(
         key: ValueKey<int>(index),
         child: children[index],
@@ -474,7 +445,6 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 6, bottom: 10, left: 6, right: 10),
-      // Mesma cor do corpo — sem container próprio, sem contraste tonal com o conteúdo
       color: scheme.surface,
       child: Row(
         children: [
@@ -778,7 +748,7 @@ class _AccountPillState extends State<_AccountPill> {
   }
 }
 
-// ── Floating Tab Bar — pill flutuante, indicador animado com spring ────────
+// ── Floating Tab Bar ─────────────────────────────────────────────────────
 
 class _FloatingTabBar extends StatelessWidget {
   final AppColorScheme scheme;
@@ -799,8 +769,6 @@ class _FloatingTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      // Material próprio garante hit-testing correto em toda a área,
-      // incluindo InkWell ripple nativo por cima do fundo custom.
       color: Colors.transparent,
       child: Container(
         height: 62,
@@ -816,7 +784,6 @@ class _FloatingTabBar extends StatelessWidget {
               final itemWidth = constraints.maxWidth / _items.length;
               return Stack(
                 children: [
-                  // Indicador — pill que desliza com spring física real por baixo do item selecionado
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 420),
                     curve: kSpringCurve,
@@ -875,8 +842,6 @@ class _FloatingTabItem extends StatelessWidget {
     final color = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
     return InkWell(
       onTap: onTap,
-      // InkWell com Material ancestor garante hit-test + feedback nativo,
-      // eliminando qualquer chance do toque não ser reconhecido.
       customBorder: const StadiumBorder(),
       child: SizedBox.expand(
         child: Column(
@@ -936,7 +901,7 @@ class _ChatTabState extends State<_ChatTab> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppColorScheme(appTheme.isDark);
+    final scheme = AppTheme.of(context);
 
     final bottomReserved = 64 + 10 + 62 + 14 + MediaQuery.of(context).padding.bottom;
 
@@ -991,7 +956,6 @@ class _ChatTabState extends State<_ChatTab> {
   }
 }
 
-// Bolha de mensagem entra com spring + fade, não aparece instantaneamente
 class _ChatBubble extends StatefulWidget {
   final AppColorScheme scheme;
   final String text;
@@ -1147,7 +1111,7 @@ class _DocumentEditorViewState extends State<_DocumentEditorView> {
   @override
   Widget build(BuildContext context) {
     return InAppWebView(
-      initialFile: 'assets/editor/index.html',
+      initialFile: 'assets/editor/docs.html',
       initialSettings: InAppWebViewSettings(
         transparentBackground: true,
         javaScriptEnabled: true,
@@ -1193,7 +1157,7 @@ class _EditorPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppColorScheme(appTheme.isDark);
+    final scheme = AppTheme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1316,7 +1280,6 @@ class _EditActionsButtonState extends State<_EditActionsButton> {
   }
 }
 
-// Wrapper que dá um AnimationController próprio a overlays, para entrada animada
 class _AnimatedPopupWrapper extends StatefulWidget {
   final void Function(AnimationController) onControllerReady;
   final Widget Function(BuildContext, Animation<double>) builder;
@@ -1483,22 +1446,8 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   @override
-  void initState() {
-    super.initState();
-    appTheme.addListener(_onThemeChange);
-  }
-
-  @override
-  void dispose() {
-    appTheme.removeListener(_onThemeChange);
-    super.dispose();
-  }
-
-  void _onThemeChange() => setState(() {});
-
-  @override
   Widget build(BuildContext context) {
-    final scheme = AppColorScheme(appTheme.isDark);
+    final scheme = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
@@ -1546,7 +1495,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         children: [
                           Text('Modo escuro', style: TextStyle(fontSize: 14, color: scheme.onSurface)),
                           _CustomSwitch(
-                            value: appTheme.isDark,
+                            value: scheme.isDark,
                             scheme: scheme,
                             onChanged: (_) => appTheme.toggleDark(),
                           ),

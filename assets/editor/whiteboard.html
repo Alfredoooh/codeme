@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
+<title>Quadro Branco</title>
+<style>
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  #boardWrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    background:
+      linear-gradient(#E8E8E8 1px, transparent 1px),
+      linear-gradient(90deg, #E8E8E8 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-color: #FFFFFF;
+  }
+
+  #boardCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+
+<div id="boardWrap">
+  <canvas id="boardCanvas"></canvas>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var boardWrap = document.getElementById('boardWrap');
+  var canvas = document.getElementById('boardCanvas');
+  var ctx = canvas.getContext('2d');
+
+  var strokes = []; // { points: [{x,y}], color, width, tool }
+  var currentStroke = null;
+  var isDrawing = false;
+  var currentTool = 'pen'; // pen | eraser | highlighter
+  var currentColor = '#1a1a1a';
+  var currentWidth = 2.5;
+
+  // Pan/zoom simples
+  var viewOffsetX = 0;
+  var viewOffsetY = 0;
+  var viewScale = 1;
+
+  var dpr = window.devicePixelRatio || 1;
+  var saveTimeout = null;
+
+  function redimensionarCanvas() {
+    var rect = boardWrap.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    redesenhar();
+  }
+
+  function pontoParaCanvas(clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    var x = (clientX - rect.left) * dpr / viewScale - viewOffsetX;
+    var y = (clientY - rect.top) * dpr / viewScale - viewOffsetY;
+    return { x: x, y: y };
+  }
+
+  function redesenhar() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(viewScale, 0, 0, viewScale, viewOffsetX * viewScale, viewOffsetY * viewScale);
+
+    strokes.forEach(desenharTraco);
+    if (currentStroke) desenharTraco(currentStroke);
+  }
+
+  function desenharTraco(stroke) {
+    if (stroke.points.length < 2) return;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    if (stroke.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = stroke.width * 3;
+    } else if (stroke.tool === 'highlighter') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.strokeStyle = stroke.color;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = stroke.width * 4;
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    for (var i = 1; i < stroke.points.length; i++) {
+      ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function aoPressionar(evento) {
+    isDrawing = true;
+    var ponto = pontoParaCanvas(evento.clientX, evento.clientY);
+    currentStroke = {
+      tool: currentTool,
+      color: currentColor,
+      width: currentWidth,
+      points: [ponto]
+    };
+  }
+
+  function aoMover(evento) {
+    if (!isDrawing || !currentStroke) return;
+    var ponto = pontoParaCanvas(evento.clientX, evento.clientY);
+    currentStroke.points.push(ponto);
+    redesenhar();
+  }
+
+  function aoSoltar() {
+    if (!isDrawing || !currentStroke) return;
+    isDrawing = false;
+    if (currentStroke.points.length > 1) {
+      strokes.push(currentStroke);
+      agendarGravacao();
+    }
+    currentStroke = null;
+    redesenhar();
+  }
+
+  canvas.addEventListener('pointerdown', function (e) {
+    canvas.setPointerCapture(e.pointerId);
+    aoPressionar(e);
+  });
+  canvas.addEventListener('pointermove', aoMover);
+  canvas.addEventListener('pointerup', aoSoltar);
+  canvas.addEventListener('pointercancel', aoSoltar);
+
+  function agendarGravacao() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(function () {
+      if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
+        window.AndroidBridge.saveDocument(getContent());
+      }
+    }, 500);
+  }
+
+  // ── API exposta ao toolbar Dart (específica de whiteboard) ─────
+
+  function setTool(tool) {
+    currentTool = tool; // 'pen' | 'eraser' | 'highlighter'
+  }
+
+  function setColor(hexColor) {
+    currentColor = hexColor;
+  }
+
+  function setStrokeWidth(largura) {
+    currentWidth = Math.max(1, Math.min(20, largura));
+  }
+
+  function clearBoard() {
+    strokes = [];
+    redesenhar();
+    agendarGravacao();
+  }
+
+  function undo() {
+    strokes.pop();
+    redesenhar();
+    agendarGravacao();
+  }
+
+  function resetView() {
+    viewOffsetX = 0;
+    viewOffsetY = 0;
+    viewScale = 1;
+    redesenhar();
+  }
+
+  function getContent() {
+    return JSON.stringify({ strokes: strokes });
+  }
+
+  function setContent(json) {
+    try {
+      var dados = JSON.parse(json || '{}');
+      strokes = dados.strokes || [];
+      redesenhar();
+    } catch (e) {
+      strokes = [];
+    }
+  }
+
+  window.editorApi = {
+    setTool: setTool,
+    setColor: setColor,
+    setStrokeWidth: setStrokeWidth,
+    clearBoard: clearBoard,
+    undo: undo,
+    resetView: resetView,
+    getContent: getContent,
+    setContent: setContent
+  };
+
+  function iniciar() {
+    redimensionarCanvas();
+    window.addEventListener('resize', redimensionarCanvas);
+    window.addEventListener('orientationchange', redimensionarCanvas);
+
+    var conteudoInicial = '';
+    if (window.AndroidBridge && window.AndroidBridge.loadDocument) {
+      try {
+        conteudoInicial = window.AndroidBridge.loadDocument() || '';
+      } catch (e) {
+        conteudoInicial = '';
+      }
+    }
+    if (conteudoInicial) {
+      setContent(conteudoInicial);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', iniciar);
+  } else {
+    iniciar();
+  }
+})();
+</script>
+
+</body>
+</html>

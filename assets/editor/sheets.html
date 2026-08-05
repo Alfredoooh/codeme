@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
+<title>Folha de Cálculo</title>
+<style>
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  #gridScroll {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #FFFFFF;
+  }
+
+  #gridTable {
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .col-header, .row-header {
+    background: #F1F3F4;
+    font-size: 11px;
+    font-weight: 600;
+    color: #444;
+    text-align: center;
+    user-select: none;
+    position: sticky;
+    z-index: 2;
+  }
+  .col-header {
+    top: 0;
+    height: 24px;
+    border-right: 1px solid #DADCE0;
+    border-bottom: 1px solid #DADCE0;
+  }
+  .row-header {
+    left: 0;
+    width: 36px;
+    min-width: 36px;
+    border-right: 1px solid #DADCE0;
+    border-bottom: 1px solid #DADCE0;
+  }
+  .corner {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    background: #F1F3F4;
+    border-right: 1px solid #DADCE0;
+    border-bottom: 1px solid #DADCE0;
+    width: 36px;
+    min-width: 36px;
+    height: 24px;
+  }
+
+  .cell {
+    width: 96px;
+    min-width: 96px;
+    height: 26px;
+    border-right: 1px solid #E8EAED;
+    border-bottom: 1px solid #E8EAED;
+    padding: 0 6px;
+    font-size: 12px;
+    color: #1a1a1a;
+    outline: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    background: #FFFFFF;
+  }
+  .cell.selected {
+    outline: 2px solid #2F7BF6;
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+  }
+  .cell.number {
+    text-align: right;
+  }
+  .cell[data-bold="1"] { font-weight: 700; }
+  .cell[data-italic="1"] { font-style: italic; }
+  .cell[data-underline="1"] { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div id="gridScroll">
+  <table id="gridTable"></table>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var COLS = 26;
+  var ROWS = 100;
+
+  var gridTable = document.getElementById('gridTable');
+  var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align }
+  var selectedCellKey = null;
+  var saveTimeout = null;
+
+  function colLetter(idx) {
+    var letra = '';
+    idx += 1;
+    while (idx > 0) {
+      var rem = (idx - 1) % 26;
+      letra = String.fromCharCode(65 + rem) + letra;
+      idx = Math.floor((idx - 1) / 26);
+    }
+    return letra;
+  }
+
+  function cellKey(col, row) {
+    return colLetter(col) + (row + 1);
+  }
+
+  function construirGrid() {
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    var corner = document.createElement('th');
+    corner.className = 'corner';
+    headerRow.appendChild(corner);
+    for (var c = 0; c < COLS; c++) {
+      var th = document.createElement('th');
+      th.className = 'col-header';
+      th.textContent = colLetter(c);
+      headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    gridTable.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    for (var r = 0; r < ROWS; r++) {
+      var tr = document.createElement('tr');
+      var rowHeader = document.createElement('th');
+      rowHeader.className = 'row-header';
+      rowHeader.textContent = String(r + 1);
+      tr.appendChild(rowHeader);
+
+      for (var cc = 0; cc < COLS; cc++) {
+        var td = document.createElement('td');
+        td.className = 'cell';
+        td.setAttribute('contenteditable', 'true');
+        td.setAttribute('data-key', cellKey(cc, r));
+        td.addEventListener('focus', aoFocar);
+        td.addEventListener('input', aoEditar);
+        td.addEventListener('blur', aoDesfocar);
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    gridTable.appendChild(tbody);
+  }
+
+  function aoFocar(evento) {
+    if (selectedCellKey) {
+      var anterior = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+      if (anterior) anterior.classList.remove('selected');
+    }
+    selectedCellKey = evento.target.getAttribute('data-key');
+    evento.target.classList.add('selected');
+
+    if (window.AndroidBridge && window.AndroidBridge.onCellSelected) {
+      var dados = cellsData[selectedCellKey] || {};
+      window.AndroidBridge.onCellSelected(selectedCellKey, JSON.stringify(dados));
+    }
+  }
+
+  function aoDesfocar(evento) {
+    evento.target.classList.remove('selected');
+  }
+
+  function aoEditar(evento) {
+    var key = evento.target.getAttribute('data-key');
+    var valor = evento.target.textContent;
+    if (!cellsData[key]) cellsData[key] = {};
+    cellsData[key].value = valor;
+
+    var ehNumero = valor.trim() !== '' && !isNaN(valor.trim());
+    evento.target.classList.toggle('number', ehNumero);
+
+    agendarGravacao();
+  }
+
+  function agendarGravacao() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(function () {
+      if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
+        window.AndroidBridge.saveDocument(getContent());
+      }
+    }, 500);
+  }
+
+  // ── API exposta ao toolbar Dart (específica de sheets) ─────────
+
+  function applyFormat(command) {
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    if (!el) return;
+    if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+
+    switch (command) {
+      case 'bold':
+        var novoBold = el.getAttribute('data-bold') === '1' ? '0' : '1';
+        el.setAttribute('data-bold', novoBold);
+        cellsData[selectedCellKey].bold = novoBold === '1';
+        break;
+      case 'italic':
+        var novoItalic = el.getAttribute('data-italic') === '1' ? '0' : '1';
+        el.setAttribute('data-italic', novoItalic);
+        cellsData[selectedCellKey].italic = novoItalic === '1';
+        break;
+      case 'underline':
+        var novoUnderline = el.getAttribute('data-underline') === '1' ? '0' : '1';
+        el.setAttribute('data-underline', novoUnderline);
+        cellsData[selectedCellKey].underline = novoUnderline === '1';
+        break;
+      default:
+        break;
+    }
+    agendarGravacao();
+  }
+
+  function setCellAlign(align) {
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    if (!el) return;
+    el.style.textAlign = align;
+    if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+    cellsData[selectedCellKey].align = align;
+    agendarGravacao();
+  }
+
+  function setCellColor(hexColor) {
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    if (!el) return;
+    el.style.color = hexColor;
+    if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+    cellsData[selectedCellKey].color = hexColor;
+    agendarGravacao();
+  }
+
+  function setCellFill(hexColor) {
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    if (!el) return;
+    el.style.background = hexColor;
+    if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+    cellsData[selectedCellKey].fill = hexColor;
+    agendarGravacao();
+  }
+
+  function insertRowBelow() {
+    // Implementação simplificada: adiciona linha ao fim da tabela visível.
+    // Uma versão futura pode inserir na posição exata da célula selecionada.
+    var tbody = gridTable.querySelector('tbody');
+    var tr = document.createElement('tr');
+    var novaLinha = tbody.children.length;
+    var rowHeader = document.createElement('th');
+    rowHeader.className = 'row-header';
+    rowHeader.textContent = String(novaLinha + 1);
+    tr.appendChild(rowHeader);
+    for (var c = 0; c < COLS; c++) {
+      var td = document.createElement('td');
+      td.className = 'cell';
+      td.setAttribute('contenteditable', 'true');
+      td.setAttribute('data-key', cellKey(c, novaLinha));
+      td.addEventListener('focus', aoFocar);
+      td.addEventListener('input', aoEditar);
+      td.addEventListener('blur', aoDesfocar);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+    agendarGravacao();
+  }
+
+  function applyFormula(formula) {
+    // SE, SOMASE, CONTASE, PROCV, CONCATENAR etc. — motor de fórmulas
+    // fica do lado Dart/nativo; aqui só recebemos o resultado já calculado
+    // e escrevemos na célula selecionada.
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    if (!el) return;
+    el.textContent = formula;
+    if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+    cellsData[selectedCellKey].formula = formula;
+    agendarGravacao();
+  }
+
+  function getContent() {
+    return JSON.stringify(cellsData);
+  }
+
+  function setContent(json) {
+    try {
+      var dados = JSON.parse(json || '{}');
+      cellsData = dados;
+      Object.keys(dados).forEach(function (key) {
+        var el = gridTable.querySelector('[data-key="' + key + '"]');
+        if (!el) return;
+        var d = dados[key];
+        if (d.value !== undefined) el.textContent = d.value;
+        if (d.bold) el.setAttribute('data-bold', '1');
+        if (d.italic) el.setAttribute('data-italic', '1');
+        if (d.underline) el.setAttribute('data-underline', '1');
+        if (d.align) el.style.textAlign = d.align;
+        if (d.color) el.style.color = d.color;
+        if (d.fill) el.style.background = d.fill;
+      });
+    } catch (e) {
+      // JSON inválido — mantém grid vazia
+    }
+  }
+
+  window.editorApi = {
+    applyFormat: applyFormat,
+    setCellAlign: setCellAlign,
+    setCellColor: setCellColor,
+    setCellFill: setCellFill,
+    insertRowBelow: insertRowBelow,
+    applyFormula: applyFormula,
+    getContent: getContent,
+    setContent: setContent
+  };
+
+  function iniciar() {
+    construirGrid();
+
+    var conteudoInicial = '';
+    if (window.AndroidBridge && window.AndroidBridge.loadDocument) {
+      try {
+        conteudoInicial = window.AndroidBridge.loadDocument() || '';
+      } catch (e) {
+        conteudoInicial = '';
+      }
+    }
+    if (conteudoInicial) {
+      setContent(conteudoInicial);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', iniciar);
+  } else {
+    iniciar();
+  }
+})();
+</script>
+
+</body>
+</html>

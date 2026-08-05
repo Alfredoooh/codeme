@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
-<title>Editor</title>
+<title>Documento</title>
 <style>
   * {
     box-sizing: border-box;
@@ -109,13 +109,12 @@
   var pagesStack = document.getElementById('pagesStack');
   var canvasScroll = document.getElementById('canvasScroll');
 
-  var folhas = [];        // array de { id, pageEl, contentEl }
+  var folhas = [];
   var nextFolhaId = 0;
   var fitScale = 1;
   var saveTimeout = null;
   var isRebalancing = false;
 
-  // ── Ajuste de zoom para caber na largura do WebView ────────────
   function ajustarZoom() {
     var margem = 24;
     var largura = canvasScroll.clientWidth;
@@ -124,7 +123,6 @@
     pagesStack.style.transform = 'scale(' + fitScale + ')';
   }
 
-  // ── Criação de folhas ────────────────────────────────────────
   function criarFolha() {
     var id = nextFolhaId++;
 
@@ -165,7 +163,6 @@
     return folhas[idx] ? folhas[idx].contentEl : null;
   }
 
-  // ── Normalização de nós soltos (texto direto sem <p>) ──────────
   function normalizarFilhosSoltos(conteudo) {
     var noAtual = conteudo.firstChild;
     while (noAtual) {
@@ -194,7 +191,6 @@
     return idxAtual + 1;
   }
 
-  // ── Empurra conteúdo que transborda para a página seguinte ─────
   function empurrarTransbordoDaPagina(idx) {
     var empurrouAlgo = false;
     var guarda = 0;
@@ -221,7 +217,6 @@
     return empurrouAlgo;
   }
 
-  // ── Puxa conteúdo da página seguinte se houver espaço ──────────
   function puxarConteudoDaProximaPagina(idx) {
     if (idx + 1 >= folhas.length) return false;
     var conteudo = getConteudoEl(idx);
@@ -254,7 +249,6 @@
     return puxouAlgo;
   }
 
-  // ── Remove páginas vazias no fim do documento ───────────────────
   function removerPaginasVaziasNoFim() {
     for (var i = folhas.length - 1; i > 0; i--) {
       var conteudo = getConteudoEl(i);
@@ -268,7 +262,6 @@
     atualizarNumerosPagina();
   }
 
-  // ── Preserva e restaura a posição do cursor durante o rebalance ─
   function obterPosicaoSelecao() {
     var selecao = window.getSelection();
     if (selecao.rangeCount === 0) return null;
@@ -293,12 +286,10 @@
       selecao.removeAllRanges();
       selecao.addRange(range);
     } catch (erro) {
-      // Silenciosamente ignora — perder a posição exata do cursor num
-      // rebalance raro não é crítico, o utilizador só perde o foco fino.
+      // Perder o cursor exato num rebalance raro não é crítico.
     }
   }
 
-  // ── Motor de reequilíbrio de páginas ────────────────────────────
   function reequilibrarDocumento() {
     if (isRebalancing) return;
     isRebalancing = true;
@@ -341,7 +332,6 @@
     timeoutReequilibrio = setTimeout(reequilibrarDocumento, 150);
   }
 
-  // ── Colagem de conteúdo (mantém HTML se disponível) ─────────────
   function aoColar(evento) {
     evento.preventDefault();
     var htmlColado = evento.clipboardData ? evento.clipboardData.getData('text/html') : '';
@@ -358,13 +348,11 @@
     handleInput();
   }
 
-  // ── Handler de input: notifica mudanças + agenda reequilíbrio ──
   function handleInput() {
     agendarReequilibrio();
     agendarGravacao();
   }
 
-  // ── Debounce de gravação para o Kotlin (evita escrever a cada tecla) ─
   function agendarGravacao() {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
@@ -375,14 +363,12 @@
     }, 500);
   }
 
-  // ── Serialização / hidratação do documento completo ─────────────
   function getContent() {
     return folhas.map(function (f) { return f.contentEl.innerHTML; })
       .join('<div class="page-break-marker"></div>');
   }
 
   function setContent(html) {
-    // Limpa páginas existentes
     folhas.forEach(function (f) { f.pageEl.remove(); });
     folhas = [];
     nextFolhaId = 0;
@@ -398,7 +384,6 @@
     reequilibrarDocumento();
   }
 
-  // ── API de formatação exposta ao toolbar nativo (Kotlin) ────────
   function getActiveContentEl() {
     var sel = window.getSelection();
     if (sel && sel.rangeCount) {
@@ -417,6 +402,11 @@
     }
   }
 
+  // ── API exposta ao toolbar Dart ──────────────────────────────
+  // Cada comando de formatação vive aqui. O toolbar Dart chama
+  // window.editorApi.exec('bold') via evaluateJavascript, nunca
+  // renderiza botões próprios dentro deste HTML.
+
   function exec(command) {
     focarSePreciso();
     switch (command) {
@@ -429,14 +419,32 @@
       case 'underline':
         document.execCommand('underline');
         break;
-      case 'insertTable':
-        insertTable(2, 2);
+      case 'strikethrough':
+        document.execCommand('strikeThrough');
         break;
-      case 'insertImage':
-        // A seleção de imagem em si (galeria/câmara) fica do lado nativo
-        // Kotlin, que depois chama window.editorApi.insertImageAtCursor
-        // com o dataURL resultante — este comando aqui só é o gatilho
-        // que o botão do toolbar despoleta.
+      case 'alignLeft':
+        document.execCommand('justifyLeft');
+        break;
+      case 'alignCenter':
+        document.execCommand('justifyCenter');
+        break;
+      case 'alignRight':
+        document.execCommand('justifyRight');
+        break;
+      case 'alignJustify':
+        document.execCommand('justifyFull');
+        break;
+      case 'bulletList':
+        document.execCommand('insertUnorderedList');
+        break;
+      case 'numberedList':
+        document.execCommand('insertOrderedList');
+        break;
+      case 'undo':
+        document.execCommand('undo');
+        break;
+      case 'redo':
+        document.execCommand('redo');
         break;
       default:
         break;
@@ -444,9 +452,28 @@
     handleInput();
   }
 
+  function setFontSize(px) {
+    focarSePreciso();
+    document.execCommand('fontSize', false, '7');
+    var fontElements = document.getElementsByTagName('font');
+    for (var i = 0; i < fontElements.length; i++) {
+      if (fontElements[i].size === '7') {
+        fontElements[i].removeAttribute('size');
+        fontElements[i].style.fontSize = px + 'px';
+      }
+    }
+    handleInput();
+  }
+
   function setColor(hexColor) {
     focarSePreciso();
     document.execCommand('foreColor', false, hexColor);
+    handleInput();
+  }
+
+  function setHighlight(hexColor) {
+    focarSePreciso();
+    document.execCommand('hiliteColor', false, hexColor);
     handleInput();
   }
 
@@ -464,6 +491,7 @@
     }
     html += '</tbody></table></div><p><br></p>';
     document.execCommand('insertHTML', false, html);
+    handleInput();
   }
 
   function insertImageAtCursor(dataUrl) {
@@ -473,17 +501,40 @@
     handleInput();
   }
 
-  // ── Exposição da API global para o toolbar Kotlin chamar ────────
+  function insertLink(url, texto) {
+    focarSePreciso();
+    var label = texto && texto.trim() ? texto : url;
+    var html = '<a href="' + url + '" target="_blank">' + label + '</a>&nbsp;';
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+  }
+
+  function setPageOrientation(orientacao) {
+    var novaLargura = orientacao === 'landscape' ? 1123 : 794;
+    var novaAltura = orientacao === 'landscape' ? 794 : 1123;
+    PAGE_W = novaLargura;
+    PAGE_H = novaAltura;
+    for (var i = 0; i < folhas.length; i++) {
+      folhas[i].pageEl.style.width = PAGE_W + 'px';
+      folhas[i].pageEl.style.height = PAGE_H + 'px';
+    }
+    ajustarZoom();
+    reequilibrarDocumento();
+  }
+
   window.editorApi = {
     exec: exec,
+    setFontSize: setFontSize,
     setColor: setColor,
+    setHighlight: setHighlight,
     insertTable: insertTable,
     insertImageAtCursor: insertImageAtCursor,
+    insertLink: insertLink,
+    setPageOrientation: setPageOrientation,
     getContent: getContent,
     setContent: setContent
   };
 
-  // ── Arranque ─────────────────────────────────────────────────
   function iniciar() {
     ajustarZoom();
     window.addEventListener('resize', ajustarZoom);
