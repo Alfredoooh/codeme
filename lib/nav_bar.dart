@@ -21,7 +21,7 @@ class FloatingNav extends StatelessWidget {
   static const _tabs = [
     (svg: 'ai_tab.svg',       svgFilled: 'ai_tab_filled.svg',      label: 'IA'),
     (svg: 'edit_tab.svg',     svgFilled: 'edit_tab_filled.svg',    label: 'Editor'),
-    (svg: 'template_tab.svg', svgFilled: 'template_tab_filled.svg', label: 'Templates'),
+    (svg: 'templates.svg', svgFilled: 'templates_filled.svg', label: 'Templates'),
   ];
 
   static const double _iconW  = 44.0;
