@@ -26,7 +26,7 @@ class AppColorScheme {
   Color get surface            => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFEDEDED) : const Color(0xFF111111);
   Color get onSurfaceVariant   => isDark ? const Color(0xFFBBBBBB) : const Color(0xFF555555);
-  Color get pageBackground     => isDark ? const Color(0xFF141414) : const Color(0xFFF2F2F7);
+  Color get pageBackground     => isDark ? const Color(0xFF141414) : const Color(0xFFFAFAFC);
   Color get cardBackground     => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
   // ── Contorno ────────────────────────────────────────────────

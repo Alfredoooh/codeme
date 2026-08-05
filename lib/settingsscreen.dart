@@ -43,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
               // Conteúdo
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
                   children: [
 
                     // ── Aparência ──────────────────────────────
@@ -78,9 +78,34 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       _SettingsRow(
                         s: s,
-                        label: 'Terminar sessão',
+                        label: 'Email',
+                        trailing: Text('Alterar',
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: s.primary,
+                                fontWeight: FontWeight.w500)),
+                      ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Palavra-passe',
+                        trailing: Text('Alterar',
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: s.primary,
+                                fontWeight: FontWeight.w500)),
+                      ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Plano actual',
+                        trailing: Text('Gratuito',
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: s.onSurfaceVariant)),
+                      ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Privacidade e dados',
                         trailing: const SizedBox.shrink(),
-                        labelColor: s.error,
                       ),
                     ]),
 
@@ -98,9 +123,37 @@ class SettingsScreen extends StatelessWidget {
                                 fontSize: 14,
                                 color: s.onSurfaceVariant)),
                       ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Termos de serviço',
+                        trailing: const SizedBox.shrink(),
+                      ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Política de privacidade',
+                        trailing: const SizedBox.shrink(),
+                      ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Enviar feedback',
+                        trailing: const SizedBox.shrink(),
+                      ),
+                      _SettingsRow(
+                        s: s,
+                        label: 'Ajuda e suporte',
+                        trailing: const SizedBox.shrink(),
+                      ),
                     ]),
+
+                    const SizedBox(height: 20),
                   ],
                 ),
+              ),
+
+              // ── Botão terminar sessão (fixo, no fundo) ────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: _LogoutButton(s: s, onTap: () {}),
               ),
             ],
           ),
@@ -193,8 +246,7 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: radius,
-            boxShadow: s.cardShadow),
+            borderRadius: radius),
         clipBehavior: Clip.antiAlias,
         child: child,
       );
@@ -238,4 +290,51 @@ class _SettingsRowState extends State<_SettingsRow> {
           ),
         ),
       );
+}
+
+// ── Botão terminar sessão ───────────────────────────────────
+// Fixo no fundo, retangular com cantos totalmente curvos, tom
+// avermelhado (usa a cor semântica `error` do tema).
+
+class _LogoutButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _LogoutButton({required this.s, required this.onTap});
+  @override State<_LogoutButton> createState() => _LogoutButtonState();
+}
+
+class _LogoutButtonState extends State<_LogoutButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.error.withOpacity(s.isDark ? 0.18 : 0.10),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: s.error, width: 1.5),
+          ),
+          child: Text('Terminar sessão',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: s.error)),
+        ),
+      ),
+    );
+  }
 }
