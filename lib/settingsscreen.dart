@@ -49,7 +49,7 @@ class SettingsScreen extends StatelessWidget {
                     // ── Aparência ──────────────────────────────
                     _SectionLabel(s: s, label: 'Aparência'),
                     const SizedBox(height: 10),
-                    _SettingsCard(s: s, children: [
+                    _SettingsGroup(s: s, rows: [
                       _SettingsRow(
                         s: s,
                         label: 'Modo escuro',
@@ -66,7 +66,7 @@ class SettingsScreen extends StatelessWidget {
                     // ── Conta ──────────────────────────────────
                     _SectionLabel(s: s, label: 'Conta'),
                     const SizedBox(height: 10),
-                    _SettingsCard(s: s, children: [
+                    _SettingsGroup(s: s, rows: [
                       _SettingsRow(
                         s: s,
                         label: 'Utilizador',
@@ -76,7 +76,6 @@ class SettingsScreen extends StatelessWidget {
                                 color: s.primary,
                                 fontWeight: FontWeight.w500)),
                       ),
-                      _Divider(s: s),
                       _SettingsRow(
                         s: s,
                         label: 'Terminar sessão',
@@ -90,7 +89,7 @@ class SettingsScreen extends StatelessWidget {
                     // ── Sobre ──────────────────────────────────
                     _SectionLabel(s: s, label: 'Sobre'),
                     const SizedBox(height: 10),
-                    _SettingsCard(s: s, children: [
+                    _SettingsGroup(s: s, rows: [
                       _SettingsRow(
                         s: s,
                         label: 'Versão',
@@ -127,21 +126,77 @@ class _SectionLabel extends StatelessWidget {
           letterSpacing: 0.5));
 }
 
+// ── Grupo de cards ───────────────────────────────────────────
+// • 1 único card  → todos os cantos bem arredondados
+// • 2+ cards       → cada row é o seu próprio card, com um gap
+//   pequeno entre eles (sem linha de divisão); o raio de cada
+//   canto depende da posição:
+//     primeiro → cantos de CIMA bem curvos, cantos de BAIXO quase retos
+//     meio     → todos os cantos quase retos
+//     último   → cantos de BAIXO bem curvos, cantos de CIMA quase retos
+
+class _SettingsGroup extends StatelessWidget {
+  final AppColorScheme s;
+  final List<Widget> rows;
+  const _SettingsGroup({required this.s, required this.rows});
+
+  static const double _outerRadius = 16;
+  static const double _innerRadius = 4;
+  static const double _gap = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = rows.length;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < count; i++) ...[
+          if (i > 0) const SizedBox(height: _gap),
+          _SettingsCard(
+            s: s,
+            radius: _radiusFor(i, count),
+            child: rows[i],
+          ),
+        ],
+      ],
+    );
+  }
+
+  BorderRadius _radiusFor(int index, int count) {
+    if (count == 1) {
+      return BorderRadius.circular(_outerRadius);
+    }
+    final isFirst = index == 0;
+    final isLast  = index == count - 1;
+
+    return BorderRadius.only(
+      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
+    );
+  }
+}
+
 class _SettingsCard extends StatelessWidget {
   final AppColorScheme s;
-  final List<Widget> children;
-  const _SettingsCard({required this.s, required this.children});
+  final BorderRadius radius;
+  final Widget child;
+  const _SettingsCard({
+    required this.s,
+    required this.radius,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: radius,
             boxShadow: s.cardShadow),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: children,
-        ),
+        clipBehavior: Clip.antiAlias,
+        child: child,
       );
 }
 
@@ -170,10 +225,7 @@ class _SettingsRowState extends State<_SettingsRow> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: _p ? widget.s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
+          color: _p ? widget.s.hover : Colors.transparent,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -185,15 +237,5 @@ class _SettingsRowState extends State<_SettingsRow> {
             ],
           ),
         ),
-      );
-}
-
-class _Divider extends StatelessWidget {
-  final AppColorScheme s;
-  const _Divider({required this.s});
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(left: 16),
-        child: Divider(height: 1, color: s.outlineVariant),
       );
 }
