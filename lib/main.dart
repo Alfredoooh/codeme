@@ -2,11 +2,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'theme.dart';
+import 'colors.dart';
 import 'widgets.dart';
-import 'drawer.dart';
-import 'nav_bar.dart';
-import 'tabs.dart';
+import 'drawermenu.dart';
+import 'bottomtabbar.dart';
+import 'aitab.dart';
+import 'edittab.dart';
+import 'templatestab.dart';
+import 'projectstab.dart';
+import 'settingsscreen.dart';
 import 'sheets.dart';
 
 void main() async {
@@ -45,8 +49,7 @@ class CraftLabApp extends StatelessWidget {
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
-            colorScheme:
-                ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6)),
+            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6)),
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
@@ -78,9 +81,9 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   late final SpringNav _springNav;
   bool _drawerOpen = false;
 
-  int _tabIndex    = 0;
+  AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
-  bool _hasMessages = false;
+  bool       _hasMessages = false;
 
   @override
   void initState() {
@@ -98,21 +101,29 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   void _openSettings() {
     _closeDrawer();
     Navigator.of(context)
-        .push(CupertinoPageRoute(builder: (_) => const SettingsPage()));
+        .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
   }
 
-  void _selectTab(int i) { if (i != _tabIndex) setState(() => _tabIndex = i); }
-  void _setEditorType(EditorType t) => setState(() => _editorType = t);
-  void _onMessageSent() { if (!_hasMessages) setState(() => _hasMessages = true); }
+  void _selectTab(AppTab t) {
+    if (t != _tab) setState(() => _tab = t);
+  }
 
-  void _openProjectsModal() {
-    final s = AppTheme.of(context);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => ProjectsModal(s: s),
-    );
+  void _setEditorType(EditorType t) => setState(() => _editorType = t);
+  void _onMessageSent() {
+    if (!_hasMessages) setState(() => _hasMessages = true);
+  }
+
+  Widget _buildTab() {
+    switch (_tab) {
+      case AppTab.ai:
+        return AiTab(onFirstMessage: _onMessageSent);
+      case AppTab.edit:
+        return EditTab(editorType: _editorType);
+      case AppTab.templates:
+        return const TemplatesTab();
+      case AppTab.projects:
+        return const ProjectsTab();
+    }
   }
 
   @override
@@ -123,49 +134,49 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
       type: MaterialType.transparency,
       child: Stack(children: [
 
-        // ── Conteúdo principal — SEM recoil/push ao abrir drawer
+        // ── Conteúdo principal
         ColoredBox(
           color: s.surface,
           child: Column(children: [
-            _Header(
+            _AppHeader(
               s: s,
               hasMessages: _hasMessages,
               onMenu: _openDrawer,
-              trailing: _tabIndex == 1
+              trailing: _tab == AppTab.edit
                   ? EditTypeButton(
                       s: s, current: _editorType, onSelect: _setEditorType)
                   : null,
             ),
             Expanded(
-              child: TabSwitcher(index: _tabIndex, children: [
-                ChatTab(onFirstMessage: _onMessageSent),
-                EditTab(editorType: _editorType),
-                const TemplatesTab(),
-              ]),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve:  kCupertinoOut,
+                switchOutCurve: kCupertinoIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+              ),
             ),
           ]),
         ),
 
         // ── Bottom bar flutuante
         Positioned(
-          bottom: 14,
-          left: 0, right: 0,
+          bottom: 14, left: 0, right: 0,
           child: SafeArea(
             top: false,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  FloatingNav(s: s, index: _tabIndex, onChanged: _selectTab),
-                  ProjectsButton(s: s, onTap: _openProjectsModal),
-                ],
+              child: BottomTabBar(
+                s: s,
+                current: _tab,
+                onChanged: _selectTab,
               ),
             ),
           ),
         ),
 
-        // ── Barrier
+        // ── Barrier drawer
         if (_drawerOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -174,7 +185,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
             ),
           ),
 
-        // ── Drawer (spring slide lateral, conteúdo não se mexe)
+        // ── Drawer spring lateral
         AnimatedBuilder(
           animation: _springNav.slideCtrl,
           builder: (_, child) {
@@ -194,16 +205,16 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HEADER
+// APP HEADER
 // ══════════════════════════════════════════════════════════════
 
-class _Header extends StatelessWidget {
+class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
   final bool hasMessages;
   final VoidCallback onMenu;
   final Widget? trailing;
 
-  const _Header({
+  const _AppHeader({
     required this.s,
     required this.hasMessages,
     required this.onMenu,
@@ -233,78 +244,4 @@ class _Header extends StatelessWidget {
           if (trailing != null) trailing!,
         ]),
       );
-}
-
-// ══════════════════════════════════════════════════════════════
-// SETTINGS PAGE
-// ══════════════════════════════════════════════════════════════
-
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    return Material(
-      type: MaterialType.transparency,
-      child: ColoredBox(
-        color: s.pageBackground,
-        child: SafeArea(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              color: s.pageBackground,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-              child: Row(children: [
-                AppTap(
-                  onTap: () => Navigator.pop(context),
-                  s: s,
-                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
-                ),
-                const SizedBox(width: 8),
-                Text('Definições',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface)),
-              ]),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  Text('Aparência',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurfaceVariant,
-                          letterSpacing: 0.5)),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                        color: s.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: s.cardShadow),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Modo escuro',
-                            style: TextStyle(fontSize: 15, color: s.onSurface)),
-                        AppSwitch(
-                          value: appTheme.isDark,
-                          s: s,
-                          onChanged: (_) => appTheme.toggleDark(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
 }
