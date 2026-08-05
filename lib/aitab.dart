@@ -12,6 +12,24 @@ class AiTab extends StatefulWidget {
   @override State<AiTab> createState() => _AiTabState();
 }
 
+enum QuickAction { doc, sheet, slide, whiteboard }
+
+extension QuickActionX on QuickAction {
+  String get asset => const {
+        QuickAction.doc:        'doc.png',
+        QuickAction.sheet:      'sheet.png',
+        QuickAction.slide:      'slide.png',
+        QuickAction.whiteboard: 'whiteboard.png',
+      }[this]!;
+
+  String get label => const {
+        QuickAction.doc:        'Criar documento Word',
+        QuickAction.sheet:      'Criar folha de cálculo',
+        QuickAction.slide:      'Criar apresentação',
+        QuickAction.whiteboard: 'Criar com o canvas',
+      }[this]!;
+}
+
 class _AiTabState extends State<AiTab> {
   final TextEditingController _ctrl   = TextEditingController();
   final ScrollController       _scroll = ScrollController();
@@ -31,6 +49,10 @@ class _AiTabState extends State<AiTab> {
     });
   }
 
+  void _onQuickAction(QuickAction action) {
+    // TODO: liga aqui a acção real de cada toggle (abrir editor, etc.)
+  }
+
   @override
   void dispose() { _ctrl.dispose(); _scroll.dispose(); super.dispose(); }
 
@@ -40,7 +62,7 @@ class _AiTabState extends State<AiTab> {
     return Column(children: [
       Expanded(
         child: _msgs.isEmpty
-            ? _EmptyState(s: s)
+            ? _EmptyState(s: s, onQuickAction: _onQuickAction)
             : ListView.builder(
                 controller: _scroll,
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -54,30 +76,96 @@ class _AiTabState extends State<AiTab> {
   }
 }
 
-// ── Empty state ───────────────────────────────────────────────
+// ── Empty state — apenas os toggles, sem logo nem saudação ─────
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
-  const _EmptyState({required this.s});
+  final ValueChanged<QuickAction> onQuickAction;
+  const _EmptyState({required this.s, required this.onQuickAction});
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Image.asset('assets/logo.png', width: 72, height: 72, fit: BoxFit.contain),
-          const SizedBox(height: 20),
-          Text(
-            'Torna-te mais produtivo!',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: s.onSurface,
-              letterSpacing: -0.5,
-              height: 1.15,
-            ),
-            textAlign: TextAlign.center,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: QuickAction.values
+                .map((a) => _QuickActionChip(
+                      s: s,
+                      action: a,
+                      onTap: () => onQuickAction(a),
+                    ))
+                .toList(),
           ),
-        ]),
+        ),
       );
+}
+
+// ── Toggle individual (chip com ícone + label) ──────────────────
+
+class _QuickActionChip extends StatefulWidget {
+  final AppColorScheme s;
+  final QuickAction action;
+  final VoidCallback onTap;
+  const _QuickActionChip({
+    required this.s,
+    required this.action,
+    required this.onTap,
+  });
+
+  @override
+  State<_QuickActionChip> createState() => _QuickActionChipState();
+}
+
+class _QuickActionChipState extends State<_QuickActionChip> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap:       widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.94 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: s.isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/${widget.action.asset}',
+                width: 18,
+                height: 18,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.action.label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Bolha de mensagem ─────────────────────────────────────────
