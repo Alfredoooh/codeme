@@ -30,15 +30,14 @@ class AppColorScheme {
   Color get primaryContainer    => isDark ? const Color(0xFF004591) : const Color(0xFFE8F0FF);
   Color get onPrimaryContainer  => isDark ? const Color(0xFFD3E4FF) : const Color(0xFF00204D);
 
-  Color get surface      => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFFFFFFF);
-  Color get onSurface    => isDark ? const Color(0xFFEDEDED) : const Color(0xFF111111);
-  Color get onSurfaceVariant => isDark ? const Color(0xFFBBBBBB) : const Color(0xFF555555);
+  Color get surface             => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFFFFFFF);
+  Color get onSurface           => isDark ? const Color(0xFFEDEDED) : const Color(0xFF111111);
+  Color get onSurfaceVariant    => isDark ? const Color(0xFFBBBBBB) : const Color(0xFF555555);
 
-  // Cards no dark têm contraste real com o fundo
-  Color get cardBackground => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
-  Color get pageBackground => isDark ? const Color(0xFF141414) : const Color(0xFFF2F2F7);
+  Color get cardBackground  => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
+  Color get pageBackground  => isDark ? const Color(0xFF141414) : const Color(0xFFF2F2F7);
 
-  Color get surfaceContainerHigh    => isDark ? const Color(0xFF333333) : const Color(0xFFFFFFFF);
+  Color get surfaceContainerHigh => isDark ? const Color(0xFF333333) : const Color(0xFFFFFFFF);
 
   Color get outline        => isDark ? const Color(0xFF48484A) : const Color(0xFFCCCCCC);
   Color get outlineVariant => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEEEEEE);
@@ -52,14 +51,14 @@ class AppColorScheme {
       ? [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 4))]
       : [
           BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 2)),
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1)),
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4,  offset: const Offset(0, 1)),
         ];
 
   List<BoxShadow> get floatingShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.55), blurRadius: 28, offset: const Offset(0, 8))]
       : [
           BoxShadow(color: Colors.black.withOpacity(0.11), blurRadius: 20, offset: const Offset(0, 6)),
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6,  offset: const Offset(0, 2)),
         ];
 }
 
@@ -69,10 +68,7 @@ class AppColorScheme {
 
 class AppThemeNotifier extends ChangeNotifier {
   bool isDark = false;
-  void toggleDark() {
-    isDark = !isDark;
-    notifyListeners();
-  }
+  void toggleDark() { isDark = !isDark; notifyListeners(); }
 }
 
 final AppThemeNotifier appTheme = AppThemeNotifier();
@@ -102,12 +98,12 @@ class SpringNav {
   static const _recoilDesc = SpringDescription(mass: 1, stiffness: 220, damping: 26);
 
   void open() {
-    slideCtrl.animateWith(SpringSimulation(_slideDesc, slideCtrl.value, 0.0, 0));
+    slideCtrl.animateWith(SpringSimulation(_slideDesc,  slideCtrl.value, 0.0, 0));
     recoilCtrl.animateWith(SpringSimulation(_recoilDesc, recoilCtrl.value, 1.0, 0));
   }
 
   void close() {
-    slideCtrl.animateWith(SpringSimulation(_slideDesc, slideCtrl.value, 1.0, 0));
+    slideCtrl.animateWith(SpringSimulation(_slideDesc,  slideCtrl.value, 1.0, 0));
     recoilCtrl.animateWith(SpringSimulation(_recoilDesc, recoilCtrl.value, 0.0, 0));
   }
 
@@ -118,13 +114,12 @@ class SpringNav {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CURVA CUPERTINO
+// CURVAS CUPERTINO
 // ══════════════════════════════════════════════════════════════
-const Curve kCupertino = Cubic(0.25, 0.1, 0.25, 1.0);
-// Para entradas (mais snappy, estilo iOS push)
-const Curve kCupertinoIn = Cubic(0.42, 0.0, 1.0, 1.0);
-// Para saídas
-const Curve kCupertinoOut = Cubic(0.0, 0.0, 0.58, 1.0);
+
+const Curve kCupertino    = Cubic(0.25, 0.1, 0.25, 1.0);
+const Curve kCupertinoIn  = Cubic(0.42, 0.0, 1.0,  1.0);
+const Curve kCupertinoOut = Cubic(0.0,  0.0, 0.58, 1.0);
 
 // ══════════════════════════════════════════════════════════════
 // MOCK DATA
@@ -193,8 +188,7 @@ class AppIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SvgPicture.asset(
         'assets/icons/svg/$asset',
-        width: size,
-        height: size,
+        width: size, height: size,
         colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
       );
 }
@@ -207,8 +201,7 @@ class EditorTypeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Image.asset(
         'assets/icons/png/$asset',
-        width: size,
-        height: size,
+        width: size, height: size,
         filterQuality: FilterQuality.medium,
       );
 }
@@ -226,10 +219,10 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   late final SpringNav _springNav;
   bool _drawerOpen = false;
+
+  // 0 = AI Chat, 1 = Editor, 2 = Templates
   int _tabIndex = 0;
   EditorType _editorType = EditorType.docs;
-
-  // Rastreia se já existe alguma conversa iniciada
   bool _hasMessages = false;
 
   @override
@@ -245,31 +238,27 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _openDrawer() {
-    setState(() => _drawerOpen = true);
-    _springNav.open();
-  }
-
-  void _closeDrawer() {
-    setState(() => _drawerOpen = false);
-    _springNav.close();
-  }
+  void _openDrawer()  { setState(() => _drawerOpen = true);  _springNav.open(); }
+  void _closeDrawer() { setState(() => _drawerOpen = false); _springNav.close(); }
 
   void _openSettings() {
     _closeDrawer();
-    Navigator.of(context).push(CupertinoPageRoute(
-      builder: (_) => const SettingsPage(),
-    ));
+    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SettingsPage()));
   }
 
-  void _selectTab(int i) {
-    if (i != _tabIndex) setState(() => _tabIndex = i);
-  }
-
+  void _selectTab(int i) { if (i != _tabIndex) setState(() => _tabIndex = i); }
   void _setEditorType(EditorType t) => setState(() => _editorType = t);
+  void _onMessageSent() { if (!_hasMessages) setState(() => _hasMessages = true); }
 
-  void _onMessageSent() {
-    if (!_hasMessages) setState(() => _hasMessages = true);
+  // Abre o modal de Projetos
+  void _openProjectsModal() {
+    final s = AppTheme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ProjectsModal(s: s),
+    );
   }
 
   @override
@@ -279,6 +268,8 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     return Material(
       type: MaterialType.transparency,
       child: Stack(children: [
+
+        // ── Conteúdo principal com recoil
         AnimatedBuilder(
           animation: _springNav.recoilCtrl,
           builder: (_, child) {
@@ -302,29 +293,40 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
                     ? _EditTypeButton(s: s, current: _editorType, onSelect: _setEditorType)
                     : null,
               ),
-              Expanded(
-                child: _TabSwitcher(index: _tabIndex, children: [
-                  _ChatTab(onFirstMessage: _onMessageSent),
-                  _EditTab(editorType: _editorType),
-                ]),
-              ),
+              Expanded(child: _TabSwitcher(index: _tabIndex, children: [
+                _ChatTab(onFirstMessage: _onMessageSent),
+                _EditTab(editorType: _editorType),
+                const _TemplatesTab(),
+              ])),
             ]),
           ),
         ),
 
-        // Floating Nav — mais curto, centralizado
+        // ── Barra inferior: [nav principal] ... [projetos]
         Positioned(
           bottom: 14,
           left: 0,
           right: 0,
           child: SafeArea(
             top: false,
-            child: Center(
-              child: _FloatingNav(s: s, index: _tabIndex, onChanged: _selectTab),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+
+                  // Nav principal — AI + Editor + Templates
+                  _FloatingNav(s: s, index: _tabIndex, onChanged: _selectTab),
+
+                  // Botão Projetos — separado, azul primário
+                  _ProjectsButton(s: s, onTap: _openProjectsModal),
+                ],
+              ),
             ),
           ),
         ),
 
+        // ── Barrier do drawer
         if (_drawerOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -333,14 +335,13 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
             ),
           ),
 
+        // ── Drawer com spring slide
         AnimatedBuilder(
           animation: _springNav.slideCtrl,
           builder: (_, child) {
             final v = _springNav.slideCtrl.value.clamp(0.0, 1.0);
             return Positioned(
-              top: 0,
-              bottom: 0,
-              width: 280,
+              top: 0, bottom: 0, width: 280,
               left: -280 + 280 * (1.0 - v),
               child: child!,
             );
@@ -353,7 +354,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB SWITCHER — animação Cupertino fade
+// TAB SWITCHER
 // ══════════════════════════════════════════════════════════════
 
 class _TabSwitcher extends StatelessWidget {
@@ -372,7 +373,7 @@ class _TabSwitcher extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HEADER — sem título, logo aparece só após primeira mensagem
+// HEADER
 // ══════════════════════════════════════════════════════════════
 
 class _Header extends StatelessWidget {
@@ -398,22 +399,14 @@ class _Header extends StatelessWidget {
           right: 10,
         ),
         child: Row(children: [
-          _Tap(
-            onTap: onMenu,
-            s: s,
-            child: AppIcon('menu.svg', color: s.onSurface, size: 20),
-          ),
+          _Tap(onTap: onMenu, s: s,
+              child: AppIcon('menu.svg', color: s.onSurface, size: 20)),
           const SizedBox(width: 8),
-          // Logo aparece no appbar somente após primeira mensagem
           AnimatedOpacity(
             opacity: hasMessages ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 300),
             curve: kCupertinoOut,
-            child: Image.asset(
-              'assets/logo.png',
-              height: 24,
-              fit: BoxFit.contain,
-            ),
+            child: Image.asset('assets/logo.png', height: 24, fit: BoxFit.contain),
           ),
           const Spacer(),
           if (trailing != null) trailing!,
@@ -459,8 +452,7 @@ class _TapState extends State<_Tap> {
           curve: kCupertinoOut,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 100),
-            width: widget.size,
-            height: widget.size,
+            width: widget.size, height: widget.size,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _p ? widget.s.pressed : Colors.transparent,
@@ -485,45 +477,35 @@ class _Drawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         color: s.surface,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-                child: Row(children: [
-                  Text('Conversas',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurface)),
-                  const Spacer(),
-                  _Tap(
-                    onTap: onClose,
-                    s: s,
-                    size: 32,
-                    child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
-                  ),
-                ]),
-              ),
-              Expanded(
-                child: mockConversations.isEmpty
-                    ? Center(
-                        child: Text('Sem conversas ainda',
-                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        itemCount: mockConversations.length,
-                        itemBuilder: (_, i) => _ConvTile(s: s, item: mockConversations[i]),
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: _AccountPill(s: s, onTap: onSettings),
-              ),
-            ],
-          ),
-        ),
+        child: SafeArea(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              child: Row(children: [
+                Text('Conversas',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                const Spacer(),
+                _Tap(onTap: onClose, s: s, size: 32,
+                    child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14)),
+              ]),
+            ),
+            Expanded(
+              child: mockConversations.isEmpty
+                  ? Center(child: Text('Sem conversas ainda',
+                      style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      itemCount: mockConversations.length,
+                      itemBuilder: (_, i) => _ConvTile(s: s, item: mockConversations[i]),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: _AccountPill(s: s, onTap: onSettings),
+            ),
+          ],
+        )),
       );
 }
 
@@ -531,10 +513,8 @@ class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   const _ConvTile({required this.s, required this.item});
-  @override
-  State<_ConvTile> createState() => _ConvTileState();
+  @override State<_ConvTile> createState() => _ConvTileState();
 }
-
 class _ConvTileState extends State<_ConvTile> {
   bool _h = false;
   @override
@@ -555,13 +535,11 @@ class _ConvTileState extends State<_ConvTile> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(widget.item.title,
                 style: TextStyle(fontSize: 14, color: widget.s.onSurface),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
             Text(widget.item.preview,
                 style: TextStyle(fontSize: 12, color: widget.s.onSurfaceVariant),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
           ]),
         ),
       );
@@ -571,10 +549,8 @@ class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
   const _AccountPill({required this.s, required this.onTap});
-  @override
-  State<_AccountPill> createState() => _AccountPillState();
+  @override State<_AccountPill> createState() => _AccountPillState();
 }
-
 class _AccountPillState extends State<_AccountPill> {
   bool _p = false;
   @override
@@ -593,21 +569,16 @@ class _AccountPillState extends State<_AccountPill> {
           ),
           child: Row(children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 32, height: 32,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: widget.s.primary, shape: BoxShape.circle),
-              child: Text('U',
-                  style: TextStyle(
-                      color: widget.s.onPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14)),
+              child: Text('U', style: TextStyle(
+                  color: widget.s.onPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
             ),
             const SizedBox(width: 10),
-            Expanded(
-                child: Text('Utilizador',
-                    style: TextStyle(fontSize: 14, color: widget.s.onSurface),
-                    overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text('Utilizador',
+                style: TextStyle(fontSize: 14, color: widget.s.onSurface),
+                overflow: TextOverflow.ellipsis)),
             AppIcon('settings.svg', color: widget.s.onSurfaceVariant, size: 16),
           ]),
         ),
@@ -615,7 +586,7 @@ class _AccountPillState extends State<_AccountPill> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// FLOATING NAV — apenas ícones, mais compacto
+// FLOATING NAV — 3 tabs: AI + Editor + Templates
 // ══════════════════════════════════════════════════════════════
 
 class _FloatingNav extends StatelessWidget {
@@ -625,73 +596,318 @@ class _FloatingNav extends StatelessWidget {
 
   const _FloatingNav({required this.s, required this.index, required this.onChanged});
 
+  // 3 tabs: ai, edit, templates
   static const _tabs = [
-    (svg: 'ai_tab.svg', svgFilled: 'ai_tab_filled.svg'),
-    (svg: 'edit_tab.svg', svgFilled: 'edit_tab_filled.svg'),
+    (svg: 'ai_tab.svg',        svgFilled: 'ai_tab_filled.svg'),
+    (svg: 'edit_tab.svg',      svgFilled: 'edit_tab_filled.svg'),
+    (svg: 'template_tab.svg',  svgFilled: 'template_tab_filled.svg'),
   ];
 
-  // Largura fixa — não ocupa a tela toda
-  static const double _navWidth = 120.0;
-  static const double _navHeight = 50.0;
+  static const double _itemW  = 50.0;
+  static const double _height = 50.0;
+  static const double _pad    = 5.0;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
-        child: Container(
-          width: _navWidth,
-          height: _navHeight,
-          decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: s.floatingShadow,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: Stack(children: [
-              // Indicador animado
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 300),
-                curve: kCupertinoOut,
-                left: (_navWidth / _tabs.length) * index + 5,
-                top: 5,
-                bottom: 5,
-                width: (_navWidth / _tabs.length) - 10,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: s.primaryContainer,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+  Widget build(BuildContext context) {
+    final total = _tabs.length;
+    final navW  = _itemW * total + _pad * 2;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: navW,
+        height: _height,
+        decoration: BoxDecoration(
+          color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: s.floatingShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: Stack(children: [
+            // Indicador animado
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: kCupertinoOut,
+              left: _pad + _itemW * index,
+              top: _pad,
+              bottom: _pad,
+              width: _itemW,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: s.primaryContainer,
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              Row(
-                children: List.generate(_tabs.length, (i) {
-                  final t = _tabs[i];
-                  final sel = index == i;
-                  final color = sel ? s.onPrimaryContainer : s.onSurfaceVariant;
-                  return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onChanged(i),
-                      child: Center(
-                        child: AnimatedScale(
-                          scale: sel ? 1.12 : 1.0,
-                          duration: const Duration(milliseconds: 260),
-                          curve: kCupertinoOut,
-                          child: AppIcon(sel ? t.svgFilled : t.svg, color: color, size: 20),
-                        ),
+            ),
+            // Ícones
+            Row(
+              children: List.generate(total, (i) {
+                final t   = _tabs[i];
+                final sel = index == i;
+                final color = sel ? s.onPrimaryContainer : s.onSurfaceVariant;
+                return SizedBox(
+                  width: _itemW,
+                  height: _height,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(i),
+                    child: Center(
+                      child: AnimatedScale(
+                        scale: sel ? 1.12 : 1.0,
+                        duration: const Duration(milliseconds: 260),
+                        curve: kCupertinoOut,
+                        child: AppIcon(sel ? t.svgFilled : t.svg, color: color, size: 20),
                       ),
                     ),
-                  );
-                }),
-              ),
-            ]),
-          ),
+                  ),
+                );
+              }),
+            ),
+          ]),
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// BOTTOM SHEET BASE — pequenas curvas (12px)
+// BOTÃO PROJETOS — separado, azul primário, mesmo formato pill
+// ══════════════════════════════════════════════════════════════
+
+class _ProjectsButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _ProjectsButton({required this.s, required this.onTap});
+
+  @override
+  State<_ProjectsButton> createState() => _ProjectsButtonState();
+}
+
+class _ProjectsButtonState extends State<_ProjectsButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: kCupertinoOut,
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            // Fundo azul primário — destaca-se dos outros tabs
+            color: s.primary,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: s.primary.withOpacity(0.45),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: AppIcon('projects.svg', color: s.onPrimary, size: 20),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE PROJETOS — alto, puxa do fundo
+// ══════════════════════════════════════════════════════════════
+
+class _ProjectsModal extends StatelessWidget {
+  final AppColorScheme s;
+  const _ProjectsModal({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // Modal ocupa ~88% da altura
+    final height = mq.size.height * 0.88;
+
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: s.pageBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(children: [
+        // Handle
+        Center(
+          child: Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: s.outline.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
+          child: Row(children: [
+            Text('Projetos',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface)),
+            const Spacer(),
+            // Botão novo projeto
+            GestureDetector(
+              onTap: () {},
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: s.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(CupertinoIcons.add, size: 14, color: s.onPrimary),
+                  const SizedBox(width: 4),
+                  Text('Novo', style: TextStyle(
+                      fontSize: 13, color: s.onPrimary, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Conteúdo — lista de projetos (vazia por ora)
+        Expanded(
+          child: _ProjectsList(s: s),
+        ),
+
+        SizedBox(height: mq.padding.bottom + 8),
+      ]),
+    );
+  }
+}
+
+class _ProjectsList extends StatelessWidget {
+  final AppColorScheme s;
+  const _ProjectsList({required this.s});
+
+  // Mock de projetos para demonstração
+  static const _mockProjects = [
+    ('Relatório Q2', 'Documento', 'Editado há 2h'),
+    ('Apresentação Marketing', 'Apresentação', 'Editado ontem'),
+    ('Orçamento 2025', 'Folha de cálculo', 'Editado há 3 dias'),
+    ('Brainstorm Produto', 'Quadro branco', 'Editado há 1 semana'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (_mockProjects.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(CupertinoIcons.folder, size: 48, color: s.onSurfaceVariant.withOpacity(0.4)),
+          const SizedBox(height: 12),
+          Text('Sem projetos ainda',
+              style: TextStyle(fontSize: 15, color: s.onSurfaceVariant)),
+          const SizedBox(height: 4),
+          Text('Cria o teu primeiro projeto',
+              style: TextStyle(fontSize: 13, color: s.onSurfaceVariant.withOpacity(0.6))),
+        ]),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      itemCount: _mockProjects.length,
+      separatorBuilder: (_, __) => Divider(
+        height: 1, thickness: 0.5, color: s.outlineVariant,
+        indent: 54,
+      ),
+      itemBuilder: (_, i) {
+        final (name, type, edited) = _mockProjects[i];
+        return _ProjectTile(s: s, name: name, type: type, edited: edited);
+      },
+    );
+  }
+}
+
+class _ProjectTile extends StatefulWidget {
+  final AppColorScheme s;
+  final String name, type, edited;
+  const _ProjectTile({required this.s, required this.name, required this.type, required this.edited});
+  @override State<_ProjectTile> createState() => _ProjectTileState();
+}
+
+class _ProjectTileState extends State<_ProjectTile> {
+  bool _p = false;
+
+  IconData get _icon {
+    switch (widget.type) {
+      case 'Apresentação':   return CupertinoIcons.play_rectangle;
+      case 'Folha de cálculo': return CupertinoIcons.table;
+      case 'Quadro branco':  return CupertinoIcons.pencil_outline;
+      default:               return CupertinoIcons.doc_text;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: () {},
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        color: _p ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(children: [
+          // Ícone do tipo
+          Container(
+            width: 38, height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: s.primaryContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_icon, size: 18, color: s.onPrimaryContainer),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.name,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.onSurface),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text('${widget.type} · ${widget.edited}',
+                  style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          )),
+          Icon(CupertinoIcons.chevron_right, size: 14, color: s.onSurfaceVariant),
+        ]),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTTOM SHEET BASE
 // ══════════════════════════════════════════════════════════════
 
 Future<T?> showCraftBottomSheet<T>({
@@ -712,12 +928,10 @@ Future<T?> showCraftBottomSheet<T>({
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle
           Center(
             child: Container(
               margin: const EdgeInsets.only(top: 10, bottom: 4),
-              width: 36,
-              height: 4,
+              width: 36, height: 4,
               decoration: BoxDecoration(
                 color: s.outline.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(2),
@@ -728,10 +942,7 @@ Future<T?> showCraftBottomSheet<T>({
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               child: Text(title,
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurface)),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
             ),
             const SizedBox(height: 4),
           ],
@@ -760,15 +971,13 @@ Future<String?> showColorPickerSheet(BuildContext context, AppColorScheme s, {St
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
+        spacing: 12, runSpacing: 12,
         children: colors.map((hex) {
           final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
           return GestureDetector(
             onTap: () => Navigator.pop(context, hex),
             child: Container(
-              width: 42,
-              height: 42,
+              width: 42, height: 42,
               decoration: BoxDecoration(
                 color: c,
                 shape: BoxShape.circle,
@@ -783,8 +992,7 @@ Future<String?> showColorPickerSheet(BuildContext context, AppColorScheme s, {St
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL DE IMAGENS DO SISTEMA (simulado)
-// Na prática, integraria image_picker ou photo_manager
+// MODAL DE IMAGENS
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
@@ -794,48 +1002,17 @@ Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
     title: 'Inserir imagem',
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Opções de origem
-          _ImageSourceOption(
-            s: s,
-            icon: CupertinoIcons.photo_on_rectangle,
-            label: 'Galeria de fotos',
-            onTap: () {
-              Navigator.pop(context);
-              // image_picker: ImagePicker().pickImage(source: ImageSource.gallery)
-            },
-          ),
-          _ImageSourceOption(
-            s: s,
-            icon: CupertinoIcons.camera,
-            label: 'Câmara',
-            onTap: () {
-              Navigator.pop(context);
-              // image_picker: ImagePicker().pickImage(source: ImageSource.camera)
-            },
-          ),
-          _ImageSourceOption(
-            s: s,
-            icon: CupertinoIcons.doc,
-            label: 'Ficheiros',
-            onTap: () {
-              Navigator.pop(context);
-              // file_picker: FilePicker.platform.pickFiles(type: FileType.image)
-            },
-          ),
-          _ImageSourceOption(
-            s: s,
-            icon: CupertinoIcons.link,
+      child: Column(children: [
+        _ImageSourceOption(s: s, icon: CupertinoIcons.photo_on_rectangle,
+            label: 'Galeria de fotos', onTap: () => Navigator.pop(context)),
+        _ImageSourceOption(s: s, icon: CupertinoIcons.camera,
+            label: 'Câmara', onTap: () => Navigator.pop(context)),
+        _ImageSourceOption(s: s, icon: CupertinoIcons.doc,
+            label: 'Ficheiros', onTap: () => Navigator.pop(context)),
+        _ImageSourceOption(s: s, icon: CupertinoIcons.link,
             label: 'URL de imagem',
-            onTap: () {
-              Navigator.pop(context);
-              _showUrlImageDialog(context, s);
-            },
-          ),
-        ],
-      ),
+            onTap: () { Navigator.pop(context); _showUrlImageDialog(context, s); }),
+      ]),
     ),
   );
 }
@@ -848,25 +1025,13 @@ void _showUrlImageDialog(BuildContext context, AppColorScheme s) {
       title: const Text('URL da imagem'),
       content: Padding(
         padding: const EdgeInsets.only(top: 12),
-        child: CupertinoTextField(
-          controller: ctrl,
-          placeholder: 'https://...',
-          autofocus: true,
-        ),
+        child: CupertinoTextField(controller: ctrl, placeholder: 'https://', autofocus: true),
       ),
       actions: [
+        CupertinoDialogAction(isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
         CupertinoDialogAction(
-          isDestructiveAction: true,
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancelar'),
-        ),
-        CupertinoDialogAction(
-          onPressed: () {
-            Navigator.pop(ctx);
-            // usar ctrl.text para inserir a imagem
-          },
-          child: const Text('Inserir'),
-        ),
+            onPressed: () => Navigator.pop(ctx), child: const Text('Inserir')),
       ],
     ),
   );
@@ -877,13 +1042,7 @@ class _ImageSourceOption extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-
-  const _ImageSourceOption({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _ImageSourceOption({required this.s, required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -903,11 +1062,11 @@ class _ImageSourceOption extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL DE HIPERLIGAÇÃO
+// MODAL DE LINK
 // ══════════════════════════════════════════════════════════════
 
-Future<void> showLinkSheet(
-    BuildContext context, AppColorScheme s, void Function(String url, String text) onInsert) {
+Future<void> showLinkSheet(BuildContext context, AppColorScheme s,
+    void Function(String url, String text) onInsert) {
   final urlC = TextEditingController();
   final txtC = TextEditingController();
   return showCraftBottomSheet<void>(
@@ -922,41 +1081,36 @@ Future<void> showLinkSheet(
         _SheetTextField(s: s, ctrl: txtC, hint: 'Texto (opcional)'),
         const SizedBox(height: 16),
         Row(children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: s.outline.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text('Cancelar', style: TextStyle(color: s.onSurface)),
+          Expanded(child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.outline.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Text('Cancelar', style: TextStyle(color: s.onSurface)),
             ),
-          ),
+          )),
           const SizedBox(width: 10),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.pop(context);
-                final url = urlC.text.trim();
-                if (url.isNotEmpty) onInsert(url, txtC.text.trim());
-              },
-              child: Container(
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: s.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text('Inserir',
-                    style: TextStyle(
-                        color: s.onPrimary, fontWeight: FontWeight.w600)),
+          Expanded(child: GestureDetector(
+            onTap: () {
+              Navigator.pop(context);
+              final url = urlC.text.trim();
+              if (url.isNotEmpty) onInsert(url, txtC.text.trim());
+            },
+            child: Container(
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primary,
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Text('Inserir', style: TextStyle(
+                  color: s.onPrimary, fontWeight: FontWeight.w600)),
             ),
-          ),
+          )),
         ]),
       ]),
     ),
@@ -967,7 +1121,6 @@ class _SheetTextField extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
   final String hint;
-
   const _SheetTextField({required this.s, required this.ctrl, required this.hint});
 
   @override
@@ -999,91 +1152,64 @@ class _SheetTextField extends StatelessWidget {
 class _ChatTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
   const _ChatTab({required this.onFirstMessage});
-  @override
-  State<_ChatTab> createState() => _ChatTabState();
+  @override State<_ChatTab> createState() => _ChatTabState();
 }
 
 class _ChatTabState extends State<_ChatTab> {
-  final TextEditingController _ctrl = TextEditingController();
-  final ScrollController _scroll = ScrollController();
-  final List<String> _msgs = [];
+  final TextEditingController _ctrl   = TextEditingController();
+  final ScrollController       _scroll = ScrollController();
+  final List<String>           _msgs  = [];
 
   void _send() {
     final t = _ctrl.text.trim();
     if (t.isEmpty) return;
     final isFirst = _msgs.isEmpty;
-    setState(() {
-      _msgs.add(t);
-      _ctrl.clear();
-    });
+    setState(() { _msgs.add(t); _ctrl.clear(); });
     if (isFirst) widget.onFirstMessage();
-    // Scroll para o fim
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: kCupertinoOut,
-        );
+        _scroll.animateTo(_scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300), curve: kCupertinoOut);
       }
     });
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    _scroll.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); _scroll.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    // Espaço para o input + nav flutuante
-    final inputBottom = 14.0 + 50.0 + 14.0; // nav height + margens
-
     return Column(children: [
-      // Área de mensagens
       Expanded(
         child: _msgs.isEmpty
             ? _EmptyState(s: s)
             : ListView.builder(
                 controller: _scroll,
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 itemCount: _msgs.length,
                 itemBuilder: (_, i) => _Bubble(s: s, text: _msgs[i]),
               ),
       ),
-      // Input fixo na base
       _ChatInput(s: s, ctrl: _ctrl, onSend: _send),
-      // Espaço para a nav flutuante
-      SizedBox(height: inputBottom),
+      // Espaço para a nav flutuante (50px height + 14 bottom + 14 margin)
+      const SizedBox(height: 78),
     ]);
   }
 }
 
-// Estado vazio — logo centralizado + mensagem
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
   const _EmptyState({required this.s});
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/logo.png', width: 72, height: 72, fit: BoxFit.contain),
-            const SizedBox(height: 16),
-            Text(
-              'Torna-te mais produtivo!',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: s.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Image.asset('assets/logo.png', width: 72, height: 72, fit: BoxFit.contain),
+          const SizedBox(height: 16),
+          Text('Torna-te mais produtivo!',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
+        ]),
       );
 }
 
@@ -1091,10 +1217,8 @@ class _Bubble extends StatefulWidget {
   final AppColorScheme s;
   final String text;
   const _Bubble({required this.s, required this.text});
-  @override
-  State<_Bubble> createState() => _BubbleState();
+  @override State<_Bubble> createState() => _BubbleState();
 }
-
 class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   late final Animation<double> _scale, _op;
@@ -1103,37 +1227,26 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
-    _scale = Tween(begin: 0.92, end: 1.0)
-        .animate(CurvedAnimation(parent: _c, curve: kCupertinoOut));
-    _op = Tween(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _c, curve: const Interval(0, 0.5, curve: Curves.easeOut)));
+    _scale = Tween(begin: 0.92, end: 1.0).animate(CurvedAnimation(parent: _c, curve: kCupertinoOut));
+    _op    = Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _c,
+        curve: const Interval(0, 0.5, curve: Curves.easeOut)));
     _c.forward();
   }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  @override void dispose() { _c.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: _c,
         builder: (_, child) => Opacity(
           opacity: _op.value.clamp(0.0, 1.0),
-          child: Transform.scale(
-            scale: _scale.value,
-            alignment: Alignment.centerRight,
-            child: child,
-          ),
+          child: Transform.scale(scale: _scale.value, alignment: Alignment.centerRight, child: child),
         ),
         child: Align(
           alignment: Alignment.centerRight,
           child: Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints:
-                BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
             decoration: BoxDecoration(
               color: widget.s.primaryContainer,
               borderRadius: BorderRadius.circular(18),
@@ -1147,81 +1260,222 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT — bordas fixas de 22px, send fixo em baixo
+// CHAT INPUT
 // ══════════════════════════════════════════════════════════════
 
-class _ChatInput extends StatefulWidget {
+class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
   final VoidCallback onSend;
   const _ChatInput({required this.s, required this.ctrl, required this.onSend});
 
+  static const double _radius = 22.0;
+
   @override
-  State<_ChatInput> createState() => _ChatInputState();
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Container(
+          decoration: BoxDecoration(
+            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            borderRadius: BorderRadius.circular(_radius),
+            boxShadow: s.floatingShadow,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: TextField(
+                  controller: ctrl,
+                  minLines: 1, maxLines: 6,
+                  style: TextStyle(fontSize: 15, color: s.onSurface),
+                  cursorColor: s.primary,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Escreva uma mensagem...',
+                    hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onSubmitted: (_) => onSend(),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: onSend,
+                      child: Container(
+                        width: 34, height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
+                        child: AppIcon('send.svg', color: s.onPrimary, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
-class _ChatInputState extends State<_ChatInput> {
-  // Raio fixo — não muda quando o input cresce
-  static const double _radius = 22.0;
+// ══════════════════════════════════════════════════════════════
+// TEMPLATES TAB
+// ══════════════════════════════════════════════════════════════
+
+class _TemplatesTab extends StatelessWidget {
+  const _TemplatesTab();
+
+  static const _categories = [
+    'Todos', 'Documentos', 'Apresentações', 'Folhas', 'Quadros',
+  ];
+
+  static const _templates = [
+    ('Relatório Mensal',       'Documento',       'Relatório profissional com gráficos'),
+    ('Pitch de Startup',       'Apresentação',    'Template moderno para investidores'),
+    ('Controlo de Despesas',   'Folha de cálculo','Registo mensal de gastos'),
+    ('Mapa Mental',            'Quadro branco',   'Brainstorming visual livre'),
+    ('Proposta Comercial',     'Documento',       'Proposta formal para clientes'),
+    ('Calendário de Conteúdo', 'Folha de cálculo','Planeamento de publicações'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Título
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+        child: Text('Templates',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: s.onSurface)),
+      ),
+
+      // Filtros horizontais
+      SizedBox(
+        height: 36,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: _categories.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (ctx, i) => _CategoryChip(s: s, label: _categories[i], selected: i == 0),
+        ),
+      ),
+
+      const SizedBox(height: 16),
+
+      // Grid de templates
+      Expanded(
+        child: GridView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 90),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: _templates.length,
+          itemBuilder: (_, i) {
+            final (name, type, desc) = _templates[i];
+            return _TemplateCard(s: s, name: name, type: type, desc: desc);
+          },
+        ),
+      ),
+    ]);
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool selected;
+  const _CategoryChip({required this.s, required this.label, required this.selected});
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: kCupertinoOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? s.primary : s.outline.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              color: selected ? s.onPrimary : s.onSurfaceVariant,
+            )),
+      );
+}
+
+class _TemplateCard extends StatefulWidget {
+  final AppColorScheme s;
+  final String name, type, desc;
+  const _TemplateCard({required this.s, required this.name, required this.type, required this.desc});
+  @override State<_TemplateCard> createState() => _TemplateCardState();
+}
+
+class _TemplateCardState extends State<_TemplateCard> {
+  bool _p = false;
+
+  IconData get _icon {
+    switch (widget.type) {
+      case 'Apresentação':     return CupertinoIcons.play_rectangle;
+      case 'Folha de cálculo': return CupertinoIcons.table;
+      case 'Quadro branco':    return CupertinoIcons.pencil_outline;
+      default:                 return CupertinoIcons.doc_text;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Container(
-        decoration: BoxDecoration(
-          color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-          // BorderRadius FIXO — não varia com o tamanho do container
-          borderRadius: BorderRadius.circular(_radius),
-          boxShadow: s.floatingShadow,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Área de texto — cresce verticalmente, sem influenciar o raio
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: TextField(
-                controller: widget.ctrl,
-                minLines: 1,
-                maxLines: 6,
-                style: TextStyle(fontSize: 15, color: s.onSurface),
-                cursorColor: s.primary,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: 'Escreva uma mensagem...',
-                  hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
-                  contentPadding: EdgeInsets.zero,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: () {},
+      child: AnimatedScale(
+        scale: _p ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: kCupertinoOut,
+        child: Container(
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: s.cardShadow,
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38, height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: s.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                onSubmitted: (_) => widget.onSend(),
+                child: Icon(_icon, size: 18, color: s.onPrimaryContainer),
               ),
-            ),
-            // Linha do send — sempre fixa em baixo
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  GestureDetector(
-                    onTap: widget.onSend,
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: s.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: AppIcon('send.svg', color: s.onPrimary, size: 16),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(widget.name,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurface),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Text(widget.desc,
+                  style: TextStyle(fontSize: 11, color: s.onSurfaceVariant),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+          ),
         ),
       ),
     );
@@ -1229,44 +1483,13 @@ class _ChatInputState extends State<_ChatInput> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EDITOR TYPES
-// ══════════════════════════════════════════════════════════════
-
-enum EditorType { docs, sheets, slides, whiteboard }
-
-extension EditorTypeX on EditorType {
-  String get label => const {
-        EditorType.docs: 'Documento',
-        EditorType.sheets: 'Folha de cálculo',
-        EditorType.slides: 'Apresentação',
-        EditorType.whiteboard: 'Quadro branco',
-      }[this]!;
-
-  String get pngAsset => const {
-        EditorType.docs: 'doc.png',
-        EditorType.sheets: 'sheet.png',
-        EditorType.slides: 'slide.png',
-        EditorType.whiteboard: 'whiteboard.png',
-      }[this]!;
-
-  String get htmlAsset => const {
-        EditorType.docs: 'assets/editor/docs.html',
-        EditorType.sheets: 'assets/editor/sheets.html',
-        EditorType.slides: 'assets/editor/slides.html',
-        EditorType.whiteboard: 'assets/editor/whiteboard.html',
-      }[this]!;
-}
-
-// ══════════════════════════════════════════════════════════════
-// EDIT TAB — sem toolbar nativo (HTML tem o seu próprio)
-// Modals de cor, imagem e link acessíveis via JS bridge
+// EDIT TAB
 // ══════════════════════════════════════════════════════════════
 
 class _EditTab extends StatefulWidget {
   final EditorType editorType;
   const _EditTab({required this.editorType});
-  @override
-  State<_EditTab> createState() => _EditTabState();
+  @override State<_EditTab> createState() => _EditTabState();
 }
 
 class _EditTabState extends State<_EditTab> {
@@ -1278,18 +1501,15 @@ class _EditTabState extends State<_EditTab> {
     _controllers[widget.editorType]?.evaluateJavascript(source: script);
   }
 
-  // Abre modal de cor e envia resultado ao editor via JS
   void _openColorPicker(BuildContext context, AppColorScheme s, String jsCallback) async {
     final hex = await showColorPickerSheet(context, s);
     if (hex != null) _runJs("$jsCallback('$hex')");
   }
 
-  // Abre modal de imagem
   void _openImagePicker(BuildContext context, AppColorScheme s) {
     showImagePickerSheet(context, s);
   }
 
-  // Abre modal de link
   void _openLinkSheet(BuildContext context, AppColorScheme s) {
     showLinkSheet(context, s, (url, text) {
       _runJs("editorApi.insertLink('$url','$text')");
@@ -1298,7 +1518,7 @@ class _EditTabState extends State<_EditTab> {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final s   = AppTheme.of(context);
     final idx = EditorType.values.indexOf(widget.editorType);
 
     return IndexedStack(
@@ -1315,7 +1535,6 @@ class _EditTabState extends State<_EditTab> {
           ),
           onWebViewCreated: (c) {
             _controllers[t] = c;
-            // Handler para o HTML chamar modals Flutter
             c.addJavaScriptHandler(
               handlerName: 'openColorPicker',
               callback: (args) {
@@ -1339,7 +1558,36 @@ class _EditTabState extends State<_EditTab> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TYPE BUTTON (header trailing)
+// EDITOR TYPES
+// ══════════════════════════════════════════════════════════════
+
+enum EditorType { docs, sheets, slides, whiteboard }
+
+extension EditorTypeX on EditorType {
+  String get label => const {
+        EditorType.docs:       'Documento',
+        EditorType.sheets:     'Folha de cálculo',
+        EditorType.slides:     'Apresentação',
+        EditorType.whiteboard: 'Quadro branco',
+      }[this]!;
+
+  String get pngAsset => const {
+        EditorType.docs:       'doc.png',
+        EditorType.sheets:     'sheet.png',
+        EditorType.slides:     'slide.png',
+        EditorType.whiteboard: 'whiteboard.png',
+      }[this]!;
+
+  String get htmlAsset => const {
+        EditorType.docs:       'assets/editor/docs.html',
+        EditorType.sheets:     'assets/editor/sheets.html',
+        EditorType.slides:     'assets/editor/slides.html',
+        EditorType.whiteboard: 'assets/editor/whiteboard.html',
+      }[this]!;
+}
+
+// ══════════════════════════════════════════════════════════════
+// EDIT TYPE BUTTON
 // ══════════════════════════════════════════════════════════════
 
 class _EditTypeButton extends StatefulWidget {
@@ -1347,61 +1595,48 @@ class _EditTypeButton extends StatefulWidget {
   final EditorType current;
   final ValueChanged<EditorType> onSelect;
   const _EditTypeButton({required this.s, required this.current, required this.onSelect});
-  @override
-  State<_EditTypeButton> createState() => _EditTypeButtonState();
+  @override State<_EditTypeButton> createState() => _EditTypeButtonState();
 }
 
-class _EditTypeButtonState extends State<_EditTypeButton>
-    with SingleTickerProviderStateMixin {
+class _EditTypeButtonState extends State<_EditTypeButton> with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
 
   @override
   void initState() {
     super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+    _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
   }
 
   @override
-  void dispose() {
-    _ac.dispose();
-    _ov?.remove();
-    super.dispose();
-  }
+  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
 
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
     final box = context.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
-    final sz = box.size;
+    final sz  = box.size;
     _ac.forward(from: 0);
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
       return Stack(children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: _close,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.transparent),
-          ),
-        ),
+        Positioned.fill(child: GestureDetector(
+          onTap: _close, behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        )),
         Positioned(
           top: off.dy + sz.height + 6,
           right: MediaQuery.of(ctx).size.width - off.dx - sz.width,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
-              opacity: CurvedAnimation(
-                      parent: _ac,
-                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                  .value,
+              opacity: CurvedAnimation(parent: _ac,
+                  curve: const Interval(0, 0.5, curve: Curves.easeOut)).value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
-                    .value,
+                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut)).value,
                 alignment: Alignment.topRight,
                 child: child,
               ),
@@ -1416,17 +1651,11 @@ class _EditTypeButtonState extends State<_EditTypeButton>
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: EditorType.values
-                    .map((t) => _TypeOption(
-                          s: s,
-                          type: t,
-                          selected: widget.current == t,
-                          onTap: () {
-                            widget.onSelect(t);
-                            _close();
-                          },
-                        ))
-                    .toList(),
+                children: EditorType.values.map((t) => _TypeOption(
+                  s: s, type: t,
+                  selected: widget.current == t,
+                  onTap: () { widget.onSelect(t); _close(); },
+                )).toList(),
               ),
             ),
           ),
@@ -1438,18 +1667,12 @@ class _EditTypeButtonState extends State<_EditTypeButton>
   }
 
   void _close() {
-    _ac.reverse().then((_) {
-      _ov?.remove();
-      _ov = null;
-      if (mounted) setState(() {});
-    });
+    _ac.reverse().then((_) { _ov?.remove(); _ov = null; if (mounted) setState(() {}); });
   }
 
   @override
   Widget build(BuildContext context) => _Tap(
-        onTap: _toggle,
-        s: widget.s,
-        size: 36,
+        onTap: _toggle, s: widget.s, size: 36,
         child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
       );
 }
@@ -1459,13 +1682,8 @@ class _TypeOption extends StatefulWidget {
   final EditorType type;
   final bool selected;
   final VoidCallback onTap;
-  const _TypeOption(
-      {required this.s,
-      required this.type,
-      required this.selected,
-      required this.onTap});
-  @override
-  State<_TypeOption> createState() => _TypeOptionState();
+  const _TypeOption({required this.s, required this.type, required this.selected, required this.onTap});
+  @override State<_TypeOption> createState() => _TypeOptionState();
 }
 
 class _TypeOptionState extends State<_TypeOption> {
@@ -1482,30 +1700,26 @@ class _TypeOptionState extends State<_TypeOption> {
           duration: const Duration(milliseconds: 100),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: _h
-                ? widget.s.hover
-                : widget.selected
-                    ? widget.s.primaryContainer.withOpacity(0.5)
-                    : Colors.transparent,
+            color: _h ? widget.s.hover
+                : widget.selected ? widget.s.primaryContainer.withOpacity(0.5)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
             EditorTypeIcon(widget.type.pngAsset, size: 18),
             const SizedBox(width: 10),
-            Text(widget.type.label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: widget.selected ? widget.s.primary : widget.s.onSurface,
-                  fontWeight:
-                      widget.selected ? FontWeight.w600 : FontWeight.normal,
-                )),
+            Text(widget.type.label, style: TextStyle(
+              fontSize: 14,
+              color: widget.selected ? widget.s.primary : widget.s.onSurface,
+              fontWeight: widget.selected ? FontWeight.w600 : FontWeight.normal,
+            )),
           ]),
         ),
       );
 }
 
 // ══════════════════════════════════════════════════════════════
-// SETTINGS PAGE — card com contraste real no modo escuro
+// SETTINGS PAGE
 // ══════════════════════════════════════════════════════════════
 
 class SettingsPage extends StatelessWidget {
@@ -1518,80 +1732,52 @@ class SettingsPage extends StatelessWidget {
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
-        // Fundo da página mais escuro que o card
         color: s.pageBackground,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Appbar
-              Container(
-                color: s.pageBackground,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                child: Row(children: [
-                  _Tap(
-  onTap: () => Navigator.pop(context),
-  s: s,
-  child: AppIcon('back.svg', color: s.onSurface, size: 20), // ← aqui
-),
-                    s: s,
-                    child: Icon(CupertinoIcons.back, color: s.onSurface, size: 22),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('Definições',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurface)),
-                ]),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Text('Aparência',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: s.onSurfaceVariant,
-                            letterSpacing: 0.5)),
-                    const SizedBox(height: 10),
-                    // Card com cor bem diferente do fundo no dark
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        // dark: #2C2C2E sobre fundo #141414 — contraste claro
-                        color: s.cardBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: s.cardShadow,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Modo escuro',
-                              style:
-                                  TextStyle(fontSize: 15, color: s.onSurface)),
-                          _Switch(
-                            value: appTheme.isDark,
-                            s: s,
-                            onChanged: (_) => appTheme.toggleDark(),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    // Separador
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Container(height: 0.5, color: s.outlineVariant),
-                    ),
-                  ],
+        child: SafeArea(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              color: s.pageBackground,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              child: Row(children: [
+                _Tap(
+                  onTap: () => Navigator.pop(context),
+                  s: s,
+                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
                 ),
-              ),
-            ],
-          ),
-        ),
+                const SizedBox(width: 8),
+                Text('Definições',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: s.onSurface)),
+              ]),
+            ),
+            Expanded(child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text('Aparência',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                        color: s.onSurfaceVariant, letterSpacing: 0.5)),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: s.cardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: s.cardShadow,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Modo escuro',
+                          style: TextStyle(fontSize: 15, color: s.onSurface)),
+                      _Switch(value: appTheme.isDark, s: s,
+                          onChanged: (_) => appTheme.toggleDark()),
+                    ],
+                  ),
+                ),
+              ],
+            )),
+          ],
+        )),
       ),
     );
   }
@@ -1610,8 +1796,7 @@ class _Switch extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: kCupertinoOut,
-          width: 46,
-          height: 26,
+          width: 46, height: 26,
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             color: value ? s.primary : s.outline,
@@ -1619,8 +1804,7 @@ class _Switch extends StatelessWidget {
           ),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
-            width: 20,
-            height: 20,
+            width: 20, height: 20,
             decoration: BoxDecoration(
               color: value ? s.onPrimary : s.cardBackground,
               shape: BoxShape.circle,
