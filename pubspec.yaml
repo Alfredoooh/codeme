@@ -24,3 +24,4 @@ flutter:
     - assets/editor/sheets.html
     - assets/editor/slides.html
     - assets/editor/whiteboard.html
+    - assets/logo.png
