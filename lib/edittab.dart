@@ -169,24 +169,27 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 child: child,
               ),
             ),
-            child: Container(
-              width: 220,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: EditorType.values
-                    .map((t) => _TypeOption(
-                          s: s,
-                          type: t,
-                          selected: widget.current == t,
-                          onTap: () { widget.onSelect(t); _close(); },
-                        ))
-                    .toList(),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                width: 220,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: s.floatingShadow,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: EditorType.values
+                      .map((t) => _TypeOption(
+                            s: s,
+                            type: t,
+                            selected: widget.current == t,
+                            onTap: () { widget.onSelect(t); _close(); },
+                          ))
+                      .toList(),
+                ),
               ),
             ),
           ),

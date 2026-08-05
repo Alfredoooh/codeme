@@ -118,23 +118,26 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
                 child: child,
               ),
             ),
-            child: Container(
-              width: 220,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: ConversationAction.values
-                    .map((a) => _ConversationOption(
-                          s: s,
-                          action: a,
-                          onTap: () { widget.onSelect(a); _close(); },
-                        ))
-                    .toList(),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                width: 220,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: s.floatingShadow,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: ConversationAction.values
+                      .map((a) => _ConversationOption(
+                            s: s,
+                            action: a,
+                            onTap: () { widget.onSelect(a); _close(); },
+                          ))
+                      .toList(),
+                ),
               ),
             ),
           ),
@@ -247,7 +250,7 @@ class _AiTabState extends State<AiTab> {
   }
 }
 
-// ── Empty state — toggles em grelha 2x2, com borda sólida ──────
+// ── Empty state — apenas os toggles, em grelha 2x2 ──────────────
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
@@ -261,16 +264,13 @@ class _EmptyState extends StatelessWidget {
           child: Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 8,
+            runSpacing: 8,
             children: QuickAction.values
-                .map((a) => SizedBox(
-                      width: (MediaQuery.of(context).size.width - 48 - 10) / 2,
-                      child: _QuickActionChip(
-                        s: s,
-                        action: a,
-                        onTap: () => onQuickAction(a),
-                      ),
+                .map((a) => _QuickActionChip(
+                      s: s,
+                      action: a,
+                      onTap: () => onQuickAction(a),
                     ))
                 .toList(),
           ),
@@ -312,8 +312,7 @@ class _QuickActionChipState extends State<_QuickActionChip> {
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: widget.action.tint.withOpacity(s.isDark ? 0.16 : 0.10),
             borderRadius: BorderRadius.circular(999),
@@ -324,7 +323,6 @@ class _QuickActionChipState extends State<_QuickActionChip> {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Image.asset(
@@ -334,15 +332,12 @@ class _QuickActionChipState extends State<_QuickActionChip> {
                 fit: BoxFit.contain,
               ),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  widget.action.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: widget.action.tint,
-                  ),
+              Text(
+                widget.action.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: widget.action.tint,
                 ),
               ),
             ],
