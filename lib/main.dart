@@ -113,6 +113,29 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
 
+  void _onConversationAction(ConversationAction action) {
+    // TODO: liga aqui a acção real (eliminar / renomear / nova conversa).
+    switch (action) {
+      case ConversationAction.newChat:
+        setState(() => _hasMessages = false);
+        break;
+      case ConversationAction.rename:
+        break;
+      case ConversationAction.delete:
+        setState(() => _hasMessages = false);
+        break;
+    }
+  }
+
+  String get _tabTitle {
+    switch (_tab) {
+      case AppTab.ai:        return '';
+      case AppTab.edit:      return _editorType.label;
+      case AppTab.templates: return 'Modelos';
+      case AppTab.projects:  return 'Projectos';
+    }
+  }
+
   Widget _buildTab() {
     switch (_tab) {
       case AppTab.ai:
@@ -140,12 +163,15 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           child: Column(children: [
             _AppHeader(
               s: s,
-              hasMessages: _hasMessages,
+              title: _tabTitle,
               onMenu: _openDrawer,
               trailing: _tab == AppTab.edit
                   ? EditTypeButton(
                       s: s, current: _editorType, onSelect: _setEditorType)
-                  : null,
+                  : _tab == AppTab.ai
+                      ? AiConversationMenuButton(
+                          s: s, onSelect: _onConversationAction)
+                      : null,
             ),
             Expanded(
               child: AnimatedSwitcher(
@@ -210,13 +236,13 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
-  final bool hasMessages;
+  final String title;
   final VoidCallback onMenu;
   final Widget? trailing;
 
   const _AppHeader({
     required this.s,
-    required this.hasMessages,
+    required this.title,
     required this.onMenu,
     this.trailing,
   });
@@ -234,12 +260,15 @@ class _AppHeader extends StatelessWidget {
             child: AppIcon('menu.svg', color: s.onSurface, size: 20),
           ),
           const SizedBox(width: 8),
-          AnimatedOpacity(
-            opacity: hasMessages ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 300),
-            curve: kCupertinoOut,
-            child: Image.asset('assets/logo.png', height: 24, fit: BoxFit.contain),
-          ),
+          if (title.isNotEmpty)
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: s.onSurface,
+              ),
+            ),
           const Spacer(),
           if (trailing != null) trailing!,
         ]),

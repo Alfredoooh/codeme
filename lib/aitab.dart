@@ -37,6 +37,170 @@ extension QuickActionX on QuickAction {
       }[this]!;
 }
 
+// ══════════════════════════════════════════════════════════════
+// CONVERSATION MENU (popup — mesmo padrão do EditTypeButton)
+// ══════════════════════════════════════════════════════════════
+
+enum ConversationAction { newChat, rename, delete }
+
+extension ConversationActionX on ConversationAction {
+  String get svgAsset => const {
+        ConversationAction.newChat: 'plus.svg',
+        ConversationAction.rename:  'edit.svg',
+        ConversationAction.delete:  'trash.svg',
+      }[this]!;
+
+  String get label => const {
+        ConversationAction.newChat: 'Iniciar nova conversa',
+        ConversationAction.rename:  'Renomear conversa',
+        ConversationAction.delete:  'Eliminar conversa',
+      }[this]!;
+}
+
+class AiConversationMenuButton extends StatefulWidget {
+  final AppColorScheme s;
+  final ValueChanged<ConversationAction> onSelect;
+  const AiConversationMenuButton(
+      {super.key, required this.s, required this.onSelect});
+  @override
+  State<AiConversationMenuButton> createState() =>
+      _AiConversationMenuButtonState();
+}
+
+class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
+    with SingleTickerProviderStateMixin {
+  OverlayEntry? _ov;
+  late AnimationController _ac;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
+  }
+
+  @override
+  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
+
+  void _toggle() => _ov == null ? _open() : _close();
+
+  void _open() {
+    final box = context.findRenderObject() as RenderBox;
+    final off = box.localToGlobal(Offset.zero);
+    final sz  = box.size;
+    _ac.forward(from: 0);
+
+    _ov = OverlayEntry(builder: (ctx) {
+      final s = widget.s;
+      return Stack(children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: _close,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        Positioned(
+          top: off.dy + sz.height + 6,
+          right: MediaQuery.of(ctx).size.width - off.dx - sz.width,
+          child: AnimatedBuilder(
+            animation: _ac,
+            builder: (_, child) => Opacity(
+              opacity: CurvedAnimation(
+                      parent: _ac,
+                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                  .value,
+              child: Transform.scale(
+                scale: Tween(begin: 0.92, end: 1.0)
+                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
+                    .value,
+                alignment: Alignment.topRight,
+                child: child,
+              ),
+            ),
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: ConversationAction.values
+                    .map((a) => _ConversationOption(
+                          s: s,
+                          action: a,
+                          onTap: () { widget.onSelect(a); _close(); },
+                        ))
+                    .toList(),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    });
+    Overlay.of(context).insert(_ov!);
+    setState(() {});
+  }
+
+  void _close() {
+    _ac.reverse().then((_) {
+      _ov?.remove();
+      _ov = null;
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => AppTap(
+        onTap: _toggle,
+        s: widget.s,
+        size: 36,
+        child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+      );
+}
+
+class _ConversationOption extends StatefulWidget {
+  final AppColorScheme s;
+  final ConversationAction action;
+  final VoidCallback onTap;
+  const _ConversationOption(
+      {required this.s, required this.action, required this.onTap});
+  @override State<_ConversationOption> createState() => _ConversationOptionState();
+}
+
+class _ConversationOptionState extends State<_ConversationOption> {
+  bool _h = false;
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown:   (_) => setState(() => _h = true),
+        onTapCancel: ()  => setState(() => _h = false),
+        onTapUp:     (_) => setState(() => _h = false),
+        onTap:       widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _h ? widget.s.hover : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(children: [
+            AppIcon(widget.action.svgAsset, color: widget.s.onSurface, size: 18),
+            const SizedBox(width: 10),
+            Text(widget.action.label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: widget.s.onSurface,
+                  fontWeight: FontWeight.normal,
+                )),
+          ]),
+        ),
+      );
+}
+
 class _AiTabState extends State<AiTab> {
   final TextEditingController _ctrl   = TextEditingController();
   final ScrollController       _scroll = ScrollController();
@@ -83,7 +247,7 @@ class _AiTabState extends State<AiTab> {
   }
 }
 
-// ── Empty state — apenas os toggles, sem logo nem saudação ─────
+// ── Empty state — toggles em grelha 2x2, com borda sólida ──────
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
@@ -97,13 +261,16 @@ class _EmptyState extends StatelessWidget {
           child: Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 10,
+            runSpacing: 10,
             children: QuickAction.values
-                .map((a) => _QuickActionChip(
-                      s: s,
-                      action: a,
-                      onTap: () => onQuickAction(a),
+                .map((a) => SizedBox(
+                      width: (MediaQuery.of(context).size.width - 48 - 10) / 2,
+                      child: _QuickActionChip(
+                        s: s,
+                        action: a,
+                        onTap: () => onQuickAction(a),
+                      ),
                     ))
                 .toList(),
           ),
@@ -111,7 +278,7 @@ class _EmptyState extends StatelessWidget {
       );
 }
 
-// ── Toggle individual (chip com ícone + label) ──────────────────
+// ── Toggle individual (chip com ícone + label + borda sólida) ──
 
 class _QuickActionChip extends StatefulWidget {
   final AppColorScheme s;
@@ -145,13 +312,19 @@ class _QuickActionChipState extends State<_QuickActionChip> {
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: widget.action.tint.withOpacity(s.isDark ? 0.16 : 0.10),
             borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: widget.action.tint,
+              width: 1.5,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Image.asset(
@@ -161,12 +334,15 @@ class _QuickActionChipState extends State<_QuickActionChip> {
                 fit: BoxFit.contain,
               ),
               const SizedBox(width: 6),
-              Text(
-                widget.action.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: widget.action.tint,
+              Flexible(
+                child: Text(
+                  widget.action.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: widget.action.tint,
+                  ),
                 ),
               ),
             ],
