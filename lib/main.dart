@@ -1530,7 +1530,10 @@ class SettingsPage extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                 child: Row(children: [
                   _Tap(
-                    onTap: () => Navigator.pop(context),
+  onTap: () => Navigator.pop(context),
+  s: s,
+  child: AppIcon('back.svg', color: s.onSurface, size: 20), // ← aqui
+),
                     s: s,
                     child: Icon(CupertinoIcons.back, color: s.onSurface, size: 22),
                   ),
