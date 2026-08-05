@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'theme.dart';
+import 'colors.dart';
 
 // ══════════════════════════════════════════════════════════════
 // ÍCONES SVG
@@ -68,14 +68,13 @@ class _AppTapState extends State<AppTap> {
         child: AnimatedScale(
           scale: _p ? 0.88 : 1.0,
           duration: const Duration(milliseconds: 100),
-          curve: kCupertinoOut,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 100),
             width: widget.size, height: widget.size,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _p ? widget.s.pressed : Colors.transparent,
-              borderRadius: BorderRadius.circular(widget.s.pressed == widget.s.pressed ? widget.size / 2 : widget.size / 2),
+              borderRadius: BorderRadius.circular(widget.size / 2),
             ),
             child: widget.child,
           ),

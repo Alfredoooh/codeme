@@ -86,13 +86,17 @@ class _EditTabState extends State<EditTab> {
             );
             c.addJavaScriptHandler(
               handlerName: 'openImagePicker',
-              callback: (_) => showImagePickerSheet(context, s),
+              callback: (_) {
+                showImagePickerSheet(context, s);
+              },
             );
             c.addJavaScriptHandler(
               handlerName: 'openLinkSheet',
-              callback: (_) => showLinkSheet(context, s, (url, text) {
-                _runJs("editorApi.insertLink('$url','$text')");
-              }),
+              callback: (_) {
+                showLinkSheet(context, s, (url, text) {
+                  _runJs("editorApi.insertLink('$url','$text')");
+                });
+              },
             );
           },
         );
