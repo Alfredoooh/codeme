@@ -65,24 +65,21 @@ class AppColorScheme {
 
   // ── Sombras ─────────────────────────────────────────────────
   List<BoxShadow> get cardShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.50), blurRadius: 20, offset: const Offset(0, 4))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]
       : [
-          BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 2)),
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius:  4, offset: const Offset(0, 1)),
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 1)),
         ];
 
   List<BoxShadow> get floatingShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.55), blurRadius: 28, offset: const Offset(0, 8))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
       : [
-          BoxShadow(color: Colors.black.withOpacity(0.11), blurRadius: 20, offset: const Offset(0, 6)),
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius:  6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 3)),
         ];
 
   List<BoxShadow> get navBarShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.55), blurRadius: 28, offset: const Offset(0, 8))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
       : [
-          BoxShadow(color: Colors.black.withOpacity(0.13), blurRadius: 24, offset: const Offset(0, 6)),
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius:  6, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 3)),
         ];
 }
 

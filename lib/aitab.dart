@@ -250,7 +250,7 @@ class _AiTabState extends State<AiTab> {
   }
 }
 
-// ── Empty state — apenas os toggles, em grelha 2x2 ──────────────
+// ── Empty state — toggles em grelha 2x2, tamanho compacto ──────
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
@@ -278,7 +278,7 @@ class _EmptyState extends StatelessWidget {
       );
 }
 
-// ── Toggle individual (chip com ícone + label + borda sólida) ──
+// ── Toggle individual (chip compacto com ícone + label + borda) ─
 
 class _QuickActionChip extends StatefulWidget {
   final AppColorScheme s;
@@ -312,7 +312,7 @@ class _QuickActionChipState extends State<_QuickActionChip> {
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: widget.action.tint.withOpacity(s.isDark ? 0.16 : 0.10),
             borderRadius: BorderRadius.circular(999),
@@ -327,15 +327,15 @@ class _QuickActionChipState extends State<_QuickActionChip> {
             children: [
               Image.asset(
                 'assets/icons/png/${widget.action.asset}',
-                width: 16,
-                height: 16,
+                width: 14,
+                height: 14,
                 fit: BoxFit.contain,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               Text(
                 widget.action.label,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: widget.action.tint,
                 ),
