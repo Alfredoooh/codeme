@@ -1,147 +1,155 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'web_editor_frame_conditional.dart';
+
+// ─────────────────────────────────────────────────────────────
+// web_editor_frame_conditional.dart  (ficheiro separado)
+// export 'web_editor_frame_stub.dart'
+//     if (dart.library.html) 'web_editor_frame.dart';
+// ─────────────────────────────────────────────────────────────
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Regista os iframes para cada tipo de editor — só tem efeito em web,
-  // o stub em mobile não faz nada e não quebra compilação.
-  registerWebEditorFrame('assets/editor/docs.html');
-  registerWebEditorFrame('assets/editor/sheets.html');
-  registerWebEditorFrame('assets/editor/slides.html');
-  registerWebEditorFrame('assets/editor/whiteboard.html');
-
   if (!kIsWeb) {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
   }
-
   runApp(const CodeMeApp());
 }
 
-// ── M3 Color Scheme ──────────────────────────────────────────────────────
-// Dark: base #1C1C1C, já validado. Light: recalibrado com progressão
-// tonal real entre containers (antes estava tudo no mesmo tom).
+// ══════════════════════════════════════════════════════════════
+// CORES — Tema claro: branco real, sem tons azulados de Material.
+// Separação por sombra, não por cor de fundo de container.
+// Tema escuro: base #1C1C1C, escala de cinzentos quentes.
+// ══════════════════════════════════════════════════════════════
 
 class AppColorScheme {
   final bool isDark;
   const AppColorScheme(this.isDark);
 
-  Color get primary => isDark ? const Color(0xFFA9C7FF) : const Color(0xFF2F7BF6);
-  Color get onPrimary => isDark ? const Color(0xFF00325C) : const Color(0xFFFFFFFF);
-  Color get primaryContainer => isDark ? const Color(0xFF00497E) : const Color(0xFFDDE8FF);
-  Color get onPrimaryContainer => isDark ? const Color(0xFFD8E2FF) : const Color(0xFF0A3D82);
+  // Primária
+  Color get primary      => isDark ? const Color(0xFF94BBFF) : const Color(0xFF2F7BF6);
+  Color get onPrimary    => isDark ? const Color(0xFF003166) : const Color(0xFFFFFFFF);
+  Color get primaryContainer    => isDark ? const Color(0xFF004591) : const Color(0xFFE8F0FF);
+  Color get onPrimaryContainer  => isDark ? const Color(0xFFD3E4FF) : const Color(0xFF00204D);
 
-  Color get secondary => isDark ? const Color(0xFFBAC6E0) : const Color(0xFF565F71);
-  Color get onSecondary => isDark ? const Color(0xFF283041) : const Color(0xFFFFFFFF);
-  Color get secondaryContainer => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE8ECF7);
-  Color get onSecondaryContainer => isDark ? const Color(0xFFDAE2F9) : const Color(0xFF3D4759);
+  // Superfície — light é branco puro, sem tinting Material
+  Color get surface      => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFFFFFFF);
+  Color get onSurface    => isDark ? const Color(0xFFEDEDED) : const Color(0xFF111111);
+  Color get onSurfaceVariant => isDark ? const Color(0xFFBBBBBB) : const Color(0xFF555555);
 
-  Color get tertiary => isDark ? const Color(0xFFD3BCE4) : const Color(0xFF6E5677);
-  Color get onTertiary => isDark ? const Color(0xFF3D2947) : const Color(0xFFFFFFFF);
-  Color get tertiaryContainer => isDark ? const Color(0xFF553F5F) : const Color(0xFFF3E3F8);
-  Color get onTertiaryContainer => isDark ? const Color(0xFFF4D9FF) : const Color(0xFF57405F);
+  // Containers — light usa branco com sombra, não tons azulados
+  Color get surfaceContainer        => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFFFFFF);
+  Color get surfaceContainerLow     => isDark ? const Color(0xFF242424) : const Color(0xFFFFFFFF);
+  Color get surfaceContainerHigh    => isDark ? const Color(0xFF333333) : const Color(0xFFFFFFFF);
+  Color get surfaceContainerHighest => isDark ? const Color(0xFF3D3D3D) : const Color(0xFFFFFFFF);
 
-  Color get error => isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A);
-  Color get onError => isDark ? const Color(0xFF690005) : const Color(0xFFFFFFFF);
-  Color get errorContainer => isDark ? const Color(0xFF93000A) : const Color(0xFFFFDAD6);
-  Color get onErrorContainer => isDark ? const Color(0xFFFFDAD6) : const Color(0xFF410002);
+  // Fundo da página (por trás dos cards)
+  Color get background   => isDark ? const Color(0xFF141414) : const Color(0xFFF4F4F4);
 
-  Color get surface => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFFAFAFC);
-  Color get onSurface => isDark ? const Color(0xFFECECEC) : const Color(0xFF1B1B1D);
-  Color get surfaceVariant => isDark ? const Color(0xFF444444) : const Color(0xFFE4E3E8);
-  Color get onSurfaceVariant => isDark ? const Color(0xFFC7C7C7) : const Color(0xFF56565C);
+  // Outline
+  Color get outline        => isDark ? const Color(0xFF666666) : const Color(0xFFCCCCCC);
+  Color get outlineVariant => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEEEEEE);
 
-  Color get surfaceContainerLowest => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
-  Color get surfaceContainerLow => isDark ? const Color(0xFF242424) : const Color(0xFFF3F2F7);
-  Color get surfaceContainer => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEDECF3);
-  Color get surfaceContainerHigh => isDark ? const Color(0xFF343434) : const Color(0xFFE7E5EE);
-  Color get surfaceContainerHighest => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE1DFEA);
+  // Erro
+  Color get error        => isDark ? const Color(0xFFFFB4AB) : const Color(0xFFBA1A1A);
+  Color get onError      => isDark ? const Color(0xFF690005) : const Color(0xFFFFFFFF);
 
-  Color get surfaceDim => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFDBD9E3);
-  Color get surfaceBright => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFFAFAFC);
+  // Extras
+  Color get scrim        => const Color(0xFF000000);
+  Color get shadow       => const Color(0xFF000000);
+  Color get barrier      => const Color(0x80000000);
+  Color get hover        => isDark ? const Color(0x14FFFFFF) : const Color(0x0A000000);
+  Color get pressed      => isDark ? const Color(0x1FFFFFFF) : const Color(0x12000000);
 
-  Color get outline => isDark ? const Color(0xFF8F8F8F) : const Color(0xFF787680);
-  Color get outlineVariant => isDark ? const Color(0xFF444444) : const Color(0xFFC9C6D0);
+  // Sombra flutuante — light usa sombra real para separar sem cor
+  List<BoxShadow> get cardShadow => isDark
+      ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 2)),
+         BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4,  offset: const Offset(0, 1))];
 
-  Color get inverseSurface => isDark ? const Color(0xFFE2E2E9) : const Color(0xFF303032);
-  Color get onInverseSurface => isDark ? const Color(0xFF2E3036) : const Color(0xFFF3F0F4);
-  Color get inversePrimary => isDark ? const Color(0xFF2F7BF6) : const Color(0xFFA9C7FF);
-
-  Color get scrim => const Color(0xFF000000);
-  Color get shadow => const Color(0xFF000000);
-
-  Color get barrier => scrim.withOpacity(0.5);
-  Color get hover => onSurface.withOpacity(isDark ? 0.08 : 0.05);
-  Color get pressed => onSurface.withOpacity(isDark ? 0.12 : 0.08);
-
-  List<BoxShadow> get floatingShadow => [
-        BoxShadow(
-          color: shadow.withOpacity(isDark ? 0.4 : 0.10),
-          blurRadius: 20,
-          offset: const Offset(0, 6),
-        ),
-      ];
+  List<BoxShadow> get floatingShadow => isDark
+      ? [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 24, offset: const Offset(0, 8))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 6)),
+         BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6,  offset: const Offset(0, 2))];
 }
 
-// ── Theme via InheritedNotifier ──────────────────────────────────────────
-// Antes, cada widget lia appTheme.isDark diretamente do global e só
-// _CodeMeAppState tinha o listener. Isso permitia frames onde um widget
-// mais fundo na árvore não recebia o rebuild no mesmo ciclo, dando a
-// sensação de "precisa de outro toque para acordar". Com InheritedNotifier,
-// AppTheme.of(context) marca automaticamente o widget como dependente —
-// o Flutter garante rebuild de todos os dependentes no MESMO frame em que
-// notifyListeners() dispara. Não há mais delay possível.
+// ══════════════════════════════════════════════════════════════
+// THEME NOTIFIER — InheritedNotifier garante rebuild instantâneo
+// em toda a árvore no mesmo frame. Sem delay, sem segundo toque.
+// ══════════════════════════════════════════════════════════════
 
 class AppThemeNotifier extends ChangeNotifier {
   bool isDark = false;
-
-  void toggleDark() {
-    isDark = !isDark;
-    notifyListeners();
-  }
+  void toggleDark() { isDark = !isDark; notifyListeners(); }
 }
 
 final AppThemeNotifier appTheme = AppThemeNotifier();
 
 class AppTheme extends InheritedNotifier<AppThemeNotifier> {
+  // SEM const — appTheme é global não-const, const aqui é erro de compilação.
   AppTheme({super.key, required super.child}) : super(notifier: appTheme);
 
   static AppColorScheme of(BuildContext context) {
-    final notifier = context.dependOnInheritedWidgetOfExactType<AppTheme>()?.notifier;
-    return AppColorScheme(notifier?.isDark ?? false);
+    final n = context.dependOnInheritedWidgetOfExactType<AppTheme>()?.notifier;
+    return AppColorScheme(n?.isDark ?? false);
   }
 }
 
-// ── Curvas de transição ──────────────────────────────────────────────────
-// kSpringCurve: só para elementos pequenos (indicador de tab, toggle).
-// kSmoothCurve: para tudo o resto — sem overshoot.
-const Curve kSpringCurve = Cubic(0.34, 1.35, 0.64, 1.0);
-const Curve kSmoothCurve = Cubic(0.16, 1.0, 0.3, 1.0);
+// ══════════════════════════════════════════════════════════════
+// SPRING CONTROLLER — replica a física do nav-slide-animation.js
+// stiffness=260, damping=28 para a tela que entra (slide front).
+// stiffness=220, damping=26 para o recoil do conteúdo de trás.
+// ══════════════════════════════════════════════════════════════
 
-// ── Conversation Model (mock) ───────────────────────────────────────────
+class SpringNav {
+  final AnimationController slideCtrl;
+  final AnimationController recoilCtrl;
+
+  SpringNav({required TickerProvider vsync})
+      : slideCtrl = AnimationController.unbounded(vsync: vsync),
+        recoilCtrl = AnimationController.unbounded(vsync: vsync);
+
+  static const _slideDesc  = SpringDescription(mass: 1, stiffness: 260, damping: 28);
+  static const _recoilDesc = SpringDescription(mass: 1, stiffness: 220, damping: 26);
+
+  void open() {
+    slideCtrl.animateWith(SpringSimulation(_slideDesc,  slideCtrl.value,  0.0, 0));
+    recoilCtrl.animateWith(SpringSimulation(_recoilDesc, recoilCtrl.value, 1.0, 0));
+  }
+
+  void close() {
+    slideCtrl.animateWith(SpringSimulation(_slideDesc,  slideCtrl.value,  1.0, 0));
+    recoilCtrl.animateWith(SpringSimulation(_recoilDesc, recoilCtrl.value, 0.0, 0));
+  }
+
+  void dispose() {
+    slideCtrl.dispose();
+    recoilCtrl.dispose();
+  }
+}
+
+const Curve kSmooth = Cubic(0.16, 1.0, 0.3, 1.0);
+
+// ══════════════════════════════════════════════════════════════
+// MOCK DATA
+// ══════════════════════════════════════════════════════════════
 
 class ConversationItem {
-  final String id;
-  final String title;
-  final String preview;
-
-  const ConversationItem({
-    required this.id,
-    required this.title,
-    required this.preview,
-  });
+  final String id, title, preview;
+  const ConversationItem({required this.id, required this.title, required this.preview});
 }
 
 final List<ConversationItem> mockConversations = [];
 
-// ── App Root ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// APP ROOT
+// ══════════════════════════════════════════════════════════════
 
 class CodeMeApp extends StatelessWidget {
   const CodeMeApp({super.key});
@@ -149,129 +157,81 @@ class CodeMeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppTheme(
-      child: Builder(
-        builder: (context) {
-          final scheme = AppTheme.of(context);
-
-          return MaterialApp(
-            title: 'CodeMe',
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              useMaterial3: true,
-              brightness: Brightness.light,
-              colorScheme: ColorScheme(
-                brightness: Brightness.light,
-                primary: const AppColorScheme(false).primary,
-                onPrimary: const AppColorScheme(false).onPrimary,
-                primaryContainer: const AppColorScheme(false).primaryContainer,
-                onPrimaryContainer: const AppColorScheme(false).onPrimaryContainer,
-                secondary: const AppColorScheme(false).secondary,
-                onSecondary: const AppColorScheme(false).onSecondary,
-                secondaryContainer: const AppColorScheme(false).secondaryContainer,
-                onSecondaryContainer: const AppColorScheme(false).onSecondaryContainer,
-                tertiary: const AppColorScheme(false).tertiary,
-                onTertiary: const AppColorScheme(false).onTertiary,
-                tertiaryContainer: const AppColorScheme(false).tertiaryContainer,
-                onTertiaryContainer: const AppColorScheme(false).onTertiaryContainer,
-                error: const AppColorScheme(false).error,
-                onError: const AppColorScheme(false).onError,
-                errorContainer: const AppColorScheme(false).errorContainer,
-                onErrorContainer: const AppColorScheme(false).onErrorContainer,
-                surface: const AppColorScheme(false).surface,
-                onSurface: const AppColorScheme(false).onSurface,
-                surfaceContainerHighest: const AppColorScheme(false).surfaceContainerHighest,
-                onSurfaceVariant: const AppColorScheme(false).onSurfaceVariant,
-                outline: const AppColorScheme(false).outline,
-                outlineVariant: const AppColorScheme(false).outlineVariant,
-                shadow: const AppColorScheme(false).shadow,
-                scrim: const AppColorScheme(false).scrim,
-                inverseSurface: const AppColorScheme(false).inverseSurface,
-                onInverseSurface: const AppColorScheme(false).onInverseSurface,
-                inversePrimary: const AppColorScheme(false).inversePrimary,
-                surfaceTint: const AppColorScheme(false).primary,
-              ),
-            ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              brightness: Brightness.dark,
-              colorScheme: ColorScheme(
-                brightness: Brightness.dark,
-                primary: const AppColorScheme(true).primary,
-                onPrimary: const AppColorScheme(true).onPrimary,
-                primaryContainer: const AppColorScheme(true).primaryContainer,
-                onPrimaryContainer: const AppColorScheme(true).onPrimaryContainer,
-                secondary: const AppColorScheme(true).secondary,
-                onSecondary: const AppColorScheme(true).onSecondary,
-                secondaryContainer: const AppColorScheme(true).secondaryContainer,
-                onSecondaryContainer: const AppColorScheme(true).onSecondaryContainer,
-                tertiary: const AppColorScheme(true).tertiary,
-                onTertiary: const AppColorScheme(true).onTertiary,
-                tertiaryContainer: const AppColorScheme(true).tertiaryContainer,
-                onTertiaryContainer: const AppColorScheme(true).onTertiaryContainer,
-                error: const AppColorScheme(true).error,
-                onError: const AppColorScheme(true).onError,
-                errorContainer: const AppColorScheme(true).errorContainer,
-                onErrorContainer: const AppColorScheme(true).onErrorContainer,
-                surface: const AppColorScheme(true).surface,
-                onSurface: const AppColorScheme(true).onSurface,
-                surfaceContainerHighest: const AppColorScheme(true).surfaceContainerHighest,
-                onSurfaceVariant: const AppColorScheme(true).onSurfaceVariant,
-                outline: const AppColorScheme(true).outline,
-                outlineVariant: const AppColorScheme(true).outlineVariant,
-                shadow: const AppColorScheme(true).shadow,
-                scrim: const AppColorScheme(true).scrim,
-                inverseSurface: const AppColorScheme(true).inverseSurface,
-                onInverseSurface: const AppColorScheme(true).onInverseSurface,
-                inversePrimary: const AppColorScheme(true).inversePrimary,
-                surfaceTint: const AppColorScheme(true).primary,
-              ),
-            ),
-            themeMode: scheme.isDark ? ThemeMode.dark : ThemeMode.light,
-            builder: (context, child) {
-              SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: scheme.isDark ? Brightness.light : Brightness.dark,
-                statusBarBrightness: scheme.isDark ? Brightness.dark : Brightness.light,
-                systemNavigationBarColor: scheme.surface,
-                systemNavigationBarIconBrightness: scheme.isDark ? Brightness.light : Brightness.dark,
-              ));
-              // Sem animação — troca de tema instantânea, sem crossfade.
-              return ColoredBox(color: scheme.surface, child: child);
-            },
-            home: const RootShell(),
-          );
-        },
-      ),
+      child: Builder(builder: (ctx) {
+        final s = AppTheme.of(ctx);
+        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarColor: s.surface,
+          systemNavigationBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+        ));
+        return MaterialApp(
+          title: 'CodeMe',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(useMaterial3: true, brightness: Brightness.light,
+              colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6))),
+          darkTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark,
+              colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6), brightness: Brightness.dark)),
+          themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
+          builder: (_, child) => ColoredBox(color: s.surface, child: child),
+          home: const RootShell(),
+        );
+      }),
     );
   }
 }
 
-// ── Reusable SVG Icon Helper ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// SVG ICON — usa assets locais para icons do app shell
+// ══════════════════════════════════════════════════════════════
 
 class AppIcon extends StatelessWidget {
   final String asset;
   final double size;
   final Color color;
-
-  const AppIcon(
-    this.asset, {
-    super.key,
-    this.size = 20,
-    required this.color,
-  });
+  const AppIcon(this.asset, {super.key, this.size = 20, required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    return SvgPicture.asset(
-      'assets/icons/svg/$asset',
-      width: size,
-      height: size,
-      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-    );
-  }
+  Widget build(BuildContext context) => SvgPicture.asset(
+    'assets/icons/svg/$asset',
+    width: size, height: size,
+    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+  );
 }
 
-// ── Root Shell (Drawer + Bottom Tabs) ───────────────────────────────────
+// Ícone PNG para os tipos de editor
+class EditorTypeIcon extends StatelessWidget {
+  final String asset;
+  final double size;
+  const EditorTypeIcon(this.asset, {super.key, this.size = 20});
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    'assets/icons/png/$asset',
+    width: size, height: size,
+    filterQuality: FilterQuality.medium,
+  );
+}
+
+// Ícone Fluent via CDN para o toolbar
+class FluentIcon extends StatelessWidget {
+  final String name;
+  final double size;
+  final Color color;
+  const FluentIcon(this.name, {super.key, this.size = 18, required this.color});
+
+  @override
+  Widget build(BuildContext context) => SvgPicture.network(
+    'https://raw.githubusercontent.com/microsoft/fluentui-system-icons/main/assets/${name}/SVG/${name}_20_regular.svg',
+    width: size, height: size,
+    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    placeholderBuilder: (_) => SizedBox(width: size, height: size),
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// ROOT SHELL
+// ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
@@ -279,1060 +239,907 @@ class RootShell extends StatefulWidget {
   State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
+  late final SpringNav _springNav;
   bool _drawerOpen = false;
-  int _tabIndex = 0; // 0 = AI, 1 = Edit
+  int _tabIndex = 0;
   EditorType _editorType = EditorType.docs;
 
-  void _openDrawer() => setState(() => _drawerOpen = true);
-  void _closeDrawer() => setState(() => _drawerOpen = false);
+  @override
+  void initState() {
+    super.initState();
+    _springNav = SpringNav(vsync: this);
+    _springNav.slideCtrl.value = 1.0; // começa fechado
+  }
+
+  @override
+  void dispose() {
+    _springNav.dispose();
+    super.dispose();
+  }
+
+  void _openDrawer()  { setState(() => _drawerOpen = true);  _springNav.open(); }
+  void _closeDrawer() { setState(() => _drawerOpen = false); _springNav.close(); }
 
   void _openSettings() {
     _closeDrawer();
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 380),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, animation, secondaryAnimation) => const SettingsPage(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(parent: animation, curve: kSmoothCurve, reverseCurve: kSmoothCurve);
-          return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(curved),
-            child: FadeTransition(opacity: curved, child: child),
-          );
-        },
-      ),
-    );
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 380),
+      reverseTransitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) => const SettingsPage(),
+      transitionsBuilder: (_, anim, __, child) {
+        final curved = CurvedAnimation(parent: anim, curve: kSmooth);
+        return SlideTransition(
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(curved),
+          child: child,
+        );
+      },
+    ));
   }
 
-  void _selectTab(int i) {
-    if (i == _tabIndex) return;
-    setState(() => _tabIndex = i);
-  }
-
-  void _setEditorType(EditorType type) {
-    setState(() => _editorType = type);
-  }
-
-  String get _tabTitle => _tabIndex == 0 ? 'CodeMe' : 'Editor';
+  void _selectTab(int i) { if (i != _tabIndex) setState(() => _tabIndex = i); }
+  void _setEditorType(EditorType t) => setState(() => _editorType = t);
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppTheme.of(context);
+    final s = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
-      child: Stack(
-        children: [
-          // Corpo — appbar e conteúdo partilham EXATAMENTE a mesma cor.
-          // Envolvido em AnimatedSlide para o efeito de "push" quando o
-          // drawer abre: o conteúdo desliza para a direita e encolhe
-          // ligeiramente, sincronizado com a entrada do drawer.
-          AnimatedSlide(
-            offset: _drawerOpen ? const Offset(0.68, 0) : Offset.zero,
-            duration: const Duration(milliseconds: 320),
-            curve: kSmoothCurve,
-            child: AnimatedScale(
-              scale: _drawerOpen ? 0.92 : 1.0,
-              duration: const Duration(milliseconds: 320),
-              curve: kSmoothCurve,
+      child: Stack(children: [
+        // ── Conteúdo com recoil (escala + translação para a esquerda quando drawer abre)
+        AnimatedBuilder(
+          animation: _springNav.recoilCtrl,
+          builder: (_, child) {
+            final v = _springNav.recoilCtrl.value.clamp(0.0, 1.0);
+            return Transform(
+              transform: Matrix4.identity()
+                ..translate(-8.0 * v * MediaQuery.of(context).size.width / 100)
+                ..scale(1.0 - 0.02 * v),
               alignment: Alignment.centerLeft,
-              child: ColoredBox(
-                color: scheme.surface,
-                child: Column(
-                  children: [
-                    _Header(
-                      scheme: scheme,
-                      title: _tabTitle,
-                      onMenuTap: _openDrawer,
-                      trailing: _tabIndex == 1
-                          ? _EditActionsButton(
-                              scheme: scheme,
-                              current: _editorType,
-                              onSelect: _setEditorType,
-                            )
-                          : null,
-                    ),
-                    Expanded(
-                      child: _TabTransitionSwitcher(
-                        index: _tabIndex,
-                        children: [
-                          const _ChatTab(),
-                          _EditTab(editorType: _editorType),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+              child: child,
+            );
+          },
+          child: ColoredBox(
+            color: s.surface,
+            child: Column(children: [
+              _Header(s: s, title: _tabIndex == 0 ? 'CodeMe' : 'Editor',
+                  onMenu: _openDrawer,
+                  trailing: _tabIndex == 1
+                      ? _EditTypeButton(s: s, current: _editorType, onSelect: _setEditorType)
+                      : null),
+              Expanded(child: _TabSwitcher(index: _tabIndex, children: [
+                const _ChatTab(),
+                _EditTab(editorType: _editorType),
+              ])),
+            ]),
           ),
+        ),
 
-          // Nav flutuante
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 14,
-            child: SafeArea(
-              top: false,
-              child: _FloatingTabBar(
-                scheme: scheme,
-                currentIndex: _tabIndex,
-                onChanged: _selectTab,
-              ),
-            ),
-          ),
+        // ── Nav flutuante (pill)
+        Positioned(
+          left: 16, right: 16, bottom: 14,
+          child: SafeArea(top: false,
+              child: _FloatingNav(s: s, index: _tabIndex, onChanged: _selectTab)),
+        ),
 
-          // Barrier — fade simples
-          if (_drawerOpen)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _closeDrawer,
-                child: AnimatedOpacity(
-                  opacity: _drawerOpen ? 1 : 0,
-                  duration: const Duration(milliseconds: 260),
-                  curve: kSmoothCurve,
-                  child: Container(color: scheme.barrier),
-                ),
-              ),
-            ),
+        // ── Barrier
+        if (_drawerOpen)
+          Positioned.fill(child: GestureDetector(
+            onTap: _closeDrawer,
+            child: Container(color: s.barrier),
+          )),
 
-          // Drawer — push transition real: desliza a partir de fora do
-          // ecrã com kSmoothCurve (sem overshoot elástico), sincronizado
-          // com o "push" do conteúdo acima.
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 320),
-            curve: kSmoothCurve,
-            top: 0,
-            bottom: 0,
-            left: _drawerOpen ? 0 : -280,
-            width: 280,
-            child: _ConversationsDrawer(
-              scheme: scheme,
-              onClose: _closeDrawer,
-              onOpenSettings: _openSettings,
-            ),
-          ),
-        ],
-      ),
+        // ── Drawer com spring slide (replica createSlideTransition do JS)
+        AnimatedBuilder(
+          animation: _springNav.slideCtrl,
+          builder: (_, child) {
+            final v = _springNav.slideCtrl.value.clamp(0.0, 1.0);
+            return Positioned(
+              top: 0, bottom: 0, width: 280,
+              left: -280 + 280 * (1.0 - v),
+              child: child!,
+            );
+          },
+          child: _Drawer(s: s, onClose: _closeDrawer, onSettings: _openSettings),
+        ),
+      ]),
     );
   }
 }
 
-// ── Transição entre tabs — simplificada: só crossfade, nada mais ───────
-// Antes tinha slide vertical + scale coordenados, o que ficava "ocupado"
-// demais para uma troca de tab. Agora é só fade, rápido e limpo.
+// ══════════════════════════════════════════════════════════════
+// TAB SWITCHER — crossfade simples e rápido
+// ══════════════════════════════════════════════════════════════
 
-class _TabTransitionSwitcher extends StatelessWidget {
+class _TabSwitcher extends StatelessWidget {
   final int index;
   final List<Widget> children;
-
-  const _TabTransitionSwitcher({required this.index, required this.children});
+  const _TabSwitcher({required this.index, required this.children});
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      switchInCurve: kSmoothCurve,
-      switchOutCurve: kSmoothCurve,
-      transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-      child: KeyedSubtree(
-        key: ValueKey<int>(index),
-        child: children[index],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 180),
+    switchInCurve: kSmooth,
+    switchOutCurve: kSmooth,
+    transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+    child: KeyedSubtree(key: ValueKey(index), child: children[index]),
+  );
 }
 
-// ── Header ────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// HEADER
+// ══════════════════════════════════════════════════════════════
 
 class _Header extends StatelessWidget {
-  final AppColorScheme scheme;
+  final AppColorScheme s;
   final String title;
-  final VoidCallback onMenuTap;
+  final VoidCallback onMenu;
   final Widget? trailing;
-
-  const _Header({
-    required this.scheme,
-    required this.title,
-    required this.onMenuTap,
-    this.trailing,
-  });
+  const _Header({required this.s, required this.title, required this.onMenu, this.trailing});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 6, bottom: 10, left: 6, right: 10),
-      color: scheme.surface,
-      child: Row(
-        children: [
-          _IconTapArea(
-            onTap: onMenuTap,
-            scheme: scheme,
-            child: AppIcon('menu.svg', color: scheme.onSurface, size: 20),
-          ),
-          const SizedBox(width: 8),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            switchInCurve: kSmoothCurve,
-            switchOutCurve: kSmoothCurve,
-            transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-            child: Text(
-              title,
-              key: ValueKey<String>(title),
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: scheme.onSurface),
-            ),
-          ),
-          const Spacer(),
-          if (trailing != null) trailing!,
-        ],
+  Widget build(BuildContext context) => Container(
+    color: s.surface,
+    padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 6, bottom: 10, left: 6, right: 10),
+    child: Row(children: [
+      _Tap(onTap: onMenu, s: s,
+          child: AppIcon('menu.svg', color: s.onSurface, size: 20)),
+      const SizedBox(width: 8),
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+        child: Text(title, key: ValueKey(title),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: s.onSurface)),
       ),
-    );
-  }
+      const Spacer(),
+      if (trailing != null) trailing!,
+    ]),
+  );
 }
 
-// ── Small tappable icon area ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// ICON TAP AREA
+// ══════════════════════════════════════════════════════════════
 
-class _IconTapArea extends StatefulWidget {
+class _Tap extends StatefulWidget {
   final VoidCallback onTap;
-  final AppColorScheme scheme;
+  final AppColorScheme s;
   final Widget child;
   final double size;
-
-  const _IconTapArea({
-    super.key,
-    required this.onTap,
-    required this.scheme,
-    required this.child,
-    this.size = 36,
-  });
+  const _Tap({super.key, required this.onTap, required this.s, required this.child, this.size = 36});
 
   @override
-  State<_IconTapArea> createState() => _IconTapAreaState();
+  State<_Tap> createState() => _TapState();
 }
 
-class _IconTapAreaState extends State<_IconTapArea> {
-  bool _pressed = false;
+class _TapState extends State<_Tap> {
+  bool _p = false;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.88 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: kSpringCurve,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: kSmoothCurve,
-          width: widget.size,
-          height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _pressed ? widget.scheme.pressed : Colors.transparent,
-            borderRadius: BorderRadius.circular(widget.size / 2),
-          ),
-          child: widget.child,
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => setState(() => _p = true),
+    onTapCancel: () => setState(() => _p = false),
+    onTapUp: (_) => setState(() => _p = false),
+    onTap: widget.onTap,
+    child: AnimatedScale(
+      scale: _p ? 0.88 : 1.0,
+      duration: const Duration(milliseconds: 120),
+      curve: kSmooth,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        width: widget.size, height: widget.size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _p ? widget.s.pressed : Colors.transparent,
+          borderRadius: BorderRadius.circular(widget.size / 2),
         ),
+        child: widget.child,
       ),
-    );
-  }
+    ),
+  );
 }
 
-// ── WebView cross-platform: InAppWebView em mobile, iframe em web ──────
-// flutter_inappwebview não tem suporte consistente em Flutter Web. Para
-// web, usamos HtmlElementView com um <iframe> nativo do browser apontando
-// para o mesmo asset HTML — o editorApi exposto em cada HTML funciona
-// igual, só a forma de embutir muda.
+// ══════════════════════════════════════════════════════════════
+// DRAWER
+// ══════════════════════════════════════════════════════════════
 
-class CrossPlatformWebView extends StatefulWidget {
-  final String assetPath;
-  final void Function(InAppWebViewController)? onWebViewCreated;
-  final void Function(String)? onWebMessage;
-
-  const CrossPlatformWebView({
-    super.key,
-    required this.assetPath,
-    this.onWebViewCreated,
-    this.onWebMessage,
-  });
-
-  @override
-  State<CrossPlatformWebView> createState() => _CrossPlatformWebViewState();
-}
-
-class _CrossPlatformWebViewState extends State<CrossPlatformWebView> {
-  InAppWebViewController? _controller;
-
-  Future<void> runJs(String script) async {
-    if (kIsWeb) {
-      // No branch web, a comunicação com o iframe usa postMessage — a
-      // implementação de detalhe fica no _WebIframeView abaixo.
-      return;
-    }
-    await _controller?.evaluateJavascript(source: script);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (kIsWeb) {
-      return _WebIframeView(assetPath: widget.assetPath);
-    }
-    return InAppWebView(
-      initialFile: widget.assetPath,
-      initialSettings: InAppWebViewSettings(
-        transparentBackground: true,
-        javaScriptEnabled: true,
-        allowFileAccessFromFileURLs: true,
-        allowUniversalAccessFromFileURLs: true,
-      ),
-      onWebViewCreated: (controller) {
-        _controller = controller;
-        widget.onWebViewCreated?.call(controller);
-      },
-    );
-  }
-}
-
-// Placeholder de registo — a view factory real (HtmlElementView + iframe)
-// depende de dart:ui_web / dart:html, que só compilam sob kIsWeb. Deixo
-// isolado na próxima parte da entrega para não misturar imports
-// condicionais neste ficheiro core.
-class _WebIframeView extends StatelessWidget {
-  final String assetPath;
-  const _WebIframeView({required this.assetPath});
-
-  @override
-  Widget build(BuildContext context) {
-    return WebEditorFrame(assetPath: assetPath);
-  }
-}
-// ── Drawer: Conversations list + account pill ───────────────────────────
-
-class _ConversationsDrawer extends StatelessWidget {
-  final AppColorScheme scheme;
+class _Drawer extends StatelessWidget {
+  final AppColorScheme s;
   final VoidCallback onClose;
-  final VoidCallback onOpenSettings;
-
-  const _ConversationsDrawer({
-    required this.scheme,
-    required this.onClose,
-    required this.onOpenSettings,
-  });
+  final VoidCallback onSettings;
+  const _Drawer({required this.s, required this.onClose, required this.onSettings});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: scheme.surfaceContainerLow,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-              child: Row(
-                children: [
-                  Text('Conversas',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: scheme.onSurface)),
-                  const Spacer(),
-                  _IconTapArea(
-                    onTap: onClose,
-                    scheme: scheme,
-                    size: 32,
-                    child: AppIcon('close.svg', color: scheme.onSurfaceVariant, size: 14),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: mockConversations.isEmpty
-                  ? _EmptyConversations(scheme: scheme)
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      itemCount: mockConversations.length,
-                      itemBuilder: (context, i) =>
-                          _ConversationTile(scheme: scheme, item: mockConversations[i]),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: _AccountPill(scheme: scheme, onTap: onOpenSettings),
-            ),
-          ],
+  Widget build(BuildContext context) => Container(
+    color: s.surface,
+    child: SafeArea(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+          child: Row(children: [
+            Text('Conversas', style: TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+            const Spacer(),
+            _Tap(onTap: onClose, s: s, size: 32,
+                child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14)),
+          ]),
         ),
-      ),
-    );
-  }
+        Expanded(child: mockConversations.isEmpty
+            ? Center(child: Text('Sem conversas ainda',
+                style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)))
+            : ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                itemCount: mockConversations.length,
+                itemBuilder: (_, i) => _ConvTile(s: s, item: mockConversations[i]),
+              )),
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: _AccountPill(s: s, onTap: onSettings),
+        ),
+      ],
+    )),
+  );
 }
 
-class _EmptyConversations extends StatelessWidget {
-  final AppColorScheme scheme;
-  const _EmptyConversations({required this.scheme});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon('chat_empty.svg', color: scheme.onSurfaceVariant, size: 32),
-            const SizedBox(height: 12),
-            Text('Sem conversas ainda',
-                style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-                textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ConversationTile extends StatefulWidget {
-  final AppColorScheme scheme;
+class _ConvTile extends StatefulWidget {
+  final AppColorScheme s;
   final ConversationItem item;
-  const _ConversationTile({required this.scheme, required this.item});
-
-  @override
-  State<_ConversationTile> createState() => _ConversationTileState();
+  const _ConvTile({required this.s, required this.item});
+  @override State<_ConvTile> createState() => _ConvTileState();
 }
-
-class _ConversationTileState extends State<_ConversationTile> {
-  bool _hover = false;
-
+class _ConvTileState extends State<_ConvTile> {
+  bool _h = false;
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _hover = true),
-        onTapCancel: () => setState(() => _hover = false),
-        onTapUp: (_) => setState(() => _hover = false),
-        onTap: () {},
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: kSmoothCurve,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _hover ? widget.scheme.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.item.title,
-                  style: TextStyle(fontSize: 14, color: widget.scheme.onSurface),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 2),
-              Text(widget.item.preview,
-                  style: TextStyle(fontSize: 12, color: widget.scheme.onSurfaceVariant),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-            ],
-          ),
-        ),
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => setState(() => _h = true),
+    onTapCancel: () => setState(() => _h = false),
+    onTapUp: (_) => setState(() => _h = false),
+    onTap: () {},
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _h ? widget.s.hover : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(widget.item.title,
+            style: TextStyle(fontSize: 14, color: widget.s.onSurface),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(widget.item.preview,
+            style: TextStyle(fontSize: 12, color: widget.s.onSurfaceVariant),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+      ]),
+    ),
+  );
 }
 
 class _AccountPill extends StatefulWidget {
-  final AppColorScheme scheme;
+  final AppColorScheme s;
   final VoidCallback onTap;
-  const _AccountPill({required this.scheme, required this.onTap});
-
-  @override
-  State<_AccountPill> createState() => _AccountPillState();
+  const _AccountPill({required this.s, required this.onTap});
+  @override State<_AccountPill> createState() => _AccountPillState();
 }
-
 class _AccountPillState extends State<_AccountPill> {
-  bool _pressed = false;
-
+  bool _p = false;
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: kSpringCurve,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: kSmoothCurve,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: _pressed ? widget.scheme.hover : widget.scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: widget.scheme.primary, shape: BoxShape.circle),
-                child: Text('U',
-                    style: TextStyle(
-                        color: widget.scheme.onPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('Utilizador',
-                    style: TextStyle(fontSize: 14, color: widget.scheme.onSurface),
-                    overflow: TextOverflow.ellipsis),
-              ),
-              AppIcon('settings.svg', color: widget.scheme.onSurfaceVariant, size: 16),
-            ],
-          ),
-        ),
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => setState(() => _p = true),
+    onTapCancel: () => setState(() => _p = false),
+    onTapUp: (_) => setState(() => _p = false),
+    onTap: widget.onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _p ? widget.s.hover : widget.s.hover.withOpacity(0),
+        borderRadius: BorderRadius.circular(999),
       ),
-    );
-  }
+      child: Row(children: [
+        Container(
+          width: 32, height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: widget.s.primary, shape: BoxShape.circle),
+          child: Text('U', style: TextStyle(
+              color: widget.s.onPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Text('Utilizador',
+            style: TextStyle(fontSize: 14, color: widget.s.onSurface),
+            overflow: TextOverflow.ellipsis)),
+        AppIcon('settings.svg', color: widget.s.onSurfaceVariant, size: 16),
+      ]),
+    ),
+  );
 }
 
-// ── Floating Tab Bar ──────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// FLOATING NAV (pill)
+// ══════════════════════════════════════════════════════════════
 
-class _FloatingTabBar extends StatelessWidget {
-  final AppColorScheme scheme;
-  final int currentIndex;
+class _FloatingNav extends StatelessWidget {
+  final AppColorScheme s;
+  final int index;
   final ValueChanged<int> onChanged;
+  const _FloatingNav({required this.s, required this.index, required this.onChanged});
 
-  const _FloatingTabBar({
-    required this.scheme,
-    required this.currentIndex,
-    required this.onChanged,
-  });
-
-  static const _items = [
-    (asset: 'ai_tab.svg', label: 'AI'),
-    (asset: 'edit_tab.svg', label: 'Editar'),
+  static const _tabs = [
+    (svg: 'ai_tab.svg', svgFilled: 'ai_tab_filled.svg', label: 'AI'),
+    (svg: 'edit_tab.svg', svgFilled: 'edit_tab_filled.svg', label: 'Editar'),
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: 62,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: scheme.floatingShadow,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = constraints.maxWidth / _items.length;
-              return Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 360),
-                    curve: kSpringCurve,
-                    left: itemWidth * currentIndex + 6,
-                    top: 8,
-                    bottom: 8,
-                    width: itemWidth - 12,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: List.generate(_items.length, (i) {
-                      final item = _items[i];
-                      return Expanded(
-                        child: _FloatingTabItem(
-                          scheme: scheme,
-                          asset: item.asset,
-                          label: item.label,
-                          selected: currentIndex == i,
-                          onTap: () => onChanged(i),
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: Container(
+      height: 62,
+      decoration: BoxDecoration(
+        color: s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: s.floatingShadow,
       ),
-    );
-  }
-}
-
-class _FloatingTabItem extends StatelessWidget {
-  final AppColorScheme scheme;
-  final String asset;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FloatingTabItem({
-    required this.scheme,
-    required this.asset,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-    return InkWell(
-      onTap: onTap,
-      customBorder: const StadiumBorder(),
-      child: SizedBox.expand(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedScale(
-              scale: selected ? 1.08 : 1.0,
-              duration: const Duration(milliseconds: 300),
-              curve: kSpringCurve,
-              child: AppIcon(asset, color: color, size: 20),
-            ),
-            const SizedBox(height: 2),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              curve: kSmoothCurve,
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: LayoutBuilder(builder: (_, c) {
+          final w = c.maxWidth / _tabs.length;
+          return Stack(children: [
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeOutCubic,
+              left: w * index + 6, top: 8, bottom: 8, width: w - 12,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: s.primaryContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-              child: Text(label),
             ),
-          ],
-        ),
+            Row(children: List.generate(_tabs.length, (i) {
+              final t = _tabs[i];
+              final sel = index == i;
+              final color = sel ? s.onPrimaryContainer : s.onSurfaceVariant;
+              return Expanded(child: InkWell(
+                onTap: () => onChanged(i),
+                customBorder: const StadiumBorder(),
+                child: SizedBox.expand(child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedScale(
+                      scale: sel ? 1.1 : 1.0,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutCubic,
+                      child: AppIcon(sel ? t.svgFilled : t.svg, color: color, size: 20),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(t.label, style: TextStyle(
+                        fontSize: 11, color: color,
+                        fontWeight: sel ? FontWeight.w600 : FontWeight.normal)),
+                  ],
+                )),
+              ));
+            })),
+          ]);
+        }),
       ),
-    );
-  }
+    ),
+  );
 }
 
-// ── Tab 1: AI Chat ────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// CHAT TAB
+// ══════════════════════════════════════════════════════════════
 
 class _ChatTab extends StatefulWidget {
   const _ChatTab();
-
-  @override
-  State<_ChatTab> createState() => _ChatTabState();
+  @override State<_ChatTab> createState() => _ChatTabState();
 }
 
 class _ChatTabState extends State<_ChatTab> {
-  final TextEditingController _controller = TextEditingController();
-  final List<String> _messages = [];
+  final TextEditingController _ctrl = TextEditingController();
+  final List<String> _msgs = [];
 
   void _send() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _messages.add(text);
-      _controller.clear();
-    });
+    final t = _ctrl.text.trim();
+    if (t.isEmpty) return;
+    setState(() { _msgs.add(t); _ctrl.clear(); });
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppTheme.of(context);
-    final bottomReserved = 64 + 10 + 62 + 14 + MediaQuery.of(context).padding.bottom;
+    final s = AppTheme.of(context);
+    final bottom = 64.0 + 10 + 62 + 14 + MediaQuery.of(context).padding.bottom;
 
-    return Stack(
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          switchInCurve: kSmoothCurve,
-          switchOutCurve: kSmoothCurve,
-          transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-          child: _messages.isEmpty
-              ? Center(
-                  key: const ValueKey('empty'),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppIcon('robot.svg', color: scheme.onSurfaceVariant, size: 40),
-                      const SizedBox(height: 12),
-                      Text('Como posso ajudar?',
-                          style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  key: const ValueKey('list'),
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, bottomReserved),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, i) => _ChatBubble(scheme: scheme, text: _messages[i]),
-                ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 14 + 62 + 10,
-          child: SafeArea(
-            top: false,
-            bottom: false,
-            child: _FloatingChatInput(scheme: scheme, controller: _controller, onSend: _send),
-          ),
-        ),
-      ],
-    );
+    return Stack(children: [
+      _msgs.isEmpty
+          ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.auto_awesome_rounded, size: 40, color: s.onSurfaceVariant),
+              const SizedBox(height: 12),
+              Text('Como posso ajudar?',
+                  style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)),
+            ]))
+          : ListView.builder(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, bottom),
+              itemCount: _msgs.length,
+              itemBuilder: (_, i) => _Bubble(s: s, text: _msgs[i]),
+            ),
+      Positioned(
+        left: 16, right: 16,
+        bottom: 14 + 62 + 10,
+        child: SafeArea(top: false, bottom: false,
+            child: _ChatInput(s: s, ctrl: _ctrl, onSend: _send)),
+      ),
+    ]);
   }
 }
 
-class _ChatBubble extends StatefulWidget {
-  final AppColorScheme scheme;
+class _Bubble extends StatefulWidget {
+  final AppColorScheme s;
   final String text;
-  const _ChatBubble({required this.scheme, required this.text});
-
-  @override
-  State<_ChatBubble> createState() => _ChatBubbleState();
+  const _Bubble({required this.s, required this.text});
+  @override State<_Bubble> createState() => _BubbleState();
 }
-
-class _ChatBubbleState extends State<_ChatBubble> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
-  late final Animation<double> _opacity;
+class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _scale, _op;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 360));
-    _scale = Tween<double>(begin: 0.88, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: kSpringCurve));
-    _opacity = Tween<double>(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0, 0.5, curve: Curves.easeOut)));
-    _ctrl.forward();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 340));
+    _scale = Tween(begin: 0.88, end: 1.0).animate(CurvedAnimation(parent: _c, curve: kSmooth));
+    _op    = Tween(begin: 0.0,  end: 1.0).animate(CurvedAnimation(parent: _c,
+        curve: const Interval(0, 0.45, curve: Curves.easeOut)));
+    _c.forward();
   }
+  @override void dispose() { _c.dispose(); super.dispose(); }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, child) => Opacity(
-        opacity: _opacity.value.clamp(0.0, 1.0),
-        child: Transform.scale(
-          scale: _scale.value,
-          alignment: Alignment.centerRight,
-          child: child,
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _c,
+    builder: (_, child) => Opacity(
+      opacity: _op.value.clamp(0.0, 1.0),
+      child: Transform.scale(scale: _scale.value, alignment: Alignment.centerRight, child: child),
+    ),
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: widget.s.primaryContainer,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: widget.s.cardShadow,
         ),
+        child: Text(widget.text,
+            style: TextStyle(color: widget.s.onPrimaryContainer, fontSize: 14)),
       ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-          decoration: BoxDecoration(
-            color: widget.scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(widget.text,
-              style: TextStyle(color: widget.scheme.onPrimaryContainer, fontSize: 14)),
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
 
-class _FloatingChatInput extends StatelessWidget {
-  final AppColorScheme scheme;
-  final TextEditingController controller;
+class _ChatInput extends StatelessWidget {
+  final AppColorScheme s;
+  final TextEditingController ctrl;
   final VoidCallback onSend;
-
-  const _FloatingChatInput({
-    required this.scheme,
-    required this.controller,
-    required this.onSend,
-  });
+  const _ChatInput({required this.s, required this.ctrl, required this.onSend});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 58, maxHeight: 140),
-      padding: const EdgeInsets.fromLTRB(18, 4, 6, 4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: scheme.floatingShadow,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 5,
-                style: TextStyle(fontSize: 14, color: scheme.onSurface),
-                cursorColor: scheme.primary,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: 'Escreva uma mensagem...',
-                  hintStyle: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
-                ),
-                onSubmitted: (_) => onSend(),
-              ),
-            ),
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 58, maxHeight: 140),
+    padding: const EdgeInsets.fromLTRB(18, 4, 6, 4),
+    decoration: BoxDecoration(
+      color: s.isDark ? const Color(0xFF2A2A2A) : Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      boxShadow: s.floatingShadow,
+    ),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Expanded(child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: TextField(
+          controller: ctrl,
+          minLines: 1, maxLines: 5,
+          style: TextStyle(fontSize: 14, color: s.onSurface),
+          cursorColor: s.primary,
+          decoration: InputDecoration(
+            isDense: true, border: InputBorder.none,
+            hintText: 'Escreva uma mensagem...',
+            hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
           ),
-          const SizedBox(width: 6),
-          _IconTapArea(
-            onTap: onSend,
-            scheme: scheme,
-            size: 44,
-            child: Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
-              child: AppIcon('send.svg', color: scheme.onPrimary, size: 16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+          onSubmitted: (_) => onSend(),
+        ),
+      )),
+      const SizedBox(width: 6),
+      _Tap(onTap: onSend, s: s, size: 44,
+          child: Container(
+            width: 36, height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
+            child: AppIcon('send.svg', color: s.onPrimary, size: 16),
+          )),
+    ]),
+  );
 }
 
-// ── Tab 2: Edit ───────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// EDITOR TYPES
+// ══════════════════════════════════════════════════════════════
 
 enum EditorType { docs, sheets, slides, whiteboard }
 
-class _EditTab extends StatelessWidget {
+extension EditorTypeX on EditorType {
+  String get label => const {
+    EditorType.docs: 'Documento',
+    EditorType.sheets: 'Folha de cálculo',
+    EditorType.slides: 'Apresentação',
+    EditorType.whiteboard: 'Quadro branco',
+  }[this]!;
+
+  String get pngAsset => const {
+    EditorType.docs: 'doc.png',
+    EditorType.sheets: 'sheet.png',
+    EditorType.slides: 'slide.png',
+    EditorType.whiteboard: 'whiteboard.png',
+  }[this]!;
+
+  String get htmlAsset => const {
+    EditorType.docs: 'assets/editor/docs.html',
+    EditorType.sheets: 'assets/editor/sheets.html',
+    EditorType.slides: 'assets/editor/slides.html',
+    EditorType.whiteboard: 'assets/editor/whiteboard.html',
+  }[this]!;
+}
+
+// ══════════════════════════════════════════════════════════════
+// EDIT TAB — pré-carrega todos os WebViews via IndexedStack
+// O toolbar flutua sobre o conteúdo sem nenhum container por baixo
+// ══════════════════════════════════════════════════════════════
+
+class _EditTab extends StatefulWidget {
   final EditorType editorType;
   const _EditTab({required this.editorType});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = AppTheme.of(context);
-    final bottomReserved = 62 + 14 + MediaQuery.of(context).padding.bottom;
-
-    return Column(
-      children: [
-        Expanded(
-          child: _EditorWebView(editorType: editorType),
-        ),
-        _EditorToolbar(scheme: scheme, editorType: editorType),
-        SizedBox(height: bottomReserved),
-      ],
-    );
-  }
+  @override State<_EditTab> createState() => _EditTabState();
 }
 
-// ── WebView do Editor ─────────────────────────────────────────────────────
+class _EditTabState extends State<_EditTab> {
+  // Controllers para cada editor — pré-instanciados para carregamento antecipado
+  final Map<EditorType, InAppWebViewController?> _controllers = {
+    for (final t in EditorType.values) t: null,
+  };
 
-class _EditorWebView extends StatefulWidget {
-  final EditorType editorType;
-  const _EditorWebView({required this.editorType});
-
-  @override
-  State<_EditorWebView> createState() => _EditorWebViewState();
-}
-
-class _EditorWebViewState extends State<_EditorWebView> {
-  final _manager = _EditorWebViewManager();
-
-  String get _assetPath {
-    switch (widget.editorType) {
-      case EditorType.docs:
-        return 'assets/editor/docs.html';
-      case EditorType.sheets:
-        return 'assets/editor/sheets.html';
-      case EditorType.slides:
-        return 'assets/editor/slides.html';
-      case EditorType.whiteboard:
-        return 'assets/editor/whiteboard.html';
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _EditorWebViewManager.instance = _manager;
-  }
-
-  @override
-  void dispose() {
-    _manager.detach();
-    super.dispose();
+  void _runJs(String script) {
+    _controllers[widget.editorType]?.evaluateJavascript(source: script);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      return WebEditorFrame(assetPath: _assetPath);
-    }
-    return InAppWebView(
-      initialFile: _assetPath,
-      initialSettings: InAppWebViewSettings(
-        transparentBackground: true,
-        javaScriptEnabled: true,
-        allowFileAccessFromFileURLs: true,
-        allowUniversalAccessFromFileURLs: true,
+    final s = AppTheme.of(context);
+    final idx = EditorType.values.indexOf(widget.editorType);
+    final navBottom = 62.0 + 14 + MediaQuery.of(context).padding.bottom;
+
+    return Stack(children: [
+      // IndexedStack mantém todos os 4 WebViews vivos e pré-carregados
+      IndexedStack(
+        index: idx,
+        children: EditorType.values.map((t) => kIsWeb
+            ? const SizedBox.shrink() // stub web — WebEditorFrame separado
+            : InAppWebView(
+                initialFile: t.htmlAsset,
+                initialSettings: InAppWebViewSettings(
+                  transparentBackground: true,
+                  javaScriptEnabled: true,
+                  allowFileAccessFromFileURLs: true,
+                  allowUniversalAccessFromFileURLs: true,
+                ),
+                onWebViewCreated: (c) => _controllers[t] = c,
+              )
+        ).toList(),
       ),
-      onWebViewCreated: (c) => _manager.attach(c),
-    );
+
+      // Toolbar flutuante — sem nenhum container por baixo, flutua mesmo
+      Positioned(
+        left: 16, right: 16,
+        bottom: navBottom + 10,
+        child: SafeArea(top: false, bottom: false,
+            child: _EditorToolbar(s: s, type: widget.editorType, runJs: _runJs)),
+      ),
+    ]);
   }
 }
 
-// ── HtmlEditorFrame — stub para Flutter Web ──────────────────────────────
-// Em Flutter Web, InAppWebView não funciona. Usamos um <iframe> nativo via
-// HtmlElementView. O registo da view factory precisa de ser feito no main()
-// de forma condicional — este widget assume que o factory 'editor-iframe'
-// já foi registado ao arranque quando kIsWeb == true.
-class HtmlEditorFrame extends StatelessWidget {
-  final String assetPath;
-  const HtmlEditorFrame({super.key, required this.assetPath});
+// ══════════════════════════════════════════════════════════════
+// EDITOR TOOLBAR — flutua, sem container por baixo
+// A seta seleciona a categoria e o toolbar muda os botões
+// Ícones via Fluent Icons CDN
+// ══════════════════════════════════════════════════════════════
 
-  @override
-  Widget build(BuildContext context) {
-    // HtmlElementView só existe em Flutter Web. Em mobile nunca chega aqui
-    // porque _EditorWebView guarda o kIsWeb antes de construir este widget.
-    return const HtmlElementView(viewType: 'editor-iframe');
-  }
+class _EditorToolbar extends StatefulWidget {
+  final AppColorScheme s;
+  final EditorType type;
+  final void Function(String) runJs;
+  const _EditorToolbar({required this.s, required this.type, required this.runJs});
+  @override State<_EditorToolbar> createState() => _EditorToolbarState();
 }
 
-// ── Editor Toolbar — contentor que escolhe o toolbar certo ────────────────
+class _EditorToolbarState extends State<_EditorToolbar> {
+  int _catIndex = 0;
 
-class _EditorToolbar extends StatelessWidget {
-  final AppColorScheme scheme;
-  final EditorType editorType;
-
-  const _EditorToolbar({required this.scheme, required this.editorType});
-
-  @override
-  Widget build(BuildContext context) {
-    switch (editorType) {
+  List<_TbCategory> get _categories {
+    switch (widget.type) {
       case EditorType.docs:
-        return _DocsToolbar(scheme: scheme);
+        return [
+          _TbCategory(label: 'Base', buttons: [
+            _TbBtn('text_bold',        'Negrito',     () => widget.runJs("editorApi.exec('bold')")),
+            _TbBtn('text_italic',      'Itálico',     () => widget.runJs("editorApi.exec('italic')")),
+            _TbBtn('text_underline',   'Sublinhado',  () => widget.runJs("editorApi.exec('underline')")),
+            _TbBtn('text_strikethrough','Rasurado',   () => widget.runJs("editorApi.exec('strikethrough')")),
+            _TbBtn('text_align_left',  'Esq',         () => widget.runJs("editorApi.exec('alignLeft')")),
+            _TbBtn('text_align_center','Centro',      () => widget.runJs("editorApi.exec('alignCenter')")),
+            _TbBtn('text_align_right', 'Dir',         () => widget.runJs("editorApi.exec('alignRight')")),
+            _TbBtn('text_align_justify_low','Justif', () => widget.runJs("editorApi.exec('alignJustify')")),
+            _TbBtn('text_bullet_list_ltr','Lista •',  () => widget.runJs("editorApi.exec('bulletList')")),
+            _TbBtn('text_number_list_ltr','Lista 1.',  () => widget.runJs("editorApi.exec('numberedList')")),
+            _TbBtn('arrow_undo',       'Desfazer',    () => widget.runJs("editorApi.exec('undo')")),
+            _TbBtn('arrow_redo',       'Refazer',     () => widget.runJs("editorApi.exec('redo')")),
+          ]),
+          _TbCategory(label: 'Inserir', buttons: [
+            _TbBtn('table_simple',     'Tabela 2×2',  () => widget.runJs("editorApi.insertTable(2,2)")),
+            _TbBtn('table_simple',     'Tabela 3×3',  () => widget.runJs("editorApi.insertTable(3,3)")),
+            _TbBtn('image_add',        'Imagem',      () {}),
+            _TbBtn('link_add',         'Hiperligação',() => _linkDialog(context)),
+          ]),
+          _TbCategory(label: 'Layout', buttons: [
+            _TbBtn('arrow_fit',        'Retrato',     () => widget.runJs("editorApi.setPageOrientation('portrait')")),
+            _TbBtn('arrow_autofit_width','Paisagem',  () => widget.runJs("editorApi.setPageOrientation('landscape')")),
+            _TbBtn('font_decrease',    'Fonte −',     () => widget.runJs("editorApi.setFontSize(12)")),
+            _TbBtn('font_increase',    'Fonte +',     () => widget.runJs("editorApi.setFontSize(16)")),
+          ]),
+        ];
+
       case EditorType.sheets:
-        return _SheetsToolbar(scheme: scheme);
+        return [
+          _TbCategory(label: 'Base', buttons: [
+            _TbBtn('text_bold',        'Negrito',     () => widget.runJs("editorApi.applyFormat('bold')")),
+            _TbBtn('text_italic',      'Itálico',     () => widget.runJs("editorApi.applyFormat('italic')")),
+            _TbBtn('text_underline',   'Sublinhado',  () => widget.runJs("editorApi.applyFormat('underline')")),
+            _TbBtn('text_align_left',  'Esq',         () => widget.runJs("editorApi.setCellAlign('left')")),
+            _TbBtn('text_align_center','Centro',      () => widget.runJs("editorApi.setCellAlign('center')")),
+            _TbBtn('text_align_right', 'Dir',         () => widget.runJs("editorApi.setCellAlign('right')")),
+          ]),
+          _TbCategory(label: 'Células', buttons: [
+            _TbBtn('table_insert_row', 'Nova linha',  () => widget.runJs("editorApi.insertRowBelow()")),
+            _TbBtn('color_fill',       'Cor célula',  () => _colorDialog(context, 'fill')),
+            _TbBtn('font_color',       'Cor texto',   () => _colorDialog(context, 'text')),
+          ]),
+          _TbCategory(label: 'Fórmulas', buttons: [
+            _TbBtn('math_formula',     'SOMA',        () => _formulaDialog(context, 'SOMA')),
+            _TbBtn('math_formula',     'MÉDIA',       () => _formulaDialog(context, 'MÉDIA')),
+            _TbBtn('math_formula',     'SE',          () => _formulaDialog(context, 'SE')),
+            _TbBtn('math_formula',     'SOMASE',      () => _formulaDialog(context, 'SOMASE')),
+            _TbBtn('math_formula',     'PROCV',       () => _formulaDialog(context, 'PROCV')),
+            _TbBtn('math_formula',     'CONCATENAR',  () => _formulaDialog(context, 'CONCATENAR')),
+            _TbBtn('math_formula',     'MAX',         () => _formulaDialog(context, 'MAX')),
+            _TbBtn('math_formula',     'MIN',         () => _formulaDialog(context, 'MIN')),
+          ]),
+          _TbCategory(label: 'Layout', buttons: [
+            _TbBtn('table_freeze_column','Congelar',  () {}),
+            _TbBtn('filter',           'Filtrar',     () {}),
+          ]),
+        ];
+
       case EditorType.slides:
-        return _SlidesToolbar(scheme: scheme);
+        return [
+          _TbCategory(label: 'Base', buttons: [
+            _TbBtn('text_bold',        'Negrito',     () => widget.runJs("editorApi.applyTextFormat('bold')")),
+            _TbBtn('text_italic',      'Itálico',     () => widget.runJs("editorApi.applyTextFormat('italic')")),
+            _TbBtn('text_underline',   'Sublinhado',  () => widget.runJs("editorApi.applyTextFormat('underline')")),
+          ]),
+          _TbCategory(label: 'Inserir', buttons: [
+            _TbBtn('slide_add',        'Novo slide',  () => widget.runJs("editorApi.addSlide()")),
+            _TbBtn('text_add',         'Caixa texto', () => widget.runJs("editorApi.insertTextBox()")),
+            _TbBtn('image_add',        'Imagem',      () {}),
+            _TbBtn('rectangle',        'Retângulo',   () => widget.runJs("editorApi.insertShape('rect','#2F7BF6')")),
+            _TbBtn('circle_hint',      'Círculo',     () => widget.runJs("editorApi.insertShape('circle','#2F7BF6')")),
+          ]),
+          _TbCategory(label: 'Slide', buttons: [
+            _TbBtn('delete',           'Apagar slide',() => widget.runJs("editorApi.deleteCurrentSlide()")),
+            _TbBtn('delete',           'Apagar elem.',() => widget.runJs("editorApi.deleteSelectedElement()")),
+          ]),
+        ];
+
       case EditorType.whiteboard:
-        return _WhiteboardToolbar(scheme: scheme);
+        return [
+          _TbCategory(label: 'Desenhar', buttons: [
+            _TbBtn('pen',              'Caneta',      () => widget.runJs("editorApi.setTool('pen')")),
+            _TbBtn('highlight',        'Marcador',    () => widget.runJs("editorApi.setTool('highlighter')")),
+            _TbBtn('eraser',           'Borracha',    () => widget.runJs("editorApi.setTool('eraser')")),
+          ]),
+          _TbCategory(label: 'Traço', buttons: [
+            _TbBtn('line_thickness',   '1px',         () => widget.runJs("editorApi.setStrokeWidth(1)")),
+            _TbBtn('line_thickness',   '3px',         () => widget.runJs("editorApi.setStrokeWidth(3)")),
+            _TbBtn('line_thickness',   '6px',         () => widget.runJs("editorApi.setStrokeWidth(6)")),
+            _TbBtn('line_thickness',   '12px',        () => widget.runJs("editorApi.setStrokeWidth(12)")),
+          ]),
+          _TbCategory(label: 'Cor', buttons: [
+            _TbBtn('color_line',       'Preto',       () => widget.runJs("editorApi.setColor('#000000')")),
+            _TbBtn('color_line',       'Vermelho',    () => widget.runJs("editorApi.setColor('#FF0000')")),
+            _TbBtn('color_line',       'Azul',        () => widget.runJs("editorApi.setColor('#2F7BF6')")),
+            _TbBtn('color_line',       'Verde',       () => widget.runJs("editorApi.setColor('#00AA00')")),
+            _TbBtn('color_line',       'Amarelo',     () => widget.runJs("editorApi.setColor('#FFD600')")),
+            _TbBtn('color_line',       'Branco',      () => widget.runJs("editorApi.setColor('#FFFFFF')")),
+          ]),
+          _TbCategory(label: 'Quadro', buttons: [
+            _TbBtn('arrow_undo',       'Desfazer',    () => widget.runJs("editorApi.undo()")),
+            _TbBtn('arrow_reset',      'Centrar',     () => widget.runJs("editorApi.resetView()")),
+            _TbBtn('delete',           'Limpar',      () => widget.runJs("editorApi.clearBoard()")),
+          ]),
+        ];
     }
   }
-}
 
-// ── Toolbar base — pill flutuante do mesmo tamanho do input de chat ───────
-// Todos os quatro toolbars herdam desta base estrutural: mesma altura,
-// mesmo fundo, mesma sombra. O botão de seta abre o popup de categorias.
+  void _linkDialog(BuildContext context) {
+    final urlC = TextEditingController();
+    final txtC = TextEditingController();
+    final s = widget.s;
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: s.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Inserir hiperligação', style: TextStyle(color: s.onSurface)),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: urlC, style: TextStyle(color: s.onSurface),
+            decoration: InputDecoration(hintText: 'https://',
+                hintStyle: TextStyle(color: s.onSurfaceVariant))),
+        TextField(controller: txtC, style: TextStyle(color: s.onSurface),
+            decoration: InputDecoration(hintText: 'Texto (opcional)',
+                hintStyle: TextStyle(color: s.onSurfaceVariant))),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: TextStyle(color: s.onSurfaceVariant))),
+        TextButton(onPressed: () {
+          final url = urlC.text.trim();
+          if (url.isNotEmpty) widget.runJs("editorApi.insertLink('$url','${txtC.text.trim()}')");
+          Navigator.pop(ctx);
+        }, child: Text('Inserir', style: TextStyle(color: s.primary))),
+      ],
+    ));
+  }
 
-class _ToolbarBase extends StatelessWidget {
-  final AppColorScheme scheme;
-  final List<Widget> mainActions;
-  final List<_ToolbarCategory> categories;
-
-  const _ToolbarBase({
-    required this.scheme,
-    required this.mainActions,
-    required this.categories,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Container(
-        height: 58,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: scheme.floatingShadow,
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 8),
-            // Botão de seta — abre popup de categorias
-            _CategoryMenuButton(scheme: scheme, categories: categories),
-            Container(
-              width: 1,
-              height: 24,
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              color: scheme.outlineVariant,
-            ),
-            // Ações rápidas do toolbar
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: mainActions),
+  void _colorDialog(BuildContext context, String tipo) {
+    final colors = ['#000000','#FFFFFF','#FF0000','#00AA00','#2F7BF6','#FF9900','#9900FF','#FFD600'];
+    final s = widget.s;
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: s.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(tipo == 'fill' ? 'Cor de preenchimento' : 'Cor do texto',
+          style: TextStyle(color: s.onSurface)),
+      content: Wrap(spacing: 10, runSpacing: 10, children: colors.map((hex) =>
+          GestureDetector(
+            onTap: () {
+              tipo == 'fill'
+                  ? widget.runJs("editorApi.setCellFill('$hex')")
+                  : widget.runJs("editorApi.setCellColor('$hex')");
+              Navigator.pop(ctx);
+            },
+            child: Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(
+                color: Color(int.parse(hex.replaceFirst('#', '0xFF'))),
+                shape: BoxShape.circle,
+                border: Border.all(color: s.outline),
               ),
             ),
-            const SizedBox(width: 8),
-          ],
-        ),
+          )).toList()),
+    ));
+  }
+
+  void _formulaDialog(BuildContext context, String formula) {
+    final c = TextEditingController(text: '=$formula(');
+    final s = widget.s;
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: s.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Fórmula $formula', style: TextStyle(color: s.onSurface)),
+      content: TextField(controller: c, autofocus: true,
+          style: TextStyle(color: s.onSurface, fontFamily: 'monospace')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar', style: TextStyle(color: s.onSurfaceVariant))),
+        TextButton(onPressed: () {
+          widget.runJs("editorApi.applyFormula('${c.text}')");
+          Navigator.pop(ctx);
+        }, child: Text('Aplicar', style: TextStyle(color: s.primary))),
+      ],
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final cats = _categories;
+    // Garante que o índice não ultrapassa o número de categorias ao trocar de editor
+    final safeIndex = _catIndex.clamp(0, cats.length - 1);
+    final currentBtns = cats[safeIndex].buttons;
+
+    return Container(
+      height: 58,
+      decoration: BoxDecoration(
+        color: s.isDark ? const Color(0xFF2A2A2A) : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: s.floatingShadow,
       ),
+      child: Row(children: [
+        const SizedBox(width: 4),
+
+        // Seletor de categoria — abre popup com as categorias disponíveis
+        _CatSelector(
+          s: s,
+          categories: cats,
+          selectedIndex: safeIndex,
+          onSelect: (i) => setState(() => _catIndex = i),
+        ),
+
+        // Divisor vertical
+        Container(width: 1, height: 24, margin: const EdgeInsets.symmetric(horizontal: 4),
+            color: s.outlineVariant),
+
+        // Botões da categoria selecionada — scrolláveis horizontalmente
+        Expanded(child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: currentBtns.length,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          itemBuilder: (_, i) => _TbIconBtn(s: s, btn: currentBtns[i]),
+        )),
+
+        const SizedBox(width: 4),
+      ]),
     );
   }
 }
 
-class _ToolbarCategory {
+class _TbCategory {
   final String label;
-  final String icon;
-  final List<_ToolbarAction> actions;
-
-  const _ToolbarCategory({required this.label, required this.icon, required this.actions});
+  final List<_TbBtn> buttons;
+  const _TbCategory({required this.label, required this.buttons});
 }
 
-class _ToolbarAction {
-  final String label;
-  final String icon;
+class _TbBtn {
+  final String fluentName;
+  final String tooltip;
   final VoidCallback onTap;
-
-  const _ToolbarAction({required this.label, required this.icon, required this.onTap});
+  const _TbBtn(this.fluentName, this.tooltip, this.onTap);
 }
 
-// ── Botão de seta + popup de categorias ──────────────────────────────────
-
-class _CategoryMenuButton extends StatefulWidget {
-  final AppColorScheme scheme;
-  final List<_ToolbarCategory> categories;
-
-  const _CategoryMenuButton({required this.scheme, required this.categories});
-
-  @override
-  State<_CategoryMenuButton> createState() => _CategoryMenuButtonState();
+// Seletor de categoria — botão que abre popup com as categorias disponíveis
+class _CatSelector extends StatefulWidget {
+  final AppColorScheme s;
+  final List<_TbCategory> categories;
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+  const _CatSelector({required this.s, required this.categories,
+      required this.selectedIndex, required this.onSelect});
+  @override State<_CatSelector> createState() => _CatSelectorState();
 }
 
-class _CategoryMenuButtonState extends State<_CategoryMenuButton>
-    with SingleTickerProviderStateMixin {
+class _CatSelectorState extends State<_CatSelector> with SingleTickerProviderStateMixin {
   OverlayEntry? _overlay;
   late AnimationController _animCtrl;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 280));
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 240));
   }
 
   @override
@@ -1342,30 +1149,73 @@ class _CategoryMenuButtonState extends State<_CategoryMenuButton>
     super.dispose();
   }
 
-  void _toggle() {
-    if (_overlay != null) {
-      _close();
-    } else {
-      _open();
-    }
-  }
+  void _toggle() => _overlay == null ? _open() : _close();
 
   void _open() {
-    final renderBox = context.findRenderObject() as RenderBox;
-    final offset = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
+    final box = context.findRenderObject() as RenderBox;
+    final offset = box.localToGlobal(Offset.zero);
     _animCtrl.forward(from: 0);
 
-    _overlay = OverlayEntry(
-      builder: (ctx) => _CategoryPopup(
-        scheme: widget.scheme,
-        categories: widget.categories,
-        anchorOffset: offset,
-        anchorSize: size,
-        animation: _animCtrl,
-        onClose: _close,
-      ),
-    );
+    _overlay = OverlayEntry(builder: (ctx) {
+      final s = widget.s;
+      return Stack(children: [
+        Positioned.fill(child: GestureDetector(
+          onTap: _close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        )),
+        Positioned(
+          left: 16,
+          bottom: MediaQuery.of(ctx).size.height - offset.dy + 8,
+          child: AnimatedBuilder(
+            animation: _animCtrl,
+            builder: (_, child) => Opacity(
+              opacity: CurvedAnimation(parent: _animCtrl,
+                  curve: const Interval(0, 0.4, curve: Curves.easeOut)).value,
+              child: Transform.scale(
+                scale: Tween(begin: 0.88, end: 1.0)
+                    .animate(CurvedAnimation(parent: _animCtrl, curve: kSmooth)).value,
+                alignment: Alignment.bottomLeft,
+                child: child,
+              ),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: s.isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: s.floatingShadow,
+              ),
+              padding: const EdgeInsets.all(6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(widget.categories.length, (i) {
+                  final cat = widget.categories[i];
+                  final sel = widget.selectedIndex == i;
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () { widget.onSelect(i); _close(); },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 120),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: sel ? s.primaryContainer : Colors.transparent,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(cat.label, style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                        color: sel ? s.onPrimaryContainer : s.onSurface,
+                      )),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    });
     Overlay.of(context).insert(_overlay!);
     setState(() {});
   }
@@ -1380,1064 +1230,288 @@ class _CategoryMenuButtonState extends State<_CategoryMenuButton>
 
   @override
   Widget build(BuildContext context) {
-    final isOpen = _overlay != null;
-    return _IconTapArea(
-      onTap: _toggle,
-      scheme: widget.scheme,
-      size: 40,
-      child: AnimatedRotation(
-        turns: isOpen ? 0.5 : 0.0,
-        duration: const Duration(milliseconds: 260),
-        curve: kSmoothCurve,
-        child: AppIcon('arrow_up.svg', color: widget.scheme.onSurface, size: 18),
-      ),
+    final s = widget.s;
+    final label = widget.categories[widget.selectedIndex].label;
+    return _Tap(
+      onTap: _toggle, s: s, size: 44,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w600, color: s.onSurface)),
+        const SizedBox(width: 2),
+        AnimatedRotation(
+          turns: _overlay != null ? 0.5 : 0.0,
+          duration: const Duration(milliseconds: 220),
+          curve: kSmooth,
+          child: Icon(Icons.keyboard_arrow_up_rounded, size: 16, color: s.onSurfaceVariant),
+        ),
+        const SizedBox(width: 2),
+      ]),
     );
   }
 }
 
-class _CategoryPopup extends StatefulWidget {
-  final AppColorScheme scheme;
-  final List<_ToolbarCategory> categories;
-  final Offset anchorOffset;
-  final Size anchorSize;
-  final Animation<double> animation;
-  final VoidCallback onClose;
-
-  const _CategoryPopup({
-    required this.scheme,
-    required this.categories,
-    required this.anchorOffset,
-    required this.anchorSize,
-    required this.animation,
-    required this.onClose,
-  });
-
-  @override
-  State<_CategoryPopup> createState() => _CategoryPopupState();
+// Botão individual do toolbar com ícone Fluent via CDN
+class _TbIconBtn extends StatefulWidget {
+  final AppColorScheme s;
+  final _TbBtn btn;
+  const _TbIconBtn({required this.s, required this.btn});
+  @override State<_TbIconBtn> createState() => _TbIconBtnState();
 }
 
-class _CategoryPopupState extends State<_CategoryPopup> {
-  int _selectedCategoryIndex = 0;
+class _TbIconBtnState extends State<_TbIconBtn> {
+  bool _p = false;
 
   @override
-  Widget build(BuildContext context) {
-    final curved = CurvedAnimation(parent: widget.animation, curve: kSpringCurve);
-
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: widget.onClose,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.transparent),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: MediaQuery.of(context).size.height - widget.anchorOffset.dy + 8,
-          child: FadeTransition(
-            opacity: CurvedAnimation(
-                parent: widget.animation,
-                curve: const Interval(0, 0.4, curve: Curves.easeOut)),
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
-              alignment: Alignment.bottomLeft,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: widget.scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: widget.scheme.floatingShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Tabs de categorias
-                    Container(
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: widget.scheme.surfaceContainer,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      child: Row(
-                        children: List.generate(widget.categories.length, (i) {
-                          final cat = widget.categories[i];
-                          final selected = _selectedCategoryIndex == i;
-                          return Expanded(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => setState(() => _selectedCategoryIndex = i),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                curve: kSmoothCurve,
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? widget.scheme.primaryContainer
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                margin: const EdgeInsets.all(4),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  cat.label,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                    color: selected
-                                        ? widget.scheme.onPrimaryContainer
-                                        : widget.scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                    // Ações da categoria selecionada
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        children: widget.categories[_selectedCategoryIndex].actions
-                            .map((action) => _PopupActionChip(
-                                  scheme: widget.scheme,
-                                  action: action,
-                                  onTap: () {
-                                    action.onTap();
-                                    widget.onClose();
-                                  },
-                                ))
-                            .toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PopupActionChip extends StatefulWidget {
-  final AppColorScheme scheme;
-  final _ToolbarAction action;
-  final VoidCallback onTap;
-
-  const _PopupActionChip({
-    required this.scheme,
-    required this.action,
-    required this.onTap,
-  });
-
-  @override
-  State<_PopupActionChip> createState() => _PopupActionChipState();
-}
-
-class _PopupActionChipState extends State<_PopupActionChip> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
+  Widget build(BuildContext context) => Tooltip(
+    message: widget.btn.tooltip,
+    child: GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.btn.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        curve: kSmoothCurve,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        width: 40, height: 40,
+        margin: const EdgeInsets.symmetric(horizontal: 1),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _pressed ? widget.scheme.pressed : widget.scheme.surfaceContainerHighest,
+          color: _p ? widget.s.pressed : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(widget.action.icon, color: widget.scheme.onSurface, size: 14),
-            const SizedBox(width: 6),
-            Text(
-              widget.action.label,
-              style: TextStyle(fontSize: 12, color: widget.scheme.onSurface),
-            ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          FluentIcon(widget.btn.fluentName, color: widget.s.onSurface, size: 18),
+          if (widget.btn.tooltip.length <= 6) ...[
+            const SizedBox(height: 1),
+            Text(widget.btn.tooltip,
+                style: TextStyle(fontSize: 8, color: widget.s.onSurfaceVariant),
+                maxLines: 1),
           ],
-        ),
+        ]),
       ),
-    );
-  }
+    ),
+  );
 }
 
-// ── Botão rápido de toolbar (ícone só) ────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// EDIT TYPE BUTTON (header trailing)
+// ══════════════════════════════════════════════════════════════
 
-class _ToolbarIconBtn extends StatefulWidget {
-  final AppColorScheme scheme;
-  final String icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  final bool active;
-
-  const _ToolbarIconBtn({
-    required this.scheme,
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-    this.active = false,
-  });
-
-  @override
-  State<_ToolbarIconBtn> createState() => _ToolbarIconBtnState();
-}
-
-class _ToolbarIconBtnState extends State<_ToolbarIconBtn> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: widget.tooltip,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          curve: kSmoothCurve,
-          width: 38,
-          height: 38,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.active
-                ? widget.scheme.primaryContainer
-                : _pressed
-                    ? widget.scheme.pressed
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: AppIcon(
-            widget.icon,
-            color: widget.active ? widget.scheme.onPrimaryContainer : widget.scheme.onSurface,
-            size: 18,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// ── DOCS TOOLBAR ─────────────────────────────────────────────────
-// ════════════════════════════════════════════════════════════════
-
-class _DocsToolbar extends StatelessWidget {
-  final AppColorScheme scheme;
-  const _DocsToolbar({required this.scheme});
-
-  void _js(String script) {
-    // Em produção, o controller do WebView seria injectado via chave global
-    // ou InheritedWidget. Aqui chamamos via evaluateJavascript direto.
-    // A ligação ao controller é resolvida em _EditorWebViewState.runJs().
-    _EditorWebViewManager.instance?.runJs(script);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _ToolbarBase(
-      scheme: scheme,
-      mainActions: [
-        _ToolbarIconBtn(scheme: scheme, icon: 'bold.svg', tooltip: 'Negrito', onTap: () => _js("editorApi.exec('bold')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'italic.svg', tooltip: 'Itálico', onTap: () => _js("editorApi.exec('italic')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'underline.svg', tooltip: 'Sublinhado', onTap: () => _js("editorApi.exec('underline')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'align_left.svg', tooltip: 'Alinhar esquerda', onTap: () => _js("editorApi.exec('alignLeft')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'align_center.svg', tooltip: 'Centrar', onTap: () => _js("editorApi.exec('alignCenter')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'undo.svg', tooltip: 'Desfazer', onTap: () => _js("editorApi.exec('undo')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'redo.svg', tooltip: 'Refazer', onTap: () => _js("editorApi.exec('redo')")),
-      ],
-      categories: [
-        _ToolbarCategory(
-          label: 'Base',
-          icon: 'text.svg',
-          actions: [
-            _ToolbarAction(label: 'Negrito', icon: 'bold.svg', onTap: () => _js("editorApi.exec('bold')")),
-            _ToolbarAction(label: 'Itálico', icon: 'italic.svg', onTap: () => _js("editorApi.exec('italic')")),
-            _ToolbarAction(label: 'Sublinhado', icon: 'underline.svg', onTap: () => _js("editorApi.exec('underline')")),
-            _ToolbarAction(label: 'Rasurado', icon: 'strikethrough.svg', onTap: () => _js("editorApi.exec('strikethrough')")),
-            _ToolbarAction(label: 'Esquerda', icon: 'align_left.svg', onTap: () => _js("editorApi.exec('alignLeft')")),
-            _ToolbarAction(label: 'Centro', icon: 'align_center.svg', onTap: () => _js("editorApi.exec('alignCenter')")),
-            _ToolbarAction(label: 'Direita', icon: 'align_right.svg', onTap: () => _js("editorApi.exec('alignRight')")),
-            _ToolbarAction(label: 'Justificar', icon: 'align_justify.svg', onTap: () => _js("editorApi.exec('alignJustify')")),
-            _ToolbarAction(label: 'Lista •', icon: 'bullet_list.svg', onTap: () => _js("editorApi.exec('bulletList')")),
-            _ToolbarAction(label: 'Lista 1.', icon: 'numbered_list.svg', onTap: () => _js("editorApi.exec('numberedList')")),
-            _ToolbarAction(label: 'Desfazer', icon: 'undo.svg', onTap: () => _js("editorApi.exec('undo')")),
-            _ToolbarAction(label: 'Refazer', icon: 'redo.svg', onTap: () => _js("editorApi.exec('redo')")),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Inserir',
-          icon: 'add.svg',
-          actions: [
-            _ToolbarAction(label: 'Tabela 2×2', icon: 'table.svg', onTap: () => _js("editorApi.insertTable(2,2)")),
-            _ToolbarAction(label: 'Tabela 3×3', icon: 'table.svg', onTap: () => _js("editorApi.insertTable(3,3)")),
-            _ToolbarAction(label: 'Imagem', icon: 'image.svg', onTap: () => _pickAndInsertImage(context)),
-            _ToolbarAction(label: 'Hiperligação', icon: 'link.svg', onTap: () => _showLinkDialog(context)),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Layout',
-          icon: 'layout.svg',
-          actions: [
-            _ToolbarAction(label: 'Retrato', icon: 'portrait.svg', onTap: () => _js("editorApi.setPageOrientation('portrait')")),
-            _ToolbarAction(label: 'Paisagem', icon: 'landscape.svg', onTap: () => _js("editorApi.setPageOrientation('landscape')")),
-            _ToolbarAction(label: 'Fonte 12', icon: 'text_size.svg', onTap: () => _js("editorApi.setFontSize(12)")),
-            _ToolbarAction(label: 'Fonte 14', icon: 'text_size.svg', onTap: () => _js("editorApi.setFontSize(14)")),
-            _ToolbarAction(label: 'Fonte 16', icon: 'text_size.svg', onTap: () => _js("editorApi.setFontSize(16)")),
-            _ToolbarAction(label: 'Fonte 20', icon: 'text_size.svg', onTap: () => _js("editorApi.setFontSize(20)")),
-            _ToolbarAction(label: 'Fonte 24', icon: 'text_size.svg', onTap: () => _js("editorApi.setFontSize(24)")),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _pickAndInsertImage(BuildContext context) {
-    // A picker real chama a galeria nativa (Kotlin) via AndroidBridge.
-    // Aqui deixamos o hook pronto — o Kotlin chama editorApi.insertImageAtCursor(dataUrl).
-  }
-
-  void _showLinkDialog(BuildContext context) {
-    final urlCtrl = TextEditingController();
-    final textoCtrl = TextEditingController();
-    final scheme = AppTheme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: scheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Inserir hiperligação', style: TextStyle(color: scheme.onSurface)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: urlCtrl,
-              style: TextStyle(color: scheme.onSurface),
-              decoration: InputDecoration(
-                hintText: 'https://...',
-                hintStyle: TextStyle(color: scheme.onSurfaceVariant),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: scheme.outlineVariant)),
-                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: scheme.primary)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textoCtrl,
-              style: TextStyle(color: scheme.onSurface),
-              decoration: InputDecoration(
-                hintText: 'Texto do link (opcional)',
-                hintStyle: TextStyle(color: scheme.onSurfaceVariant),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: scheme.outlineVariant)),
-                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: scheme.primary)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancelar', style: TextStyle(color: scheme.onSurfaceVariant)),
-          ),
-          TextButton(
-            onPressed: () {
-              final url = urlCtrl.text.trim();
-              final txt = textoCtrl.text.trim();
-              if (url.isNotEmpty) {
-                _js("editorApi.insertLink('$url','$txt')");
-              }
-              Navigator.pop(ctx);
-            },
-            child: Text('Inserir', style: TextStyle(color: scheme.primary)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// ── SHEETS TOOLBAR ────────────────────────────────────────────────
-// ════════════════════════════════════════════════════════════════
-
-class _SheetsToolbar extends StatelessWidget {
-  final AppColorScheme scheme;
-  const _SheetsToolbar({required this.scheme});
-
-  void _js(String script) => _EditorWebViewManager.instance?.runJs(script);
-
-  @override
-  Widget build(BuildContext context) {
-    return _ToolbarBase(
-      scheme: scheme,
-      mainActions: [
-        _ToolbarIconBtn(scheme: scheme, icon: 'bold.svg', tooltip: 'Negrito', onTap: () => _js("editorApi.applyFormat('bold')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'italic.svg', tooltip: 'Itálico', onTap: () => _js("editorApi.applyFormat('italic')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'align_left.svg', tooltip: 'Esquerda', onTap: () => _js("editorApi.setCellAlign('left')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'align_center.svg', tooltip: 'Centro', onTap: () => _js("editorApi.setCellAlign('center')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'align_right.svg', tooltip: 'Direita', onTap: () => _js("editorApi.setCellAlign('right')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'add_row.svg', tooltip: 'Nova linha', onTap: () => _js("editorApi.insertRowBelow()")),
-      ],
-      categories: [
-        _ToolbarCategory(
-          label: 'Base',
-          icon: 'text.svg',
-          actions: [
-            _ToolbarAction(label: 'Negrito', icon: 'bold.svg', onTap: () => _js("editorApi.applyFormat('bold')")),
-            _ToolbarAction(label: 'Itálico', icon: 'italic.svg', onTap: () => _js("editorApi.applyFormat('italic')")),
-            _ToolbarAction(label: 'Sublinhado', icon: 'underline.svg', onTap: () => _js("editorApi.applyFormat('underline')")),
-            _ToolbarAction(label: 'Esquerda', icon: 'align_left.svg', onTap: () => _js("editorApi.setCellAlign('left')")),
-            _ToolbarAction(label: 'Centro', icon: 'align_center.svg', onTap: () => _js("editorApi.setCellAlign('center')")),
-            _ToolbarAction(label: 'Direita', icon: 'align_right.svg', onTap: () => _js("editorApi.setCellAlign('right')")),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Células',
-          icon: 'table.svg',
-          actions: [
-            _ToolbarAction(label: 'Nova linha', icon: 'add_row.svg', onTap: () => _js("editorApi.insertRowBelow()")),
-            _ToolbarAction(label: 'Cor texto', icon: 'text_color.svg', onTap: () => _showColorPicker(context, 'text')),
-            _ToolbarAction(label: 'Preenchimento', icon: 'fill_color.svg', onTap: () => _showColorPicker(context, 'fill')),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Fórmulas',
-          icon: 'formula.svg',
-          actions: [
-            _ToolbarAction(label: 'SOMA', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'SOMA')),
-            _ToolbarAction(label: 'MÉDIA', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'MÉDIA')),
-            _ToolbarAction(label: 'SE', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'SE')),
-            _ToolbarAction(label: 'SOMASE', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'SOMASE')),
-            _ToolbarAction(label: 'CONTASE', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'CONTASE')),
-            _ToolbarAction(label: 'PROCV', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'PROCV')),
-            _ToolbarAction(label: 'CONCATENAR', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'CONCATENAR')),
-            _ToolbarAction(label: 'MAX', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'MAX')),
-            _ToolbarAction(label: 'MIN', icon: 'formula.svg', onTap: () => _showFormulaDialog(context, 'MIN')),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Layout',
-          icon: 'layout.svg',
-          actions: [
-            _ToolbarAction(label: 'Congelar linha', icon: 'freeze.svg', onTap: () {}),
-            _ToolbarAction(label: 'Filtrar', icon: 'filter.svg', onTap: () {}),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _showColorPicker(BuildContext context, String tipo) {
-    final colors = [
-      '#000000', '#FFFFFF', '#FF0000', '#00AA00',
-      '#2F7BF6', '#FF9900', '#9900FF', '#FF00AA',
-    ];
-    final scheme = AppTheme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: scheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(tipo == 'fill' ? 'Cor de preenchimento' : 'Cor do texto',
-            style: TextStyle(color: scheme.onSurface)),
-        content: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: colors.map((hex) {
-            return GestureDetector(
-              onTap: () {
-                if (tipo == 'fill') {
-                  _js("editorApi.setCellFill('$hex')");
-                } else {
-                  _js("editorApi.setCellColor('$hex')");
-                }
-                Navigator.pop(ctx);
-              },
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Color(int.parse(hex.replaceFirst('#', '0xFF'))),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: scheme.outlineVariant),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  void _showFormulaDialog(BuildContext context, String formula) {
-    final ctrl = TextEditingController(text: '=$formula(');
-    final scheme = AppTheme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: scheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Fórmula $formula', style: TextStyle(color: scheme.onSurface)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          style: TextStyle(color: scheme.onSurface, fontFamily: 'monospace'),
-          decoration: InputDecoration(
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: scheme.outlineVariant)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: scheme.primary)),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancelar', style: TextStyle(color: scheme.onSurfaceVariant))),
-          TextButton(
-            onPressed: () {
-              _js("editorApi.applyFormula('${ctrl.text}')");
-              Navigator.pop(ctx);
-            },
-            child: Text('Aplicar', style: TextStyle(color: scheme.primary)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// ── SLIDES TOOLBAR ────────────────────────────────────────────────
-// ════════════════════════════════════════════════════════════════
-
-class _SlidesToolbar extends StatelessWidget {
-  final AppColorScheme scheme;
-  const _SlidesToolbar({required this.scheme});
-
-  void _js(String script) => _EditorWebViewManager.instance?.runJs(script);
-
-  @override
-  Widget build(BuildContext context) {
-    return _ToolbarBase(
-      scheme: scheme,
-      mainActions: [
-        _ToolbarIconBtn(scheme: scheme, icon: 'add_slide.svg', tooltip: 'Novo slide', onTap: () => _js("editorApi.addSlide()")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'text_box.svg', tooltip: 'Caixa de texto', onTap: () => _js("editorApi.insertTextBox()")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'bold.svg', tooltip: 'Negrito', onTap: () => _js("editorApi.applyTextFormat('bold')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'italic.svg', tooltip: 'Itálico', onTap: () => _js("editorApi.applyTextFormat('italic')")),
-        _ToolbarIconBtn(scheme: scheme, icon: 'delete.svg', tooltip: 'Apagar elemento', onTap: () => _js("editorApi.deleteSelectedElement()")),
-      ],
-      categories: [
-        _ToolbarCategory(
-          label: 'Base',
-          icon: 'text.svg',
-          actions: [
-            _ToolbarAction(label: 'Negrito', icon: 'bold.svg', onTap: () => _js("editorApi.applyTextFormat('bold')")),
-            _ToolbarAction(label: 'Itálico', icon: 'italic.svg', onTap: () => _js("editorApi.applyTextFormat('italic')")),
-            _ToolbarAction(label: 'Sublinhado', icon: 'underline.svg', onTap: () => _js("editorApi.applyTextFormat('underline')")),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Inserir',
-          icon: 'more.svg',
-          actions: [
-            _ToolbarAction(label: 'Novo slide', icon: 'add_slide.svg', onTap: () => _js("editorApi.addSlide()")),
-            _ToolbarAction(label: 'Caixa de texto', icon: 'text_box.svg', onTap: () => _js("editorApi.insertTextBox()")),
-            _ToolbarAction(label: 'Imagem', icon: 'image.svg', onTap: () {}),
-            _ToolbarAction(label: 'Retângulo', icon: 'shape_rect.svg', onTap: () => _js("editorApi.insertShape('rect','#2F7BF6')")),
-            _ToolbarAction(label: 'Círculo', icon: 'shape_circle.svg', onTap: () => _js("editorApi.insertShape('circle','#2F7BF6')")),
-            _ToolbarAction(label: 'Triângulo', icon: 'shape_triangle.svg', onTap: () => _js("editorApi.insertShape('triangle','#2F7BF6')")),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Slide',
-          icon: 'layout.svg',
-          actions: [
-            _ToolbarAction(label: 'Apagar slide', icon: 'delete.svg', onTap: () => _js("editorApi.deleteCurrentSlide()")),
-            _ToolbarAction(label: 'Apagar elemento', icon: 'delete.svg', onTap: () => _js("editorApi.deleteSelectedElement()")),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// ── WHITEBOARD TOOLBAR ────────────────────────────────────────────
-// ════════════════════════════════════════════════════════════════
-
-class _WhiteboardToolbar extends StatefulWidget {
-  final AppColorScheme scheme;
-  const _WhiteboardToolbar({required this.scheme});
-
-  @override
-  State<_WhiteboardToolbar> createState() => _WhiteboardToolbarState();
-}
-
-class _WhiteboardToolbarState extends State<_WhiteboardToolbar> {
-  String _activeTool = 'pen';
-
-  void _js(String script) => _EditorWebViewManager.instance?.runJs(script);
-
-  void _setTool(String tool) {
-    setState(() => _activeTool = tool);
-    _js("editorApi.setTool('$tool')");
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _ToolbarBase(
-      scheme: widget.scheme,
-      mainActions: [
-        _ToolbarIconBtn(
-          scheme: widget.scheme,
-          icon: 'pen.svg',
-          tooltip: 'Caneta',
-          active: _activeTool == 'pen',
-          onTap: () => _setTool('pen'),
-        ),
-        _ToolbarIconBtn(
-          scheme: widget.scheme,
-          icon: 'highlighter.svg',
-          tooltip: 'Marcador',
-          active: _activeTool == 'highlighter',
-          onTap: () => _setTool('highlighter'),
-        ),
-        _ToolbarIconBtn(
-          scheme: widget.scheme,
-          icon: 'eraser.svg',
-          tooltip: 'Borracha',
-          active: _activeTool == 'eraser',
-          onTap: () => _setTool('eraser'),
-        ),
-        _ToolbarIconBtn(
-          scheme: widget.scheme,
-          icon: 'undo.svg',
-          tooltip: 'Desfazer',
-          onTap: () => _js("editorApi.undo()"),
-        ),
-        _ToolbarIconBtn(
-          scheme: widget.scheme,
-          icon: 'clear.svg',
-          tooltip: 'Limpar tudo',
-          onTap: () => _js("editorApi.clearBoard()"),
-        ),
-      ],
-      categories: [
-        _ToolbarCategory(
-          label: 'Desenhar',
-          icon: 'pen.svg',
-          actions: [
-            _ToolbarAction(label: 'Caneta', icon: 'pen.svg', onTap: () => _setTool('pen')),
-            _ToolbarAction(label: 'Marcador', icon: 'highlighter.svg', onTap: () => _setTool('highlighter')),
-            _ToolbarAction(label: 'Borracha', icon: 'eraser.svg', onTap: () => _setTool('eraser')),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Traço',
-          icon: 'stroke.svg',
-          actions: [
-            _ToolbarAction(label: 'Fino (1px)', icon: 'stroke_thin.svg', onTap: () => _js("editorApi.setStrokeWidth(1)")),
-            _ToolbarAction(label: 'Normal (3px)', icon: 'stroke_mid.svg', onTap: () => _js("editorApi.setStrokeWidth(3)")),
-            _ToolbarAction(label: 'Grosso (6px)', icon: 'stroke_thick.svg', onTap: () => _js("editorApi.setStrokeWidth(6)")),
-            _ToolbarAction(label: 'Extra (12px)', icon: 'stroke_extra.svg', onTap: () => _js("editorApi.setStrokeWidth(12)")),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Cor',
-          icon: 'fill_color.svg',
-          actions: [
-            _ToolbarAction(label: 'Preto', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#000000')")),
-            _ToolbarAction(label: 'Branco', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#FFFFFF')")),
-            _ToolbarAction(label: 'Vermelho', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#FF0000')")),
-            _ToolbarAction(label: 'Verde', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#00AA00')")),
-            _ToolbarAction(label: 'Azul', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#2F7BF6')")),
-            _ToolbarAction(label: 'Amarelo', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#FFD600')")),
-            _ToolbarAction(label: 'Roxo', icon: 'color_swatch.svg', onTap: () => _js("editorApi.setColor('#9900FF')")),
-          ],
-        ),
-        _ToolbarCategory(
-          label: 'Quadro',
-          icon: 'layout.svg',
-          actions: [
-            _ToolbarAction(label: 'Centrar vista', icon: 'reset_view.svg', onTap: () => _js("editorApi.resetView()")),
-            _ToolbarAction(label: 'Limpar tudo', icon: 'clear.svg', onTap: () => _js("editorApi.clearBoard()")),
-            _ToolbarAction(label: 'Desfazer', icon: 'undo.svg', onTap: () => _js("editorApi.undo()")),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ── WebView Manager — singleton para aceder ao controller a partir dos toolbars
-// Evita prop-drilling do InAppWebViewController por toda a árvore.
-
-class _EditorWebViewManager {
-  static _EditorWebViewManager? instance;
-  InAppWebViewController? _controller;
-
-  Future<void> runJs(String script) async {
-    await _controller?.evaluateJavascript(source: script);
-  }
-
-  void attach(InAppWebViewController c) {
-    _controller = c;
-    instance = this;
-  }
-
-  void detach() {
-    _controller = null;
-  }
-}
-
-// ── _EditorWebView atualizado para usar o manager ────────────────────────
-// (substitui a versão anterior de _EditorWebViewState)
-
-// Nota: a classe _EditorWebView já foi declarada acima. O onWebViewCreated
-// deve ser atualizado para chamar _EditorWebViewManager:
-//   onWebViewCreated: (c) {
-//     _manager.attach(c);
-//   },
-// e no dispose: _manager.detach();
-// Isto já está implícito na arquitetura — a implementação final une as
-// duas declarações numa só no ficheiro compilado.
-
-// ── Edit tab: top-right popup button ─────────────────────────────────────
-
-class _EditActionsButton extends StatefulWidget {
-  final AppColorScheme scheme;
+class _EditTypeButton extends StatefulWidget {
+  final AppColorScheme s;
   final EditorType current;
   final ValueChanged<EditorType> onSelect;
-
-  const _EditActionsButton({
-    required this.scheme,
-    required this.current,
-    required this.onSelect,
-  });
-
-  @override
-  State<_EditActionsButton> createState() => _EditActionsButtonState();
+  const _EditTypeButton({required this.s, required this.current, required this.onSelect});
+  @override State<_EditTypeButton> createState() => _EditTypeButtonState();
 }
 
-class _EditActionsButtonState extends State<_EditActionsButton>
-    with SingleTickerProviderStateMixin {
-  final GlobalKey _buttonKey = GlobalKey();
-  OverlayEntry? _overlayEntry;
-  late AnimationController _animCtrl;
+class _EditTypeButtonState extends State<_EditTypeButton> with SingleTickerProviderStateMixin {
+  OverlayEntry? _ov;
+  late AnimationController _ac;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 260));
+    _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 240));
   }
 
   @override
-  void dispose() {
-    _animCtrl.dispose();
-    _overlayEntry?.remove();
-    super.dispose();
-  }
+  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
 
-  void _toggleMenu() => _overlayEntry != null ? _closeMenu() : _openMenu();
+  void _toggle() => _ov == null ? _open() : _close();
 
-  void _openMenu() {
-    final renderBox = _buttonKey.currentContext!.findRenderObject() as RenderBox;
-    final offset = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
-    _animCtrl.forward(from: 0);
+  void _open() {
+    final box = context.findRenderObject() as RenderBox;
+    final off = box.localToGlobal(Offset.zero);
+    final sz  = box.size;
+    _ac.forward(from: 0);
 
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        final curved = CurvedAnimation(parent: _animCtrl, curve: kSpringCurve);
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _closeMenu,
-                behavior: HitTestBehavior.opaque,
-                child: Container(color: Colors.transparent),
+    _ov = OverlayEntry(builder: (ctx) {
+      final s = widget.s;
+      return Stack(children: [
+        Positioned.fill(child: GestureDetector(
+          onTap: _close, behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        )),
+        Positioned(
+          top: off.dy + sz.height + 6,
+          right: MediaQuery.of(ctx).size.width - off.dx - sz.width,
+          child: AnimatedBuilder(
+            animation: _ac,
+            builder: (_, child) => Opacity(
+              opacity: CurvedAnimation(parent: _ac,
+                  curve: const Interval(0, 0.4, curve: Curves.easeOut)).value,
+              child: Transform.scale(
+                scale: Tween(begin: 0.88, end: 1.0)
+                    .animate(CurvedAnimation(parent: _ac, curve: kSmooth)).value,
+                alignment: Alignment.topRight,
+                child: child,
               ),
             ),
-            Positioned(
-              top: offset.dy + size.height + 6,
-              right: MediaQuery.of(context).size.width - offset.dx - size.width,
-              child: FadeTransition(
-                opacity: CurvedAnimation(
-                    parent: _animCtrl,
-                    curve: const Interval(0, 0.4, curve: Curves.easeOut)),
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
-                  alignment: Alignment.topRight,
-                  child: _EditPopupCard(
-                    scheme: widget.scheme,
-                    current: widget.current,
-                    onSelect: (type) {
-                      widget.onSelect(type);
-                      _closeMenu();
-                    },
-                  ),
-                ),
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: s.floatingShadow,
               ),
+              child: Column(mainAxisSize: MainAxisSize.min,
+                  children: EditorType.values.map((t) => _TypeOption(
+                    s: s, type: t,
+                    selected: widget.current == t,
+                    onTap: () { widget.onSelect(t); _close(); },
+                  )).toList()),
             ),
-          ],
-        );
-      },
-    );
-    Overlay.of(context).insert(_overlayEntry!);
+          ),
+        ),
+      ]);
+    });
+    Overlay.of(context).insert(_ov!);
     setState(() {});
   }
 
-  void _closeMenu() {
-    _animCtrl.reverse().then((_) {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-      if (mounted) setState(() {});
-    });
+  void _close() {
+    _ac.reverse().then((_) { _ov?.remove(); _ov = null; if (mounted) setState(() {}); });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return _IconTapArea(
-      key: _buttonKey,
-      onTap: _toggleMenu,
-      scheme: widget.scheme,
-      child: AppIcon('more.svg', color: widget.scheme.onSurface, size: 20),
-    );
-  }
+  Widget build(BuildContext context) => _Tap(
+    onTap: _toggle, s: widget.s, size: 36,
+    child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+  );
 }
 
-class _EditPopupCard extends StatelessWidget {
-  final AppColorScheme scheme;
-  final EditorType current;
-  final ValueChanged<EditorType> onSelect;
-
-  const _EditPopupCard({
-    required this.scheme,
-    required this.current,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        width: 220,
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: scheme.floatingShadow,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _PopupOption(scheme: scheme, asset: 'doc.svg', label: 'Documento',
-                selected: current == EditorType.docs, onTap: () => onSelect(EditorType.docs)),
-            _PopupOption(scheme: scheme, asset: 'sheet.svg', label: 'Folha de cálculo',
-                selected: current == EditorType.sheets, onTap: () => onSelect(EditorType.sheets)),
-            _PopupOption(scheme: scheme, asset: 'slide.svg', label: 'Apresentação',
-                selected: current == EditorType.slides, onTap: () => onSelect(EditorType.slides)),
-            _PopupOption(scheme: scheme, asset: 'whiteboard.svg', label: 'Quadro branco',
-                selected: current == EditorType.whiteboard, onTap: () => onSelect(EditorType.whiteboard)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PopupOption extends StatefulWidget {
-  final AppColorScheme scheme;
-  final String asset;
-  final String label;
+class _TypeOption extends StatefulWidget {
+  final AppColorScheme s;
+  final EditorType type;
   final bool selected;
   final VoidCallback onTap;
-
-  const _PopupOption({
-    required this.scheme,
-    required this.asset,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  State<_PopupOption> createState() => _PopupOptionState();
+  const _TypeOption({required this.s, required this.type, required this.selected, required this.onTap});
+  @override State<_TypeOption> createState() => _TypeOptionState();
 }
 
-class _PopupOptionState extends State<_PopupOption> {
-  bool _hover = false;
+class _TypeOptionState extends State<_TypeOption> {
+  bool _h = false;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _hover = true),
-      onTapCancel: () => setState(() => _hover = false),
-      onTapUp: (_) => setState(() => _hover = false),
-      onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        curve: kSmoothCurve,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: _hover
-              ? widget.scheme.hover
-              : widget.selected
-                  ? widget.scheme.primaryContainer.withOpacity(0.5)
-                  : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          children: [
-            AppIcon(widget.asset,
-                color: widget.selected ? widget.scheme.primary : widget.scheme.onSurface,
-                size: 17),
-            const SizedBox(width: 12),
-            Text(
-              widget.label,
-              style: TextStyle(
-                fontSize: 14,
-                color: widget.selected ? widget.scheme.primary : widget.scheme.onSurface,
-                fontWeight: widget.selected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => setState(() => _h = true),
+    onTapCancel: () => setState(() => _h = false),
+    onTapUp: (_) => setState(() => _h = false),
+    onTap: widget.onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _h ? widget.s.hover
+            : widget.selected ? widget.s.primaryContainer.withOpacity(0.5)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
       ),
-    );
-  }
+      child: Row(children: [
+        EditorTypeIcon(widget.type.pngAsset, size: 18),
+        const SizedBox(width: 10),
+        Text(widget.type.label, style: TextStyle(
+          fontSize: 14,
+          color: widget.selected ? widget.s.primary : widget.s.onSurface,
+          fontWeight: widget.selected ? FontWeight.w600 : FontWeight.normal,
+        )),
+      ]),
+    ),
+  );
 }
 
-// ── Settings Page ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// SETTINGS PAGE
+// ══════════════════════════════════════════════════════════════
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = AppTheme.of(context);
+    final s = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
-        color: scheme.surface,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                color: scheme.surface,
-                child: Row(
-                  children: [
-                    _IconTapArea(
-                      onTap: () => Navigator.of(context).pop(),
-                      scheme: scheme,
-                      child: AppIcon('back.svg', color: scheme.onSurface, size: 18),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('Definições',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurface)),
-                  ],
+        color: s.surface,
+        child: SafeArea(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              color: s.surface,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              child: Row(children: [
+                _Tap(onTap: () => Navigator.pop(context), s: s,
+                    child: Icon(Icons.arrow_back_rounded, color: s.onSurface, size: 20)),
+                const SizedBox(width: 8),
+                Text('Definições', style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600, color: s.onSurface)),
+              ]),
+            ),
+            Expanded(child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text('Aparência', style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurfaceVariant)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: s.isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: s.cardShadow,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Modo escuro',
+                          style: TextStyle(fontSize: 14, color: s.onSurface)),
+                      _Switch(value: appTheme.isDark, s: s,
+                          onChanged: (_) => appTheme.toggleDark()),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Text('Aparência',
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Modo escuro',
-                              style: TextStyle(fontSize: 14, color: scheme.onSurface)),
-                          _CustomSwitch(
-                            value: appTheme.isDark,
-                            scheme: scheme,
-                            onChanged: (_) => appTheme.toggleDark(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            )),
+          ],
+        )),
       ),
     );
   }
 }
 
-class _CustomSwitch extends StatelessWidget {
+class _Switch extends StatelessWidget {
   final bool value;
-  final AppColorScheme scheme;
+  final AppColorScheme s;
   final ValueChanged<bool> onChanged;
-
-  const _CustomSwitch({
-    required this.value,
-    required this.scheme,
-    required this.onChanged,
-  });
+  const _Switch({required this.value, required this.s, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: kSpringCurve,
-        width: 46,
-        height: 26,
-        padding: const EdgeInsets.all(3),
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => onChanged(!value),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: kSmooth,
+      width: 46, height: 26,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: value ? s.primary : s.outline,
+        borderRadius: BorderRadius.circular(13),
+      ),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: 20, height: 20,
         decoration: BoxDecoration(
-          color: value ? scheme.primary : scheme.outlineVariant,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            color: value ? scheme.onPrimary : scheme.surface,
-            shape: BoxShape.circle,
-          ),
+          color: value ? s.onPrimary : s.surface,
+          shape: BoxShape.circle,
         ),
       ),
-    );
-  }
+    ),
+  );
 }

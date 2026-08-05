@@ -18,8 +18,9 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/icons/
+    - assets/icons/svg/
+    - assets/icons/png/
     - assets/editor/docs.html
+    - assets/editor/sheets.html
     - assets/editor/slides.html
     - assets/editor/whiteboard.html
-    - assets/editor/sheets.html
