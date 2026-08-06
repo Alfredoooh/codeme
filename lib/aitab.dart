@@ -40,7 +40,6 @@ extension QuickActionX on QuickAction {
         QuickAction.whiteboard: Color(0xFFE1306C), // vermelho/rosa
       }[this]!;
 
-  /// Texto inicial colocado no input ao seleccionar o toggle.
   String get promptSeed => const {
         QuickAction.doc:        'Cria um documento Word sobre ',
         QuickAction.sheet:      'Cria uma folha de cálculo sobre ',
@@ -48,7 +47,6 @@ extension QuickActionX on QuickAction {
         QuickAction.whiteboard: 'Cria um quadro branco sobre ',
       }[this]!;
 
-  /// EditorType correspondente, para navegação automática após criação.
   EditorType get editorType => const {
         QuickAction.doc:        EditorType.docs,
         QuickAction.sheet:      EditorType.sheets,
@@ -292,17 +290,14 @@ class _AiTabState extends State<AiTab> {
   }
 
   void _onAttachFiles() async {
-    // TODO: ligar resultado (result.files) ao envio da mensagem.
     await FilePicker.pickFiles(allowMultiple: true);
   }
 
   void _onAttachPhotos() async {
-    // TODO: ligar imagem seleccionada ao envio da mensagem.
     await ImagePicker().pickImage(source: ImageSource.gallery);
   }
 
   void _onOpenCamera() async {
-    // TODO: ligar foto capturada ao envio da mensagem.
     await ImagePicker().pickImage(source: ImageSource.camera);
   }
 
@@ -357,6 +352,10 @@ class _AiTabState extends State<AiTab> {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    // Espaço ocupado pelo teclado — usado para empurrar o floating
+    // input bar para cima quando o teclado abre.
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Column(children: [
       Expanded(
         child: (_msgs.isEmpty && _showToggles)
@@ -381,7 +380,14 @@ class _AiTabState extends State<AiTab> {
         onModel: _openModelSheet,
         onClearTool: _onClearTool,
       ),
-      const SizedBox(height: 84),
+      // Sobe com o teclado (keyboard avoiding) + espaço extra em
+      // baixo quando o teclado está fechado, para o bar ficar mais
+      // afastado do fundo do ecrã.
+      AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: kCupertinoOut,
+        height: keyboardInset > 0 ? keyboardInset : 104,
+      ),
     ]);
   }
 }
@@ -606,17 +612,17 @@ class _ChatInput extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
                 child: Row(
                   children: [
-                    // Botão de adicionar (esquerda) — circular
+                    // Botão de adicionar (esquerda) — circular, ícone maior
                     GestureDetector(
                       onTap: onAttach,
                       child: Container(
-                        width: 34, height: 34,
+                        width: 36, height: 36,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: s.hover,
                           shape: BoxShape.circle,
                         ),
-                        child: AppIcon('add.svg', color: s.onSurface, size: 18),
+                        child: AppIcon('add.svg', color: s.onSurface, size: 22),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -648,11 +654,11 @@ class _ChatInput extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    // Botão de voz — escuro/cinza, não colorido
+                    // Botão de voz — ícone maior
                     GestureDetector(
                       onTap: onVoice,
                       child: Container(
-                        width: 34, height: 34,
+                        width: 36, height: 36,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: s.isDark
@@ -661,19 +667,19 @@ class _ChatInput extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: AppIcon('record.svg',
-                            color: s.onSurfaceVariant, size: 16),
+                            color: s.onSurfaceVariant, size: 20),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Botão de enviar
+                    // Botão de enviar — ícone maior
                     GestureDetector(
                       onTap: onSend,
                       child: Container(
-                        width: 34, height: 34,
+                        width: 36, height: 36,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                             color: s.primary, shape: BoxShape.circle),
-                        child: AppIcon('send.svg', color: s.onPrimary, size: 16),
+                        child: AppIcon('send.svg', color: s.onPrimary, size: 20),
                       ),
                     ),
                   ],
@@ -686,6 +692,8 @@ class _ChatInput extends StatelessWidget {
 }
 
 // ── Pill que mostra a ferramenta ligada (aparece acima do input) ─
+// Comprimento reduzido: paddings e espaçamentos internos mais
+// apertados, mantendo cantos totalmente redondos.
 
 class _AttachedToolPill extends StatelessWidget {
   final AppColorScheme s;
@@ -695,29 +703,32 @@ class _AttachedToolPill extends StatelessWidget {
       {required this.s, required this.type, required this.onClear});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: s.primaryContainer,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            EditorTypeIcon(type.pngAsset, size: 14),
-            const SizedBox(width: 6),
-            Text(type.label,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: s.onPrimaryContainer)),
-            const SizedBox(width: 6),
-            GestureDetector(
-              onTap: onClear,
-              child: AppIcon('close.svg',
-                  color: s.onPrimaryContainer, size: 12),
-            ),
-          ],
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: s.primaryContainer,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EditorTypeIcon(type.pngAsset, size: 13),
+              const SizedBox(width: 4),
+              Text(type.label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: s.onPrimaryContainer)),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: onClear,
+                child: AppIcon('close.svg',
+                    color: s.onPrimaryContainer, size: 9),
+              ),
+            ],
+          ),
         ),
       );
 }
@@ -805,62 +816,130 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              _SheetOption(
+              // Opções em cards, mesmo padrão visual da tela de definições
+              _SheetOptionsGroup(s: s, options: [
+                _SheetOption(
+                  s: s,
+                  icon: 'file.svg',
+                  label: 'Arquivos',
+                  subtitle: 'Enviar qualquer tipo de arquivo',
+                  onTap: () { Navigator.pop(context); widget.onFiles(); },
+                ),
+                _SheetOption(
+                  s: s,
+                  icon: 'image.svg',
+                  label: 'Fotos',
+                  subtitle: 'Enviar fotos da galeria',
+                  onTap: () { Navigator.pop(context); widget.onPhotos(); },
+                ),
+                _SheetOption(
+                  s: s,
+                  icon: 'camera.svg',
+                  label: 'Câmera',
+                  subtitle: 'Tirar uma foto agora',
+                  onTap: () { Navigator.pop(context); widget.onCamera(); },
+                ),
+                _SheetOption(
+                  s: s,
+                  icon: 'tools.svg',
+                  label: 'Ferramentas',
+                  subtitle: 'Ligar um documento, folha ou quadro',
+                  onTap: () { Navigator.pop(context); widget.onOpenTools(); },
+                ),
+              ]),
+              const SizedBox(height: 6),
+              // Pesquisa online — card isolado, mesmo padrão
+              _SettingsStyleCard(
                 s: s,
-                icon: 'file.svg',
-                label: 'Arquivos',
-                subtitle: 'Enviar qualquer tipo de arquivo',
-                onTap: () { Navigator.pop(context); widget.onFiles(); },
-              ),
-              _SheetOption(
-                s: s,
-                icon: 'image.svg',
-                label: 'Fotos',
-                subtitle: 'Enviar fotos da galeria',
-                onTap: () { Navigator.pop(context); widget.onPhotos(); },
-              ),
-              _SheetOption(
-                s: s,
-                icon: 'camera.svg',
-                label: 'Câmera',
-                subtitle: 'Tirar uma foto agora',
-                onTap: () { Navigator.pop(context); widget.onCamera(); },
-              ),
-              _SheetOption(
-                s: s,
-                icon: 'tools.svg',
-                label: 'Ferramentas',
-                subtitle: 'Ligar um documento, folha ou quadro',
-                onTap: () { Navigator.pop(context); widget.onOpenTools(); },
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(
-                  children: [
-                    AppIcon('globe.svg', color: s.onSurface, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text('Pesquisa online',
-                          style: TextStyle(
-                              fontSize: 14, color: s.onSurface)),
-                    ),
-                    AppSwitch(
-                      value: _webSearchOn,
-                      s: s,
-                      onChanged: (v) {
-                        setState(() => _webSearchOn = v);
-                        widget.onToggleWebSearch(v);
-                      },
-                    ),
-                  ],
+                radius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      AppIcon('globe.svg', color: s.onSurface, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Pesquisa online',
+                            style: TextStyle(
+                                fontSize: 14, color: s.onSurface)),
+                      ),
+                      AppSwitch(
+                        value: _webSearchOn,
+                        s: s,
+                        onChanged: (v) {
+                          setState(() => _webSearchOn = v);
+                          widget.onToggleWebSearch(v);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Card genérico (mesmo padrão do _SettingsCard) ──────────────
+
+class _SettingsStyleCard extends StatelessWidget {
+  final AppColorScheme s;
+  final BorderRadius radius;
+  final Widget child;
+  const _SettingsStyleCard(
+      {required this.s, required this.radius, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(color: s.cardBackground, borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
+}
+
+// ── Grupo de opções em cards — mesma lógica de raios do
+//    _SettingsGroup (primeiro/meio/último) ──────────────────────
+
+class _SheetOptionsGroup extends StatelessWidget {
+  final AppColorScheme s;
+  final List<_SheetOption> options;
+  const _SheetOptionsGroup({required this.s, required this.options});
+
+  static const double _outerRadius = 16;
+  static const double _innerRadius = 4;
+  static const double _gap = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = options.length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < count; i++) ...[
+          if (i > 0) const SizedBox(height: _gap),
+          _SettingsStyleCard(
+            s: s,
+            radius: _radiusFor(i, count),
+            child: options[i],
+          ),
+        ],
+      ],
+    );
+  }
+
+  BorderRadius _radiusFor(int index, int count) {
+    if (count == 1) return BorderRadius.circular(_outerRadius);
+    final isFirst = index == 0;
+    final isLast  = index == count - 1;
+    return BorderRadius.only(
+      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
     );
   }
 }
@@ -893,10 +972,7 @@ class _SheetOptionState extends State<_SheetOption> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _h ? widget.s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
+          color: _h ? widget.s.hover : Colors.transparent,
           child: Row(children: [
             AppIcon(widget.icon, color: widget.s.onSurface, size: 18),
             const SizedBox(width: 12),
@@ -958,15 +1034,20 @@ Future<void> showToolsSheet(
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              ...EditorType.values.map((t) => _ToolOption(
-                    s: s,
-                    type: t,
-                    selected: current == t,
-                    onTap: () {
-                      onSelect(t);
-                      Navigator.pop(ctx);
-                    },
-                  )),
+              _SheetOptionsGroup(
+                s: s,
+                options: EditorType.values
+                    .map((t) => _ToolOptionAsSheetOption(
+                          s: s,
+                          type: t,
+                          selected: current == t,
+                          onTap: () {
+                            onSelect(t);
+                            Navigator.pop(ctx);
+                          },
+                        ))
+                    .toList(),
+              ),
             ],
           ),
         ),
@@ -975,51 +1056,65 @@ Future<void> showToolsSheet(
   );
 }
 
-class _ToolOption extends StatefulWidget {
-  final AppColorScheme s;
-  final EditorType type;
+// _ToolOption adaptado para o novo padrão de card (extends
+// _SheetOption por composição, não por herança, para reaproveitar
+// o mesmo grupo/raios; aqui é um widget próprio pois o layout
+// interno difere — inclui indicador de selecção).
+
+class _ToolOptionAsSheetOption extends _SheetOption {
   final bool selected;
-  final VoidCallback onTap;
-  const _ToolOption(
-      {required this.s, required this.type, required this.selected, required this.onTap});
-  @override State<_ToolOption> createState() => _ToolOptionState();
+  _ToolOptionAsSheetOption({
+    required AppColorScheme s,
+    required EditorType type,
+    required this.selected,
+    required VoidCallback onTap,
+  }) : super(
+          s: s,
+          icon: '',
+          label: type.label,
+          subtitle: '',
+          onTap: onTap,
+        ) {
+    _type = type;
+  }
+  late final EditorType _type;
+
+  @override
+  State<_SheetOption> createState() => _ToolOptionAsSheetOptionState();
 }
 
-class _ToolOptionState extends State<_ToolOption> {
+class _ToolOptionAsSheetOptionState extends State<_SheetOption> {
   bool _h = false;
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: _h
-                ? widget.s.hover
-                : widget.selected
-                    ? widget.s.primaryContainer.withOpacity(0.5)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(children: [
-            EditorTypeIcon(widget.type.pngAsset, size: 18),
-            const SizedBox(width: 10),
-            Text(widget.type.label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: widget.selected
-                      ? widget.s.primary
-                      : widget.s.onSurface,
-                  fontWeight:
-                      widget.selected ? FontWeight.w600 : FontWeight.normal,
-                )),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final w = widget as _ToolOptionAsSheetOption;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       w.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        color: _h
+            ? w.s.hover
+            : w.selected
+                ? w.s.primaryContainer.withOpacity(0.5)
+                : Colors.transparent,
+        child: Row(children: [
+          EditorTypeIcon(w._type.pngAsset, size: 18),
+          const SizedBox(width: 10),
+          Text(w._type.label,
+              style: TextStyle(
+                fontSize: 14,
+                color: w.selected ? w.s.primary : w.s.onSurface,
+                fontWeight: w.selected ? FontWeight.w600 : FontWeight.normal,
+              )),
+        ]),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1086,8 +1181,6 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 
   void _stopAndTranscribe() {
     setState(() => _recording = false);
-    // TODO: enviar áudio gravado para o serviço de transcrição real
-    // e chamar widget.onTranscribed(textoTranscrito).
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) Navigator.pop(context);
     });
@@ -1220,15 +1313,20 @@ Future<void> showModelSelectSheet(
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              ...AiModel.values.map((m) => _ModelOption(
-                    s: s,
-                    model: m,
-                    selected: current == m,
-                    onTap: () {
-                      onSelect(m);
-                      Navigator.pop(ctx);
-                    },
-                  )),
+              _SheetOptionsGroup(
+                s: s,
+                options: AiModel.values
+                    .map((m) => _ModelOptionAsSheetOption(
+                          s: s,
+                          model: m,
+                          selected: current == m,
+                          onTap: () {
+                            onSelect(m);
+                            Navigator.pop(ctx);
+                          },
+                        ))
+                    .toList(),
+              ),
             ],
           ),
         ),
@@ -1237,59 +1335,63 @@ Future<void> showModelSelectSheet(
   );
 }
 
-class _ModelOption extends StatefulWidget {
-  final AppColorScheme s;
-  final AiModel model;
+class _ModelOptionAsSheetOption extends _SheetOption {
   final bool selected;
-  final VoidCallback onTap;
-  const _ModelOption(
-      {required this.s, required this.model, required this.selected, required this.onTap});
-  @override State<_ModelOption> createState() => _ModelOptionState();
+  _ModelOptionAsSheetOption({
+    required AppColorScheme s,
+    required AiModel model,
+    required this.selected,
+    required VoidCallback onTap,
+  }) : super(s: s, icon: '', label: '', subtitle: '', onTap: onTap) {
+    _model = model;
+  }
+  late final AiModel _model;
+
+  @override
+  State<_SheetOption> createState() => _ModelOptionAsSheetOptionState();
 }
 
-class _ModelOptionState extends State<_ModelOption> {
+class _ModelOptionAsSheetOptionState extends State<_SheetOption> {
   bool _h = false;
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: _h
-                ? widget.s.hover
-                : widget.selected
-                    ? widget.s.primaryContainer.withOpacity(0.5)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.model.label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: widget.selected
-                            ? widget.s.primary
-                            : widget.s.onSurface,
-                      )),
-                  const SizedBox(height: 1),
-                  Text(widget.model.badge,
-                      style: TextStyle(
-                          fontSize: 12, color: widget.s.onSurfaceVariant)),
-                ],
-              ),
+  Widget build(BuildContext context) {
+    final w = widget as _ModelOptionAsSheetOption;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       w.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        color: _h
+            ? w.s.hover
+            : w.selected
+                ? w.s.primaryContainer.withOpacity(0.5)
+                : Colors.transparent,
+        child: Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(w._model.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: w.selected ? w.s.primary : w.s.onSurface,
+                    )),
+                const SizedBox(height: 1),
+                Text(w._model.badge,
+                    style: TextStyle(
+                        fontSize: 12, color: w.s.onSurfaceVariant)),
+              ],
             ),
-            if (widget.selected)
-              AppIcon('check.svg', color: widget.s.primary, size: 16),
-          ]),
-        ),
-      );
+          ),
+          if (w.selected)
+            AppIcon('check.svg', color: w.s.primary, size: 16),
+        ]),
+      ),
+    );
+  }
 }

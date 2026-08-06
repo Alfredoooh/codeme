@@ -23,7 +23,6 @@ class AppColorScheme {
   Color get onPrimaryContainer => isDark ? const Color(0xFFD3E4FF) : const Color(0xFF00204D);
 
   // ── Superfície / fundo ──────────────────────────────────────
-  // Dark: aclarado ligeiramente de 0xFF1C1C1C para 0xFF232323 (menos "apagado")
   Color get surface            => isDark ? const Color(0xFF232323) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFEDEDED) : const Color(0xFF1B1B1B);
   Color get onSurfaceVariant   => isDark ? const Color(0xFFB8B8B8) : const Color(0xFF616161);
@@ -31,7 +30,6 @@ class AppColorScheme {
   Color get cardBackground     => isDark ? const Color(0xFF303030) : const Color(0xFFFFFFFF);
 
   // ── Contorno ────────────────────────────────────────────────
-  // Light: cinzentos mais neutros/frios, estilo Fluent (menos amarelados)
   Color get outline            => isDark ? const Color(0xFF4E4E4E) : const Color(0xFFD1D1D1);
   Color get outlineVariant     => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE5E5E5);
 
@@ -50,7 +48,9 @@ class AppColorScheme {
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
   Color get navIconActive      => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF2F7BF6);
   Color get navLabelActive     => isDark ? const Color(0xFFD3E4FF) : const Color(0xFF00204D);
-  Color get navIndicatorBg     => isDark ? const Color(0xFF004591) : const Color(0xFFE8F0FF);
+  // Pill do tab ativo no drawer: cinza fraquinho no dark (em vez de azul),
+  // mantém-se container azul claro no light.
+  Color get navIndicatorBg     => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE8F0FF);
 
   // ── Projetos (tab) ──────────────────────────────────────────
   Color get projectsTabBg      => const Color(0xFF2F7BF6);

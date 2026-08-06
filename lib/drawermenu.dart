@@ -91,7 +91,6 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        // Fecha o drawer com gesto de arrastar para a esquerda
         onHorizontalDragEnd: (details) {
           final v = details.primaryVelocity ?? 0;
           if (v < -200) onClose();
@@ -167,6 +166,7 @@ class AppDrawer extends StatelessWidget {
 }
 
 // ── Drawer tab tile (IA / Editor / Templates / Projetos) ───────
+// Pill totalmente curvo (cápsula) quando ativo.
 
 class _DrawerTabTile extends StatefulWidget {
   final AppColorScheme s;
@@ -208,11 +208,9 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
           color: sel
               ? s.navIndicatorBg
               : (_pressed ? s.hover : Colors.transparent),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          // Ícone: color (svg_color/) quando ativo, mono outline quando inativo.
-          // Tamanho unificado com o resto dos ícones do app (20).
           sel
               ? AppIcon(widget.tab.svg,
                   color: s.onSurface, size: 20, useColorAsset: true)
