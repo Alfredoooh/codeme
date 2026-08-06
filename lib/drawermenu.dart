@@ -276,7 +276,8 @@ class _ConvTileState extends State<_ConvTile> {
 // Cápsula totalmente curva, fundo sempre visível (cardBackground).
 // Sem ícone de definições: no lugar tem um botão que abre um popup
 // (mesmo padrão do AiConversationMenuButton) com opções rápidas —
-// alterar tema (toggle directo) e terminar sessão.
+// alterar tema (toggle directo), definições e terminar sessão.
+// Ícones exclusivamente SVG (AppIcon), nada de Icons.* Material.
 
 class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
@@ -429,19 +430,19 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
                   children: [
                     _AccountQuickOption(
                       s: s,
-                      icon: Icons.dark_mode_outlined,
+                      icon: 'theme.svg',
                       label: s.isDark ? 'Modo claro' : 'Modo escuro',
                       onTap: () { appTheme.toggleDark(); _close(); },
                     ),
                     _AccountQuickOption(
                       s: s,
-                      icon: Icons.settings_outlined,
+                      icon: 'settings.svg',
                       label: 'Definições',
                       onTap: () { widget.onOpenSettings(); _close(); },
                     ),
                     _AccountQuickOption(
                       s: s,
-                      icon: Icons.logout,
+                      icon: 'logout.svg',
                       label: 'Terminar sessão',
                       destructive: true,
                       onTap: () {
@@ -480,14 +481,15 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
             color: widget.s.hover,
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.more_vert, color: widget.s.onSurfaceVariant, size: 18),
+          child: AppIcon('more_filled.svg',
+              color: widget.s.onSurfaceVariant, size: 18),
         ),
       );
 }
 
 class _AccountQuickOption extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
@@ -521,7 +523,7 @@ class _AccountQuickOptionState extends State<_AccountQuickOption> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, color: color, size: 18),
+          AppIcon(widget.icon, color: color, size: 18),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(

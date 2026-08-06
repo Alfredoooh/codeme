@@ -35,11 +35,12 @@ class CraftLabApp extends StatelessWidget {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
-        // Status bar sólida, seguindo a cor de fundo do tema atual
+        // Status bar e nav bar do sistema seguem o mesmo tom do corpo
+        // (s.pageBackground), igual ao fundo do ecrã de chat/definições.
         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: s.surface,
+          statusBarColor: s.pageBackground,
           statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
-          systemNavigationBarColor: s.surface,
+          systemNavigationBarColor: s.pageBackground,
           systemNavigationBarIconBrightness:
               s.isDark ? Brightness.light : Brightness.dark,
         ));
@@ -60,7 +61,7 @@ class CraftLabApp extends StatelessWidget {
             ),
           ),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
-          builder: (_, child) => ColoredBox(color: s.surface, child: child!),
+          builder: (_, child) => ColoredBox(color: s.pageBackground, child: child!),
           home: const RootShell(),
         );
       }),
@@ -241,7 +242,9 @@ class _AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        color: s.surface,
+        // Mesmo tom do corpo (s.pageBackground), em vez de s.surface,
+        // para o appbar não destoar do fundo do ecrã.
+        color: s.pageBackground,
         padding: EdgeInsets.only(
           top: MediaQuery.of(context).padding.top + 6,
           bottom: 10, left: 6, right: 10,

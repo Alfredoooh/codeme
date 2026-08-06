@@ -251,7 +251,6 @@ class _AiTabState extends State<AiTab> {
   final ScrollController       _scroll = ScrollController();
   final List<String>           _msgs  = [];
 
-  bool     _showToggles  = true;
   bool     _webSearchOn  = false;
   AiModel  _model        = AiModel.deepseekV3;
   EditorType? _attachedTool;
@@ -263,7 +262,6 @@ class _AiTabState extends State<AiTab> {
     setState(() {
       _msgs.add(t);
       _ctrl.clear();
-      _showToggles = false;
       _attachedTool = null;
     });
     if (isFirst) widget.onFirstMessage();
@@ -272,16 +270,6 @@ class _AiTabState extends State<AiTab> {
         _scroll.animateTo(_scroll.position.maxScrollExtent,
             duration: const Duration(milliseconds: 300), curve: kCupertinoOut);
       }
-    });
-  }
-
-  void _onQuickAction(QuickAction action) {
-    setState(() {
-      _showToggles = false;
-      _ctrl.text = action.promptSeed;
-      _ctrl.selection =
-          TextSelection.collapsed(offset: _ctrl.text.length);
-      _attachedTool = action.editorType;
     });
   }
 
@@ -306,21 +294,12 @@ class _AiTabState extends State<AiTab> {
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
-  void _openAttachSheet() {
-    showAttachSheet(
+  void _openToolsSheet() {
+    showToolsSheet(
       context,
       AppTheme.of(context),
-      webSearchOn: _webSearchOn,
-      onToggleWebSearch: _onToggleWebSearch,
-      onFiles: _onAttachFiles,
-      onPhotos: _onAttachPhotos,
-      onCamera: _onOpenCamera,
-      onOpenTools: () => showToolsSheet(
-        context,
-        AppTheme.of(context),
-        current: _attachedTool,
-        onSelect: _onToolSelected,
-      ),
+      current: _attachedTool,
+      onSelect: _onToolSelected,
     );
   }
 
@@ -358,134 +337,40 @@ class _AiTabState extends State<AiTab> {
 
     return Column(children: [
       Expanded(
-        child: (_msgs.isEmpty && _showToggles)
+        child: _msgs.isEmpty
             ? const SizedBox.shrink()
-            : _msgs.isEmpty
-                ? const SizedBox.shrink()
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    itemCount: _msgs.length,
-                    itemBuilder: (_, i) => _Bubble(s: s, text: _msgs[i]),
-                  ),
+            : ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                itemCount: _msgs.length,
+                itemBuilder: (_, i) => _Bubble(s: s, text: _msgs[i]),
+              ),
       ),
-      // Toggles numa linha só, encostados às pontas, logo acima da
-      // barra de input flutuante — só aparecem antes da 1ª mensagem.
-      if (_msgs.isEmpty && _showToggles)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: _EmptyStateToggleRow(s: s, onQuickAction: _onQuickAction),
-        ),
       _ChatInput(
         s: s,
         ctrl: _ctrl,
         model: _model,
+        webSearchOn: _webSearchOn,
         attachedTool: _attachedTool,
         onSend: _send,
-        onAttach: _openAttachSheet,
+        onFiles: _onAttachFiles,
+        onPhotos: _onAttachPhotos,
+        onCamera: _onOpenCamera,
+        onOpenTools: _openToolsSheet,
+        onToggleWebSearch: _onToggleWebSearch,
         onVoice: _openVoiceSheet,
         onModel: _openModelSheet,
         onClearTool: _onClearTool,
       ),
       // Sobe com o teclado (keyboard avoiding) + espaço extra em
       // baixo quando o teclado está fechado, para o bar ficar mais
-      // afastada do fundo do ecrã (desce um pouco mais que antes).
+      // afastada do fundo do ecrã.
       AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: kCupertinoOut,
         height: keyboardInset > 0 ? keyboardInset : 20,
       ),
     ]);
-  }
-}
-
-// ── Toggles em linha, um de cada ponta, por cima do input bar ──
-
-class _EmptyStateToggleRow extends StatelessWidget {
-  final AppColorScheme s;
-  final ValueChanged<QuickAction> onQuickAction;
-  const _EmptyStateToggleRow({required this.s, required this.onQuickAction});
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: QuickAction.values
-            .map((a) => _QuickActionChip(
-                  s: s,
-                  action: a,
-                  onTap: () => onQuickAction(a),
-                ))
-            .toList(),
-      );
-}
-
-// ── Toggle individual (chip compacto com ícone + label + borda) ─
-
-class _QuickActionChip extends StatefulWidget {
-  final AppColorScheme s;
-  final QuickAction action;
-  final VoidCallback onTap;
-  const _QuickActionChip({
-    required this.s,
-    required this.action,
-    required this.onTap,
-  });
-
-  @override
-  State<_QuickActionChip> createState() => _QuickActionChipState();
-}
-
-class _QuickActionChipState extends State<_QuickActionChip> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
-      onTap:       widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.94 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: widget.action.tint.withOpacity(s.isDark ? 0.16 : 0.10),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: widget.action.tint,
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Image.asset(
-                'assets/icons/png/${widget.action.asset}',
-                width: 14,
-                height: 14,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                widget.action.label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: widget.action.tint,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -527,9 +412,14 @@ class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
   final AiModel model;
+  final bool webSearchOn;
   final EditorType? attachedTool;
   final VoidCallback onSend;
-  final VoidCallback onAttach;
+  final VoidCallback onFiles;
+  final VoidCallback onPhotos;
+  final VoidCallback onCamera;
+  final VoidCallback onOpenTools;
+  final ValueChanged<bool> onToggleWebSearch;
   final VoidCallback onVoice;
   final VoidCallback onModel;
   final VoidCallback onClearTool;
@@ -538,9 +428,14 @@ class _ChatInput extends StatelessWidget {
     required this.s,
     required this.ctrl,
     required this.model,
+    required this.webSearchOn,
     required this.attachedTool,
     required this.onSend,
-    required this.onAttach,
+    required this.onFiles,
+    required this.onPhotos,
+    required this.onCamera,
+    required this.onOpenTools,
+    required this.onToggleWebSearch,
     required this.onVoice,
     required this.onModel,
     required this.onClearTool,
@@ -586,18 +481,17 @@ class _ChatInput extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
                 child: Row(
                   children: [
-                    // Botão de adicionar (esquerda) — circular, ícone maior
-                    GestureDetector(
-                      onTap: onAttach,
-                      child: Container(
-                        width: 36, height: 36,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: s.hover,
-                          shape: BoxShape.circle,
-                        ),
-                        child: AppIcon('add.svg', color: s.onSurface, size: 22),
-                      ),
+                    // Botão de adicionar (esquerda) — abre popup ancorado
+                    // com as opções de anexo (mesmo padrão do popup do
+                    // menu de conversa), em vez de bottom sheet modal.
+                    _AttachMenuButton(
+                      s: s,
+                      webSearchOn: webSearchOn,
+                      onFiles: onFiles,
+                      onPhotos: onPhotos,
+                      onCamera: onCamera,
+                      onOpenTools: onOpenTools,
+                      onToggleWebSearch: onToggleWebSearch,
                     ),
                     const SizedBox(width: 6),
                     // Selector de modelo
@@ -708,141 +602,138 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH SHEET (modal de anexos: arquivos, fotos, câmera, pesquisa
-// online, ferramentas)
+// ATTACH MENU BUTTON (popup ancorado — substitui o antigo bottom
+// sheet modal de anexos). Mesmo padrão de overlay (fade + scale)
+// do AiConversationMenuButton, ancorado ao próprio botão "+".
 // ══════════════════════════════════════════════════════════════
 
-Future<void> showAttachSheet(
-  BuildContext context,
-  AppColorScheme s, {
-  required bool webSearchOn,
-  required ValueChanged<bool> onToggleWebSearch,
-  required VoidCallback onFiles,
-  required VoidCallback onPhotos,
-  required VoidCallback onCamera,
-  required VoidCallback onOpenTools,
-}) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => _AttachSheetContent(
-      s: s,
-      webSearchOn: webSearchOn,
-      onToggleWebSearch: onToggleWebSearch,
-      onFiles: onFiles,
-      onPhotos: onPhotos,
-      onCamera: onCamera,
-      onOpenTools: onOpenTools,
-    ),
-  );
-}
-
-class _AttachSheetContent extends StatefulWidget {
+class _AttachMenuButton extends StatefulWidget {
   final AppColorScheme s;
   final bool webSearchOn;
-  final ValueChanged<bool> onToggleWebSearch;
   final VoidCallback onFiles;
   final VoidCallback onPhotos;
   final VoidCallback onCamera;
   final VoidCallback onOpenTools;
+  final ValueChanged<bool> onToggleWebSearch;
 
-  const _AttachSheetContent({
+  const _AttachMenuButton({
     required this.s,
     required this.webSearchOn,
-    required this.onToggleWebSearch,
     required this.onFiles,
     required this.onPhotos,
     required this.onCamera,
     required this.onOpenTools,
+    required this.onToggleWebSearch,
   });
 
   @override
-  State<_AttachSheetContent> createState() => _AttachSheetContentState();
+  State<_AttachMenuButton> createState() => _AttachMenuButtonState();
 }
 
-class _AttachSheetContentState extends State<_AttachSheetContent> {
+class _AttachMenuButtonState extends State<_AttachMenuButton>
+    with SingleTickerProviderStateMixin {
+  OverlayEntry? _ov;
+  late AnimationController _ac;
   late bool _webSearchOn = widget.webSearchOn;
 
   @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
-          decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: s.floatingShadow,
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
+  }
+
+  @override
+  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
+
+  void _toggle() => _ov == null ? _open() : _close();
+
+  void _open() {
+    final box = context.findRenderObject() as RenderBox;
+    final off = box.localToGlobal(Offset.zero);
+    final sz  = box.size;
+    _ac.forward(from: 0);
+
+    _ov = OverlayEntry(builder: (ctx) {
+      final s = widget.s;
+      return Stack(children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: _close,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: s.outline,
-                  borderRadius: BorderRadius.circular(999),
-                ),
+        ),
+        Positioned(
+          // Abre para cima do botão, já que este fica junto ao fundo
+          // do ecrã, dentro da barra de input.
+          bottom: MediaQuery.of(ctx).size.height - off.dy + 6,
+          left: off.dx,
+          child: AnimatedBuilder(
+            animation: _ac,
+            builder: (_, child) => Opacity(
+              opacity: CurvedAnimation(
+                      parent: _ac,
+                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                  .value,
+              child: Transform.scale(
+                scale: Tween(begin: 0.92, end: 1.0)
+                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
+                    .value,
+                alignment: Alignment.bottomLeft,
+                child: child,
               ),
-              // Opções em cards, mesmo padrão visual da tela de definições
-              _SheetOptionsGroup(s: s, options: [
-                _SheetOption(
-                  s: s,
-                  icon: 'file.svg',
-                  label: 'Arquivos',
-                  subtitle: 'Enviar qualquer tipo de arquivo',
-                  onTap: () { Navigator.pop(context); widget.onFiles(); },
-                ),
-                _SheetOption(
-                  s: s,
-                  icon: 'image.svg',
-                  label: 'Fotos',
-                  subtitle: 'Enviar fotos da galeria',
-                  onTap: () { Navigator.pop(context); widget.onPhotos(); },
-                ),
-                _SheetOption(
-                  s: s,
-                  icon: 'camera.svg',
-                  label: 'Câmera',
-                  subtitle: 'Tirar uma foto agora',
-                  onTap: () { Navigator.pop(context); widget.onCamera(); },
-                ),
-                _SheetOption(
-                  s: s,
-                  icon: 'tools.svg',
-                  label: 'Ferramentas',
-                  subtitle: 'Ligar um documento, folha ou quadro',
-                  onTap: () { Navigator.pop(context); widget.onOpenTools(); },
-                ),
-              ]),
-              const SizedBox(height: 6),
-              // Pesquisa online — card isolado, mesmo padrão
-              _SettingsStyleCard(
-                s: s,
-                radius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  child: Row(
+            ),
+            child: StatefulBuilder(
+              builder: (ctx, setOverlayState) => Material(
+                type: MaterialType.transparency,
+                child: Container(
+                  width: 240,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: s.floatingShadow,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      AppIcon('globe.svg', color: s.onSurface, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text('Pesquisa online',
-                            style: TextStyle(
-                                fontSize: 14, color: s.onSurface)),
-                      ),
-                      AppSwitch(
-                        value: _webSearchOn,
+                      _AttachMenuOption(
                         s: s,
+                        icon: 'file.svg',
+                        label: 'Arquivos',
+                        onTap: () { widget.onFiles(); _close(); },
+                      ),
+                      _AttachMenuOption(
+                        s: s,
+                        icon: 'image.svg',
+                        label: 'Fotos',
+                        onTap: () { widget.onPhotos(); _close(); },
+                      ),
+                      _AttachMenuOption(
+                        s: s,
+                        icon: 'camera.svg',
+                        label: 'Câmera',
+                        onTap: () { widget.onCamera(); _close(); },
+                      ),
+                      _AttachMenuOption(
+                        s: s,
+                        icon: 'tools.svg',
+                        label: 'Ferramentas',
+                        onTap: () { widget.onOpenTools(); _close(); },
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        child: Divider(height: 1),
+                      ),
+                      _AttachMenuSwitchOption(
+                        s: s,
+                        icon: 'globe.svg',
+                        label: 'Pesquisa online',
+                        value: _webSearchOn,
                         onChanged: (v) {
-                          setState(() => _webSearchOn = v);
+                          setOverlayState(() => _webSearchOn = v);
                           widget.onToggleWebSearch(v);
                         },
                       ),
@@ -850,15 +741,112 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      ),
-    );
+      ]);
+    });
+    Overlay.of(context).insert(_ov!);
+    setState(() {});
   }
+
+  void _close() {
+    _ac.reverse().then((_) {
+      _ov?.remove();
+      _ov = null;
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggle,
+        child: Container(
+          width: 36, height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.s.hover,
+            shape: BoxShape.circle,
+          ),
+          child: AppIcon('add.svg', color: widget.s.onSurface, size: 22),
+        ),
+      );
 }
 
-// ── Card genérico (mesmo padrão do _SettingsCard) ──────────────
+class _AttachMenuOption extends StatefulWidget {
+  final AppColorScheme s;
+  final String icon;
+  final String label;
+  final VoidCallback onTap;
+  const _AttachMenuOption({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  @override State<_AttachMenuOption> createState() => _AttachMenuOptionState();
+}
+
+class _AttachMenuOptionState extends State<_AttachMenuOption> {
+  bool _h = false;
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown:   (_) => setState(() => _h = true),
+        onTapCancel: ()  => setState(() => _h = false),
+        onTapUp:     (_) => setState(() => _h = false),
+        onTap:       widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _h ? widget.s.hover : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(children: [
+            AppIcon(widget.icon, color: widget.s.onSurface, size: 18),
+            const SizedBox(width: 10),
+            Text(widget.label,
+                style: TextStyle(fontSize: 14, color: widget.s.onSurface)),
+          ]),
+        ),
+      );
+}
+
+class _AttachMenuSwitchOption extends StatelessWidget {
+  final AppColorScheme s;
+  final String icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _AttachMenuSwitchOption({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(children: [
+          AppIcon(icon, color: s.onSurface, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(fontSize: 14, color: s.onSurface)),
+          ),
+          AppSwitch(value: value, s: s, onChanged: onChanged),
+        ]),
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
+// CARD GENÉRICO (mesmo padrão do _SettingsCard, ainda usado pelo
+// tools sheet e model sheet abaixo) e opções em grupo
+// ══════════════════════════════════════════════════════════════
 
 class _SettingsStyleCard extends StatelessWidget {
   final AppColorScheme s;
@@ -874,9 +862,6 @@ class _SettingsStyleCard extends StatelessWidget {
         child: child,
       );
 }
-
-// ── Grupo de opções em cards — mesma lógica de raios do
-//    _SettingsGroup (primeiro/meio/último) ──────────────────────
 
 class _SheetOptionsGroup extends StatelessWidget {
   final AppColorScheme s;
@@ -1215,8 +1200,8 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                     shape: BoxShape.circle,
                     border: Border.all(color: s.error, width: 1.5),
                   ),
-                  child: Icon(
-                    _recording ? Icons.mic : Icons.mic_none,
+                  child: AppIcon(
+                    _recording ? 'record.svg' : 'record.svg',
                     color: s.error,
                     size: 30,
                   ),
