@@ -11,9 +11,9 @@ workflows:
       - name: Generate key.properties
         script: |
           cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
-          storePassword=$CM_KEYSTORE_PASSWORD
-          keyPassword=$CM_KEY_PASSWORD
-          keyAlias=$CM_KEY_ALIAS
+          storePassword=Test@Codeme2026
+          keyPassword=Test@Codeme2026
+          keyAlias=codeme-test
           storeFile=codeme-release.jks
           EOF
           echo "✅ key.properties gerado"
