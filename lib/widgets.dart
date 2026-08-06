@@ -10,14 +10,32 @@ class AppIcon extends StatelessWidget {
   final String asset;
   final double size;
   final Color color;
-  const AppIcon(this.asset, {super.key, this.size = 20, required this.color});
+  /// Quando true, carrega de assets/icons/svg_color/ e NÃO aplica
+  /// colorFilter — o ícone mantém as cores originais do próprio SVG.
+  final bool useColorAsset;
+
+  const AppIcon(
+    this.asset, {
+    super.key,
+    this.size = 20,
+    required this.color,
+    this.useColorAsset = false,
+  });
 
   @override
-  Widget build(BuildContext context) => SvgPicture.asset(
-        'assets/icons/svg/$asset',
-        width: size, height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
+  Widget build(BuildContext context) {
+    final path = useColorAsset
+        ? 'assets/icons/svg_color/$asset'
+        : 'assets/icons/svg/$asset';
+
+    return SvgPicture.asset(
+      path,
+      width: size,
+      height: size,
+      colorFilter:
+          useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
 }
 
 class EditorTypeIcon extends StatelessWidget {

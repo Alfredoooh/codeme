@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
-import 'bottomtabbar.dart';
 import 'aitab.dart';
 import 'edittab.dart';
 import 'templatestab.dart';
@@ -36,8 +35,9 @@ class CraftLabApp extends StatelessWidget {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
+        // Status bar sólida, seguindo a cor de fundo do tema atual
         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          statusBarColor: s.surface,
           statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
           systemNavigationBarColor: s.surface,
           systemNavigationBarIconBrightness:
@@ -105,6 +105,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   }
 
   void _selectTab(AppTab t) {
+    _closeDrawer();
     if (t != _tab) setState(() => _tab = t);
   }
 
@@ -157,7 +158,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
       type: MaterialType.transparency,
       child: Stack(children: [
 
-        // ── Conteúdo principal
+        // ── Conteúdo principal (ocupa toda a área, sem bottom bar)
         ColoredBox(
           color: s.surface,
           child: Column(children: [
@@ -186,22 +187,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           ]),
         ),
 
-        // ── Bottom bar flutuante
-        Positioned(
-          bottom: 14, left: 0, right: 0,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: BottomTabBar(
-                s: s,
-                current: _tab,
-                onChanged: _selectTab,
-              ),
-            ),
-          ),
-        ),
-
         // ── Barrier drawer
         if (_drawerOpen)
           Positioned.fill(
@@ -223,7 +208,12 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
             );
           },
           child: AppDrawer(
-              s: s, onClose: _closeDrawer, onSettings: _openSettings),
+            s: s,
+            onClose: _closeDrawer,
+            onSettings: _openSettings,
+            currentTab: _tab,
+            onSelectTab: _selectTab,
+          ),
         ),
       ]),
     );

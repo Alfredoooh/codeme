@@ -4,6 +4,35 @@ import 'colors.dart';
 import 'widgets.dart';
 
 // ══════════════════════════════════════════════════════════════
+// TABS — 4 tabs: IA | Editor | Templates | Projetos
+// ══════════════════════════════════════════════════════════════
+
+enum AppTab { ai, edit, templates, projects }
+
+extension AppTabX on AppTab {
+  String get svg       => const {
+        AppTab.ai:        'ai_tab.svg',
+        AppTab.edit:      'edit_tab.svg',
+        AppTab.templates: 'templates.svg',
+        AppTab.projects:  'projects.svg',
+      }[this]!;
+
+  String get svgFilled => const {
+        AppTab.ai:        'ai_tab_filled.svg',
+        AppTab.edit:      'edit_tab_filled.svg',
+        AppTab.templates: 'templates_filled.svg',
+        AppTab.projects:  'projects_filled.svg',
+      }[this]!;
+
+  String get label => const {
+        AppTab.ai:        'IA',
+        AppTab.edit:      'Editor',
+        AppTab.templates: 'Templates',
+        AppTab.projects:  'Projetos',
+      }[this]!;
+}
+
+// ══════════════════════════════════════════════════════════════
 // SPRING NAV (slide lateral, SEM recoil no conteúdo)
 // ══════════════════════════════════════════════════════════════
 
@@ -41,63 +70,166 @@ class AppDrawer extends StatelessWidget {
   final AppColorScheme s;
   final VoidCallback onClose;
   final VoidCallback onSettings;
+  final AppTab currentTab;
+  final ValueChanged<AppTab> onSelectTab;
 
   const AppDrawer({
     super.key,
     required this.s,
     required this.onClose,
     required this.onSettings,
+    required this.currentTab,
+    required this.onSelectTab,
   });
 
+  static const List<AppTab> _allTabs = [
+    AppTab.ai,
+    AppTab.edit,
+    AppTab.templates,
+    AppTab.projects,
+  ];
+
   @override
-  Widget build(BuildContext context) => Container(
-        color: s.surface,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-                child: Row(children: [
-                  Text('Conversas',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface,
-                      )),
-                  const Spacer(),
-                  AppTap(
-                    onTap: onClose, s: s, size: 32,
-                    child:
-                        AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
+  Widget build(BuildContext context) => GestureDetector(
+        // Fecha o drawer com gesto de arrastar para a esquerda
+        onHorizontalDragEnd: (details) {
+          final v = details.primaryVelocity ?? 0;
+          if (v < -200) onClose();
+        },
+        child: Container(
+          color: s.surface,
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+                  child: Text(
+                    'Menu',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: s.onSurface,
+                    ),
                   ),
-                ]),
-              ),
-              Expanded(
-                child: conversations.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Sem conversas ainda',
-                          style: TextStyle(
-                              fontSize: 14, color: s.onSurfaceVariant),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Column(
+                    children: [
+                      for (final tab in _allTabs)
+                        _DrawerTabTile(
+                          s: s,
+                          tab: tab,
+                          selected: currentTab == tab,
+                          onTap: () => onSelectTab(tab),
                         ),
-                      )
-                    : ListView.builder(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8),
-                        itemCount: conversations.length,
-                        itemBuilder: (_, i) =>
-                            _ConvTile(s: s, item: conversations[i]),
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: _AccountPill(s: s, onTap: onSettings),
-              ),
-            ],
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+                  child: Text(
+                    'Conversas',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: conversations.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Sem conversas ainda',
+                            style: TextStyle(
+                                fontSize: 14, color: s.onSurfaceVariant),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                          itemCount: conversations.length,
+                          itemBuilder: (_, i) =>
+                              _ConvTile(s: s, item: conversations[i]),
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: _AccountPill(s: s, onTap: onSettings),
+                ),
+              ],
+            ),
           ),
         ),
       );
+}
+
+// ── Drawer tab tile (IA / Editor / Templates / Projetos) ───────
+
+class _DrawerTabTile extends StatefulWidget {
+  final AppColorScheme s;
+  final AppTab tab;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DrawerTabTile({
+    required this.s,
+    required this.tab,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  State<_DrawerTabTile> createState() => _DrawerTabTileState();
+}
+
+class _DrawerTabTileState extends State<_DrawerTabTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s   = widget.s;
+    final sel = widget.selected;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: kCupertinoOut,
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: sel
+              ? s.navIndicatorBg
+              : (_pressed ? s.hover : Colors.transparent),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          // Ícone: color (svg_color/) quando ativo, mono outline quando inativo.
+          // Tamanho unificado com o resto dos ícones do app (20).
+          sel
+              ? AppIcon(widget.tab.svg,
+                  color: s.onSurface, size: 20, useColorAsset: true)
+              : AppIcon(widget.tab.svg, color: s.onSurfaceVariant, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            widget.tab.label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+              color: sel ? s.navLabelActive : s.onSurface,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 // ── Conversation tile ─────────────────────────────────────────
