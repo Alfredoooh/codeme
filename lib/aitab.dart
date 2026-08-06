@@ -293,7 +293,7 @@ class _AiTabState extends State<AiTab> {
 
   void _onAttachFiles() async {
     // TODO: ligar resultado (result.files) ao envio da mensagem.
-    await FilePicker.platform.pickFiles(allowMultiple: true);
+    await FilePicker.pickFiles(allowMultiple: true);
   }
 
   void _onAttachPhotos() async {
