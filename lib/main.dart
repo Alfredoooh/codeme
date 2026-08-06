@@ -159,8 +159,10 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
       child: Stack(children: [
 
         // ── Conteúdo principal (ocupa toda a área, sem bottom bar)
+        // Fundo igual ao do SettingsScreen (s.pageBackground), para o
+        // ecrã de chat e as restantes tabs partilharem o mesmo tom.
         ColoredBox(
-          color: s.surface,
+          color: s.pageBackground,
           child: Column(children: [
             _AppHeader(
               s: s,

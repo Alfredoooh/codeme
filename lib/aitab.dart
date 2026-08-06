@@ -359,7 +359,7 @@ class _AiTabState extends State<AiTab> {
     return Column(children: [
       Expanded(
         child: (_msgs.isEmpty && _showToggles)
-            ? _EmptyState(s: s, onQuickAction: _onQuickAction)
+            ? const SizedBox.shrink()
             : _msgs.isEmpty
                 ? const SizedBox.shrink()
                 : ListView.builder(
@@ -369,6 +369,13 @@ class _AiTabState extends State<AiTab> {
                     itemBuilder: (_, i) => _Bubble(s: s, text: _msgs[i]),
                   ),
       ),
+      // Toggles numa linha só, encostados às pontas, logo acima da
+      // barra de input flutuante — só aparecem antes da 1ª mensagem.
+      if (_msgs.isEmpty && _showToggles)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: _EmptyStateToggleRow(s: s, onQuickAction: _onQuickAction),
+        ),
       _ChatInput(
         s: s,
         ctrl: _ctrl,
@@ -382,41 +389,33 @@ class _AiTabState extends State<AiTab> {
       ),
       // Sobe com o teclado (keyboard avoiding) + espaço extra em
       // baixo quando o teclado está fechado, para o bar ficar mais
-      // afastado do fundo do ecrã.
+      // afastada do fundo do ecrã (desce um pouco mais que antes).
       AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: kCupertinoOut,
-        height: keyboardInset > 0 ? keyboardInset : 104,
+        height: keyboardInset > 0 ? keyboardInset : 20,
       ),
     ]);
   }
 }
 
-// ── Empty state — toggles em grelha, somem ao seleccionar ──────
+// ── Toggles em linha, um de cada ponta, por cima do input bar ──
 
-class _EmptyState extends StatelessWidget {
+class _EmptyStateToggleRow extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<QuickAction> onQuickAction;
-  const _EmptyState({required this.s, required this.onQuickAction});
+  const _EmptyStateToggleRow({required this.s, required this.onQuickAction});
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: QuickAction.values
-                .map((a) => _QuickActionChip(
-                      s: s,
-                      action: a,
-                      onTap: () => onQuickAction(a),
-                    ))
-                .toList(),
-          ),
-        ),
+  Widget build(BuildContext context) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: QuickAction.values
+            .map((a) => _QuickActionChip(
+                  s: s,
+                  action: a,
+                  onTap: () => onQuickAction(a),
+                ))
+            .toList(),
       );
 }
 
@@ -499,55 +498,30 @@ class _Bubble extends StatefulWidget {
   @override State<_Bubble> createState() => _BubbleState();
 }
 
-class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-  late final Animation<double> _scale, _op;
-
+class _BubbleState extends State<_Bubble> {
   @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
-    _scale = Tween(begin: 0.92, end: 1.0)
-        .animate(CurvedAnimation(parent: _c, curve: kCupertinoOut));
-    _op = Tween(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _c,
-            curve: const Interval(0, 0.5, curve: Curves.easeOut)));
-    _c.forward();
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        decoration: BoxDecoration(
+          color: s.primaryContainer,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          widget.text,
+          style: TextStyle(fontSize: 15, color: s.onPrimaryContainer),
+        ),
+      ),
+    );
   }
-
-  @override void dispose() { _c.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _c,
-        builder: (_, child) => Opacity(
-          opacity: _op.value.clamp(0.0, 1.0),
-          child: Transform.scale(
-              scale: _scale.value, alignment: Alignment.centerRight, child: child),
-        ),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75),
-            decoration: BoxDecoration(
-              color: widget.s.primaryContainer,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: widget.s.cardShadow,
-            ),
-            child: Text(widget.text,
-                style: TextStyle(
-                    color: widget.s.onPrimaryContainer, fontSize: 14)),
-          ),
-        ),
-      );
 }
-
-// ══════════════════════════════════════════════════════════════
-// CHAT INPUT
-// ══════════════════════════════════════════════════════════════
 
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
@@ -574,7 +548,7 @@ class _ChatInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
         child: Container(
           decoration: BoxDecoration(
             color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
