@@ -50,7 +50,6 @@ workflows:
               "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
           }
 
-          # Fluent Design: cantos mais suaves (estilo Windows 11 / Mica)
           def fluent_rounded(img, size, ratio=0.22):
               img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
               mask = Image.new("L", (size, size), 0)
@@ -102,12 +101,6 @@ workflows:
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
-
-      - name: Generate Gradle Wrapper
-        script: |
-          cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.14
-          chmod +x gradlew
 
       - name: Enable R8 + resource shrinking
         script: |
@@ -225,12 +218,6 @@ workflows:
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
-
-      - name: Generate Gradle Wrapper
-        script: |
-          cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.14
-          chmod +x gradlew
 
       - name: Build debug APK
         script: |
