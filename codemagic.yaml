@@ -8,20 +8,13 @@ workflows:
       groups:
         - codeme_keystore
     scripts:
-      - name: Restore keystore from encrypted variable
-        script: |
-          KEYSTORE_DIR="${CM_BUILD_DIR}/keystore"
-          mkdir -p "$KEYSTORE_DIR"
-          echo "$CM_KEYSTORE" | base64 --decode > "$KEYSTORE_DIR/codeme-release.jks"
-          echo "✅ Keystore restaurado em $KEYSTORE_DIR/codeme-release.jks"
-
       - name: Generate key.properties
         script: |
           cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
           storePassword=$CM_KEYSTORE_PASSWORD
           keyPassword=$CM_KEY_PASSWORD
           keyAlias=$CM_KEY_ALIAS
-          storeFile=../keystore/codeme-release.jks
+          storeFile=app/codeme-release.jks
           EOF
           echo "✅ key.properties gerado"
 
