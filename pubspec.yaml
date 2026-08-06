@@ -14,6 +14,8 @@ dependencies:
     sdk: flutter
   flutter_inappwebview: ^6.1.5
   flutter_svg: ^2.0.10+1
+  file_picker: ^8.x
+  image_picker: ^1.x
 
 flutter:
   uses-material-design: true
