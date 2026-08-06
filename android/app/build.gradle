@@ -23,7 +23,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
 namespace "com.codeme.app"
-compileSdkVersion 34
+compileSdkVersion 35
 ndkVersion flutter.ndkVersion
 
 compileOptions {
@@ -42,7 +42,7 @@ main.java.srcDirs += "src/main/kotlin"
 defaultConfig {
 applicationId "com.codeme.app"
 minSdkVersion 24
-targetSdkVersion 34
+targetSdkVersion 35
 versionCode flutterVersionCode.toInteger()
 versionName flutterVersionName
 multiDexEnabled true
