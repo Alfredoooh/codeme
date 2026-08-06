@@ -93,16 +93,21 @@ workflows:
           print("Icones e splash processados com sucesso!")
           PYEOF
 
-      - name: Generate Gradle Wrapper
+      - name: Remove stale adaptive icon (anydpi-v26)
         script: |
-          cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.14
-          chmod +x gradlew
+          rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
+          echo "✅ mipmap-anydpi-v26 removido (se existia)"
 
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
+
+      - name: Generate Gradle Wrapper
+        script: |
+          cd "${CM_BUILD_DIR}/android"
+          gradle wrapper --gradle-version 8.14
+          chmod +x gradlew
 
       - name: Enable R8 + resource shrinking
         script: |
@@ -211,16 +216,21 @@ workflows:
           print("Icones e splash processados com sucesso!")
           PYEOF
 
-      - name: Generate Gradle Wrapper
+      - name: Remove stale adaptive icon (anydpi-v26)
         script: |
-          cd "${CM_BUILD_DIR}/android"
-          gradle wrapper --gradle-version 8.14
-          chmod +x gradlew
+          rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
+          echo "✅ mipmap-anydpi-v26 removido (se existia)"
 
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
+
+      - name: Generate Gradle Wrapper
+        script: |
+          cd "${CM_BUILD_DIR}/android"
+          gradle wrapper --gradle-version 8.14
+          chmod +x gradlew
 
       - name: Build debug APK
         script: |
