@@ -1,5 +1,6 @@
 plugins {
 id "com.android.application"
+id "kotlin-android"
 id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -22,12 +23,16 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
 namespace "com.codeme.app"
-compileSdkVersion 36
+compileSdkVersion 34
 ndkVersion flutter.ndkVersion
 
 compileOptions {
-sourceCompatibility JavaVersion.VERSION_17
-targetCompatibility JavaVersion.VERSION_17
+sourceCompatibility JavaVersion.VERSION_1_8
+targetCompatibility JavaVersion.VERSION_1_8
+}
+
+kotlinOptions {
+jvmTarget = "1.8"
 }
 
 sourceSets {
@@ -37,7 +42,7 @@ main.java.srcDirs += "src/main/kotlin"
 defaultConfig {
 applicationId "com.codeme.app"
 minSdkVersion 24
-targetSdkVersion 36
+targetSdkVersion 34
 versionCode flutterVersionCode.toInteger()
 versionName flutterVersionName
 multiDexEnabled true
@@ -74,6 +79,7 @@ source "../.."
 }
 
 dependencies {
+implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22"
 implementation "androidx.multidex:multidex:2.0.1"
 implementation "androidx.webkit:webkit:1.10.0"
 }
