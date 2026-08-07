@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'sheets.dart';
+import 'api_service.dart';
 
 // ══════════════════════════════════════════════════════════════
 // EDITOR TYPE ENUM
@@ -32,7 +33,39 @@ extension EditorTypeX on EditorType {
         EditorType.slides:     'assets/editor/slides.html',
         EditorType.whiteboard: 'assets/editor/whiteboard.html',
       }[this]!;
+
+  static EditorType fromCanvasKind(CanvasKind k) {
+    switch (k) {
+      case CanvasKind.sheet: return EditorType.sheets;
+      case CanvasKind.slide: return EditorType.slides;
+      case CanvasKind.whiteboard: return EditorType.whiteboard;
+      case CanvasKind.doc: return EditorType.docs;
+    }
+  }
 }
+
+// ══════════════════════════════════════════════════════════════
+// EDIT TAB CONTROLLER — permite que widgets fora do EditTab (ex:
+// o Canvas Popup na AiTab) mandem carregar um CanvasItem específico
+// dentro do WebView certo, sem acoplar EditTab ao AiTab diretamente.
+// ══════════════════════════════════════════════════════════════
+
+class EditTabController extends ChangeNotifier {
+  CanvasItem? _pendingLoad;
+
+  CanvasItem? get pendingLoad => _pendingLoad;
+
+  void requestLoad(CanvasItem item) {
+    _pendingLoad = item;
+    notifyListeners();
+  }
+
+  void consumePendingLoad() {
+    _pendingLoad = null;
+  }
+}
+
+final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
 // EDIT TAB
@@ -48,6 +81,39 @@ class _EditTabState extends State<EditTab> {
   final Map<EditorType, InAppWebViewController?> _controllers = {
     for (final t in EditorType.values) t: null,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    editTabController.addListener(_onPendingLoad);
+    // Se já houver um pedido pendente (ex: navegou-se para esta tab
+    // exatamente por causa de um clique no canvas popup), processa já.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingLoad());
+  }
+
+  @override
+  void dispose() {
+    editTabController.removeListener(_onPendingLoad);
+    super.dispose();
+  }
+
+  void _onPendingLoad() {
+    final pending = editTabController.pendingLoad;
+    if (pending == null) return;
+    final targetType = EditorTypeX.fromCanvasKind(pending.kind);
+    final ctrl = _controllers[targetType];
+    if (ctrl == null) return; // WebView ainda não foi criado — tenta de novo ao criar
+    _injectCanvas(ctrl, pending);
+    editTabController.consumePendingLoad();
+  }
+
+  void _injectCanvas(InAppWebViewController ctrl, CanvasItem item) {
+    final escaped = item.content
+        .replaceAll('\\', '\\\\')
+        .replaceAll("'", "\\'")
+        .replaceAll('\n', '\\n');
+    ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
+  }
 
   void _runJs(String script) =>
       _controllers[widget.editorType]?.evaluateJavascript(source: script);
@@ -99,6 +165,7 @@ class _EditTabState extends State<EditTab> {
               },
             );
           },
+          onLoadStop: (c, _) => _onPendingLoad(),
         );
       }).toList(),
     );

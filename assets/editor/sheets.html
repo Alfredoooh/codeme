@@ -51,8 +51,8 @@
   }
   .row-header {
     left: 0;
-    width: 36px;
-    min-width: 36px;
+    width: 40px;
+    min-width: 40px;
     border-right: 1px solid #DADCE0;
     border-bottom: 1px solid #DADCE0;
   }
@@ -64,8 +64,8 @@
     background: #F1F3F4;
     border-right: 1px solid #DADCE0;
     border-bottom: 1px solid #DADCE0;
-    width: 36px;
-    min-width: 36px;
+    width: 40px;
+    min-width: 40px;
     height: 24px;
   }
 
@@ -110,10 +110,10 @@
   'use strict';
 
   var COLS = 26;
-  var ROWS = 100;
+  var ROWS = 1000;
 
   var gridTable = document.getElementById('gridTable');
-  var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align }
+  var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align, color, fill }
   var selectedCellKey = null;
   var saveTimeout = null;
 
@@ -148,6 +148,8 @@
     gridTable.appendChild(thead);
 
     var tbody = document.createElement('tbody');
+    var fragmento = document.createDocumentFragment();
+
     for (var r = 0; r < ROWS; r++) {
       var tr = document.createElement('tr');
       var rowHeader = document.createElement('th');
@@ -160,23 +162,30 @@
         td.className = 'cell';
         td.setAttribute('contenteditable', 'true');
         td.setAttribute('data-key', cellKey(cc, r));
-        td.addEventListener('focus', aoFocar);
-        td.addEventListener('input', aoEditar);
-        td.addEventListener('blur', aoDesfocar);
         tr.appendChild(td);
       }
-      tbody.appendChild(tr);
+      fragmento.appendChild(tr);
     }
+    tbody.appendChild(fragmento);
     gridTable.appendChild(tbody);
+
+    // Delegação de eventos num único listener no tbody em vez de
+    // 26.000 listeners individuais — essencial para não travar o
+    // WebView com 1000 linhas × 26 colunas.
+    tbody.addEventListener('focusin', aoFocar);
+    tbody.addEventListener('focusout', aoDesfocar);
+    tbody.addEventListener('input', aoEditar);
   }
 
   function aoFocar(evento) {
+    var td = evento.target.closest ? evento.target.closest('.cell') : null;
+    if (!td) return;
     if (selectedCellKey) {
       var anterior = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
       if (anterior) anterior.classList.remove('selected');
     }
-    selectedCellKey = evento.target.getAttribute('data-key');
-    evento.target.classList.add('selected');
+    selectedCellKey = td.getAttribute('data-key');
+    td.classList.add('selected');
 
     if (window.AndroidBridge && window.AndroidBridge.onCellSelected) {
       var dados = cellsData[selectedCellKey] || {};
@@ -185,17 +194,21 @@
   }
 
   function aoDesfocar(evento) {
-    evento.target.classList.remove('selected');
+    var td = evento.target.closest ? evento.target.closest('.cell') : null;
+    if (!td) return;
+    td.classList.remove('selected');
   }
 
   function aoEditar(evento) {
-    var key = evento.target.getAttribute('data-key');
-    var valor = evento.target.textContent;
+    var td = evento.target.closest ? evento.target.closest('.cell') : null;
+    if (!td) return;
+    var key = td.getAttribute('data-key');
+    var valor = td.textContent;
     if (!cellsData[key]) cellsData[key] = {};
     cellsData[key].value = valor;
 
     var ehNumero = valor.trim() !== '' && !isNaN(valor.trim());
-    evento.target.classList.toggle('number', ehNumero);
+    td.classList.toggle('number', ehNumero);
 
     agendarGravacao();
   }
@@ -207,6 +220,12 @@
         window.AndroidBridge.saveDocument(getContent());
       }
     }, 500);
+  }
+
+  function scrollParaCelula(key) {
+    var el = gridTable.querySelector('[data-key="' + key + '"]');
+    if (!el) return;
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   // ── API exposta ao toolbar Dart (específica de sheets) ─────────
@@ -270,27 +289,63 @@
   }
 
   function insertRowBelow() {
-    // Implementação simplificada: adiciona linha ao fim da tabela visível.
-    // Uma versão futura pode inserir na posição exata da célula selecionada.
+    // Insere imediatamente a seguir à linha da célula selecionada
+    // (ou no fim, se nada estiver selecionado). Reconstrói apenas
+    // os data-key das linhas subsequentes, sem tocar no resto.
     var tbody = gridTable.querySelector('tbody');
+    var linhaBase = 0;
+    if (selectedCellKey) {
+      var match = selectedCellKey.match(/^[A-Z]+(\d+)$/);
+      if (match) linhaBase = parseInt(match[1], 10); // linha 1-indexed atual
+    } else {
+      linhaBase = ROWS;
+    }
+
     var tr = document.createElement('tr');
-    var novaLinha = tbody.children.length;
     var rowHeader = document.createElement('th');
     rowHeader.className = 'row-header';
-    rowHeader.textContent = String(novaLinha + 1);
     tr.appendChild(rowHeader);
     for (var c = 0; c < COLS; c++) {
       var td = document.createElement('td');
       td.className = 'cell';
       td.setAttribute('contenteditable', 'true');
-      td.setAttribute('data-key', cellKey(c, novaLinha));
-      td.addEventListener('focus', aoFocar);
-      td.addEventListener('input', aoEditar);
-      td.addEventListener('blur', aoDesfocar);
       tr.appendChild(td);
     }
-    tbody.appendChild(tr);
+
+    var linhasExistentes = tbody.children;
+    if (linhaBase >= linhasExistentes.length) {
+      tbody.appendChild(tr);
+    } else {
+      tbody.insertBefore(tr, linhasExistentes[linhaBase]);
+    }
+
+    ROWS++;
+    renumerarLinhas();
     agendarGravacao();
+  }
+
+  function renumerarLinhas() {
+    var tbody = gridTable.querySelector('tbody');
+    var linhas = tbody.children;
+    var novoCellsData = {};
+
+    for (var r = 0; r < linhas.length; r++) {
+      var tr = linhas[r];
+      tr.children[0].textContent = String(r + 1);
+      for (var c = 1; c <= COLS; c++) {
+        var td = tr.children[c];
+        if (!td) continue;
+        var novaKey = cellKey(c - 1, r);
+        var chaveAntiga = td.getAttribute('data-key');
+        td.setAttribute('data-key', novaKey);
+        if (chaveAntiga && cellsData[chaveAntiga]) {
+          novoCellsData[novaKey] = cellsData[chaveAntiga];
+        } else if (cellsData[novaKey]) {
+          novoCellsData[novaKey] = cellsData[novaKey];
+        }
+      }
+    }
+    cellsData = novoCellsData;
   }
 
   function applyFormula(formula) {
@@ -325,6 +380,8 @@
         if (d.align) el.style.textAlign = d.align;
         if (d.color) el.style.color = d.color;
         if (d.fill) el.style.background = d.fill;
+        var ehNumero = (d.value || '').toString().trim() !== '' && !isNaN((d.value || '').toString().trim());
+        el.classList.toggle('number', ehNumero);
       });
     } catch (e) {
       // JSON inválido — mantém grid vazia
@@ -338,6 +395,7 @@
     setCellFill: setCellFill,
     insertRowBelow: insertRowBelow,
     applyFormula: applyFormula,
+    scrollToCell: scrollParaCelula,
     getContent: getContent,
     setContent: setContent
   };

@@ -19,22 +19,40 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  #slideCanvas {
-    position: relative;
+  /* ── Layout mobile: slide grande no centro (scroll/zoom para ver
+     o slide atual em detalhe) + faixa de miniaturas navegável por
+     baixo — o mesmo padrão que apps de apresentação usam em ecrãs
+     pequenos, em vez de tentar mostrar o slide 16:9 inteiro giant
+     e as miniaturas ao lado, que não cabe em largura de telemóvel. ── */
+
+  #root {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
+  }
+
+  #mainStage {
+    flex: 1;
+    min-height: 0;
+    position: relative;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: #EDEEF0;
+  }
+
+  #slideCanvas {
+    position: relative;
   }
 
   .slide-16-9 {
     background: #FFFFFF;
     width: 960px;
     height: 540px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.16);
-    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.18);
+    border-radius: 6px;
     position: relative;
     transform-origin: center;
     overflow: hidden;
@@ -63,15 +81,139 @@
     pointer-events: none;
   }
   .slide-element[data-type="shape"] {
-    background: #2F7BF6;
     border-radius: 4px;
+  }
+  .slide-element[data-type="shape"].shape-circle {
+    border-radius: 50%;
+  }
+
+  .element-resize-handle {
+    position: absolute;
+    right: -7px;
+    bottom: -7px;
+    width: 18px;
+    height: 18px;
+    background: #2F7BF6;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    display: none;
+    z-index: 5;
+  }
+  .slide-element.selected .element-resize-handle {
+    display: block;
+  }
+
+  /* ── Contador de slide no canto (X / Y) — orientação mobile ── */
+  #slideCounter {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  /* ── Setas de navegação lateral (tap para trocar de slide) ── */
+  .nav-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #333;
+    z-index: 4;
+    user-select: none;
+  }
+  .nav-arrow.prev { left: 10px; }
+  .nav-arrow.next { right: 10px; }
+  .nav-arrow.hidden { opacity: 0.25; pointer-events: none; }
+
+  /* ── Faixa de miniaturas horizontal por baixo (estilo PowerPoint
+     mobile / Keynote mobile / Google Slides mobile) ── */
+  #thumbStrip {
+    height: 92px;
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border-top: 1px solid #E5E5EA;
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 10px;
+    gap: 8px;
+  }
+  .thumb-item {
+    flex-shrink: 0;
+    width: 96px;
+    height: 54px;
+    border-radius: 5px;
+    background: #FFFFFF;
+    border: 2px solid #DADCE0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  }
+  .thumb-item.active {
+    border-color: #2F7BF6;
+  }
+  .thumb-item .thumb-scaled {
+    position: absolute;
+    top: 0; left: 0;
+    width: 960px;
+    height: 540px;
+    transform-origin: top left;
+    pointer-events: none;
+  }
+  .thumb-number {
+    position: absolute;
+    bottom: 2px;
+    left: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #FFFFFF;
+    text-shadow: 0 0 2px rgba(0,0,0,0.6);
+    z-index: 2;
+  }
+  .thumb-add {
+    flex-shrink: 0;
+    width: 96px;
+    height: 54px;
+    border-radius: 5px;
+    border: 2px dashed #C4C7CC;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9AA0A6;
+    font-size: 22px;
+    font-weight: 300;
   }
 </style>
 </head>
 <body>
 
-<div id="slideCanvas">
-  <div class="slide-16-9" id="currentSlide"></div>
+<div id="root">
+  <div id="mainStage">
+    <div id="slideCanvas">
+      <div class="slide-16-9" id="currentSlide"></div>
+    </div>
+    <div id="slideCounter">1 / 1</div>
+    <div class="nav-arrow prev hidden" id="navPrev">‹</div>
+    <div class="nav-arrow next hidden" id="navNext">›</div>
+  </div>
+  <div id="thumbStrip"></div>
 </div>
 
 <script>
@@ -80,11 +222,17 @@
 
   var SLIDE_W = 960;
   var SLIDE_H = 540;
+  var THUMB_SCALE = 96 / SLIDE_W; // largura da miniatura / largura real do slide
 
+  var mainStage = document.getElementById('mainStage');
   var slideCanvas = document.getElementById('slideCanvas');
   var currentSlideEl = document.getElementById('currentSlide');
+  var slideCounterEl = document.getElementById('slideCounter');
+  var thumbStrip = document.getElementById('thumbStrip');
+  var navPrev = document.getElementById('navPrev');
+  var navNext = document.getElementById('navNext');
 
-  var slides = [{ id: 0, elements: [] }]; // cada slide guarda os seus elementos
+  var slides = [{ id: 0, elements: [] }];
   var currentSlideIndex = 0;
   var nextElementId = 0;
   var selectedElementId = null;
@@ -92,10 +240,10 @@
   var saveTimeout = null;
 
   function ajustarZoom() {
-    var margem = 32;
-    var larguraDisponivel = slideCanvas.clientWidth - margem;
-    var alturaDisponivel = slideCanvas.clientHeight - margem;
-    var escala = Math.min(larguraDisponivel / SLIDE_W, alturaDisponivel / SLIDE_H, 1);
+    var margem = 28;
+    var larguraDisponivel = mainStage.clientWidth - margem;
+    var alturaDisponivel = mainStage.clientHeight - margem;
+    var escala = Math.min(larguraDisponivel / SLIDE_W, alturaDisponivel / SLIDE_H, 1.4);
     fitScale = (escala > 0 && isFinite(escala)) ? escala : 1;
     currentSlideEl.style.transform = 'scale(' + fitScale + ')';
   }
@@ -118,6 +266,8 @@
       if (el.type === 'text') {
         div.setAttribute('contenteditable', 'true');
         div.innerHTML = el.html || 'Texto';
+        div.style.fontSize = (el.fontSize || 24) + 'px';
+        if (el.color) div.style.color = el.color;
         div.addEventListener('input', function () {
           el.html = div.innerHTML;
           agendarGravacao();
@@ -128,7 +278,13 @@
         div.appendChild(img);
       } else if (el.type === 'shape') {
         div.style.background = el.color || '#2F7BF6';
+        if (el.shapeKind === 'circle') div.classList.add('shape-circle');
       }
+
+      var handle = document.createElement('div');
+      handle.className = 'element-resize-handle';
+      div.appendChild(handle);
+      ligarResizeHandle(handle, div, el);
 
       div.addEventListener('click', function (evento) {
         evento.stopPropagation();
@@ -137,6 +293,58 @@
 
       currentSlideEl.appendChild(div);
     });
+
+    atualizarContadorENavegacao();
+    atualizarThumbAtiva();
+  }
+
+  function ligarResizeHandle(handle, div, el) {
+    var arrastando = false;
+    var startX = 0, startY = 0, startW = 0, startH = 0;
+
+    function posClient(evento) {
+      if (evento.touches && evento.touches.length) {
+        return { x: evento.touches[0].clientX, y: evento.touches[0].clientY };
+      }
+      return { x: evento.clientX, y: evento.clientY };
+    }
+
+    function aoIniciar(evento) {
+      evento.preventDefault();
+      evento.stopPropagation();
+      arrastando = true;
+      var pos = posClient(evento);
+      startX = pos.x;
+      startY = pos.y;
+      startW = el.w;
+      startH = el.h;
+    }
+
+    function aoMover(evento) {
+      if (!arrastando) return;
+      evento.preventDefault();
+      var pos = posClient(evento);
+      var deltaX = (pos.x - startX) / fitScale;
+      var deltaY = (pos.y - startY) / fitScale;
+      el.w = Math.max(24, startW + deltaX);
+      el.h = Math.max(24, startH + deltaY);
+      div.style.width = el.w + 'px';
+      div.style.height = el.h + 'px';
+    }
+
+    function aoTerminar() {
+      if (!arrastando) return;
+      arrastando = false;
+      agendarGravacao();
+      renderizarThumbs();
+    }
+
+    handle.addEventListener('mousedown', aoIniciar);
+    handle.addEventListener('touchstart', aoIniciar, { passive: false });
+    window.addEventListener('mousemove', aoMover);
+    window.addEventListener('touchmove', aoMover, { passive: false });
+    window.addEventListener('mouseup', aoTerminar);
+    window.addEventListener('touchend', aoTerminar);
   }
 
   function selecionarElemento(id) {
@@ -149,11 +357,13 @@
     }
   }
 
-  slideCanvas.addEventListener('click', function () {
-    selectedElementId = null;
-    currentSlideEl.querySelectorAll('.slide-element').forEach(function (elDiv) {
-      elDiv.classList.remove('selected');
-    });
+  mainStage.addEventListener('click', function (evento) {
+    if (evento.target === mainStage || evento.target === slideCanvas) {
+      selectedElementId = null;
+      currentSlideEl.querySelectorAll('.slide-element').forEach(function (elDiv) {
+        elDiv.classList.remove('selected');
+      });
+    }
   });
 
   function agendarGravacao() {
@@ -165,12 +375,117 @@
     }, 500);
   }
 
+  // ── Navegação entre slides (setas + swipe + miniaturas) ──────
+
+  function atualizarContadorENavegacao() {
+    slideCounterEl.textContent = (currentSlideIndex + 1) + ' / ' + slides.length;
+    navPrev.classList.toggle('hidden', currentSlideIndex === 0);
+    navNext.classList.toggle('hidden', currentSlideIndex === slides.length - 1);
+  }
+
+  navPrev.addEventListener('click', function () { goToSlide(currentSlideIndex - 1); });
+  navNext.addEventListener('click', function () { goToSlide(currentSlideIndex + 1); });
+
+  // Swipe horizontal no stage principal para trocar de slide.
+  (function ligarSwipe() {
+    var startX = 0, startY = 0, tocando = false;
+    mainStage.addEventListener('touchstart', function (evento) {
+      if (evento.touches.length !== 1) return;
+      tocando = true;
+      startX = evento.touches[0].clientX;
+      startY = evento.touches[0].clientY;
+    }, { passive: true });
+
+    mainStage.addEventListener('touchend', function (evento) {
+      if (!tocando) return;
+      tocando = false;
+      var endX = evento.changedTouches[0].clientX;
+      var endY = evento.changedTouches[0].clientY;
+      var deltaX = endX - startX;
+      var deltaY = endY - startY;
+      if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+        if (deltaX < 0) goToSlide(currentSlideIndex + 1);
+        else goToSlide(currentSlideIndex - 1);
+      }
+    }, { passive: true });
+  })();
+
+  // ── Faixa de miniaturas ───────────────────────────────────────
+
+  function renderizarThumbs() {
+    thumbStrip.innerHTML = '';
+    slides.forEach(function (slide, idx) {
+      var thumb = document.createElement('div');
+      thumb.className = 'thumb-item' + (idx === currentSlideIndex ? ' active' : '');
+      thumb.setAttribute('data-idx', idx);
+
+      var scaled = document.createElement('div');
+      scaled.className = 'thumb-scaled';
+      scaled.style.transform = 'scale(' + THUMB_SCALE + ')';
+      scaled.style.background = '#FFFFFF';
+
+      slide.elements.forEach(function (el) {
+        var mini = document.createElement('div');
+        mini.style.position = 'absolute';
+        mini.style.left = el.x + 'px';
+        mini.style.top = el.y + 'px';
+        mini.style.width = el.w + 'px';
+        mini.style.height = el.h + 'px';
+        mini.style.overflow = 'hidden';
+        if (el.type === 'text') {
+          mini.style.fontSize = (el.fontSize || 24) + 'px';
+          mini.style.color = el.color || '#1a1a1a';
+          mini.style.lineHeight = '1.4';
+          mini.innerHTML = el.html || '';
+        } else if (el.type === 'image') {
+          var img = document.createElement('img');
+          img.src = el.src;
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'contain';
+          mini.appendChild(img);
+        } else if (el.type === 'shape') {
+          mini.style.background = el.color || '#2F7BF6';
+          mini.style.borderRadius = el.shapeKind === 'circle' ? '50%' : '4px';
+        }
+        scaled.appendChild(mini);
+      });
+
+      var number = document.createElement('div');
+      number.className = 'thumb-number';
+      number.style.color = '#333';
+      number.style.textShadow = 'none';
+      number.textContent = String(idx + 1);
+
+      thumb.appendChild(scaled);
+      thumb.appendChild(number);
+      thumb.addEventListener('click', function () { goToSlide(idx); });
+      thumbStrip.appendChild(thumb);
+    });
+
+    var addBtn = document.createElement('div');
+    addBtn.className = 'thumb-add';
+    addBtn.textContent = '+';
+    addBtn.addEventListener('click', function () { addSlide(); });
+    thumbStrip.appendChild(addBtn);
+  }
+
+  function atualizarThumbAtiva() {
+    var itens = thumbStrip.querySelectorAll('.thumb-item');
+    itens.forEach(function (item, idx) {
+      item.classList.toggle('active', idx === currentSlideIndex);
+    });
+    var ativo = thumbStrip.querySelector('.thumb-item.active');
+    if (ativo) ativo.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }
+
   // ── API exposta ao toolbar Dart (específica de slides) ─────────
 
   function addSlide() {
     slides.push({ id: slides.length, elements: [] });
     currentSlideIndex = slides.length - 1;
     renderizarSlideAtual();
+    renderizarThumbs();
     agendarGravacao();
   }
 
@@ -179,6 +494,7 @@
     currentSlideIndex = index;
     selectedElementId = null;
     renderizarSlideAtual();
+    atualizarThumbAtiva();
   }
 
   function deleteCurrentSlide() {
@@ -186,6 +502,7 @@
     slides.splice(currentSlideIndex, 1);
     currentSlideIndex = Math.max(0, currentSlideIndex - 1);
     renderizarSlideAtual();
+    renderizarThumbs();
     agendarGravacao();
   }
 
@@ -195,11 +512,14 @@
       id: nextElementId++,
       type: 'text',
       x: 80, y: 80, w: 400, h: 100,
+      fontSize: 24,
+      color: '#1a1a1a',
       html: 'Novo texto'
     };
     slide.elements.push(novoElemento);
     renderizarSlideAtual();
     selecionarElemento(novoElemento.id);
+    renderizarThumbs();
     agendarGravacao();
   }
 
@@ -213,6 +533,7 @@
     };
     slide.elements.push(novoElemento);
     renderizarSlideAtual();
+    renderizarThumbs();
     agendarGravacao();
   }
 
@@ -227,6 +548,7 @@
     };
     slide.elements.push(novoElemento);
     renderizarSlideAtual();
+    renderizarThumbs();
     agendarGravacao();
   }
 
@@ -236,6 +558,7 @@
     slide.elements = slide.elements.filter(function (el) { return el.id !== selectedElementId; });
     selectedElementId = null;
     renderizarSlideAtual();
+    renderizarThumbs();
     agendarGravacao();
   }
 
@@ -244,10 +567,47 @@
     var el = currentSlideEl.querySelector('[data-id="' + selectedElementId + '"]');
     if (!el || el.getAttribute('data-type') !== 'text') return;
     el.focus();
+    document.execCommand('styleWithCSS', false, true);
     if (command === 'bold') document.execCommand('bold');
     else if (command === 'italic') document.execCommand('italic');
     else if (command === 'underline') document.execCommand('underline');
     agendarGravacao();
+  }
+
+  function setSelectedTextColor(hexColor) {
+    if (selectedElementId === null) return;
+    var slide = slides[currentSlideIndex];
+    var dadosEl = slide.elements.find(function (e) { return e.id === selectedElementId; });
+    if (!dadosEl || dadosEl.type !== 'text') return;
+    dadosEl.color = hexColor;
+    var div = currentSlideEl.querySelector('[data-id="' + selectedElementId + '"]');
+    if (div) div.style.color = hexColor;
+    agendarGravacao();
+    renderizarThumbs();
+  }
+
+  function setSelectedShapeColor(hexColor) {
+    if (selectedElementId === null) return;
+    var slide = slides[currentSlideIndex];
+    var dadosEl = slide.elements.find(function (e) { return e.id === selectedElementId; });
+    if (!dadosEl || dadosEl.type !== 'shape') return;
+    dadosEl.color = hexColor;
+    var div = currentSlideEl.querySelector('[data-id="' + selectedElementId + '"]');
+    if (div) div.style.background = hexColor;
+    agendarGravacao();
+    renderizarThumbs();
+  }
+
+  function setSelectedFontSize(px) {
+    if (selectedElementId === null) return;
+    var slide = slides[currentSlideIndex];
+    var dadosEl = slide.elements.find(function (e) { return e.id === selectedElementId; });
+    if (!dadosEl || dadosEl.type !== 'text') return;
+    dadosEl.fontSize = px;
+    var div = currentSlideEl.querySelector('[data-id="' + selectedElementId + '"]');
+    if (div) div.style.fontSize = px + 'px';
+    agendarGravacao();
+    renderizarThumbs();
   }
 
   function getContent() {
@@ -267,6 +627,7 @@
           });
         });
         renderizarSlideAtual();
+        renderizarThumbs();
       }
     } catch (e) {
       // JSON inválido — mantém slide único vazio
@@ -286,6 +647,9 @@
     insertShape: insertShape,
     deleteSelectedElement: deleteSelectedElement,
     applyTextFormat: applyTextFormat,
+    setSelectedTextColor: setSelectedTextColor,
+    setSelectedShapeColor: setSelectedShapeColor,
+    setSelectedFontSize: setSelectedFontSize,
     getContent: getContent,
     setContent: setContent,
     getSlideCount: getSlideCount
@@ -309,6 +673,7 @@
     } else {
       renderizarSlideAtual();
     }
+    renderizarThumbs();
   }
 
   if (document.readyState === 'loading') {

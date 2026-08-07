@@ -91,6 +91,76 @@
   .doc-table-wrap { position: relative; display: block; margin: 8px 0; }
 
   a { color: #2F7BF6; text-decoration: underline; }
+
+  /* ── Formas inseridas (retângulo, círculo, linha, seta) ── */
+  .doc-shape-wrap {
+    position: relative;
+    display: inline-block;
+    margin: 8px 4px;
+    vertical-align: middle;
+  }
+  .doc-shape-wrap[data-locked="0"] {
+    outline: 1px dashed transparent;
+  }
+  .doc-shape-wrap.shape-selected {
+    outline: 2px solid #2F7BF6;
+    outline-offset: 2px;
+  }
+  .doc-shape-rect {
+    border-radius: 4px;
+  }
+  .doc-shape-circle {
+    border-radius: 50%;
+  }
+  .doc-shape-line {
+    height: 3px !important;
+    border-radius: 2px;
+  }
+  .doc-shape-arrow-head {
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 12px solid currentColor;
+  }
+
+  /* ── Resize handle simples para formas e imagens ── */
+  .resize-handle {
+    position: absolute;
+    right: -6px;
+    bottom: -6px;
+    width: 16px;
+    height: 16px;
+    background: #2F7BF6;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    cursor: nwse-resize;
+    display: none;
+  }
+  .doc-shape-wrap.shape-selected .resize-handle,
+  .doc-img-wrap.img-selected .resize-handle {
+    display: block;
+  }
+  .doc-img-wrap {
+    position: relative;
+    display: inline-block;
+    margin: 6px 0;
+    max-width: 100%;
+  }
+  .doc-img-wrap img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 2px;
+  }
+  .doc-img-wrap.img-selected img {
+    outline: 2px solid #2F7BF6;
+    outline-offset: 2px;
+  }
 </style>
 </head>
 <body>
@@ -114,6 +184,9 @@
   var fitScale = 1;
   var saveTimeout = null;
   var isRebalancing = false;
+  var nextShapeId = 0;
+  var selectedShapeEl = null;
+  var selectedImgEl = null;
 
   function ajustarZoom() {
     var margem = 24;
@@ -139,6 +212,7 @@
 
     contentEl.addEventListener('input', handleInput);
     contentEl.addEventListener('paste', aoColar);
+    contentEl.addEventListener('click', aoClicarNoConteudo);
 
     var pageNumberEl = document.createElement('div');
     pageNumberEl.className = 'page-number';
@@ -372,6 +446,8 @@
     folhas.forEach(function (f) { f.pageEl.remove(); });
     folhas = [];
     nextFolhaId = 0;
+    selectedShapeEl = null;
+    selectedImgEl = null;
 
     var parts = (html || '').split('<div class="page-break-marker"></div>');
     var htmls = parts.length ? parts : ['<p><br></p>'];
@@ -381,6 +457,7 @@
       folha.contentEl.innerHTML = h || '<p><br></p>';
     });
 
+    reativarHandlersDeFormasEImagens();
     reequilibrarDocumento();
   }
 
@@ -402,10 +479,7 @@
     }
   }
 
-  // ── API exposta ao toolbar Dart ──────────────────────────────
-  // Cada comando de formatação vive aqui. O toolbar Dart chama
-  // window.editorApi.exec('bold') via evaluateJavascript, nunca
-  // renderiza botões próprios dentro deste HTML.
+  // ── Comandos básicos de texto ────────────────────────────────
 
   function exec(command) {
     focarSePreciso();
@@ -465,17 +539,37 @@
     handleInput();
   }
 
+  // ── Cor de texto e destaque (highlight/marcador) ─────────────
+  // Ambos usam execCommand nativo do contenteditable, funcionam em
+  // qualquer seleção de texto ativa dentro de qualquer página.
+
   function setColor(hexColor) {
     focarSePreciso();
+    document.execCommand('styleWithCSS', false, true);
     document.execCommand('foreColor', false, hexColor);
     handleInput();
   }
 
   function setHighlight(hexColor) {
     focarSePreciso();
-    document.execCommand('hiliteColor', false, hexColor);
+    document.execCommand('styleWithCSS', false, true);
+    // hiliteColor funciona no Chromium (WebView Android); backColor
+    // é o fallback usado por alguns motores mais antigos.
+    var aplicou = document.execCommand('hiliteColor', false, hexColor);
+    if (!aplicou) {
+      document.execCommand('backColor', false, hexColor);
+    }
     handleInput();
   }
+
+  function clearHighlight() {
+    focarSePreciso();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('hiliteColor', false, 'transparent');
+    handleInput();
+  }
+
+  // ── Tabelas ───────────────────────────────────────────────────
 
   function insertTable(rows, cols) {
     focarSePreciso();
@@ -494,11 +588,17 @@
     handleInput();
   }
 
+  // ── Imagens ───────────────────────────────────────────────────
+
   function insertImageAtCursor(dataUrl) {
     focarSePreciso();
-    var html = '<p><img src="' + dataUrl + '" style="max-width:100%; height:auto;" /></p>';
+    var html = '<span class="doc-img-wrap" contenteditable="false">' +
+      '<img src="' + dataUrl + '" />' +
+      '<div class="resize-handle"></div>' +
+      '</span>&nbsp;';
     document.execCommand('insertHTML', false, html);
     handleInput();
+    setTimeout(reativarHandlersDeFormasEImagens, 30);
   }
 
   function insertLink(url, texto) {
@@ -508,6 +608,169 @@
     document.execCommand('insertHTML', false, html);
     handleInput();
   }
+
+  // ── Formas (retângulo, círculo, linha, seta) ────────────────
+  // Inseridas como bloco flutuante dentro do fluxo do texto, com
+  // cor preenchível e redimensionável por arraste do handle.
+
+  function insertShape(shapeKind, hexColor) {
+    focarSePreciso();
+    var cor = hexColor || '#2F7BF6';
+    var id = 'shape_' + (nextShapeId++);
+    var w = shapeKind === 'line' ? 160 : 100;
+    var h = shapeKind === 'line' ? 3 : 100;
+    var extraClass = shapeKind === 'circle' ? 'doc-shape-circle'
+      : shapeKind === 'line' ? 'doc-shape-line'
+      : shapeKind === 'arrow' ? 'doc-shape-line'
+      : 'doc-shape-rect';
+
+    var innerArrow = shapeKind === 'arrow'
+      ? '<div class="doc-shape-arrow-head" style="color:' + cor + '"></div>'
+      : '';
+
+    var html = '<span class="doc-shape-wrap" data-shape-id="' + id + '" data-shape-kind="' +
+      shapeKind + '" contenteditable="false">' +
+      '<span class="' + extraClass + '" data-shape-body="1" style="display:block; width:' + w +
+      'px; height:' + h + 'px; background:' + cor + ';">' + innerArrow + '</span>' +
+      '<span class="resize-handle"></span>' +
+      '</span>&nbsp;';
+
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+    setTimeout(reativarHandlersDeFormasEImagens, 30);
+  }
+
+  function setSelectedShapeColor(hexColor) {
+    if (!selectedShapeEl) return;
+    var body = selectedShapeEl.querySelector('[data-shape-body]');
+    if (body) body.style.background = hexColor;
+    var arrowHead = selectedShapeEl.querySelector('.doc-shape-arrow-head');
+    if (arrowHead) arrowHead.style.color = hexColor;
+    agendarGravacao();
+  }
+
+  function deleteSelectedShape() {
+    if (!selectedShapeEl) return;
+    selectedShapeEl.remove();
+    selectedShapeEl = null;
+    handleInput();
+  }
+
+  function deleteSelectedImage() {
+    if (!selectedImgEl) return;
+    selectedImgEl.remove();
+    selectedImgEl = null;
+    handleInput();
+  }
+
+  function deselecionarTudo() {
+    if (selectedShapeEl) {
+      selectedShapeEl.classList.remove('shape-selected');
+      selectedShapeEl = null;
+    }
+    if (selectedImgEl) {
+      selectedImgEl.classList.remove('img-selected');
+      selectedImgEl = null;
+    }
+  }
+
+  function aoClicarNoConteudo(evento) {
+    var alvo = evento.target;
+    var shapeWrap = alvo.closest ? alvo.closest('.doc-shape-wrap') : null;
+    var imgWrap = alvo.closest ? alvo.closest('.doc-img-wrap') : null;
+
+    if (shapeWrap) {
+      evento.preventDefault();
+      deselecionarTudo();
+      selectedShapeEl = shapeWrap;
+      shapeWrap.classList.add('shape-selected');
+      if (window.AndroidBridge && window.AndroidBridge.onShapeSelected) {
+        window.AndroidBridge.onShapeSelected(shapeWrap.getAttribute('data-shape-id'));
+      }
+      return;
+    }
+    if (imgWrap) {
+      evento.preventDefault();
+      deselecionarTudo();
+      selectedImgEl = imgWrap;
+      imgWrap.classList.add('img-selected');
+      if (window.AndroidBridge && window.AndroidBridge.onImageSelected) {
+        window.AndroidBridge.onImageSelected('1');
+      }
+      return;
+    }
+    deselecionarTudo();
+  }
+
+  // ── Arraste do handle de redimensionar (touch + mouse) ───────
+
+  function reativarHandlersDeFormasEImagens() {
+    var handles = document.querySelectorAll('.resize-handle');
+    handles.forEach(function (handle) {
+      if (handle.getAttribute('data-bound') === '1') return;
+      handle.setAttribute('data-bound', '1');
+
+      var arrastando = false;
+      var startX = 0, startY = 0, startW = 0, startH = 0;
+      var wrapEl = null;
+      var bodyEl = null;
+
+      function pegarWrap() {
+        return handle.closest('.doc-shape-wrap') || handle.closest('.doc-img-wrap');
+      }
+
+      function posClient(evento) {
+        if (evento.touches && evento.touches.length) {
+          return { x: evento.touches[0].clientX, y: evento.touches[0].clientY };
+        }
+        return { x: evento.clientX, y: evento.clientY };
+      }
+
+      function aoIniciar(evento) {
+        evento.preventDefault();
+        evento.stopPropagation();
+        wrapEl = pegarWrap();
+        if (!wrapEl) return;
+        bodyEl = wrapEl.querySelector('[data-shape-body]') || wrapEl.querySelector('img');
+        if (!bodyEl) return;
+        arrastando = true;
+        var pos = posClient(evento);
+        startX = pos.x;
+        startY = pos.y;
+        startW = bodyEl.offsetWidth;
+        startH = bodyEl.offsetHeight;
+      }
+
+      function aoMover(evento) {
+        if (!arrastando || !bodyEl) return;
+        evento.preventDefault();
+        var pos = posClient(evento);
+        var deltaX = (pos.x - startX) / fitScale;
+        var deltaY = (pos.y - startY) / fitScale;
+        var novaLargura = Math.max(20, startW + deltaX);
+        var novaAltura = Math.max(20, startH + deltaY);
+        bodyEl.style.width = novaLargura + 'px';
+        if (bodyEl.tagName !== 'IMG' || true) {
+          bodyEl.style.height = novaAltura + 'px';
+        }
+      }
+
+      function aoTerminar() {
+        if (!arrastando) return;
+        arrastando = false;
+        agendarGravacao();
+      }
+
+      handle.addEventListener('mousedown', aoIniciar);
+      handle.addEventListener('touchstart', aoIniciar, { passive: false });
+      window.addEventListener('mousemove', aoMover);
+      window.addEventListener('touchmove', aoMover, { passive: false });
+      window.addEventListener('mouseup', aoTerminar);
+      window.addEventListener('touchend', aoTerminar);
+    });
+  }
+
+  // ── Orientação de página ─────────────────────────────────────
 
   function setPageOrientation(orientacao) {
     var novaLargura = orientacao === 'landscape' ? 1123 : 794;
@@ -522,14 +785,24 @@
     reequilibrarDocumento();
   }
 
+  // ── API exposta ao toolbar Dart e/ou à IA (canvas automático) ─
+  // Tudo aqui é acionável tanto por toques do utilizador na toolbar
+  // como por chamadas diretas do lado Dart quando a IA gera um
+  // documento completo (setContent) ou edita um já existente.
+
   window.editorApi = {
     exec: exec,
     setFontSize: setFontSize,
     setColor: setColor,
     setHighlight: setHighlight,
+    clearHighlight: clearHighlight,
     insertTable: insertTable,
     insertImageAtCursor: insertImageAtCursor,
     insertLink: insertLink,
+    insertShape: insertShape,
+    setSelectedShapeColor: setSelectedShapeColor,
+    deleteSelectedShape: deleteSelectedShape,
+    deleteSelectedImage: deleteSelectedImage,
     setPageOrientation: setPageOrientation,
     getContent: getContent,
     setContent: setContent

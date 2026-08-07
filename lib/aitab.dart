@@ -13,106 +13,87 @@ import 'api_service.dart';
 import 'auth_service.dart';
 
 // ══════════════════════════════════════════════════════════════
-// AI TAB
-// ══════════════════════════════════════════════════════════════
-
-class AiTab extends StatefulWidget {
-  final VoidCallback onFirstMessage;
-  const AiTab({super.key, required this.onFirstMessage});
-  @override State<AiTab> createState() => _AiTabState();
-}
-
-enum QuickAction { doc, sheet, slide, whiteboard }
-
-extension QuickActionX on QuickAction {
-  String get asset => const {
-        QuickAction.doc:        'doc.png',
-        QuickAction.sheet:      'sheet.png',
-        QuickAction.slide:      'slide.png',
-        QuickAction.whiteboard: 'whiteboard.png',
-      }[this]!;
-
-  String get label => const {
-        QuickAction.doc:        'Criar documento Word',
-        QuickAction.sheet:      'Criar folha de cálculo',
-        QuickAction.slide:      'Criar apresentação',
-        QuickAction.whiteboard: 'Criar com o canvas',
-      }[this]!;
-
-  Color get tint => const {
-        QuickAction.doc:        Color(0xFF2B579A),
-        QuickAction.sheet:      Color(0xFF217346),
-        QuickAction.slide:      Color(0xFFD24726),
-        QuickAction.whiteboard: Color(0xFFE1306C),
-      }[this]!;
-
-  String get promptSeed => const {
-        QuickAction.doc:        'Cria um documento Word sobre ',
-        QuickAction.sheet:      'Cria uma folha de cálculo sobre ',
-        QuickAction.slide:      'Cria uma apresentação sobre ',
-        QuickAction.whiteboard: 'Cria um quadro branco sobre ',
-      }[this]!;
-
-  EditorType get editorType => const {
-        QuickAction.doc:        EditorType.docs,
-        QuickAction.sheet:      EditorType.sheets,
-        QuickAction.slide:      EditorType.slides,
-        QuickAction.whiteboard: EditorType.whiteboard,
-      }[this]!;
-}
-
-// ══════════════════════════════════════════════════════════════
-// AI MODEL — labels DeepSeek mantidos, ligados aos providers reais
+// AI MODEL — deepseek v4 / v4 pro / R1, ligados aos providers reais
 // do worker (gemini / groq) via kProviderMap em api_service.dart
 // ══════════════════════════════════════════════════════════════
 
-enum AiModel { deepseekV3, deepseekR1, deepseekCoder }
+enum AiModel { deepseekV4, deepseekV4Pro, deepseekR1 }
 
 extension AiModelX on AiModel {
   String get label => const {
-        AiModel.deepseekV3:    'DeepSeek V3',
+        AiModel.deepseekV4:    'DeepSeek V4',
+        AiModel.deepseekV4Pro: 'DeepSeek V4 Pro',
         AiModel.deepseekR1:    'DeepSeek R1',
-        AiModel.deepseekCoder: 'DeepSeek Coder',
       }[this]!;
 
   String get badge => const {
-        AiModel.deepseekV3:    'Rápido',
+        AiModel.deepseekV4:    'Rápido',
+        AiModel.deepseekV4Pro: 'Avançado',
         AiModel.deepseekR1:    'Raciocínio',
-        AiModel.deepseekCoder: 'Código',
+      }[this]!;
+
+  String get description => const {
+        AiModel.deepseekV4:    'Respostas rápidas para o dia a dia',
+        AiModel.deepseekV4Pro: 'Mais capacidade para tarefas complexas',
+        AiModel.deepseekR1:    'Pensa passo a passo antes de responder',
       }[this]!;
 
   ApiProvider get provider => const {
-        AiModel.deepseekV3:    ApiProvider.gemini,
+        AiModel.deepseekV4:    ApiProvider.gemini,
+        AiModel.deepseekV4Pro: ApiProvider.groqVersatile,
         AiModel.deepseekR1:    ApiProvider.gemini,
-        AiModel.deepseekCoder: ApiProvider.groqVersatile,
       }[this]!;
 
   bool get think => this == AiModel.deepseekR1;
 }
 
 // ══════════════════════════════════════════════════════════════
-// TEXT CLEANUP — remove markdown "cru" (asteriscos, hashes, etc.)
-// que chegava sem ser renderizado. As bolhas de chat mostram texto
-// simples, por isso convertemos markdown básico para texto plano
-// bem formatado em vez de deixar os símbolos à mostra.
+// SYSTEM PROMPT — pede formatação rica e ensina a IA a usar o
+// protocolo de canvas, agora incluindo cor de texto e destaque
+// (highlight) via comandos editorApi.setColor / editorApi.setHighlight
+// no documento HTML gerado.
+// ══════════════════════════════════════════════════════════════
+
+const String kAiSystemPrompt = '''
+Respondes sempre em português europeu, de forma clara e bem estruturada.
+Usa formatação markdown completa sempre que ajudar a organizar a informação:
+negrito para destacar termos-chave, listas com marcadores ou numeradas para
+sequências e opções, tabelas para comparações ou dados tabulares, e títulos
+curtos quando a resposta tiver várias secções. Evita parágrafos longos e
+densos quando a informação pode ser organizada visualmente.
+
+Quando o utilizador pedir para criares, escreveres ou editares um documento,
+uma folha de cálculo ou uma apresentação, gera o conteúdo e embrulha-o EXATAMENTE
+neste formato, no fim da tua resposta:
+
+[[canvas:doc:Título do documento||<p>conteúdo em html aqui</p>]]
+
+Para documentos (doc), podes aplicar cor ao texto e destaque (highlight/marcador)
+diretamente no HTML gerado, usando estilos inline no próprio texto, exatamente
+como o editor os interpreta:
+- Cor de texto: <span style="color:#HEXCOR">texto colorido</span>
+- Destaque/marcador: <span style="background-color:#HEXCOR">texto realçado</span>
+Podes combinar ambos no mesmo span quando fizer sentido. Usa cor com intenção —
+por exemplo vermelho para avisos, verde para conclusões positivas, amarelo para
+destacar pontos importantes — e nunca abuses, só onde realmente ajudar a leitura.
+
+Usa "sheet" para folhas de cálculo (conteúdo em JSON de células) e "slide" para
+apresentações (conteúdo em JSON de slides). Nunca mostres este bloco ao
+utilizador como texto explicado — ele é processado automaticamente pela
+aplicação e transformado num cartão de documento navegável.
+''';
+
+// ══════════════════════════════════════════════════════════════
+// TEXT CLEANUP — agora preserva markdown estrutural (negrito, listas,
+// tabelas, títulos) para o MarkdownBody renderizar; só limpa artefactos
+// que não fazem sentido dentro de uma bolha de chat.
 // ══════════════════════════════════════════════════════════════
 
 String cleanAiText(String raw) {
   var t = raw;
-  // Bold/italic: **texto** / __texto__ / *texto* / _texto_
-  t = t.replaceAllMapped(RegExp(r'\*\*\*(.+?)\*\*\*'), (m) => m.group(1)!);
-  t = t.replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => m.group(1)!);
-  t = t.replaceAllMapped(RegExp(r'__(.+?)__'), (m) => m.group(1)!);
-  t = t.replaceAllMapped(RegExp(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)'), (m) => m.group(1)!);
-  t = t.replaceAllMapped(RegExp(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)'), (m) => m.group(1)!);
-  // Headers: ### Título -> Título
-  t = t.replaceAllMapped(RegExp(r'^#{1,6}\s+', multiLine: true), (m) => '');
-  // Listas: "- item" / "* item" -> "• item"
-  t = t.replaceAllMapped(RegExp(r'^[\-\*]\s+', multiLine: true), (m) => '•  ');
-  // Inline code: `codigo` -> codigo
-  t = t.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => m.group(1)!);
-  // Blockquote: "> texto" -> "texto"
-  t = t.replaceAllMapped(RegExp(r'^>\s+', multiLine: true), (m) => '');
+  // Remove blocos de canvas residuais que não tenham sido apanhados pelo
+  // parser (ex: streaming interrompido) para nunca vazarem para a bolha.
+  t = t.replaceAll(RegExp(r'\[\[canvas:[\s\S]*?\]\]'), '');
   return t.trim();
 }
 
@@ -138,17 +119,55 @@ extension ConversationActionX on ConversationAction {
       }[this]!;
 }
 
-class AiConversationMenuButton extends StatefulWidget {
+/// Popup unificado — substitui os antigos modais (attach/model/message
+/// actions) por um único padrão de popup ancorado, igual ao usado em
+/// EditTypeButton e AiConversationMenuButton. Item 1 do pedido.
+class PopupMenu<T> extends StatefulWidget {
   final AppColorScheme s;
-  final ValueChanged<ConversationAction> onSelect;
-  const AiConversationMenuButton(
-      {super.key, required this.s, required this.onSelect});
+  final Widget anchor;
+  final double anchorSize;
+  final List<PopupMenuEntry<T>> entries;
+  final ValueChanged<T> onSelect;
+  final double width;
+  final Alignment alignFrom; // topRight (abre para baixo) ou bottomRight (abre para cima)
+
+  const PopupMenu({
+    super.key,
+    required this.s,
+    required this.anchor,
+    required this.entries,
+    required this.onSelect,
+    this.anchorSize = 36,
+    this.width = 240,
+    this.alignFrom = Alignment.topRight,
+  });
+
   @override
-  State<AiConversationMenuButton> createState() =>
-      _AiConversationMenuButtonState();
+  State<PopupMenu<T>> createState() => PopupMenuState<T>();
 }
 
-class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
+class PopupMenuEntry<T> {
+  final T value;
+  final String label;
+  final String? subtitle;
+  final String? svgIcon;
+  final String? pngIcon;
+  final bool selected;
+  final bool disabled;
+  final bool destructive;
+  const PopupMenuEntry({
+    required this.value,
+    required this.label,
+    this.subtitle,
+    this.svgIcon,
+    this.pngIcon,
+    this.selected = false,
+    this.disabled = false,
+    this.destructive = false,
+  });
+}
+
+class PopupMenuState<T> extends State<PopupMenu<T>>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
@@ -163,27 +182,31 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
   @override
   void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
 
-  void _toggle() => _ov == null ? _open() : _close();
+  void toggle() => _ov == null ? open() : close();
 
-  void _open() {
+  void open() {
     final box = context.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz  = box.size;
     _ac.forward(from: 0);
 
+    final opensUp = widget.alignFrom == Alignment.bottomRight;
+
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
+      final screenSize = MediaQuery.of(ctx).size;
       return Stack(children: [
         Positioned.fill(
           child: GestureDetector(
-            onTap: _close,
+            onTap: close,
             behavior: HitTestBehavior.opaque,
             child: Container(color: Colors.transparent),
           ),
         ),
         Positioned(
-          top: off.dy + sz.height + 6,
-          right: MediaQuery.of(ctx).size.width - off.dx - sz.width,
+          top: opensUp ? null : off.dy + sz.height + 6,
+          bottom: opensUp ? screenSize.height - off.dy + 6 : null,
+          right: (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - widget.width - 12),
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -195,27 +218,31 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
                 scale: Tween(begin: 0.92, end: 1.0)
                     .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
                     .value,
-                alignment: Alignment.topRight,
+                alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
                 child: child,
               ),
             ),
             child: Material(
               type: MaterialType.transparency,
               child: Container(
-                width: 220,
+                width: widget.width,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: s.floatingShadow,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: ConversationAction.values
-                      .map((a) => _ConversationOption(
+                  children: widget.entries
+                      .map((e) => _PopupRow<T>(
                             s: s,
-                            action: a,
-                            onTap: () { widget.onSelect(a); _close(); },
+                            entry: e,
+                            onTap: () {
+                              if (e.disabled) return;
+                              close();
+                              widget.onSelect(e.value);
+                            },
                           ))
                       .toList(),
                 ),
@@ -229,7 +256,7 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
     setState(() {});
   }
 
-  void _close() {
+  void close() {
     _ac.reverse().then((_) {
       _ov?.remove();
       _ov = null;
@@ -238,73 +265,239 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
   }
 
   @override
-  Widget build(BuildContext context) => AppTap(
-        onTap: _toggle,
-        s: widget.s,
-        size: 36,
-        child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: toggle,
+        child: widget.anchor,
       );
 }
 
-class _ConversationOption extends StatefulWidget {
+class _PopupRow<T> extends StatefulWidget {
   final AppColorScheme s;
-  final ConversationAction action;
+  final PopupMenuEntry<T> entry;
   final VoidCallback onTap;
-  const _ConversationOption(
-      {required this.s, required this.action, required this.onTap});
-  @override State<_ConversationOption> createState() => _ConversationOptionState();
+  const _PopupRow({required this.s, required this.entry, required this.onTap});
+  @override State<_PopupRow<T>> createState() => _PopupRowState<T>();
 }
 
-class _ConversationOptionState extends State<_ConversationOption> {
+class _PopupRowState<T> extends State<_PopupRow<T>> {
   bool _h = false;
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final e = widget.entry;
+    final color = e.disabled
+        ? s.onSurfaceVariant.withOpacity(0.4)
+        : e.destructive
+            ? s.error
+            : e.selected
+                ? s.primary
+                : s.onSurface;
+
+    return Opacity(
+      opacity: e.disabled ? 0.55 : 1.0,
+      child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
+        onTapDown:   e.disabled ? null : (_) => setState(() => _h = true),
+        onTapCancel: e.disabled ? null : ()  => setState(() => _h = false),
+        onTapUp:     e.disabled ? null : (_) => setState(() => _h = false),
         onTap:       widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: _h ? widget.s.hover : Colors.transparent,
+            color: _h && !e.disabled
+                ? s.hover
+                : e.selected
+                    ? s.primaryContainer.withOpacity(0.4)
+                    : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            AppIcon(widget.action.svgAsset, color: widget.s.onSurface, size: 18),
-            const SizedBox(width: 10),
-            Text(widget.action.label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: widget.s.onSurface,
-                  fontWeight: FontWeight.normal,
-                )),
+            if (e.svgIcon != null) ...[
+              AppIcon(e.svgIcon!, color: color, size: 18),
+              const SizedBox(width: 10),
+            ] else if (e.pngIcon != null) ...[
+              EditorTypeIcon(e.pngIcon!, size: 18),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: e.selected ? FontWeight.w600 : FontWeight.w400,
+                        color: color,
+                      )),
+                  if (e.subtitle != null) ...[
+                    const SizedBox(height: 1),
+                    Text(e.subtitle!,
+                        style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                  ],
+                ],
+              ),
+            ),
+            if (e.selected)
+              AppIcon('check.svg', color: s.primary, size: 16),
           ]),
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI TAB STATE
+// AI CONVERSATION MENU BUTTON — agora usa PopupMenu genérico e
+// desativa a opção incógnito quando já existe conversa em curso
+// (item 4: incógnito só pode ser escolhido antes da 1ª mensagem).
 // ══════════════════════════════════════════════════════════════
 
-class _AiTabState extends State<AiTab> {
+class AiConversationMenuButton extends StatelessWidget {
+  final AppColorScheme s;
+  final ValueChanged<ConversationAction> onSelect;
+  final bool hasMessages;
+  const AiConversationMenuButton({
+    super.key,
+    required this.s,
+    required this.onSelect,
+    required this.hasMessages,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <PopupMenuEntry<ConversationAction>>[
+      PopupMenuEntry(
+        value: ConversationAction.newChat,
+        label: ConversationAction.newChat.label,
+        svgIcon: ConversationAction.newChat.svgAsset,
+      ),
+      PopupMenuEntry(
+        value: ConversationAction.incognito,
+        label: ConversationAction.incognito.label,
+        svgIcon: ConversationAction.incognito.svgAsset,
+        disabled: hasMessages, // item 4
+      ),
+      PopupMenuEntry(
+        value: ConversationAction.rename,
+        label: ConversationAction.rename.label,
+        svgIcon: ConversationAction.rename.svgAsset,
+      ),
+      PopupMenuEntry(
+        value: ConversationAction.delete,
+        label: ConversationAction.delete.label,
+        svgIcon: ConversationAction.delete.svgAsset,
+        destructive: true,
+      ),
+    ];
+
+    return PopupMenu<ConversationAction>(
+      s: s,
+      entries: entries,
+      onSelect: onSelect,
+      anchor: AppTap(
+        onTap: () {},
+        s: s,
+        child: AppIcon('more_filled.svg', color: s.onSurface, size: 20),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AI TAB
+// ══════════════════════════════════════════════════════════════
+
+class AiTab extends StatefulWidget {
+  final VoidCallback onFirstMessage;
+  /// Conversa a carregar de imediato (ex: aberta a partir do drawer).
+  /// Item 7 do pedido.
+  final String? initialConversationId;
+  final ConversationAction? externalAction;
+  final VoidCallback? onExternalActionConsumed;
+  final ValueChanged<bool>? onHasMessagesChanged;
+  const AiTab({
+    super.key,
+    required this.onFirstMessage,
+    this.initialConversationId,
+    this.externalAction,
+    this.onExternalActionConsumed,
+    this.onHasMessagesChanged,
+  });
+  @override State<AiTab> createState() => AiTabState();
+}
+
+class AiTabState extends State<AiTab> {
   final TextEditingController _ctrl   = TextEditingController();
   final ScrollController       _scroll = ScrollController();
   final List<ChatMessage>      _msgs  = [];
+  final List<CanvasItem>       _canvases = [];
 
-  bool     _showToggles  = true;
-  bool     _webSearchOn  = false;
   bool     _incognito    = false;
   bool     _sending      = false;
   String   _streamingText = '';
   String?  _streamingThink;
   String?  _conversationId;
-  AiModel  _model        = AiModel.deepseekV3;
+  AiModel  _model        = AiModel.deepseekV4;
   EditorType? _attachedTool;
+  int      _canvasIdSeq  = 0;
+  CanvasKind? _creatingCanvasKind; // não-nulo enquanto a IA está a "desenhar" um canvas
+
+  bool get _hasMessages => _msgs.isNotEmpty;
 
   StreamSubscription<ChatStreamEvent>? _streamSub;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialConversationId != null) {
+      _loadConversation(widget.initialConversationId!);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AiTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.externalAction != null && widget.externalAction != oldWidget.externalAction) {
+      _onConversationAction(widget.externalAction!);
+      widget.onExternalActionConsumed?.call();
+    }
+    if (widget.initialConversationId != null &&
+        widget.initialConversationId != oldWidget.initialConversationId &&
+        widget.initialConversationId != _conversationId) {
+      _loadConversation(widget.initialConversationId!);
+    }
+  }
+
+  Future<void> _loadConversation(String id) async {
+    final token = authController.token;
+    if (token == null) return;
+    final data = await ConversationsApiService.get(token, id);
+    if (!mounted || data == null) return;
+    final rawMsgs = data['messages'];
+    final rawCanvases = data['canvases'];
+    setState(() {
+      _msgs.clear();
+      if (rawMsgs is List) {
+        _msgs.addAll(rawMsgs.whereType<Map<String, dynamic>>().map(ChatMessage.fromJson));
+      }
+      _canvases.clear();
+      if (rawCanvases is List) {
+        _canvases.addAll(rawCanvases.whereType<Map<String, dynamic>>().map(CanvasItem.fromJson));
+      }
+      _conversationId = id;
+      _incognito = false;
+      _sending = false;
+      _streamingText = '';
+      _streamingThink = null;
+    });
+    if (_msgs.isNotEmpty) widget.onFirstMessage();
+    widget.onHasMessagesChanged?.call(_hasMessages);
+    _scrollToEnd();
+  }
+
+  String _nextCanvasId() => 'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
 
   Future<void> _send() async {
     final t = _ctrl.text.trim();
@@ -315,13 +508,16 @@ class _AiTabState extends State<AiTab> {
     setState(() {
       _msgs.add(userMsg);
       _ctrl.clear();
-      _showToggles = false;
       _attachedTool = null;
       _sending = true;
       _streamingText = '';
       _streamingThink = null;
+      _creatingCanvasKind = null;
     });
-    if (isFirst) widget.onFirstMessage();
+    if (isFirst) {
+      widget.onFirstMessage();
+      widget.onHasMessagesChanged?.call(true);
+    }
     _scrollToEnd();
 
     final token = authController.token;
@@ -341,12 +537,18 @@ class _AiTabState extends State<AiTab> {
       provider: _model.provider,
       think: _model.think,
       language: 'pt',
+      systemPrompt: kAiSystemPrompt,
     ).listen(
       (event) {
         if (!mounted) return;
         switch (event) {
           case ChatTokenEvent(text: final text):
-            setState(() => _streamingText += text);
+            setState(() {
+              _streamingText += text;
+              _creatingCanvasKind = CanvasParser.hasOpenBlock(_streamingText)
+                  ? CanvasParser.openBlockKind(_streamingText)
+                  : null;
+            });
             _scrollToEnd();
             break;
           case ChatThinkEvent(text: final text):
@@ -354,13 +556,16 @@ class _AiTabState extends State<AiTab> {
             break;
           case ChatDoneEvent(fullText: final fullText):
             final finalText = fullText.isNotEmpty ? fullText : _streamingText;
+            final parsed = CanvasParser.parse(finalText, idGen: _nextCanvasId);
             setState(() {
-              if (finalText.trim().isNotEmpty) {
-                _msgs.add(ChatMessage(role: 'assistant', content: finalText));
+              if (parsed.cleanText.trim().isNotEmpty) {
+                _msgs.add(ChatMessage(role: 'assistant', content: parsed.cleanText));
               }
+              _canvases.addAll(parsed.items);
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
+              _creatingCanvasKind = null;
             });
             _scrollToEnd();
             _persistConversation();
@@ -371,6 +576,7 @@ class _AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
+              _creatingCanvasKind = null;
               _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
             });
             _scrollToEnd();
@@ -380,6 +586,7 @@ class _AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
+              _creatingCanvasKind = null;
               _msgs.add(const ChatMessage(
                   role: 'assistant',
                   content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
@@ -395,6 +602,7 @@ class _AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
+          _creatingCanvasKind = null;
           _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
         });
         _scrollToEnd();
@@ -413,12 +621,14 @@ class _AiTabState extends State<AiTab> {
         token,
         title: title,
         messages: _msgs,
+        canvases: _canvases,
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
       }
     } else {
-      await ConversationsApiService.update(token, _conversationId!, title: title, messages: _msgs);
+      await ConversationsApiService.update(token, _conversationId!,
+          title: title, messages: _msgs, canvases: _canvases);
     }
   }
 
@@ -431,12 +641,14 @@ class _AiTabState extends State<AiTab> {
         token,
         title: 'Nova conversa',
         messages: _msgs,
+        canvases: _canvases,
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
       }
     } else {
-      await ConversationsApiService.update(token, _conversationId!, messages: _msgs);
+      await ConversationsApiService.update(token, _conversationId!,
+          messages: _msgs, canvases: _canvases);
     }
   }
 
@@ -446,16 +658,6 @@ class _AiTabState extends State<AiTab> {
         _scroll.animateTo(_scroll.position.maxScrollExtent,
             duration: const Duration(milliseconds: 300), curve: kCupertinoOut);
       }
-    });
-  }
-
-  void _onQuickAction(QuickAction action) {
-    setState(() {
-      _showToggles = false;
-      _ctrl.text = action.promptSeed;
-      _ctrl.selection =
-          TextSelection.collapsed(offset: _ctrl.text.length);
-      _attachedTool = action.editorType;
     });
   }
 
@@ -475,21 +677,20 @@ class _AiTabState extends State<AiTab> {
     await ImagePicker().pickImage(source: ImageSource.camera);
   }
 
-  void _onToggleWebSearch(bool v) => setState(() => _webSearchOn = v);
-
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
-  void _openAttachSheet() {
-    showAttachSheet(
+  void _openAttachSheet(GlobalKey anchorKey) {
+    showAttachPopup(
       context,
       AppTheme.of(context),
-      webSearchOn: _webSearchOn,
-      onToggleWebSearch: _onToggleWebSearch,
+      anchorKey: anchorKey,
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
       onSelectTool: _onToolSelected,
+      onOpenCanvasPopup: _openCanvasPopup,
+      canvasCount: _canvases.length,
     );
   }
 
@@ -506,12 +707,30 @@ class _AiTabState extends State<AiTab> {
     );
   }
 
-  void _openModelSheet() {
-    showModelSelectSheet(
+  void _openModelPopup(GlobalKey anchorKey) {
+    showModelSelectPopup(
       context,
       AppTheme.of(context),
+      anchorKey: anchorKey,
       current: _model,
       onSelect: _onModelSelected,
+    );
+  }
+
+  void _openCanvasPopup() {
+    showCanvasSheet(
+      context,
+      AppTheme.of(context),
+      canvases: _canvases,
+      onOpenCanvas: _onOpenCanvas,
+    );
+  }
+
+  void _onOpenCanvas(CanvasItem item) {
+    // Item 8: ao tocar num canvas, navega para o EditTab já carregado.
+    editTabController.requestLoad(item);
+    AiTabHostNavigation.of(context)?.goToEditTab(
+      EditorTypeX.fromCanvasKind(item.kind),
     );
   }
 
@@ -521,25 +740,30 @@ class _AiTabState extends State<AiTab> {
         _streamSub?.cancel();
         setState(() {
           _msgs.clear();
-          _showToggles = true;
+          _canvases.clear();
           _incognito = false;
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
+          _creatingCanvasKind = null;
           _conversationId = null;
         });
+        widget.onHasMessagesChanged?.call(false);
         break;
       case ConversationAction.incognito:
+        if (_hasMessages) return; // item 4: bloqueado depois de iniciar conversa
         _streamSub?.cancel();
         setState(() {
           _msgs.clear();
-          _showToggles = false;
+          _canvases.clear();
           _incognito = true;
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
+          _creatingCanvasKind = null;
           _conversationId = null;
         });
+        widget.onHasMessagesChanged?.call(false);
         break;
       case ConversationAction.rename:
         break;
@@ -551,13 +775,15 @@ class _AiTabState extends State<AiTab> {
         _streamSub?.cancel();
         setState(() {
           _msgs.clear();
-          _showToggles = true;
+          _canvases.clear();
           _incognito = false;
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
+          _creatingCanvasKind = null;
           _conversationId = null;
         });
+        widget.onHasMessagesChanged?.call(false);
         break;
     }
   }
@@ -586,6 +812,41 @@ class _AiTabState extends State<AiTab> {
     showSelectTextSheet(context, AppTheme.of(context), text: _msgs[index].content);
   }
 
+  // ── Ações da barra de reação sob cada resposta da IA ────────────
+
+  void _onAssistantThumbUp(int index) {
+    // Ponto de extensão para telemetria/feedback no worker, se/quando existir.
+  }
+
+  void _onAssistantThumbDown(int index) {
+    // Ponto de extensão para telemetria/feedback no worker, se/quando existir.
+  }
+
+  void _onAssistantCopy(int index) {
+    final msg = _msgs[index];
+    Clipboard.setData(ClipboardData(text: msg.content));
+  }
+
+  void _onAssistantRefresh(int index) {
+    // Reenvia a última mensagem do utilizador anterior a esta resposta,
+    // removendo a resposta atual e tudo o que vem depois.
+    if (_sending) return;
+    int userIdx = index - 1;
+    while (userIdx >= 0 && _msgs[userIdx].role != 'user') {
+      userIdx--;
+    }
+    if (userIdx < 0) return;
+    final userText = _msgs[userIdx].content;
+    setState(() {
+      _msgs.removeRange(userIdx, _msgs.length);
+      _ctrl.text = userText;
+    });
+    _send();
+  }
+
+  final GlobalKey _attachAnchorKey = GlobalKey();
+  final GlobalKey _modelAnchorKey  = GlobalKey();
+
   @override
   void dispose() {
     _ctrl.dispose();
@@ -605,38 +866,44 @@ class _AiTabState extends State<AiTab> {
         Expanded(
           child: _incognito
               ? const _IncognitoState()
-              : (_msgs.isEmpty && _streamingText.isEmpty && _showToggles)
-                  ? _EmptyState(s: s, onQuickAction: _onQuickAction)
-                  : (_msgs.isEmpty && _streamingText.isEmpty)
-                      ? const SizedBox.shrink()
-                      : ListView.builder(
-                          controller: _scroll,
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          itemCount: _msgs.length + (_sending ? 1 : 0),
-                          itemBuilder: (_, i) {
-                            if (i >= _msgs.length) {
-                              return _StreamingBubble(
-                                s: s,
-                                text: cleanAiText(_streamingText),
-                                thinking: _streamingThink != null
-                                    ? cleanAiText(_streamingThink!)
-                                    : null,
-                              );
-                            }
-                            final msg = _msgs[i];
-                            if (msg.role == 'user') {
-                              return _Bubble(
-                                s: s,
-                                text: msg.content,
-                                onEdit: () => _onBubbleEdit(i),
-                                onCopy: () => _onBubbleCopy(i),
-                                onDelete: () => _onBubbleDelete(i),
-                                onSelectText: () => _onBubbleSelectText(i),
-                              );
-                            }
-                            return _AssistantBubble(s: s, text: cleanAiText(msg.content));
-                          },
-                        ),
+              : (_msgs.isEmpty && _streamingText.isEmpty)
+                  ? _EmptyState(s: s)
+                  : ListView.builder(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      itemCount: _msgs.length + (_sending ? 1 : 0),
+                      itemBuilder: (_, i) {
+                        if (i >= _msgs.length) {
+                          return _StreamingBubble(
+                            s: s,
+                            text: cleanAiText(_streamingText),
+                            thinking: _streamingThink != null
+                                ? cleanAiText(_streamingThink!)
+                                : null,
+                            creatingCanvasKind: _creatingCanvasKind,
+                          );
+                        }
+                        final msg = _msgs[i];
+                        if (msg.role == 'user') {
+                          return _Bubble(
+                            s: s,
+                            text: msg.content,
+                            onEdit: () => _onBubbleEdit(i),
+                            onCopy: () => _onBubbleCopy(i),
+                            onDelete: () => _onBubbleDelete(i),
+                            onSelectText: () => _onBubbleSelectText(i),
+                          );
+                        }
+                        return _AssistantBubble(
+                          s: s,
+                          text: cleanAiText(msg.content),
+                          onThumbUp: () => _onAssistantThumbUp(i),
+                          onThumbDown: () => _onAssistantThumbDown(i),
+                          onCopy: () => _onAssistantCopy(i),
+                          onRefresh: () => _onAssistantRefresh(i),
+                        );
+                      },
+                    ),
         ),
         _ChatInput(
           s: s,
@@ -645,25 +912,45 @@ class _AiTabState extends State<AiTab> {
           attachedTool: _attachedTool,
           incognito: _incognito,
           sending: _sending,
+          attachAnchorKey: _attachAnchorKey,
+          modelAnchorKey: _modelAnchorKey,
           onSend: _send,
-          onAttach: _openAttachSheet,
+          onAttach: () => _openAttachSheet(_attachAnchorKey),
           onVoice: _openVoiceSheet,
-          onModel: _openModelSheet,
+          onModel: () => _openModelPopup(_modelAnchorKey),
           onClearTool: _onClearTool,
         ),
+        // Item 2: respiro extra por baixo do input, para não ficar
+        // colado à borda do teclado/gesture bar do telemóvel.
         AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: kCupertinoOut,
-          height: keyboardInset > 0 ? keyboardInset : 104,
+          height: keyboardInset > 0 ? keyboardInset + 12 : 132,
         ),
       ]),
     );
   }
 }
 
-// ── Estado incógnito — nunca escurece o fundo; segue sempre o tema.
-// Mostra apenas o ícone filled centrado (o topo já tem o header
-// "Conversa incógnita" fora deste widget). ──
+/// InheritedWidget leve para permitir que a AiTab (aninhada dentro de
+/// AiTabHost) peça ao RootShell para mudar para a tab Editor com um
+/// EditorType específico, sem acoplamento direto entre os dois widgets.
+class AiTabHostNavigation extends InheritedWidget {
+  final void Function(EditorType type) goToEditTab;
+  const AiTabHostNavigation({
+    super.key,
+    required this.goToEditTab,
+    required super.child,
+  });
+
+  static AiTabHostNavigation? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AiTabHostNavigation>();
+
+  @override
+  bool updateShouldNotify(AiTabHostNavigation oldWidget) => true;
+}
+
+// ── Estado incógnito — nunca escurece o fundo; segue sempre o tema. ──
 
 class _IncognitoState extends StatelessWidget {
   const _IncognitoState();
@@ -682,100 +969,35 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Toggle individual (chip compacto com ícone + label + borda) ─
+// ── Empty state — item 3: sem toggles/chips de ação rápida, apenas
+// um estado neutro e acolhedor. ──
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
-  final ValueChanged<QuickAction> onQuickAction;
-  const _EmptyState({required this.s, required this.onQuickAction});
+  const _EmptyState({required this.s});
 
   @override
   Widget build(BuildContext context) => Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: QuickAction.values
-                .map((a) => _QuickActionChip(
-                      s: s,
-                      action: a,
-                      onTap: () => onQuickAction(a),
-                    ))
-                .toList(),
-          ),
-        ),
-      );
-}
-
-class _QuickActionChip extends StatefulWidget {
-  final AppColorScheme s;
-  final QuickAction action;
-  final VoidCallback onTap;
-  const _QuickActionChip({
-    required this.s,
-    required this.action,
-    required this.onTap,
-  });
-
-  @override
-  State<_QuickActionChip> createState() => _QuickActionChipState();
-}
-
-class _QuickActionChipState extends State<_QuickActionChip> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
-      onTap:       widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.94 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: widget.action.tint.withOpacity(s.isDark ? 0.16 : 0.10),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: widget.action.tint,
-              width: 1.5,
-            ),
-          ),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/icons/png/${widget.action.asset}',
-                width: 14,
-                height: 14,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(width: 5),
+              AppIcon('ai_tab_filled.svg', color: s.onSurfaceVariant, size: 40, useColorAsset: true),
+              const SizedBox(height: 14),
               Text(
-                widget.action.label,
+                'Como posso ajudar?',
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: widget.action.tint,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface,
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 // ── Bolha de mensagem do utilizador ─────────────────────────────
@@ -820,7 +1042,7 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
     final box = context.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz = box.size;
-    showMessageActionsMenu(
+    showMessageActionsPopup(
       context,
       widget.s,
       anchorOffset: off,
@@ -834,8 +1056,6 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Pill de mensagem do utilizador — reforçado no claro para ficar
-    // bem mais visível que um primaryContainer padrão desbotado.
     final bubbleColor = widget.s.isDark
         ? widget.s.primaryContainer
         : const Color(0xFFD7E7FE);
@@ -873,12 +1093,26 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   }
 }
 
-// ── Bolha de resposta do assistente ──────────────────────────────
+// ── Bolha de resposta do assistente — agora com formatação rica
+// (negrito, listas, tabelas, títulos) e uma barra de ações por baixo
+// com thumb_up, thumb_down, copiar e regenerar, em ícones ligeiramente
+// mais pequenos do que o resto da interface. ──
 
 class _AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
-  const _AssistantBubble({required this.s, required this.text});
+  final VoidCallback onThumbUp;
+  final VoidCallback onThumbDown;
+  final VoidCallback onCopy;
+  final VoidCallback onRefresh;
+  const _AssistantBubble({
+    required this.s,
+    required this.text,
+    required this.onThumbUp,
+    required this.onThumbDown,
+    required this.onCopy,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) => Align(
@@ -887,21 +1121,121 @@ class _AssistantBubble extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
-          child: SelectableText(
-            text,
-            style: TextStyle(color: s.onSurface, fontSize: 14.5, height: 1.45),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichAiText(text: text, s: s),
+              const SizedBox(height: 6),
+              _AssistantActionBar(
+                s: s,
+                onThumbUp: onThumbUp,
+                onThumbDown: onThumbDown,
+                onCopy: onCopy,
+                onRefresh: onRefresh,
+              ),
+            ],
           ),
         ),
       );
 }
 
+// ── Barra de ações sob cada resposta da IA. Ícones ligeiramente
+// menores (16px) do que os padrão da interface (18-20px), conforme
+// pedido — "um pouco mais pequenos do que os de toda a interface". ──
+
+class _AssistantActionBar extends StatelessWidget {
+  final AppColorScheme s;
+  final VoidCallback onThumbUp;
+  final VoidCallback onThumbDown;
+  final VoidCallback onCopy;
+  final VoidCallback onRefresh;
+  const _AssistantActionBar({
+    required this.s,
+    required this.onThumbUp,
+    required this.onThumbDown,
+    required this.onCopy,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AssistantActionIcon(s: s, asset: 'thumb_up.svg', onTap: onThumbUp),
+          const SizedBox(width: 4),
+          _AssistantActionIcon(s: s, asset: 'thumb_down.svg', onTap: onThumbDown),
+          const SizedBox(width: 4),
+          _AssistantActionIcon(s: s, asset: 'copy.svg', onTap: onCopy),
+          const SizedBox(width: 4),
+          _AssistantActionIcon(s: s, asset: 'refresh.svg', onTap: onRefresh),
+        ],
+      );
+}
+
+class _AssistantActionIcon extends StatefulWidget {
+  final AppColorScheme s;
+  final String asset;
+  final VoidCallback onTap;
+  const _AssistantActionIcon({
+    required this.s,
+    required this.asset,
+    required this.onTap,
+  });
+  @override State<_AssistantActionIcon> createState() => _AssistantActionIconState();
+}
+
+class _AssistantActionIconState extends State<_AssistantActionIcon> {
+  bool _h = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        width: 28, height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _h ? s.hover : Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        // 16px — ligeiramente menor do que o padrão de 18-20px usado
+        // no resto da interface (ex: more_filled.svg, add.svg).
+        child: AppIcon(widget.asset, color: s.onSurfaceVariant, size: 16),
+      ),
+    );
+  }
+}
+
 // ── Bolha de streaming (resposta a chegar em tempo real) ────────
+// Item 8: mostra "A criar documento..." com ícone tools.svg quando
+// a IA está a meio de gerar um bloco de canvas.
 
 class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
   final String? thinking;
-  const _StreamingBubble({required this.s, required this.text, this.thinking});
+  final CanvasKind? creatingCanvasKind;
+  const _StreamingBubble({
+    required this.s,
+    required this.text,
+    this.thinking,
+    this.creatingCanvasKind,
+  });
+
+  String get _creatingLabel {
+    switch (creatingCanvasKind) {
+      case CanvasKind.doc:        return 'A criar documento...';
+      case CanvasKind.sheet:      return 'A criar folha de cálculo...';
+      case CanvasKind.slide:      return 'A criar apresentação...';
+      case CanvasKind.whiteboard: return 'A criar quadro branco...';
+      case null:                  return '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Align(
@@ -923,28 +1257,379 @@ class _StreamingBubble extends StatelessWidget {
                           fontStyle: FontStyle.italic,
                           height: 1.4)),
                 ),
-              if (text.isEmpty)
-                SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
-                  ),
-                )
-              else
-                Text(text,
-                    style: TextStyle(color: s.onSurface, fontSize: 14.5, height: 1.45)),
+              if (text.isNotEmpty) RichAiText(text: text, s: s),
+              if (creatingCanvasKind != null) ...[
+                if (text.isNotEmpty) const SizedBox(height: 10),
+                _CanvasCreatingPill(s: s, label: _creatingLabel),
+              ] else if (text.isEmpty)
+                // Item 6: loader de grade piscando enquanto não há nenhum
+                // token de texto ainda (arranque da resposta).
+                BlinkingGridLoader(color: s.onSurfaceVariant),
             ],
           ),
         ),
       );
 }
 
+class _CanvasCreatingPill extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  const _CanvasCreatingPill({required this.s, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: s.primaryContainer.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon('tools.svg', color: s.primary, size: 15),
+            const SizedBox(width: 8),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: s.primary)),
+          ],
+        ),
+      );
+}
+
 // ══════════════════════════════════════════════════════════════
-// MESSAGE ACTIONS MENU (editar / copiar / eliminar / selecionar texto)
+// BLINKING GRID LOADER — item 6 do pedido. Grelha 3x3 de pontos que
+// piscam em cascata, tradução direta do loader "13. Grade piscando"
+// do mockup de referência, feito em Flutter puro (sem CSS/HTML).
 // ══════════════════════════════════════════════════════════════
 
-void showMessageActionsMenu(
+class BlinkingGridLoader extends StatefulWidget {
+  final Color color;
+  final double dotSize;
+  final double gap;
+  const BlinkingGridLoader({
+    super.key,
+    required this.color,
+    this.dotSize = 7,
+    this.gap = 5,
+  });
+
+  @override
+  State<BlinkingGridLoader> createState() => _BlinkingGridLoaderState();
+}
+
+class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  static const int _cols = 3;
+  static const int _rows = 3;
+  static const double _cycleMs = 1200;
+  static const double _stepDelayMs = 100;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: _cycleMs.round()),
+    )..repeat();
+  }
+
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  double _opacityFor(int index, double t) {
+    final delay = (index * _stepDelayMs) / _cycleMs;
+    var local = (t - delay) % 1.0;
+    if (local < 0) local += 1.0;
+    // Replica keyframes 0%,100%{opacity:.15} 50%{opacity:1}
+    final phase = (local * 2).clamp(0.0, 2.0);
+    final eased = phase <= 1.0 ? phase : (2.0 - phase);
+    return 0.15 + (0.85 * eased);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = _cols * widget.dotSize + (_cols - 1) * widget.gap;
+    return SizedBox(
+      width: size,
+      height: _rows * widget.dotSize + (_rows - 1) * widget.gap,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(_rows, (r) => Padding(
+            padding: EdgeInsets.only(bottom: r == _rows - 1 ? 0 : widget.gap),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(_cols, (c) {
+                final index = r * _cols + c;
+                return Padding(
+                  padding: EdgeInsets.only(right: c == _cols - 1 ? 0 : widget.gap),
+                  child: Opacity(
+                    opacity: _opacityFor(index, _c.value),
+                    child: Container(
+                      width: widget.dotSize,
+                      height: widget.dotSize,
+                      decoration: BoxDecoration(
+                        color: widget.color,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          )),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RICH AI TEXT — renderizador de markdown leve, sem dependências
+// externas: negrito, itálico, títulos, listas com marcadores e
+// numeradas, e tabelas. Item 9 do pedido.
+// ══════════════════════════════════════════════════════════════
+
+class RichAiText extends StatelessWidget {
+  final String text;
+  final AppColorScheme s;
+  const RichAiText({super.key, required this.text, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = _parseBlocks(text);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: blocks,
+    );
+  }
+
+  List<Widget> _parseBlocks(String raw) {
+    final lines = raw.split('\n');
+    final widgets = <Widget>[];
+    int i = 0;
+    List<List<String>>? tableRows;
+
+    void flushTable() {
+      if (tableRows != null && tableRows!.isNotEmpty) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: _AiTable(rows: tableRows!, s: s),
+        ));
+      }
+      tableRows = null;
+    }
+
+    while (i < lines.length) {
+      final line = lines[i];
+      final trimmed = line.trim();
+
+      // Linha de tabela markdown: | a | b | c |
+      if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.contains('|', 1)) {
+        // ignora a linha separadora |---|---|
+        final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(trimmed);
+        if (!isSeparator) {
+          final cells = trimmed
+              .substring(1, trimmed.length - 1)
+              .split('|')
+              .map((c) => c.trim())
+              .toList();
+          tableRows ??= [];
+          tableRows!.add(cells);
+        }
+        i++;
+        continue;
+      } else if (tableRows != null) {
+        flushTable();
+      }
+
+      if (trimmed.isEmpty) {
+        widgets.add(const SizedBox(height: 6));
+        i++;
+        continue;
+      }
+
+      // Títulos: ### Texto
+      final headerMatch = RegExp(r'^(#{1,4})\s+(.*)$').firstMatch(trimmed);
+      if (headerMatch != null) {
+        final level = headerMatch.group(1)!.length;
+        final content = headerMatch.group(2)!;
+        widgets.add(Padding(
+          padding: EdgeInsets.only(top: i == 0 ? 0 : 8, bottom: 4),
+          child: _formattedText(
+            content, s,
+            fontSize: level == 1 ? 18 : level == 2 ? 16.5 : 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ));
+        i++;
+        continue;
+      }
+
+      // Lista com marcadores: - item / * item
+      final bulletMatch = RegExp(r'^[\-\*]\s+(.*)$').firstMatch(trimmed);
+      if (bulletMatch != null) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 8),
+                child: Container(
+                  width: 5, height: 5,
+                  margin: const EdgeInsets.only(top: 6),
+                  decoration: BoxDecoration(color: s.onSurfaceVariant, shape: BoxShape.circle),
+                ),
+              ),
+              Expanded(child: _formattedText(bulletMatch.group(1)!, s)),
+            ],
+          ),
+        ));
+        i++;
+        continue;
+      }
+
+      // Lista numerada: 1. item
+      final numberedMatch = RegExp(r'^(\d+)\.\s+(.*)$').firstMatch(trimmed);
+      if (numberedMatch != null) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 22,
+                child: Text('${numberedMatch.group(1)}.',
+                    style: TextStyle(
+                        fontSize: 14.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              ),
+              Expanded(child: _formattedText(numberedMatch.group(2)!, s)),
+            ],
+          ),
+        ));
+        i++;
+        continue;
+      }
+
+      // Parágrafo normal
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: _formattedText(trimmed, s),
+      ));
+      i++;
+    }
+
+    flushTable();
+    return widgets;
+  }
+
+  Widget _formattedText(String raw, AppColorScheme s, {double fontSize = 14.5, FontWeight? fontWeight}) {
+    final spans = <TextSpan>[];
+    final pattern = RegExp(r'(\*\*.+?\*\*|__.+?__|\*[^\*]+?\*|_[^_]+?_|`[^`]+?`)');
+    int last = 0;
+    for (final m in pattern.allMatches(raw)) {
+      if (m.start > last) {
+        spans.add(TextSpan(text: raw.substring(last, m.start)));
+      }
+      final token = m.group(0)!;
+      if (token.startsWith('**') || token.startsWith('__')) {
+        spans.add(TextSpan(
+          text: token.substring(2, token.length - 2),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ));
+      } else if (token.startsWith('`')) {
+        spans.add(TextSpan(
+          text: token.substring(1, token.length - 1),
+          style: TextStyle(
+            fontFamily: 'monospace',
+            backgroundColor: s.hover,
+            fontSize: fontSize - 1,
+          ),
+        ));
+      } else {
+        spans.add(TextSpan(
+          text: token.substring(1, token.length - 1),
+          style: const TextStyle(fontStyle: FontStyle.italic),
+        ));
+      }
+      last = m.end;
+    }
+    if (last < raw.length) spans.add(TextSpan(text: raw.substring(last)));
+
+    return SelectableText.rich(
+      TextSpan(
+        style: TextStyle(
+          color: s.onSurface,
+          fontSize: fontSize,
+          fontWeight: fontWeight ?? FontWeight.normal,
+          height: 1.45,
+        ),
+        children: spans,
+      ),
+    );
+  }
+}
+
+class _AiTable extends StatelessWidget {
+  final List<List<String>> rows;
+  final AppColorScheme s;
+  const _AiTable({required this.rows, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final header = rows.first;
+    final body = rows.length > 1 ? rows.sublist(1) : <List<String>>[];
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Table(
+        border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
+        columnWidths: {
+          for (int i = 0; i < header.length; i++) i: const FlexColumnWidth(),
+        },
+        children: [
+          TableRow(
+            decoration: BoxDecoration(color: s.hover),
+            children: header
+                .map((c) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Text(c,
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: s.onSurface)),
+                    ))
+                .toList(),
+          ),
+          for (final row in body)
+            TableRow(
+              children: row
+                  .map((c) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Text(c,
+                            style: TextStyle(fontSize: 12.5, color: s.onSurface)),
+                      ))
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MESSAGE ACTIONS POPUP (editar / copiar / eliminar / selecionar texto)
+// ══════════════════════════════════════════════════════════════
+
+void showMessageActionsPopup(
   BuildContext context,
   AppColorScheme s, {
   required Offset anchorOffset,
@@ -1148,7 +1833,9 @@ Future<void> showSelectTextSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT
+// CHAT INPUT — item 2 (mais respiro por baixo) e item 3 (sem toggles)
+// e item 5 (ícone do botão de enviar muda para progress.svg enquanto
+// a IA está a responder).
 // ══════════════════════════════════════════════════════════════
 
 class _ChatInput extends StatelessWidget {
@@ -1158,6 +1845,8 @@ class _ChatInput extends StatelessWidget {
   final EditorType? attachedTool;
   final bool incognito;
   final bool sending;
+  final GlobalKey attachAnchorKey;
+  final GlobalKey modelAnchorKey;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onVoice;
@@ -1171,6 +1860,8 @@ class _ChatInput extends StatelessWidget {
     required this.attachedTool,
     required this.incognito,
     required this.sending,
+    required this.attachAnchorKey,
+    required this.modelAnchorKey,
     required this.onSend,
     required this.onAttach,
     required this.onVoice,
@@ -1218,6 +1909,7 @@ class _ChatInput extends StatelessWidget {
             child: Row(
               children: [
                 GestureDetector(
+                  key: attachAnchorKey,
                   onTap: onAttach,
                   child: Container(
                     width: 36, height: 36,
@@ -1231,6 +1923,7 @@ class _ChatInput extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 GestureDetector(
+                  key: modelAnchorKey,
                   onTap: onModel,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -1281,14 +1974,11 @@ class _ChatInput extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: sending ? s.primary.withOpacity(0.5) : s.primary,
                         shape: BoxShape.circle),
+                    // Item 5: enquanto `sending` é true, mostra progress.svg
+                    // (com rotação contínua) em vez do CircularProgressIndicator
+                    // genérico; volta a send.svg assim que a resposta termina.
                     child: sending
-                        ? SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(s.onPrimary),
-                            ),
-                          )
+                        ? _SpinningIcon(asset: 'progress.svg', color: s.onPrimary)
                         : AppIcon('send.svg', color: s.onPrimary, size: 20),
                   ),
                 ),
@@ -1306,6 +1996,31 @@ class _ChatInput extends StatelessWidget {
           : inner,
     );
   }
+}
+
+class _SpinningIcon extends StatefulWidget {
+  final String asset;
+  final Color color;
+  const _SpinningIcon({required this.asset, required this.color});
+  @override State<_SpinningIcon> createState() => _SpinningIconState();
+}
+
+class _SpinningIconState extends State<_SpinningIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat();
+  }
+  @override void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => RotationTransition(
+        turns: _c,
+        child: AppIcon(widget.asset, color: widget.color, size: 18),
+      );
 }
 
 // ── Pill que mostra a ferramenta ligada (aparece acima do input) ─
@@ -1349,71 +2064,157 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH SHEET — 4 opções diretas com pngs (doc/sheet/slide/whiteboard)
+// ATTACH POPUP — item 1: agora é popup ancorado, não modal de baixo.
+// Inclui a entrada "Canvas" (item 8) com cards.svg e contador.
 // ══════════════════════════════════════════════════════════════
 
-Future<void> showAttachSheet(
+enum _AttachAction { files, photos, camera, canvas }
+
+void showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
-  required bool webSearchOn,
-  required ValueChanged<bool> onToggleWebSearch,
+  required GlobalKey anchorKey,
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
   required ValueChanged<EditorType> onSelectTool,
+  required VoidCallback onOpenCanvasPopup,
+  required int canvasCount,
+}) {
+  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
+  final off = box.localToGlobal(Offset.zero);
+  final sz = box.size;
+  final screenSize = MediaQuery.of(context).size;
+
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    final width = 240.0;
+    final desiredTop = off.dy - 6 - 360;
+    final top = desiredTop < 40 ? null : desiredTop;
+    final bottom = desiredTop < 40 ? screenSize.height - off.dy + 6 : null;
+
+    final entries = <PopupMenuEntry<_AttachAction>>[
+      const PopupMenuEntry(value: _AttachAction.files, label: 'Arquivos', subtitle: 'Enviar qualquer tipo de arquivo', svgIcon: 'file.svg'),
+      const PopupMenuEntry(value: _AttachAction.photos, label: 'Fotos', subtitle: 'Enviar fotos da galeria', svgIcon: 'image.svg'),
+      const PopupMenuEntry(value: _AttachAction.camera, label: 'Câmera', subtitle: 'Tirar uma foto agora', svgIcon: 'camera.svg'),
+      PopupMenuEntry(
+        value: _AttachAction.canvas,
+        label: 'Canvas',
+        subtitle: canvasCount == 0 ? 'Ainda sem documentos' : '$canvasCount documento${canvasCount == 1 ? '' : 's'} nesta conversa',
+        svgIcon: 'cards.svg',
+      ),
+    ];
+
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      Positioned(
+        top: top,
+        bottom: bottom,
+        left: off.dx,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, child) => Opacity(
+            opacity: CurvedAnimation(
+                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                .value,
+            child: Transform.scale(
+              scale: Tween(begin: 0.92, end: 1.0)
+                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .value,
+              alignment: top == null ? Alignment.bottomLeft : Alignment.topLeft,
+              child: child,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              width: width,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final e in entries.sublist(0, 3))
+                    _PopupRow<_AttachAction>(
+                      s: s,
+                      entry: e,
+                      onTap: () {
+                        close();
+                        switch (e.value) {
+                          case _AttachAction.files: onFiles(); break;
+                          case _AttachAction.photos: onPhotos(); break;
+                          case _AttachAction.camera: onCamera(); break;
+                          case _AttachAction.canvas: break;
+                        }
+                      },
+                    ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    child: Divider(height: 1),
+                  ),
+                  _PopupRow<_AttachAction>(
+                    s: s,
+                    entry: entries[3],
+                    onTap: () { close(); onOpenCanvasPopup(); },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  });
+
+  Overlay.of(context).insert(entry);
+  controller.forward();
+}
+
+// ══════════════════════════════════════════════════════════════
+// CANVAS SHEET — item 8: modal com todos os documentos/folhas/slides
+// criados nesta conversa, navegável verticalmente (swipe).
+// ══════════════════════════════════════════════════════════════
+
+Future<void> showCanvasSheet(
+  BuildContext context,
+  AppColorScheme s, {
+  required List<CanvasItem> canvases,
+  required ValueChanged<CanvasItem> onOpenCanvas,
 }) {
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (ctx) => _AttachSheetContent(
-      s: s,
-      webSearchOn: webSearchOn,
-      onToggleWebSearch: onToggleWebSearch,
-      onFiles: onFiles,
-      onPhotos: onPhotos,
-      onCamera: onCamera,
-      onSelectTool: onSelectTool,
-    ),
-  );
-}
-
-class _AttachSheetContent extends StatefulWidget {
-  final AppColorScheme s;
-  final bool webSearchOn;
-  final ValueChanged<bool> onToggleWebSearch;
-  final VoidCallback onFiles;
-  final VoidCallback onPhotos;
-  final VoidCallback onCamera;
-  final ValueChanged<EditorType> onSelectTool;
-
-  const _AttachSheetContent({
-    required this.s,
-    required this.webSearchOn,
-    required this.onToggleWebSearch,
-    required this.onFiles,
-    required this.onPhotos,
-    required this.onCamera,
-    required this.onSelectTool,
-  });
-
-  @override
-  State<_AttachSheetContent> createState() => _AttachSheetContentState();
-}
-
-class _AttachSheetContentState extends State<_AttachSheetContent> {
-  late bool _webSearchOn = widget.webSearchOn;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return Material(
+    builder: (ctx) => Material(
       type: MaterialType.transparency,
       child: SafeArea(
         top: false,
         child: Container(
           margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           decoration: BoxDecoration(
             color: s.floatingSurface,
             borderRadius: BorderRadius.circular(28),
@@ -1421,176 +2222,112 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SheetGrabber(s: s),
-              SheetOptionsGroup(s: s, options: [
-                _SheetOption(
-                  s: s,
-                  icon: 'file.svg',
-                  label: 'Arquivos',
-                  subtitle: 'Enviar qualquer tipo de arquivo',
-                  onTap: () { Navigator.pop(context); widget.onFiles(); },
-                ),
-                _SheetOption(
-                  s: s,
-                  icon: 'image.svg',
-                  label: 'Fotos',
-                  subtitle: 'Enviar fotos da galeria',
-                  onTap: () { Navigator.pop(context); widget.onPhotos(); },
-                ),
-                _SheetOption(
-                  s: s,
-                  icon: 'camera.svg',
-                  label: 'Câmera',
-                  subtitle: 'Tirar uma foto agora',
-                  onTap: () { Navigator.pop(context); widget.onCamera(); },
-                ),
+              Center(child: SheetGrabber(s: s)),
+              Row(children: [
+                AppIcon('cards.svg', color: s.onSurface, size: 18),
+                const SizedBox(width: 8),
+                Text('Canvas desta conversa',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
               ]),
-              const SizedBox(height: 6),
-              // 4 opções diretas com PNGs reais — doc.png / sheet.png /
-              // slide.png / whiteboard.png de assets/icons/png/
-              SheetOptionsGroup(
-                s: s,
-                options: EditorType.values
-                    .map((t) => _ToolPngSheetOption(
-                          s: s,
-                          type: t,
-                          onTap: () {
-                            Navigator.pop(context);
-                            widget.onSelectTool(t);
-                          },
-                        ))
-                    .toList(),
-              ),
-              const SizedBox(height: 6),
-              SettingsStyleCard(
-                s: s,
-                radius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  child: Row(
-                    children: [
-                      AppIcon('globe.svg', color: s.onSurface, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text('Pesquisa online',
-                            style: TextStyle(
-                                fontSize: 14, color: s.onSurface)),
-                      ),
-                      AppSwitch(
-                        value: _webSearchOn,
+              const SizedBox(height: 12),
+              if (canvases.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Center(
+                    child: Text('Ainda não há documentos nesta conversa.',
+                        style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: canvases.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final item = canvases[canvases.length - 1 - i]; // mais recente primeiro
+                      return _CanvasCard(
                         s: s,
-                        onChanged: (v) {
-                          setState(() => _webSearchOn = v);
-                          widget.onToggleWebSearch(v);
+                        item: item,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          onOpenCanvas(item);
                         },
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
-              ),
             ],
           ),
         ),
       ),
+    ),
+  );
+}
+
+class _CanvasCard extends StatefulWidget {
+  final AppColorScheme s;
+  final CanvasItem item;
+  final VoidCallback onTap;
+  const _CanvasCard({required this.s, required this.item, required this.onTap});
+  @override State<_CanvasCard> createState() => _CanvasCardState();
+}
+
+class _CanvasCardState extends State<_CanvasCard> {
+  bool _h = false;
+
+  EditorType get _editorType => EditorTypeX.fromCanvasKind(widget.item.kind);
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _h ? s.hover : s.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: s.cardShadow,
+        ),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: s.primaryContainer.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: EditorTypeIcon(_editorType.pngAsset, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+                const SizedBox(height: 2),
+                Text(_editorType.label,
+                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          AppIcon('chevron_right.svg', color: s.onSurfaceVariant, size: 14),
+        ]),
+      ),
     );
   }
-}
-
-// ── Opção do attach sheet com png real (doc/sheet/slide/whiteboard).
-// type.pngAsset já resolve para "doc.png"/"sheet.png"/"slide.png"/
-// "whiteboard.png" em assets/icons/png/ (ver EditorType em edittab.dart). ─
-
-class _ToolPngSheetOption extends StatefulWidget {
-  final AppColorScheme s;
-  final EditorType type;
-  final VoidCallback onTap;
-  const _ToolPngSheetOption({required this.s, required this.type, required this.onTap});
-  @override State<_ToolPngSheetOption> createState() => _ToolPngSheetOptionState();
-}
-
-class _ToolPngSheetOptionState extends State<_ToolPngSheetOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          color: _h ? widget.s.hover : Colors.transparent,
-          child: Row(children: [
-            EditorTypeIcon(widget.type.pngAsset, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(widget.type.label,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: widget.s.onSurface)),
-            ),
-          ]),
-        ),
-      );
-}
-
-// ── Opção genérica do sheet (arquivos/fotos/câmera) — usa SVG ───
-
-class _SheetOption extends StatefulWidget {
-  final AppColorScheme s;
-  final String icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-  const _SheetOption({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-  });
-  @override State<_SheetOption> createState() => _SheetOptionState();
-}
-
-class _SheetOptionState extends State<_SheetOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          color: _h ? widget.s.hover : Colors.transparent,
-          child: Row(children: [
-            AppIcon(widget.icon, color: widget.s.onSurface, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.label,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: widget.s.onSurface)),
-                  const SizedBox(height: 1),
-                  Text(widget.subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: widget.s.onSurfaceVariant)),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1746,112 +2483,99 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT SHEET
+// MODEL SELECT POPUP — item 1: agora popup ancorado ao botão de
+// modelo, não modal de baixo. Modelos: V4 / V4 Pro / R1.
 // ══════════════════════════════════════════════════════════════
 
-Future<void> showModelSelectSheet(
+void showModelSelectPopup(
   BuildContext context,
   AppColorScheme s, {
+  required GlobalKey anchorKey,
   required AiModel current,
   required ValueChanged<AiModel> onSelect,
 }) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: s.floatingShadow,
+  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
+  final off = box.localToGlobal(Offset.zero);
+  final sz = box.size;
+  final screenSize = MediaQuery.of(context).size;
+
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    final width = 250.0;
+    final desiredTop = off.dy - 6 - 220;
+    final top = desiredTop < 40 ? null : desiredTop;
+    final bottom = desiredTop < 40 ? screenSize.height - off.dy + 6 : null;
+
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      Positioned(
+        top: top,
+        bottom: bottom,
+        left: off.dx,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, child) => Opacity(
+            opacity: CurvedAnimation(
+                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                .value,
+            child: Transform.scale(
+              scale: Tween(begin: 0.92, end: 1.0)
+                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .value,
+              alignment: top == null ? Alignment.bottomLeft : Alignment.topLeft,
+              child: child,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SheetGrabber(s: s),
-              SheetOptionsGroup(
-                s: s,
-                options: AiModel.values
-                    .map((m) => _ModelOption(
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              width: width,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: AiModel.values
+                    .map((m) => _PopupRow<AiModel>(
                           s: s,
-                          model: m,
-                          selected: current == m,
-                          onTap: () {
-                            onSelect(m);
-                            Navigator.pop(ctx);
-                          },
+                          entry: PopupMenuEntry(
+                            value: m,
+                            label: m.label,
+                            subtitle: m.description,
+                            selected: current == m,
+                          ),
+                          onTap: () { close(); onSelect(m); },
                         ))
                     .toList(),
               ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
-class _ModelOption extends StatefulWidget {
-  final AppColorScheme s;
-  final AiModel model;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ModelOption({
-    required this.s,
-    required this.model,
-    required this.selected,
-    required this.onTap,
+    ]);
   });
-  @override State<_ModelOption> createState() => _ModelOptionState();
-}
 
-class _ModelOptionState extends State<_ModelOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final w = widget;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       w.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        color: _h
-            ? w.s.hover
-            : w.selected
-                ? w.s.primaryContainer.withOpacity(0.5)
-                : Colors.transparent,
-        child: Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(w.model.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: w.selected ? w.s.primary : w.s.onSurface,
-                    )),
-                const SizedBox(height: 1),
-                Text(w.model.badge,
-                    style: TextStyle(
-                        fontSize: 12, color: w.s.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          if (w.selected)
-            AppIcon('check.svg', color: w.s.primary, size: 16),
-        ]),
-      ),
-    );
-  }
+  Overlay.of(context).insert(entry);
+  controller.forward();
 }

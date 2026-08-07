@@ -75,6 +75,131 @@ class ChatErrorEvent extends ChatStreamEvent {
 class ChatCreditsExhaustedEvent extends ChatStreamEvent {}
 
 // ══════════════════════════════════════════════════════════════
+// CANVAS — documentos/folhas/slides que a IA cria durante o chat.
+// A IA sinaliza a criação com um bloco especial no texto da resposta:
+//   [[canvas:doc:Título||conteúdo em html ou texto]]
+//   [[canvas:sheet:Título||json da folha]]
+//   [[canvas:slide:Título||json das slides]]
+// O parser abaixo extrai esses blocos, monta CanvasItem, e devolve o
+// texto "limpo" (sem o bloco cru) para mostrar na bolha de chat.
+// ══════════════════════════════════════════════════════════════
+
+enum CanvasKind { doc, sheet, slide, whiteboard }
+
+extension CanvasKindX on CanvasKind {
+  String get wireTag => const {
+        CanvasKind.doc:        'doc',
+        CanvasKind.sheet:      'sheet',
+        CanvasKind.slide:      'slide',
+        CanvasKind.whiteboard: 'whiteboard',
+      }[this]!;
+
+  static CanvasKind fromWire(String tag) {
+    switch (tag) {
+      case 'sheet': return CanvasKind.sheet;
+      case 'slide': return CanvasKind.slide;
+      case 'whiteboard': return CanvasKind.whiteboard;
+      default: return CanvasKind.doc;
+    }
+  }
+}
+
+class CanvasItem {
+  final String id;
+  final CanvasKind kind;
+  final String title;
+  final String content; // html (doc) / json (sheet, slide, whiteboard)
+  final int createdAt;
+
+  const CanvasItem({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.content,
+    required this.createdAt,
+  });
+
+  CanvasItem copyWith({String? title, String? content}) => CanvasItem(
+        id: id,
+        kind: kind,
+        title: title ?? this.title,
+        content: content ?? this.content,
+        createdAt: createdAt,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind.wireTag,
+        'title': title,
+        'content': content,
+        'createdAt': createdAt,
+      };
+
+  factory CanvasItem.fromJson(Map<String, dynamic> j) => CanvasItem(
+        id: j['id']?.toString() ?? '',
+        kind: CanvasKindX.fromWire(j['kind']?.toString() ?? 'doc'),
+        title: j['title']?.toString() ?? 'Sem título',
+        content: j['content']?.toString() ?? '',
+        createdAt: (j['createdAt'] is num) ? (j['createdAt'] as num).toInt() : 0,
+      );
+}
+
+class CanvasParseResult {
+  final String cleanText;
+  final List<CanvasItem> items;
+  const CanvasParseResult(this.cleanText, this.items);
+}
+
+class CanvasParser {
+  static final RegExp _blockRe = RegExp(
+    r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
+    multiLine: true,
+  );
+
+  static CanvasParseResult parse(String raw, {required String Function() idGen}) {
+    final items = <CanvasItem>[];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cleaned = raw.replaceAllMapped(_blockRe, (m) {
+      final kind = CanvasKindX.fromWire(m.group(1)!);
+      final title = m.group(2)!.trim().isEmpty ? 'Sem título' : m.group(2)!.trim();
+      final content = m.group(3)!.trim();
+      items.add(CanvasItem(
+        id: idGen(),
+        kind: kind,
+        title: title,
+        content: content,
+        createdAt: now,
+      ));
+      return '';
+    }).trim();
+    return CanvasParseResult(cleaned, items);
+  }
+
+  /// Deteta se um bloco de canvas está a meio de streaming (aberto mas
+  /// ainda não fechado) para mostrar o indicador "A criar documento...".
+  static bool hasOpenBlock(String raw) {
+    final openIdx = raw.lastIndexOf('[[canvas:');
+    if (openIdx == -1) return false;
+    final closeIdx = raw.indexOf(']]', openIdx);
+    return closeIdx == -1;
+  }
+
+  static CanvasKind? openBlockKind(String raw) {
+    final openIdx = raw.lastIndexOf('[[canvas:');
+    if (openIdx == -1) return null;
+    final rest = raw.substring(openIdx + 9);
+    final colonIdx = rest.indexOf(':');
+    if (colonIdx == -1) return null;
+    final tag = rest.substring(0, colonIdx);
+    if (tag == 'sheet') return CanvasKind.sheet;
+    if (tag == 'slide') return CanvasKind.slide;
+    if (tag == 'whiteboard') return CanvasKind.whiteboard;
+    if (tag == 'doc') return CanvasKind.doc;
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // AUTH API
 // ══════════════════════════════════════════════════════════════
 
@@ -299,6 +424,7 @@ class ConversationsApiService {
     required String title,
     List<ChatMessage> messages = const [],
     String? model,
+    List<CanvasItem> canvases = const [],
   }) async {
     try {
       final res = await http.post(
@@ -308,6 +434,7 @@ class ConversationsApiService {
           'title': title,
           'messages': messages.map((m) => m.toJson()).toList(),
           if (model != null) 'model': model,
+          'canvases': canvases.map((c) => c.toJson()).toList(),
         }),
       );
       if (res.statusCode < 200 || res.statusCode >= 300) return null;
@@ -335,11 +462,13 @@ class ConversationsApiService {
     String id, {
     String? title,
     List<ChatMessage>? messages,
+    List<CanvasItem>? canvases,
   }) async {
     try {
       final body = <String, dynamic>{};
       if (title != null) body['title'] = title;
       if (messages != null) body['messages'] = messages.map((m) => m.toJson()).toList();
+      if (canvases != null) body['canvases'] = canvases.map((c) => c.toJson()).toList();
       await http.put(
         Uri.parse('$kApiBase/conversations/$id'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
