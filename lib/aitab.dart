@@ -11,6 +11,7 @@ import 'widgets.dart';
 import 'edittab.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
+import 'aiwidgets.dart';
 
 // ══════════════════════════════════════════════════════════════
 // AI MODEL — deepseek v4 / v4 pro / R1, ligados aos providers reais
@@ -51,7 +52,8 @@ extension AiModelX on AiModel {
 // SYSTEM PROMPT — pede formatação rica e ensina a IA a usar o
 // protocolo de canvas, agora incluindo cor de texto e destaque
 // (highlight) via comandos editorApi.setColor / editorApi.setHighlight
-// no documento HTML gerado.
+// no documento HTML gerado. kAiWidgetsInstructions é anexado condicio-
+// nalmente quando o switch de Widgets está ativo (ver AiTabState).
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
@@ -81,6 +83,34 @@ Usa "sheet" para folhas de cálculo (conteúdo em JSON de células) e "slide" pa
 apresentações (conteúdo em JSON de slides). Nunca mostres este bloco ao
 utilizador como texto explicado — ele é processado automaticamente pela
 aplicação e transformado num cartão de documento navegável.
+
+Blocos de código normais (```dart, ```python, ```js, etc.) são sempre bem-vindos
+sempre que ajudarem a explicar algo técnico, independentemente de qualquer outra
+funcionalidade estar ativa.
+''';
+
+const String kAiWidgetsInstructions = '''
+
+Tens também acesso a widgets visuais interativos. Quando fizer sentido para a
+resposta, gera um bloco de código com uma das seguintes linguagens especiais,
+contendo APENAS um objeto JSON válido no corpo do bloco:
+
+- ```widget_table``` — { "headers": ["Col1","Col2"], "rows": [["a","b"]] }
+- ```widget_bar``` — { "data": [{"label":"Jan","value":10,"unit":"","color":"#6F5AF6"}] }
+- ```widget_pie``` — { "data": [{"label":"A","value":30,"color":"#2F80ED"}] }
+- ```widget_code``` — { "language": "python", "code": "print('hi')" } (só usa isto em vez de um bloco de código normal se quiseres o cartão com botão de copiar dedicado; blocos de código normais já funcionam sempre)
+- ```widget_sheet``` — { "lines": [{"text":"Título","title":true},{"text":"linha normal"}] }
+- ```widget_market``` — { "type": "crypto", "symbol": "BTC", "name": "Bitcoin" } ou { "type": "forex", "symbol": "USDEUR" }
+- ```widget_calendar``` — { "events": [{"date":"2026-08-10","name":"Reunião","time":"14:00","color":"#6F5AF6"}] }
+- ```widget_timer``` — { "seconds": 300, "label": "Foco" }
+- ```widget_mindmap``` — { "tree": {"id":"root","label":"Tema","color":"#6F5AF6","children":[]} }
+- ```widget_graph``` — { "expression": "sin(x)", "xMin": -10, "xMax": 10 }
+- ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
+
+Usa estes widgets apenas quando acrescentam valor real à resposta (dados
+quantitativos, comparações visuais, localização, tempo), nunca como enfeite.
+Nunca expliques ao utilizador que estás a gerar um bloco widget — ele é
+processado automaticamente e transformado num cartão interativo.
 ''';
 
 // ══════════════════════════════════════════════════════════════
@@ -436,6 +466,7 @@ class AiTabState extends State<AiTab> {
 
   bool     _incognito    = false;
   bool     _sending      = false;
+  bool     _widgetsEnabled = false;
   String   _streamingText = '';
   String?  _streamingThink;
   String?  _conversationId;
@@ -499,6 +530,9 @@ class AiTabState extends State<AiTab> {
 
   String _nextCanvasId() => 'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
 
+  String get _effectiveSystemPrompt =>
+      _widgetsEnabled ? kAiSystemPrompt + kAiWidgetsInstructions : kAiSystemPrompt;
+
   Future<void> _send() async {
     final t = _ctrl.text.trim();
     if (t.isEmpty || _sending) return;
@@ -537,7 +571,7 @@ class AiTabState extends State<AiTab> {
       provider: _model.provider,
       think: _model.think,
       language: 'pt',
-      systemPrompt: kAiSystemPrompt,
+      systemPrompt: _effectiveSystemPrompt,
     ).listen(
       (event) {
         if (!mounted) return;
@@ -680,6 +714,8 @@ class AiTabState extends State<AiTab> {
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
+  void _onToggleWidgets(bool value) => setState(() => _widgetsEnabled = value);
+
   void _openAttachSheet(GlobalKey anchorKey) {
     showAttachPopup(
       context,
@@ -691,6 +727,8 @@ class AiTabState extends State<AiTab> {
       onSelectTool: _onToolSelected,
       onOpenCanvasPopup: _openCanvasPopup,
       canvasCount: _canvases.length,
+      widgetsEnabled: _widgetsEnabled,
+      onToggleWidgets: _onToggleWidgets,
     );
   }
 
@@ -1333,7 +1371,7 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: _cycleMs.round()),
+      duration: Duration(milliseconds: _cycleMs.round()),
     )..repeat();
   }
 
@@ -1392,7 +1430,14 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
 // ══════════════════════════════════════════════════════════════
 // RICH AI TEXT — renderizador de markdown leve, sem dependências
 // externas: negrito, itálico, títulos, listas com marcadores e
-// numeradas, e tabelas. Item 9 do pedido.
+// numeradas, tabelas — e agora widgets interativos (```widget_x```)
+// intercalados com o texto normal, via aiwidgets.dart. A deteção de
+// widgets acontece ANTES do parse de markdown: o texto é dividido em
+// segmentos por parseAiWidgetBlocks(), cada segmento de texto passa
+// pelo parser de markdown normal, e cada bloco de widget é renderizado
+// diretamente pelo dispatcher buildAiWidget(). Blocos de código comuns
+// (```dart, ```python, etc.) não são widget_* e continuam a cair no
+// tratamento de código já existente mais abaixo, sempre visíveis.
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
@@ -1402,11 +1447,43 @@ class RichAiText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final blocks = _parseBlocks(text);
+    final widgetParse = parseAiWidgetBlocks(text);
+    if (widgetParse.blocks.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: _parseBlocks(text),
+      );
+    }
+
+    // Divide o texto-com-marcadores em segmentos alternados de
+    // texto-markdown e placeholders \u0000WB<i>\u0000, preservando a ordem.
+    final markerRe = RegExp(r'\u0000WB(\d+)\u0000');
+    final children = <Widget>[];
+    int last = 0;
+    for (final m in markerRe.allMatches(widgetParse.textWithMarkers)) {
+      if (m.start > last) {
+        final segment = widgetParse.textWithMarkers.substring(last, m.start);
+        if (segment.trim().isNotEmpty) children.addAll(_parseBlocks(segment));
+      }
+      final idx = int.parse(m.group(1)!);
+      if (idx < widgetParse.blocks.length) {
+        children.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: buildAiWidget(widgetParse.blocks[idx], s),
+        ));
+      }
+      last = m.end;
+    }
+    if (last < widgetParse.textWithMarkers.length) {
+      final segment = widgetParse.textWithMarkers.substring(last);
+      if (segment.trim().isNotEmpty) children.addAll(_parseBlocks(segment));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
-      children: blocks,
+      children: children,
     );
   }
 
@@ -1515,6 +1592,31 @@ class RichAiText extends StatelessWidget {
           ),
         ));
         i++;
+        continue;
+      }
+
+      // Bloco de código normal (```lang ... ```) — SEMPRE visível,
+      // independentemente do switch de widgets. Detetado aqui porque
+      // já não é widget_* (esses foram extraídos antes pelo parser).
+      if (trimmed.startsWith('```')) {
+        final lang = trimmed.substring(3).trim();
+        final codeLines = <String>[];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.add(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // consome a fence de fecho
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: buildAiWidget(
+            AiWidgetBlock(id: 'widget_code', json: {
+              'language': lang.isEmpty ? 'text' : lang,
+              'code': codeLines.join('\n'),
+            }),
+            s,
+          ),
+        ));
         continue;
       }
 
@@ -2065,7 +2167,10 @@ class _AttachedToolPill extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // ATTACH POPUP — item 1: agora é popup ancorado, não modal de baixo.
-// Inclui a entrada "Canvas" (item 8) com cards.svg e contador.
+// Inclui a entrada "Canvas" (item 8) com cards.svg e contador, e
+// agora também a entrada "Widgets" com switch, que ativa/desativa o
+// modo de widgets interativos (gráficos, mapas, calendário, etc.)
+// sem fechar o popup ao ser tocada — só o switch reage.
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera, canvas }
@@ -2080,6 +2185,8 @@ void showAttachPopup(
   required ValueChanged<EditorType> onSelectTool,
   required VoidCallback onOpenCanvasPopup,
   required int canvasCount,
+  required bool widgetsEnabled,
+  required ValueChanged<bool> onToggleWidgets,
 }) {
   final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
   final off = box.localToGlobal(Offset.zero);
@@ -2092,16 +2199,21 @@ void showAttachPopup(
     duration: const Duration(milliseconds: 200),
   );
 
+  // Notifier local para o switch de Widgets re-renderizar sem fechar
+  // o popup nem precisar de setState no widget pai a cada toque.
+  final widgetsNotifier = ValueNotifier<bool>(widgetsEnabled);
+
   void close() {
     controller.reverse().then((_) {
       entry.remove();
       controller.dispose();
+      widgetsNotifier.dispose();
     });
   }
 
   entry = OverlayEntry(builder: (ctx) {
     final width = 240.0;
-    final desiredTop = off.dy - 6 - 360;
+    final desiredTop = off.dy - 6 - 420;
     final top = desiredTop < 40 ? null : desiredTop;
     final bottom = desiredTop < 40 ? screenSize.height - off.dy + 6 : null;
 
@@ -2179,6 +2291,21 @@ void showAttachPopup(
                     entry: entries[3],
                     onTap: () { close(); onOpenCanvasPopup(); },
                   ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    child: Divider(height: 1),
+                  ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: widgetsNotifier,
+                    builder: (_, enabled, __) => _WidgetsToggleRow(
+                      s: s,
+                      enabled: enabled,
+                      onChanged: (v) {
+                        widgetsNotifier.value = v;
+                        onToggleWidgets(v);
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2190,6 +2317,48 @@ void showAttachPopup(
 
   Overlay.of(context).insert(entry);
   controller.forward();
+}
+
+// ── Linha "Widgets" com switch — não fecha o popup ao ser tocada,
+// apenas alterna o estado (o próprio Switch já intercepta o gesto). ──
+
+class _WidgetsToggleRow extends StatelessWidget {
+  final AppColorScheme s;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+  const _WidgetsToggleRow({required this.s, required this.enabled, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(children: [
+        AppIcon('widgets.svg', size: 18, color: s.onSurface),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Widgets',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface)),
+              Text(
+                enabled ? 'Gráficos, mapas e cartões interativos' : 'Desativado',
+                style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+        Transform.scale(
+          scale: 0.8,
+          child: Switch.adaptive(
+            value: enabled,
+            onChanged: onChanged,
+            activeColor: s.primary,
+          ),
+        ),
+      ]),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
