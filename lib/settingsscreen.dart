@@ -37,17 +37,11 @@ class SettingsScreen extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Espaço reservado para a appbar (que fica sobreposta,
-                // com gradiente, ver Stack abaixo)
                 SizedBox(height: 52 + 6),
-
-                // Conteúdo
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                     children: [
-
-                      // ── Aparência ──────────────────────────────
                       _SectionLabel(s: s, label: 'Aparência'),
                       const SizedBox(height: 10),
                       _SettingsGroup(s: s, rows: [
@@ -64,7 +58,6 @@ class SettingsScreen extends StatelessWidget {
 
                       const SizedBox(height: 28),
 
-                      // ── Conta ──────────────────────────────────
                       _SectionLabel(s: s, label: 'Conta'),
                       const SizedBox(height: 10),
                       _SettingsGroup(s: s, rows: [
@@ -112,7 +105,6 @@ class SettingsScreen extends StatelessWidget {
 
                       const SizedBox(height: 28),
 
-                      // ── Sobre ──────────────────────────────────
                       _SectionLabel(s: s, label: 'Sobre'),
                       const SizedBox(height: 10),
                       _SettingsGroup(s: s, rows: [
@@ -153,8 +145,6 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
 
-            // ── Appbar sobreposta, com gradiente de transparência
-            //    para baixo (contínuo, sem blur)
             Positioned(
               top: 0, left: 0, right: 0,
               child: Container(
@@ -186,9 +176,6 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
 
-            // ── Botão terminar sessão (fixo no fundo), com o
-            //    container-fundo em gradiente de transparência
-            //    para cima (contínuo, sem blur)
             Positioned(
               left: 0, right: 0, bottom: 0,
               child: Container(
@@ -234,7 +221,7 @@ class _SectionLabel extends StatelessWidget {
 
 class _SettingsGroup extends StatelessWidget {
   final AppColorScheme s;
-  final List<Widget> rows;
+  final List<_SettingsRow> rows;
   const _SettingsGroup({required this.s, required this.rows});
 
   static const double _outerRadius = 16;
@@ -244,7 +231,6 @@ class _SettingsGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = rows.length;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -261,12 +247,9 @@ class _SettingsGroup extends StatelessWidget {
   }
 
   BorderRadius _radiusFor(int index, int count) {
-    if (count == 1) {
-      return BorderRadius.circular(_outerRadius);
-    }
+    if (count == 1) return BorderRadius.circular(_outerRadius);
     final isFirst = index == 0;
     final isLast  = index == count - 1;
-
     return BorderRadius.only(
       topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
       topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
@@ -337,7 +320,7 @@ class _SettingsRowState extends State<_SettingsRow> {
 }
 
 // ── Botão terminar sessão ───────────────────────────────────
-// Filled: fundo vermelho sólido, texto branco, cantos totalmente curvos.
+// Cores Fluent 2 (Cranberry) via s.error / s.onError.
 
 class _LogoutButton extends StatefulWidget {
   final AppColorScheme s;
@@ -374,7 +357,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: s.isDark ? const Color(0xFF3A0000) : Colors.white)),
+                  color: s.onError)),
         ),
       ),
     );
@@ -382,6 +365,9 @@ class _LogoutButtonState extends State<_LogoutButton> {
 }
 
 // ── Sheet de confirmação genérico (Sim / Não) ─────────────────
+// Fundo agora usa s.floatingSurface (derivado da paleta real, em
+// vez do hardcode 0xFF2C2C2E que destoava no tema escuro), e o
+// texto da mensagem ficou mais discreto (13px em vez de 15px).
 
 class _ConfirmActionSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -399,7 +385,7 @@ class _ConfirmActionSheet extends StatelessWidget {
             margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
             decoration: BoxDecoration(
-              color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+              color: s.floatingSurface,
               borderRadius: BorderRadius.circular(28),
               boxShadow: s.floatingShadow,
             ),
@@ -418,8 +404,8 @@ class _ConfirmActionSheet extends StatelessWidget {
                   message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                       color: s.onSurface),
                 ),
                 const SizedBox(height: 20),
@@ -490,9 +476,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: widget.filled
-                  ? (s.isDark ? const Color(0xFF3A0000) : Colors.white)
-                  : s.onSurface,
+              color: widget.filled ? s.onError : s.onSurface,
             ),
           ),
         ),

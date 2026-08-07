@@ -4,7 +4,7 @@ import 'colors.dart';
 import 'widgets.dart';
 
 // ══════════════════════════════════════════════════════════════
-// TABS — 4 tabs: IA | Editor | Templates | Projetos
+// TABS
 // ══════════════════════════════════════════════════════════════
 
 enum AppTab { ai, edit, templates, projects }
@@ -33,7 +33,7 @@ extension AppTabX on AppTab {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SPRING NAV (slide lateral, SEM recoil no conteúdo)
+// SPRING NAV
 // ══════════════════════════════════════════════════════════════
 
 class SpringNav {
@@ -165,8 +165,7 @@ class AppDrawer extends StatelessWidget {
       );
 }
 
-// ── Drawer tab tile (IA / Editor / Templates / Projetos) ───────
-// Pill totalmente curvo (cápsula) quando ativo.
+// ── Drawer tab tile ───────────────────────────────────────────
 
 class _DrawerTabTile extends StatefulWidget {
   final AppColorScheme s;
@@ -273,11 +272,6 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ── Account pill ──────────────────────────────────────────────
-// Cápsula totalmente curva, fundo sempre visível (cardBackground).
-// Sem ícone de definições: no lugar tem um botão que abre um popup
-// (mesmo padrão do AiConversationMenuButton) com opções rápidas —
-// alterar tema (toggle directo), definições e terminar sessão.
-// Ícones exclusivamente SVG (AppIcon), nada de Icons.* Material.
 
 class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
@@ -290,8 +284,7 @@ class _AccountPillState extends State<_AccountPill> {
   bool _p = false;
 
   void _openUserInfo() {
-    // TODO: ligar aqui a navegação real para o perfil do utilizador,
-    // caso venhas a querer um ecrã de perfil separado das definições.
+    // TODO: ligar aqui a navegação real para o perfil do utilizador.
   }
 
   @override
@@ -349,8 +342,6 @@ class _AccountPillState extends State<_AccountPill> {
 }
 
 // ── Botão que abre o popup de opções rápidas da conta ──────────
-// Mesmo padrão de overlay (fade + scale) do AiConversationMenuButton
-// em aitab.dart, ancorado ao próprio botão.
 
 class _AccountQuickMenuButton extends StatefulWidget {
   final AppColorScheme s;
@@ -396,8 +387,6 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
           ),
         ),
         Positioned(
-          // Abre para cima do botão, já que este fica junto ao fundo
-          // do drawer (perto do rodapé do ecrã).
           bottom: MediaQuery.of(ctx).size.height - off.dy + 6,
           left: off.dx + sz.width - 220,
           child: AnimatedBuilder(
@@ -421,7 +410,7 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
                 width: 220,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  color: s.floatingSurface,
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: s.floatingShadow,
                 ),

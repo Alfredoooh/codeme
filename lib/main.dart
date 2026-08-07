@@ -35,14 +35,19 @@ class CraftLabApp extends StatelessWidget {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
-        // Status bar e nav bar do sistema seguem o mesmo tom do corpo
-        // (s.pageBackground), igual ao fundo do ecrã de chat/definições.
+        final incognito = AppTheme.isIncognito(ctx);
+        // Fundo efetivo do shell: em modo incógnito, usa sempre o tom
+        // dedicado (mais profundo), mesmo que o tema esteja no claro.
+        final bg = incognito ? s.incognitoBackground : s.pageBackground;
+
+        // Status bar e nav bar do sistema seguem o mesmo tom do corpo.
         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: s.pageBackground,
-          statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
-          systemNavigationBarColor: s.pageBackground,
+          statusBarColor: bg,
+          statusBarIconBrightness:
+              (s.isDark || incognito) ? Brightness.light : Brightness.dark,
+          systemNavigationBarColor: bg,
           systemNavigationBarIconBrightness:
-              s.isDark ? Brightness.light : Brightness.dark,
+              (s.isDark || incognito) ? Brightness.light : Brightness.dark,
         ));
         return MaterialApp(
           title: 'CraftLab',
@@ -50,18 +55,18 @@ class CraftLabApp extends StatelessWidget {
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
-            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6)),
+            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F6CBD)),
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.dark,
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2F7BF6),
+              seedColor: const Color(0xFF0F6CBD),
               brightness: Brightness.dark,
             ),
           ),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
-          builder: (_, child) => ColoredBox(color: s.pageBackground, child: child!),
+          builder: (_, child) => ColoredBox(color: bg, child: child!),
           home: const RootShell(),
         );
       }),
@@ -91,6 +96,12 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     super.initState();
     _springNav = SpringNav(vsync: this);
     _springNav.slideCtrl.value = 1.0;
+    // O botão de incógnito/popup no header depende de appTheme
+    // (isIncognito), por isso este widget precisa de repintar quando
+    // ele muda — appTheme já é o InheritedNotifier usado por AppTheme,
+    // então basta ouvir aqui também para o header reagir a toggles
+    // vindos de outros pontos da app (ex: popup do drawer, se algum
+    // dia vier a alternar incógnito por lá também).
   }
 
   @override
@@ -154,27 +165,34 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final incognito = AppTheme.isIncognito(context);
+    final bg = incognito ? s.incognitoBackground : s.pageBackground;
 
     return Material(
       type: MaterialType.transparency,
       child: Stack(children: [
 
         // ── Conteúdo principal (ocupa toda a área, sem bottom bar)
-        // Fundo igual ao do SettingsScreen (s.pageBackground), para o
-        // ecrã de chat e as restantes tabs partilharem o mesmo tom.
         ColoredBox(
-          color: s.pageBackground,
+          color: bg,
           child: Column(children: [
             _AppHeader(
               s: s,
+              incognito: incognito,
               title: _tabTitle,
               onMenu: _openDrawer,
               trailing: _tab == AppTab.edit
                   ? EditTypeButton(
                       s: s, current: _editorType, onSelect: _setEditorType)
                   : _tab == AppTab.ai
-                      ? AiConversationMenuButton(
-                          s: s, onSelect: _onConversationAction)
+                      ? (_hasMessages
+                          ? AiConversationMenuButton(
+                              s: s, onSelect: _onConversationAction)
+                          : _IncognitoButton(
+                              s: s,
+                              active: incognito,
+                              onTap: appTheme.toggleIncognito,
+                            ))
                       : null,
             ),
             Expanded(
@@ -229,43 +247,74 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
+  final bool incognito;
   final String title;
   final VoidCallback onMenu;
   final Widget? trailing;
 
   const _AppHeader({
     required this.s,
+    required this.incognito,
     required this.title,
     required this.onMenu,
     this.trailing,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        // Mesmo tom do corpo (s.pageBackground), em vez de s.surface,
-        // para o appbar não destoar do fundo do ecrã.
-        color: s.pageBackground,
-        padding: EdgeInsets.only(
-          top: MediaQuery.of(context).padding.top + 6,
-          bottom: 10, left: 6, right: 10,
+  Widget build(BuildContext context) {
+    // Mesmo tom do corpo — respeita o modo incógnito.
+    final bg   = incognito ? s.incognitoSurface   : s.pageBackground;
+    final fg   = incognito ? s.incognitoOnSurface : s.onSurface;
+    return Container(
+      color: bg,
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 6,
+        bottom: 10, left: 6, right: 10,
+      ),
+      child: Row(children: [
+        AppTap(
+          onTap: onMenu, s: s,
+          child: AppIcon('menu.svg', color: fg, size: 20),
         ),
-        child: Row(children: [
-          AppTap(
-            onTap: onMenu, s: s,
-            child: AppIcon('menu.svg', color: s.onSurface, size: 20),
-          ),
-          const SizedBox(width: 8),
-          if (title.isNotEmpty)
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
+        const SizedBox(width: 8),
+        if (title.isNotEmpty)
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: fg,
             ),
-          const Spacer(),
-          if (trailing != null) trailing!,
-        ]),
+          ),
+        const Spacer(),
+        if (trailing != null) trailing!,
+      ]),
+    );
+  }
+}
+
+// ── Botão de incógnito ──────────────────────────────────────────
+// Substitui o AiConversationMenuButton enquanto não há mensagens
+// na conversa atual. Ao tocar, alterna o modo incógnito global
+// (appTheme.isIncognito), que escurece o app independentemente do
+// tema claro/escuro estar ativo.
+
+class _IncognitoButton extends StatelessWidget {
+  final AppColorScheme s;
+  final bool active;
+  final VoidCallback onTap;
+  const _IncognitoButton(
+      {required this.s, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => AppTap(
+        onTap: onTap,
+        s: s,
+        size: 36,
+        child: AppIcon(
+          'incognito.svg',
+          color: active ? s.primary : s.onSurface,
+          size: 20,
+        ),
       );
 }

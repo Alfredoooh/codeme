@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'edittab.dart';
@@ -34,10 +36,10 @@ extension QuickActionX on QuickAction {
       }[this]!;
 
   Color get tint => const {
-        QuickAction.doc:        Color(0xFF2B579A), // azul Word
-        QuickAction.sheet:      Color(0xFF217346), // verde Excel
-        QuickAction.slide:      Color(0xFFD24726), // laranja/vermelho PowerPoint
-        QuickAction.whiteboard: Color(0xFFE1306C), // vermelho/rosa
+        QuickAction.doc:        Color(0xFF2B579A),
+        QuickAction.sheet:      Color(0xFF217346),
+        QuickAction.slide:      Color(0xFFD24726),
+        QuickAction.whiteboard: Color(0xFFE1306C),
       }[this]!;
 
   String get promptSeed => const {
@@ -56,22 +58,22 @@ extension QuickActionX on QuickAction {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI MODEL (selector estilo "Sonnet 5 Extra")
+// AI MODEL
 // ══════════════════════════════════════════════════════════════
 
-enum AiModel { deepseekV3, deepseekR1, deepseekCoder }
+enum AiModel { v4Flash, v4Pro, r1Think }
 
 extension AiModelX on AiModel {
   String get label => const {
-        AiModel.deepseekV3:    'DeepSeek V3',
-        AiModel.deepseekR1:    'DeepSeek R1',
-        AiModel.deepseekCoder: 'DeepSeek Coder',
+        AiModel.v4Flash: 'V4 Flash',
+        AiModel.v4Pro:   'V4 Pro',
+        AiModel.r1Think: 'R1 Think',
       }[this]!;
 
   String get badge => const {
-        AiModel.deepseekV3:    'Rápido',
-        AiModel.deepseekR1:    'Raciocínio',
-        AiModel.deepseekCoder: 'Código',
+        AiModel.v4Flash: 'Rápido',
+        AiModel.v4Pro:   'Avançado',
+        AiModel.r1Think: 'Raciocínio',
       }[this]!;
 }
 
@@ -162,7 +164,7 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
                 width: 220,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  color: s.floatingSurface,
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: s.floatingShadow,
                 ),
@@ -252,7 +254,7 @@ class _AiTabState extends State<AiTab> {
   final List<String>           _msgs  = [];
 
   bool     _webSearchOn  = false;
-  AiModel  _model        = AiModel.deepseekV3;
+  AiModel  _model        = AiModel.v4Flash;
   EditorType? _attachedTool;
 
   void _send() {
@@ -294,15 +296,6 @@ class _AiTabState extends State<AiTab> {
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
-  void _openToolsSheet() {
-    showToolsSheet(
-      context,
-      AppTheme.of(context),
-      current: _attachedTool,
-      onSelect: _onToolSelected,
-    );
-  }
-
   void _openVoiceSheet() {
     showVoiceRecordSheet(
       context,
@@ -316,23 +309,12 @@ class _AiTabState extends State<AiTab> {
     );
   }
 
-  void _openModelSheet() {
-    showModelSelectSheet(
-      context,
-      AppTheme.of(context),
-      current: _model,
-      onSelect: _onModelSelected,
-    );
-  }
-
   @override
   void dispose() { _ctrl.dispose(); _scroll.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    // Espaço ocupado pelo teclado — usado para empurrar o floating
-    // input bar para cima quando o teclado abre.
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Column(children: [
@@ -356,15 +338,12 @@ class _AiTabState extends State<AiTab> {
         onFiles: _onAttachFiles,
         onPhotos: _onAttachPhotos,
         onCamera: _onOpenCamera,
-        onOpenTools: _openToolsSheet,
+        onToolSelected: _onToolSelected,
         onToggleWebSearch: _onToggleWebSearch,
         onVoice: _openVoiceSheet,
-        onModel: _openModelSheet,
+        onModelSelected: _onModelSelected,
         onClearTool: _onClearTool,
       ),
-      // Sobe com o teclado (keyboard avoiding) + espaço extra em
-      // baixo quando o teclado está fechado, para o bar ficar mais
-      // afastada do fundo do ecrã.
       AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: kCupertinoOut,
@@ -418,10 +397,10 @@ class _ChatInput extends StatelessWidget {
   final VoidCallback onFiles;
   final VoidCallback onPhotos;
   final VoidCallback onCamera;
-  final VoidCallback onOpenTools;
+  final ValueChanged<EditorType> onToolSelected;
   final ValueChanged<bool> onToggleWebSearch;
   final VoidCallback onVoice;
-  final VoidCallback onModel;
+  final ValueChanged<AiModel> onModelSelected;
   final VoidCallback onClearTool;
 
   const _ChatInput({
@@ -434,10 +413,10 @@ class _ChatInput extends StatelessWidget {
     required this.onFiles,
     required this.onPhotos,
     required this.onCamera,
-    required this.onOpenTools,
+    required this.onToolSelected,
     required this.onToggleWebSearch,
     required this.onVoice,
-    required this.onModel,
+    required this.onModelSelected,
     required this.onClearTool,
   });
 
@@ -446,7 +425,7 @@ class _ChatInput extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
         child: Container(
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: s.floatingSurface,
             borderRadius: BorderRadius.circular(22),
             boxShadow: s.floatingShadow,
           ),
@@ -481,48 +460,23 @@ class _ChatInput extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
                 child: Row(
                   children: [
-                    // Botão de adicionar (esquerda) — abre popup ancorado
-                    // com as opções de anexo (mesmo padrão do popup do
-                    // menu de conversa), em vez de bottom sheet modal.
                     _AttachMenuButton(
                       s: s,
                       webSearchOn: webSearchOn,
+                      attachedTool: attachedTool,
                       onFiles: onFiles,
                       onPhotos: onPhotos,
                       onCamera: onCamera,
-                      onOpenTools: onOpenTools,
+                      onToolSelected: onToolSelected,
                       onToggleWebSearch: onToggleWebSearch,
                     ),
                     const SizedBox(width: 6),
-                    // Selector de modelo
-                    GestureDetector(
-                      onTap: onModel,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: s.hover,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(model.label,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: s.onSurface)),
-                            const SizedBox(width: 3),
-                            Text(model.badge,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: s.onSurfaceVariant)),
-                          ],
-                        ),
-                      ),
+                    _ModelMenuButton(
+                      s: s,
+                      current: model,
+                      onSelected: onModelSelected,
                     ),
                     const Spacer(),
-                    // Botão de voz — ícone maior
                     GestureDetector(
                       onTap: onVoice,
                       child: Container(
@@ -539,7 +493,6 @@ class _ChatInput extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Botão de enviar — ícone maior
                     GestureDetector(
                       onTap: onSend,
                       child: Container(
@@ -559,9 +512,7 @@ class _ChatInput extends StatelessWidget {
       );
 }
 
-// ── Pill que mostra a ferramenta ligada (aparece acima do input) ─
-// Comprimento reduzido: paddings e espaçamentos internos mais
-// apertados, mantendo cantos totalmente redondos.
+// ── Pill que mostra a ferramenta ligada ─────────────────────────
 
 class _AttachedToolPill extends StatelessWidget {
   final AppColorScheme s;
@@ -602,39 +553,33 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH MENU BUTTON (popup ancorado — substitui o antigo bottom
-// sheet modal de anexos). Mesmo padrão de overlay (fade + scale)
-// do AiConversationMenuButton, ancorado ao próprio botão "+".
+// POPUP BASE — helper genérico para popups ancorados (fade+scale),
+// reaproveitado por anexar, ferramentas e selector de modelo,
+// evitando repetir a lógica de OverlayEntry em cada botão.
 // ══════════════════════════════════════════════════════════════
 
-class _AttachMenuButton extends StatefulWidget {
+class _AnchoredPopupButton extends StatefulWidget {
   final AppColorScheme s;
-  final bool webSearchOn;
-  final VoidCallback onFiles;
-  final VoidCallback onPhotos;
-  final VoidCallback onCamera;
-  final VoidCallback onOpenTools;
-  final ValueChanged<bool> onToggleWebSearch;
-
-  const _AttachMenuButton({
+  final Widget Function(BuildContext, VoidCallback close) menuBuilder;
+  final Widget child;
+  final double width;
+  final Alignment anchor; // topRight, bottomLeft, bottomRight...
+  const _AnchoredPopupButton({
     required this.s,
-    required this.webSearchOn,
-    required this.onFiles,
-    required this.onPhotos,
-    required this.onCamera,
-    required this.onOpenTools,
-    required this.onToggleWebSearch,
+    required this.menuBuilder,
+    required this.child,
+    this.width = 240,
+    this.anchor = Alignment.bottomLeft,
   });
 
   @override
-  State<_AttachMenuButton> createState() => _AttachMenuButtonState();
+  State<_AnchoredPopupButton> createState() => _AnchoredPopupButtonState();
 }
 
-class _AttachMenuButtonState extends State<_AttachMenuButton>
+class _AnchoredPopupButtonState extends State<_AnchoredPopupButton>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
-  late bool _webSearchOn = widget.webSearchOn;
 
   @override
   void initState() {
@@ -646,9 +591,9 @@ class _AttachMenuButtonState extends State<_AttachMenuButton>
   @override
   void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
 
-  void _toggle() => _ov == null ? _open() : _close();
+  void toggle() => _ov == null ? open() : close();
 
-  void _open() {
+  void open() {
     final box = context.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz  = box.size;
@@ -656,18 +601,17 @@ class _AttachMenuButtonState extends State<_AttachMenuButton>
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
+      final screenH = MediaQuery.of(ctx).size.height;
       return Stack(children: [
         Positioned.fill(
           child: GestureDetector(
-            onTap: _close,
+            onTap: close,
             behavior: HitTestBehavior.opaque,
             child: Container(color: Colors.transparent),
           ),
         ),
         Positioned(
-          // Abre para cima do botão, já que este fica junto ao fundo
-          // do ecrã, dentro da barra de input.
-          bottom: MediaQuery.of(ctx).size.height - off.dy + 6,
+          bottom: screenH - off.dy + 6,
           left: off.dx,
           child: AnimatedBuilder(
             animation: _ac,
@@ -684,62 +628,17 @@ class _AttachMenuButtonState extends State<_AttachMenuButton>
                 child: child,
               ),
             ),
-            child: StatefulBuilder(
-              builder: (ctx, setOverlayState) => Material(
-                type: MaterialType.transparency,
-                child: Container(
-                  width: 240,
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: s.floatingShadow,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _AttachMenuOption(
-                        s: s,
-                        icon: 'file.svg',
-                        label: 'Arquivos',
-                        onTap: () { widget.onFiles(); _close(); },
-                      ),
-                      _AttachMenuOption(
-                        s: s,
-                        icon: 'image.svg',
-                        label: 'Fotos',
-                        onTap: () { widget.onPhotos(); _close(); },
-                      ),
-                      _AttachMenuOption(
-                        s: s,
-                        icon: 'camera.svg',
-                        label: 'Câmera',
-                        onTap: () { widget.onCamera(); _close(); },
-                      ),
-                      _AttachMenuOption(
-                        s: s,
-                        icon: 'tools.svg',
-                        label: 'Ferramentas',
-                        onTap: () { widget.onOpenTools(); _close(); },
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        child: Divider(height: 1),
-                      ),
-                      _AttachMenuSwitchOption(
-                        s: s,
-                        icon: 'globe.svg',
-                        label: 'Pesquisa online',
-                        value: _webSearchOn,
-                        onChanged: (v) {
-                          setOverlayState(() => _webSearchOn = v);
-                          widget.onToggleWebSearch(v);
-                        },
-                      ),
-                    ],
-                  ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                width: widget.width,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: s.floatingShadow,
                 ),
+                child: widget.menuBuilder(ctx, close),
               ),
             ),
           ),
@@ -750,7 +649,7 @@ class _AttachMenuButtonState extends State<_AttachMenuButton>
     setState(() {});
   }
 
-  void _close() {
+  void close() {
     _ac.reverse().then((_) {
       _ov?.remove();
       _ov = null;
@@ -761,314 +660,58 @@ class _AttachMenuButtonState extends State<_AttachMenuButton>
   @override
   Widget build(BuildContext context) => GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: Container(
-          width: 36, height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.s.hover,
-            shape: BoxShape.circle,
-          ),
-          child: AppIcon('add.svg', color: widget.s.onSurface, size: 22),
-        ),
+        onTap: toggle,
+        child: widget.child,
       );
 }
 
-class _AttachMenuOption extends StatefulWidget {
+class _MenuOption extends StatefulWidget {
   final AppColorScheme s;
   final String icon;
   final String label;
   final VoidCallback onTap;
-  const _AttachMenuOption({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  @override State<_AttachMenuOption> createState() => _AttachMenuOptionState();
-}
-
-class _AttachMenuOptionState extends State<_AttachMenuOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _h ? widget.s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(children: [
-            AppIcon(widget.icon, color: widget.s.onSurface, size: 18),
-            const SizedBox(width: 10),
-            Text(widget.label,
-                style: TextStyle(fontSize: 14, color: widget.s.onSurface)),
-          ]),
-        ),
-      );
-}
-
-class _AttachMenuSwitchOption extends StatelessWidget {
-  final AppColorScheme s;
-  final String icon;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _AttachMenuSwitchOption({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(children: [
-          AppIcon(icon, color: s.onSurface, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(label,
-                style: TextStyle(fontSize: 14, color: s.onSurface)),
-          ),
-          AppSwitch(value: value, s: s, onChanged: onChanged),
-        ]),
-      );
-}
-
-// ══════════════════════════════════════════════════════════════
-// CARD GENÉRICO (mesmo padrão do _SettingsCard, ainda usado pelo
-// tools sheet e model sheet abaixo) e opções em grupo
-// ══════════════════════════════════════════════════════════════
-
-class _SettingsStyleCard extends StatelessWidget {
-  final AppColorScheme s;
-  final BorderRadius radius;
-  final Widget child;
-  const _SettingsStyleCard(
-      {required this.s, required this.radius, required this.child});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(color: s.cardBackground, borderRadius: radius),
-        clipBehavior: Clip.antiAlias,
-        child: child,
-      );
-}
-
-class _SheetOptionsGroup extends StatelessWidget {
-  final AppColorScheme s;
-  final List<_SheetOption> options;
-  const _SheetOptionsGroup({required this.s, required this.options});
-
-  static const double _outerRadius = 16;
-  static const double _innerRadius = 4;
-  static const double _gap = 2;
-
-  @override
-  Widget build(BuildContext context) {
-    final count = options.length;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (int i = 0; i < count; i++) ...[
-          if (i > 0) const SizedBox(height: _gap),
-          _SettingsStyleCard(
-            s: s,
-            radius: _radiusFor(i, count),
-            child: options[i],
-          ),
-        ],
-      ],
-    );
-  }
-
-  BorderRadius _radiusFor(int index, int count) {
-    if (count == 1) return BorderRadius.circular(_outerRadius);
-    final isFirst = index == 0;
-    final isLast  = index == count - 1;
-    return BorderRadius.only(
-      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
-      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
-    );
-  }
-}
-
-class _SheetOption extends StatefulWidget {
-  final AppColorScheme s;
-  final String icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-  const _SheetOption({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-  });
-  @override State<_SheetOption> createState() => _SheetOptionState();
-}
-
-class _SheetOptionState extends State<_SheetOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          color: _h ? widget.s.hover : Colors.transparent,
-          child: Row(children: [
-            AppIcon(widget.icon, color: widget.s.onSurface, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.label,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: widget.s.onSurface)),
-                  const SizedBox(height: 1),
-                  Text(widget.subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: widget.s.onSurfaceVariant)),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      );
-}
-
-// ══════════════════════════════════════════════════════════════
-// TOOLS SHEET (opções do editor: docs / sheets / slides / whiteboard)
-// ══════════════════════════════════════════════════════════════
-
-Future<void> showToolsSheet(
-  BuildContext context,
-  AppColorScheme s, {
-  required EditorType? current,
-  required ValueChanged<EditorType> onSelect,
-}) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: s.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(bottom: 10, top: 2),
-                decoration: BoxDecoration(
-                  color: s.outline,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              _SheetOptionsGroup(
-                s: s,
-                options: EditorType.values
-                    .map((t) => _ToolOptionAsSheetOption(
-                          s: s,
-                          type: t,
-                          selected: current == t,
-                          onTap: () {
-                            onSelect(t);
-                            Navigator.pop(ctx);
-                          },
-                        ))
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-// _ToolOption adaptado para o novo padrão de card (extends
-// _SheetOption por composição, não por herança, para reaproveitar
-// o mesmo grupo/raios; aqui é um widget próprio pois o layout
-// interno difere — inclui indicador de selecção).
-
-class _ToolOptionAsSheetOption extends _SheetOption {
   final bool selected;
-  _ToolOptionAsSheetOption({
-    required AppColorScheme s,
-    required EditorType type,
-    required this.selected,
-    required VoidCallback onTap,
-  }) : super(
-          s: s,
-          icon: '',
-          label: type.label,
-          subtitle: '',
-          onTap: onTap,
-        ) {
-    _type = type;
-  }
-  late final EditorType _type;
-
-  @override
-  State<_SheetOption> createState() => _ToolOptionAsSheetOptionState();
+  const _MenuOption({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+  });
+  @override State<_MenuOption> createState() => _MenuOptionState();
 }
 
-class _ToolOptionAsSheetOptionState extends State<_SheetOption> {
+class _MenuOptionState extends State<_MenuOption> {
   bool _h = false;
   @override
   Widget build(BuildContext context) {
-    final w = widget as _ToolOptionAsSheetOption;
+    final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _h = true),
       onTapCancel: ()  => setState(() => _h = false),
       onTapUp:     (_) => setState(() => _h = false),
-      onTap:       w.onTap,
+      onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        color: _h
-            ? w.s.hover
-            : w.selected
-                ? w.s.primaryContainer.withOpacity(0.5)
-                : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: _h
+              ? s.hover
+              : widget.selected
+                  ? s.primaryContainer.withOpacity(0.5)
+                  : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
         child: Row(children: [
-          EditorTypeIcon(w._type.pngAsset, size: 18),
+          AppIcon(widget.icon,
+              color: widget.selected ? s.primary : s.onSurface, size: 18),
           const SizedBox(width: 10),
-          Text(w._type.label,
+          Text(widget.label,
               style: TextStyle(
                 fontSize: 14,
-                color: w.selected ? w.s.primary : w.s.onSurface,
-                fontWeight: w.selected ? FontWeight.w600 : FontWeight.normal,
+                color: widget.selected ? s.primary : s.onSurface,
+                fontWeight: widget.selected ? FontWeight.w600 : FontWeight.normal,
               )),
         ]),
       ),
@@ -1077,7 +720,180 @@ class _ToolOptionAsSheetOptionState extends State<_SheetOption> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// VOICE RECORD SHEET (transcrição — só UI, callback TODO)
+// ATTACH MENU BUTTON (popup ancorado)
+// ══════════════════════════════════════════════════════════════
+
+class _AttachMenuButton extends StatefulWidget {
+  final AppColorScheme s;
+  final bool webSearchOn;
+  final EditorType? attachedTool;
+  final VoidCallback onFiles;
+  final VoidCallback onPhotos;
+  final VoidCallback onCamera;
+  final ValueChanged<EditorType> onToolSelected;
+  final ValueChanged<bool> onToggleWebSearch;
+
+  const _AttachMenuButton({
+    required this.s,
+    required this.webSearchOn,
+    required this.attachedTool,
+    required this.onFiles,
+    required this.onPhotos,
+    required this.onCamera,
+    required this.onToolSelected,
+    required this.onToggleWebSearch,
+  });
+
+  @override
+  State<_AttachMenuButton> createState() => _AttachMenuButtonState();
+}
+
+class _AttachMenuButtonState extends State<_AttachMenuButton> {
+  final _key = GlobalKey<_AnchoredPopupButtonState>();
+  late bool _webSearchOn = widget.webSearchOn;
+
+  @override
+  Widget build(BuildContext context) => _AnchoredPopupButton(
+        key: _key,
+        s: widget.s,
+        width: 240,
+        menuBuilder: (ctx, close) => StatefulBuilder(
+          builder: (ctx, setOverlayState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MenuOption(
+                s: widget.s, icon: 'file.svg', label: 'Arquivos',
+                onTap: () { widget.onFiles(); close(); },
+              ),
+              _MenuOption(
+                s: widget.s, icon: 'image.svg', label: 'Fotos',
+                onTap: () { widget.onPhotos(); close(); },
+              ),
+              _MenuOption(
+                s: widget.s, icon: 'camera.svg', label: 'Câmera',
+                onTap: () { widget.onCamera(); close(); },
+              ),
+              // Ferramentas — agora expande inline no próprio popup
+              // (submenu) em vez de abrir um segundo bottom sheet,
+              // mantendo tudo dentro de um único popup ancorado.
+              ...EditorType.values.map((t) => _MenuOption(
+                    s: widget.s,
+                    icon: 'tools.svg',
+                    label: t.label,
+                    selected: widget.attachedTool == t,
+                    onTap: () { widget.onToolSelected(t); close(); },
+                  )),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Divider(height: 1),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                child: Row(children: [
+                  AppIcon('globe.svg', color: widget.s.onSurface, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Pesquisa online',
+                        style: TextStyle(
+                            fontSize: 14, color: widget.s.onSurface)),
+                  ),
+                  AppSwitch(
+                    value: _webSearchOn,
+                    s: widget.s,
+                    onChanged: (v) {
+                      setOverlayState(() => _webSearchOn = v);
+                      widget.onToggleWebSearch(v);
+                    },
+                  ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        child: Container(
+          width: 36, height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: widget.s.hover, shape: BoxShape.circle),
+          child: AppIcon('add.svg', color: widget.s.onSurface, size: 22),
+        ),
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODEL MENU BUTTON (popup ancorado — V4 Flash / V4 Pro / R1 Think)
+// ══════════════════════════════════════════════════════════════
+
+class _ModelMenuButton extends StatelessWidget {
+  final AppColorScheme s;
+  final AiModel current;
+  final ValueChanged<AiModel> onSelected;
+  const _ModelMenuButton(
+      {required this.s, required this.current, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) => _AnchoredPopupButton(
+        s: s,
+        width: 200,
+        menuBuilder: (ctx, close) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: AiModel.values
+              .map((m) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () { onSelected(m); close(); },
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(m.label,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: current == m ? s.primary : s.onSurface,
+                                  )),
+                              Text(m.badge,
+                                  style: TextStyle(
+                                      fontSize: 12, color: s.onSurfaceVariant)),
+                            ],
+                          ),
+                        ),
+                        if (current == m)
+                          AppIcon('check.svg', color: s.primary, size: 16),
+                      ]),
+                    ),
+                  ))
+              .toList(),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: s.hover,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(current.label,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface)),
+              const SizedBox(width: 3),
+              Text(current.badge,
+                  style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
+// VOICE RECORD SHEET — ondas reagem à amplitude real do microfone
+// via package:record (AmplitudeListener em stream).
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -1106,29 +922,56 @@ class _VoiceRecordSheetContent extends StatefulWidget {
       _VoiceRecordSheetContentState();
 }
 
-class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-  bool _recording = true;
+class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent> {
+  final AudioRecorder _recorder = AudioRecorder();
+  StreamSubscription<Amplitude>? _ampSub;
   Timer? _timer;
   int _seconds = 0;
+  bool _recording = true;
+
+  // Histórico curto de amplitudes normalizadas (0.0–1.0), usado
+  // para desenhar as barras da forma de onda.
+  final List<double> _levels = List.filled(28, 0.06);
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
+    _start();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _seconds++);
     });
   }
 
+  Future<void> _start() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) {
+      if (mounted) setState(() => _recording = false);
+      return;
+    }
+    await _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc),
+      path: '', // TODO: definir path real de destino do ficheiro gravado.
+    );
+    // dB tipicamente entre -45 (silêncio) e 0 (pico). Normalizamos
+    // para 0.0–1.0 para desenhar a altura das barras.
+    _ampSub = _recorder
+        .onAmplitudeChanged(const Duration(milliseconds: 80))
+        .listen((amp) {
+      final normalized = ((amp.current + 45) / 45).clamp(0.0, 1.0);
+      if (mounted) {
+        setState(() {
+          _levels.removeAt(0);
+          _levels.add(math.max(0.06, normalized));
+        });
+      }
+    });
+  }
+
   @override
   void dispose() {
-    _pulse.dispose();
+    _ampSub?.cancel();
     _timer?.cancel();
+    _recorder.dispose();
     super.dispose();
   }
 
@@ -1138,8 +981,10 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
     return '$m:$sec';
   }
 
-  void _stopAndTranscribe() {
+  void _stopAndTranscribe() async {
     setState(() => _recording = false);
+    await _ampSub?.cancel();
+    await _recorder.stop();
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) Navigator.pop(context);
     });
@@ -1156,7 +1001,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
           margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: s.floatingSurface,
             borderRadius: BorderRadius.circular(28),
             boxShadow: s.floatingShadow,
           ),
@@ -1181,30 +1026,27 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
               const SizedBox(height: 6),
               Text(
                 _formattedTime,
-                style: TextStyle(
-                    fontSize: 13, color: s.onSurfaceVariant),
+                style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
-              AnimatedBuilder(
-                animation: _pulse,
-                builder: (_, child) {
-                  final scale = _recording
-                      ? 1.0 + (_pulse.value * 0.12)
-                      : 1.0;
-                  return Transform.scale(scale: scale, child: child);
-                },
-                child: Container(
-                  width: 76, height: 76,
-                  decoration: BoxDecoration(
-                    color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: s.error, width: 1.5),
-                  ),
-                  child: AppIcon(
-                    _recording ? 'record.svg' : 'record.svg',
-                    color: s.error,
-                    size: 30,
-                  ),
+              SizedBox(
+                height: 64,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: _levels
+                      .map((lvl) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 90),
+                            curve: kCupertinoOut,
+                            width: 3.5,
+                            height: 8 + (lvl * 48),
+                            margin: const EdgeInsets.symmetric(horizontal: 1.6),
+                            decoration: BoxDecoration(
+                              color: s.primary,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ))
+                      .toList(),
                 ),
               ),
               const SizedBox(height: 24),
@@ -1230,126 +1072,6 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// MODEL SELECT SHEET (lista de modelos DeepSeek)
-// ══════════════════════════════════════════════════════════════
-
-Future<void> showModelSelectSheet(
-  BuildContext context,
-  AppColorScheme s, {
-  required AiModel current,
-  required ValueChanged<AiModel> onSelect,
-}) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: s.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(bottom: 10, top: 2),
-                decoration: BoxDecoration(
-                  color: s.outline,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              _SheetOptionsGroup(
-                s: s,
-                options: AiModel.values
-                    .map((m) => _ModelOptionAsSheetOption(
-                          s: s,
-                          model: m,
-                          selected: current == m,
-                          onTap: () {
-                            onSelect(m);
-                            Navigator.pop(ctx);
-                          },
-                        ))
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-class _ModelOptionAsSheetOption extends _SheetOption {
-  final bool selected;
-  _ModelOptionAsSheetOption({
-    required AppColorScheme s,
-    required AiModel model,
-    required this.selected,
-    required VoidCallback onTap,
-  }) : super(s: s, icon: '', label: '', subtitle: '', onTap: onTap) {
-    _model = model;
-  }
-  late final AiModel _model;
-
-  @override
-  State<_SheetOption> createState() => _ModelOptionAsSheetOptionState();
-}
-
-class _ModelOptionAsSheetOptionState extends State<_SheetOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final w = widget as _ModelOptionAsSheetOption;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       w.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        color: _h
-            ? w.s.hover
-            : w.selected
-                ? w.s.primaryContainer.withOpacity(0.5)
-                : Colors.transparent,
-        child: Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(w._model.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: w.selected ? w.s.primary : w.s.onSurface,
-                    )),
-                const SizedBox(height: 1),
-                Text(w._model.badge,
-                    style: TextStyle(
-                        fontSize: 12, color: w.s.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          if (w.selected)
-            AppIcon('check.svg', color: w.s.primary, size: 16),
-        ]),
       ),
     );
   }
