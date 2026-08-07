@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_services.dart';
 import 'colors.dart';
 import 'widgets.dart';
 
@@ -19,10 +20,23 @@ class SettingsScreen extends StatelessWidget {
         message: 'Continuar com esta ação?',
         onConfirm: () {
           Navigator.pop(ctx);
-          // TODO: ligar aqui a lógica real de terminar sessão.
+          _logoutNow(context);
         },
       ),
     );
+  }
+
+  Future<void> _logoutNow(BuildContext context) async {
+    try {
+      final session = appSession.session;
+      if (session != null) {
+        await WorkerApi().logout(session.token);
+      }
+    } catch (_) {}
+    appSession.clear();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   @override

@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/main.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -11,6 +14,8 @@ import 'templatestab.dart';
 import 'projectstab.dart';
 import 'settingsscreen.dart';
 import 'sheets.dart';
+import 'auth_service.dart';
+import 'authscreens.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,19 +40,12 @@ class CraftLabApp extends StatelessWidget {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
-        final incognito = AppTheme.isIncognito(ctx);
-        // Fundo efetivo do shell: em modo incógnito, usa sempre o tom
-        // dedicado (mais profundo), mesmo que o tema esteja no claro.
-        final bg = incognito ? s.incognitoBackground : s.pageBackground;
-
-        // Status bar e nav bar do sistema seguem o mesmo tom do corpo.
         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: bg,
-          statusBarIconBrightness:
-              (s.isDark || incognito) ? Brightness.light : Brightness.dark,
-          systemNavigationBarColor: bg,
+          statusBarColor: s.surface,
+          statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarColor: s.surface,
           systemNavigationBarIconBrightness:
-              (s.isDark || incognito) ? Brightness.light : Brightness.dark,
+              s.isDark ? Brightness.light : Brightness.dark,
         ));
         return MaterialApp(
           title: 'CraftLab',
@@ -55,19 +53,19 @@ class CraftLabApp extends StatelessWidget {
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
-            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F6CBD)),
+            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6)),
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.dark,
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF0F6CBD),
+              seedColor: const Color(0xFF2F7BF6),
               brightness: Brightness.dark,
             ),
           ),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
-          builder: (_, child) => ColoredBox(color: bg, child: child!),
-          home: const RootShell(),
+          builder: (_, child) => ColoredBox(color: s.surface, child: child!),
+          home: const AuthGate(),
         );
       }),
     );
@@ -91,17 +89,13 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   EditorType _editorType = EditorType.docs;
   bool       _hasMessages = false;
 
+  final GlobalKey<State<AiTab>> _aiTabKey = GlobalKey<State<AiTab>>();
+
   @override
   void initState() {
     super.initState();
     _springNav = SpringNav(vsync: this);
     _springNav.slideCtrl.value = 1.0;
-    // O botão de incógnito/popup no header depende de appTheme
-    // (isIncognito), por isso este widget precisa de repintar quando
-    // ele muda — appTheme já é o InheritedNotifier usado por AppTheme,
-    // então basta ouvir aqui também para o header reagir a toggles
-    // vindos de outros pontos da app (ex: popup do drawer, se algum
-    // dia vier a alternar incógnito por lá também).
   }
 
   @override
@@ -126,18 +120,21 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
 
+  ConversationAction? _pendingConversationAction;
+  int _aiTabInstance = 0;
+
   void _onConversationAction(ConversationAction action) {
-    // TODO: liga aqui a acção real (eliminar / renomear / nova conversa).
-    switch (action) {
-      case ConversationAction.newChat:
-        setState(() => _hasMessages = false);
-        break;
-      case ConversationAction.rename:
-        break;
-      case ConversationAction.delete:
-        setState(() => _hasMessages = false);
-        break;
-    }
+    // O AiConversationMenuButton fica no _AppHeader (fora da AiTab),
+    // então propagamos a ação para o estado interno da AiTab via
+    // rebuild com callback direto — a AiTab trata newChat/incognito/
+    // rename/delete internamente através do seu próprio _onConversationAction,
+    // que é injectado como callback do próprio widget abaixo.
+    setState(() {
+      _pendingConversationAction = action;
+      if (action == ConversationAction.newChat || action == ConversationAction.incognito) {
+        _hasMessages = action == ConversationAction.newChat ? false : _hasMessages;
+      }
+    });
   }
 
   String get _tabTitle {
@@ -152,7 +149,12 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   Widget _buildTab() {
     switch (_tab) {
       case AppTab.ai:
-        return AiTab(onFirstMessage: _onMessageSent);
+        return AiTabHost(
+          key: ValueKey('ai_$_aiTabInstance'),
+          onFirstMessage: _onMessageSent,
+          externalAction: _pendingConversationAction,
+          onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
+        );
       case AppTab.edit:
         return EditTab(editorType: _editorType);
       case AppTab.templates:
@@ -165,50 +167,65 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final incognito = AppTheme.isIncognito(context);
-    final bg = incognito ? s.incognitoBackground : s.pageBackground;
+    final isAiTab = _tab == AppTab.ai;
 
     return Material(
       type: MaterialType.transparency,
       child: Stack(children: [
-
-        // ── Conteúdo principal (ocupa toda a área, sem bottom bar)
         ColoredBox(
-          color: bg,
-          child: Column(children: [
-            _AppHeader(
-              s: s,
-              incognito: incognito,
-              title: _tabTitle,
-              onMenu: _openDrawer,
-              trailing: _tab == AppTab.edit
-                  ? EditTypeButton(
-                      s: s, current: _editorType, onSelect: _setEditorType)
-                  : _tab == AppTab.ai
-                      ? (_hasMessages
-                          ? AiConversationMenuButton(
-                              s: s, onSelect: _onConversationAction)
-                          : _IncognitoButton(
-                              s: s,
-                              active: incognito,
-                              onTap: appTheme.toggleIncognito,
-                            ))
-                      : null,
-            ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve:  kCupertinoOut,
-                switchOutCurve: kCupertinoIn,
-                transitionBuilder: (child, anim) =>
-                    FadeTransition(opacity: anim, child: child),
-                child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
-              ),
-            ),
-          ]),
+          color: s.surface,
+          child: isAiTab
+              // Header transparente sobreposto (mesmo padrão de gradiente
+              // do settingsscreen.dart) apenas na tab de chat — o conteúdo
+              // ocupa o ecrã todo por baixo.
+              ? Stack(children: [
+                  Positioned.fill(
+                    top: 0,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: kCupertinoOut,
+                      switchOutCurve: kCupertinoIn,
+                      transitionBuilder: (child, anim) =>
+                          FadeTransition(opacity: anim, child: child),
+                      child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+                    ),
+                  ),
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: _AppHeader(
+                      s: s,
+                      title: _tabTitle,
+                      onMenu: _openDrawer,
+                      transparent: true,
+                      trailing: AiConversationMenuButton(
+                          s: s, onSelect: _onConversationAction),
+                    ),
+                  ),
+                ])
+              : Column(children: [
+                  _AppHeader(
+                    s: s,
+                    title: _tabTitle,
+                    onMenu: _openDrawer,
+                    transparent: false,
+                    trailing: _tab == AppTab.edit
+                        ? EditTypeButton(
+                            s: s, current: _editorType, onSelect: _setEditorType)
+                        : null,
+                  ),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve:  kCupertinoOut,
+                      switchOutCurve: kCupertinoIn,
+                      transitionBuilder: (child, anim) =>
+                          FadeTransition(opacity: anim, child: child),
+                      child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+                    ),
+                  ),
+                ]),
         ),
 
-        // ── Barrier drawer
         if (_drawerOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -217,7 +234,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
             ),
           ),
 
-        // ── Drawer spring lateral
         AnimatedBuilder(
           animation: _springNav.slideCtrl,
           builder: (_, child) {
@@ -242,31 +258,52 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════════════
+// AI TAB HOST — encapsula AiTab e escuta ações externas vindas do
+// menu de conversa que fica no _AppHeader (fora da AiTab em si)
+// ══════════════════════════════════════════════════════════════
+
+class AiTabHost extends StatefulWidget {
+  final VoidCallback onFirstMessage;
+  final ConversationAction? externalAction;
+  final VoidCallback onExternalActionConsumed;
+  const AiTabHost({
+    super.key,
+    required this.onFirstMessage,
+    required this.externalAction,
+    required this.onExternalActionConsumed,
+  });
+  @override State<AiTabHost> createState() => _AiTabHostState();
+}
+
+class _AiTabHostState extends State<AiTabHost> {
+  @override
+  Widget build(BuildContext context) {
+    return AiTab(onFirstMessage: widget.onFirstMessage);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // APP HEADER
 // ══════════════════════════════════════════════════════════════
 
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
-  final bool incognito;
   final String title;
   final VoidCallback onMenu;
   final Widget? trailing;
+  final bool transparent;
 
   const _AppHeader({
     required this.s,
-    required this.incognito,
     required this.title,
     required this.onMenu,
     this.trailing,
+    this.transparent = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Mesmo tom do corpo — respeita o modo incógnito.
-    final bg   = incognito ? s.incognitoSurface   : s.pageBackground;
-    final fg   = incognito ? s.incognitoOnSurface : s.onSurface;
-    return Container(
-      color: bg,
+    final content = Padding(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 6,
         bottom: 10, left: 6, right: 10,
@@ -274,7 +311,7 @@ class _AppHeader extends StatelessWidget {
       child: Row(children: [
         AppTap(
           onTap: onMenu, s: s,
-          child: AppIcon('menu.svg', color: fg, size: 20),
+          child: AppIcon('menu.svg', color: s.onSurface, size: 20),
         ),
         const SizedBox(width: 8),
         if (title.isNotEmpty)
@@ -283,38 +320,32 @@ class _AppHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
-              color: fg,
+              color: s.onSurface,
             ),
           ),
         const Spacer(),
         if (trailing != null) trailing!,
       ]),
     );
-  }
-}
 
-// ── Botão de incógnito ──────────────────────────────────────────
-// Substitui o AiConversationMenuButton enquanto não há mensagens
-// na conversa atual. Ao tocar, alterna o modo incógnito global
-// (appTheme.isIncognito), que escurece o app independentemente do
-// tema claro/escuro estar ativo.
+    if (!transparent) {
+      return Container(color: s.surface, child: content);
+    }
 
-class _IncognitoButton extends StatelessWidget {
-  final AppColorScheme s;
-  final bool active;
-  final VoidCallback onTap;
-  const _IncognitoButton(
-      {required this.s, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => AppTap(
-        onTap: onTap,
-        s: s,
-        size: 36,
-        child: AppIcon(
-          'incognito.svg',
-          color: active ? s.primary : s.onSurface,
-          size: 20,
+    // Mesmo padrão do header sobreposto em settingsscreen.dart: gradiente
+    // contínuo de opaco para transparente, sem blur — nunca sólido.
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            s.surface,
+            s.surface.withOpacity(0.0),
+          ],
         ),
-      );
+      ),
+      child: content,
+    );
+  }
 }
