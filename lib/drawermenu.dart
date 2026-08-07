@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/drawermenu.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'dart:convert';
@@ -135,6 +138,20 @@ class ConversationsController extends ChangeNotifier {
     await ConversationsApiService.pin(token, id, pinned);
   }
 
+  Future<void> archive(String id, bool archived) async {
+    final token = authController.token;
+    if (token == null) return;
+    final idx = items.indexWhere((c) => c.id == id);
+    if (idx == -1) return;
+    final old = items[idx];
+    items[idx] = ConversationItem(
+      id: old.id, title: old.title, preview: old.preview,
+      pinned: old.pinned, archived: archived, updatedAt: old.updatedAt,
+    );
+    notifyListeners();
+    await ConversationsApiService.archive(token, id, archived);
+  }
+
   Future<void> delete(String id) async {
     final token = authController.token;
     if (token == null) return;
@@ -184,13 +201,15 @@ class AppDrawer extends StatefulWidget {
   State<AppDrawer> createState() => _AppDrawerState();
 }
 
-class _AppDrawerState extends State<AppDrawer> {
+class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMixin {
   static const List<AppTab> _allTabs = [
     AppTab.ai,
     AppTab.edit,
     AppTab.templates,
     AppTab.projects,
   ];
+
+  bool _expanded = false;
 
   @override
   void initState() {
@@ -209,7 +228,50 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _onConvsChanged() { if (mounted) setState(() {}); }
 
-  void _confirmDelete(BuildContext context, ConversationItem item) {
+  void _toggleExpanded() => setState(() => _expanded = !_expanded);
+
+  void _openSearch(BuildContext context) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, __, ___) => ConversationSearchScreen(
+        s: widget.s,
+        onOpenConversation: (id) {
+          widget.onOpenConversation?.call(id);
+          widget.onClose();
+        },
+      ),
+      transitionsBuilder: (_, anim, __, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+        child: SlideTransition(
+          position: Tween(begin: const Offset(0, 0.04), end: Offset.zero)
+              .animate(CurvedAnimation(parent: anim, curve: kCupertinoOut)),
+          child: child,
+        ),
+      ),
+    ));
+  }
+
+  void _openConversation(ConversationItem item) {
+    widget.onOpenConversation?.call(item.id);
+    widget.onClose();
+  }
+
+  void _openConvPopup(BuildContext context, GlobalKey anchorKey, ConversationItem item) {
+    showConversationOptionsPopup(
+      context,
+      widget.s,
+      anchorKey: anchorKey,
+      item: item,
+      onOpen: () => _openConversation(item),
+      onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
+      onArchive: () => conversationsController.archive(item.id, !item.archived),
+      onDelete: () => _confirmDeletePopup(context, anchorKey, item),
+    );
+  }
+
+  void _confirmDeletePopup(BuildContext context, GlobalKey anchorKey, ConversationItem item) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -225,43 +287,22 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  void _openConvOptions(BuildContext context, ConversationItem item) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => _ConversationOptionsSheet(
-        s: widget.s,
-        item: item,
-        onTogglePin: () {
-          Navigator.pop(ctx);
-          conversationsController.togglePin(item.id, !item.pinned);
-        },
-        onDelete: () {
-          Navigator.pop(ctx);
-          _confirmDelete(context, item);
-        },
-        onOpen: () {
-          Navigator.pop(ctx);
-          widget.onOpenConversation?.call(item.id);
-          widget.onClose();
-        },
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final pinned = conversationsController.items.where((c) => c.pinned).toList();
-    final others = conversationsController.items.where((c) => !c.pinned).toList();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
+    final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
     return GestureDetector(
       onHorizontalDragEnd: (details) {
         final v = details.primaryVelocity ?? 0;
-        if (v < -200) widget.onClose();
+        if (!_expanded && v < -200) widget.onClose();
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 260),
+        curve: kCupertinoOut,
+        width: _expanded ? screenWidth : 280,
         color: s.surface,
         child: SafeArea(
           child: Column(
@@ -280,14 +321,32 @@ class _AppDrawerState extends State<AppDrawer> {
                         color: s.onSurface,
                       ),
                     ),
-                    AppTap(
-                      onTap: () {
-                        widget.onNewChat?.call();
-                        widget.onClose();
-                      },
-                      s: s,
-                      child: AppIcon('new_chat.svg', color: s.onSurfaceVariant, size: 20),
-                    ),
+                    Row(children: [
+                      AppTap(
+                        onTap: () => _openSearch(context),
+                        s: s,
+                        child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 20),
+                      ),
+                      const SizedBox(width: 4),
+                      AppTap(
+                        onTap: _toggleExpanded,
+                        s: s,
+                        child: AppIcon(
+                          _expanded ? 'decrease.svg' : 'expand.svg',
+                          color: s.onSurfaceVariant,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      AppTap(
+                        onTap: () {
+                          widget.onNewChat?.call();
+                          widget.onClose();
+                        },
+                        s: s,
+                        child: AppIcon('new_chat.svg', color: s.onSurfaceVariant, size: 20),
+                      ),
+                    ]),
                   ],
                 ),
               ),
@@ -386,11 +445,11 @@ class _AppDrawerState extends State<AppDrawer> {
             _ConvTile(
               s: s,
               item: item,
-              onTap: () {
-                widget.onOpenConversation?.call(item.id);
-                widget.onClose();
-              },
-              onLongPress: () => _openConvOptions(context, item),
+              expanded: _expanded,
+              onTap: () => _openConversation(item),
+              onOptions: (key) => _openConvPopup(context, key, item),
+              onArchive: () => conversationsController.archive(item.id, true),
+              onDelete: () => conversationsController.delete(item.id),
             ),
           const SizedBox(height: 8),
         ],
@@ -398,11 +457,11 @@ class _AppDrawerState extends State<AppDrawer> {
           _ConvTile(
             s: s,
             item: item,
-            onTap: () {
-              widget.onOpenConversation?.call(item.id);
-              widget.onClose();
-            },
-            onLongPress: () => _openConvOptions(context, item),
+            expanded: _expanded,
+            onTap: () => _openConversation(item),
+            onOptions: (key) => _openConvPopup(context, key, item),
+            onArchive: () => conversationsController.archive(item.id, true),
+            onDelete: () => conversationsController.delete(item.id),
           ),
         const SizedBox(height: 8),
       ],
@@ -474,159 +533,274 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
   }
 }
 
-// ── Conversation tile ─────────────────────────────────────────
+// ── Conversation tile — agora com popup de opções (long-press ou
+// botão dedicado) e, quando o drawer está expandido, swipe para
+// arquivar (direita) ou eliminar (esquerda). ─────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
+  final bool expanded;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final ValueChanged<GlobalKey> onOptions;
+  final VoidCallback onArchive;
+  final VoidCallback onDelete;
   const _ConvTile({
     required this.s,
     required this.item,
+    required this.expanded,
     required this.onTap,
-    required this.onLongPress,
+    required this.onOptions,
+    required this.onArchive,
+    required this.onDelete,
   });
   @override State<_ConvTile> createState() => _ConvTileState();
 }
 
-class _ConvTileState extends State<_ConvTile> {
+class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixin {
   bool _h = false;
+  final GlobalKey _anchorKey = GlobalKey();
+
+  double _dragDx = 0;
+  bool _resolved = false;
+
+  static const double _threshold = 96;
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (!widget.expanded || _resolved) return;
+    setState(() => _dragDx += d.delta.dx);
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    if (!widget.expanded || _resolved) {
+      setState(() => _dragDx = 0);
+      return;
+    }
+    if (_dragDx <= -_threshold) {
+      setState(() => _resolved = true);
+      widget.onDelete();
+    } else if (_dragDx >= _threshold) {
+      setState(() => _resolved = true);
+      widget.onArchive();
+    } else {
+      setState(() => _dragDx = 0);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _h = true),
-        onTapCancel: ()  => setState(() => _h = false),
-        onTapUp:     (_) => setState(() => _h = false),
-        onTap: widget.onTap,
-        onLongPress: widget.onLongPress,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          margin: const EdgeInsets.symmetric(vertical: 2),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _h ? widget.s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final bg = _dragDx < 0
+        ? s.error
+        : _dragDx > 0
+            ? s.primary
+            : Colors.transparent;
+    final icon = _dragDx < 0 ? 'trash.svg' : 'archive.svg';
+    final iconColor = _dragDx < 0 ? s.onError : s.onPrimary;
+
+    return AnimatedOpacity(
+      opacity: _resolved ? 0.0 : 1.0,
+      duration: const Duration(milliseconds: 180),
+      child: Stack(children: [
+        if (widget.expanded && _dragDx != 0)
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: AppIcon(icon, color: iconColor, size: 18),
+            ),
           ),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(widget.item.title,
-                    style: TextStyle(fontSize: 14, color: widget.s.onSurface),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (widget.item.preview.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(widget.item.preview,
-                      style:
-                          TextStyle(fontSize: 12, color: widget.s.onSurfaceVariant),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
+        Transform.translate(
+          offset: Offset(_dragDx, 0),
+          child: GestureDetector(
+            key: _anchorKey,
+            behavior: HitTestBehavior.opaque,
+            onTapDown:   (_) => setState(() => _h = true),
+            onTapCancel: ()  => setState(() => _h = false),
+            onTapUp:     (_) => setState(() => _h = false),
+            onTap: widget.onTap,
+            onLongPress: () => widget.onOptions(_anchorKey),
+            onHorizontalDragUpdate: widget.expanded ? _onDragUpdate : null,
+            onHorizontalDragEnd: widget.expanded ? _onDragEnd : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: _h ? s.hover : s.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(widget.item.title,
+                        style: TextStyle(fontSize: 14, color: s.onSurface),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (widget.item.preview.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(widget.item.preview,
+                          style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ]),
+                ),
+                if (widget.item.pinned) ...[
+                  const SizedBox(width: 6),
+                  AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
                 ],
+                const SizedBox(width: 4),
+                AppTap(
+                  onTap: () => widget.onOptions(_anchorKey),
+                  s: s,
+                  size: 28,
+                  child: AppIcon('more_filled.svg', color: s.onSurfaceVariant, size: 16),
+                ),
               ]),
             ),
-            if (widget.item.pinned) ...[
-              const SizedBox(width: 6),
-              AppIcon('pin.svg', color: widget.s.onSurfaceVariant, size: 13),
-            ],
-          ]),
+          ),
         ),
-      );
+      ]),
+    );
+  }
 }
 
-// ── Sheet de opções de uma conversa (fixar / eliminar) ─────────
+// ── Popup de opções de uma conversa (fixar / arquivar / eliminar) —
+// substitui o antigo bottom sheet, ancorado ao próprio item tocado. ──
 
-class _ConversationOptionsSheet extends StatelessWidget {
-  final AppColorScheme s;
-  final ConversationItem item;
-  final VoidCallback onTogglePin;
-  final VoidCallback onDelete;
-  final VoidCallback onOpen;
-  const _ConversationOptionsSheet({
-    required this.s,
-    required this.item,
-    required this.onTogglePin,
-    required this.onDelete,
-    required this.onOpen,
-  });
+void showConversationOptionsPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required ConversationItem item,
+  required VoidCallback onOpen,
+  required VoidCallback onTogglePin,
+  required VoidCallback onArchive,
+  required VoidCallback onDelete,
+}) {
+  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
+  final off = box.localToGlobal(Offset.zero);
+  final sz = box.size;
+  final screenSize = MediaQuery.of(context).size;
 
-  @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 190),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    const width = 232.0;
+    final desiredTop = off.dy + sz.height + 6;
+    final overflowsBottom = desiredTop + 190 > screenSize.height - 24;
+    final top = overflowsBottom ? null : desiredTop;
+    final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
+
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      Positioned(
+        top: top,
+        bottom: bottom,
+        left: left,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, child) => Opacity(
+            opacity: CurvedAnimation(
+                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                .value,
+            child: Transform.scale(
+              scale: Tween(begin: 0.92, end: 1.0)
+                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .value,
+              alignment: overflowsBottom ? Alignment.bottomLeft : Alignment.topLeft,
+              child: child,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: Text(item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurfaceVariant)),
-                ),
-                const SizedBox(height: 8),
-                SheetOptionsGroup(s: s, options: [
-                  _SheetOption(
-                    s: s,
-                    icon: 'send.svg',
-                    label: 'Abrir conversa',
-                    onTap: onOpen,
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              width: width,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ConvPopupRow(
+                    s: s, icon: 'send.svg', label: 'Abrir conversa',
+                    onTap: () { close(); onOpen(); },
                   ),
-                  _SheetOption(
-                    s: s,
-                    icon: 'pin.svg',
+                  _ConvPopupRow(
+                    s: s, icon: 'pin.svg',
                     label: item.pinned ? 'Desafixar' : 'Fixar',
-                    onTap: onTogglePin,
+                    onTap: () { close(); onTogglePin(); },
                   ),
-                  _SheetOption(
-                    s: s,
-                    icon: 'trash.svg',
-                    label: 'Eliminar',
+                  _ConvPopupRow(
+                    s: s, icon: 'archive.svg',
+                    label: item.archived ? 'Desarquivar' : 'Arquivar',
+                    onTap: () { close(); onArchive(); },
+                  ),
+                  _ConvPopupRow(
+                    s: s, icon: 'trash.svg', label: 'Eliminar',
                     destructive: true,
-                    onTap: onDelete,
+                    onTap: () { close(); onDelete(); },
                   ),
-                ]),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      );
+      ),
+    ]);
+  });
+
+  Overlay.of(context).insert(entry);
+  controller.forward();
 }
 
-class _SheetOption extends StatefulWidget {
+class _ConvPopupRow extends StatefulWidget {
   final AppColorScheme s;
   final String icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
-  const _SheetOption({
+  const _ConvPopupRow({
     required this.s,
     required this.icon,
     required this.label,
     required this.onTap,
     this.destructive = false,
   });
-  @override State<_SheetOption> createState() => _SheetOptionState();
+  @override State<_ConvPopupRow> createState() => _ConvPopupRowState();
 }
 
-class _SheetOptionState extends State<_SheetOption> {
+class _ConvPopupRowState extends State<_ConvPopupRow> {
   bool _h = false;
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final color = widget.destructive ? s.error : s.onSurface;
+    final color = widget.destructive ? widget.s.error : widget.s.onSurface;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _h = true),
@@ -635,12 +809,16 @@ class _SheetOptionState extends State<_SheetOption> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        color: _h ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: _h ? widget.s.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
         child: Row(children: [
-          AppIcon(widget.icon, color: color, size: 18),
-          const SizedBox(width: 12),
-          Text(widget.label, style: TextStyle(fontSize: 15, color: color)),
+          AppIcon(widget.icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Text(widget.label,
+              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
         ]),
       ),
     );
@@ -756,6 +934,191 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONVERSATION SEARCH SCREEN — aberta pelo botão search.svg no
+// header do drawer. Pesquisa por título e preview em todas as
+// conversas carregadas no ConversationsController.
+// ══════════════════════════════════════════════════════════════
+
+class ConversationSearchScreen extends StatefulWidget {
+  final AppColorScheme s;
+  final ValueChanged<String> onOpenConversation;
+  const ConversationSearchScreen({
+    super.key,
+    required this.s,
+    required this.onOpenConversation,
+  });
+
+  @override
+  State<ConversationSearchScreen> createState() => _ConversationSearchScreenState();
+}
+
+class _ConversationSearchScreenState extends State<ConversationSearchScreen> {
+  final TextEditingController _ctrl = TextEditingController();
+  final FocusNode _focus = FocusNode();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  List<ConversationItem> get _results {
+    final q = _query.trim().toLowerCase();
+    final all = conversationsController.items.where((c) => !c.archived);
+    if (q.isEmpty) return all.toList();
+    return all
+        .where((c) =>
+            c.title.toLowerCase().contains(q) ||
+            c.preview.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final results = _results;
+
+    return Material(
+      color: s.surface,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
+              child: Row(children: [
+                AppTap(
+                  onTap: () => Navigator.of(context).pop(),
+                  s: s,
+                  child: AppIcon('chevron_left.svg', color: s.onSurface, size: 20),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: s.hover,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(children: [
+                      AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _ctrl,
+                          focusNode: _focus,
+                          onChanged: (v) => setState(() => _query = v),
+                          style: TextStyle(fontSize: 14.5, color: s.onSurface),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'Pesquisar conversas...',
+                            hintStyle: TextStyle(fontSize: 14.5, color: s.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                      if (_query.isNotEmpty)
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            _ctrl.clear();
+                            _query = '';
+                          }),
+                          child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
+                        ),
+                    ]),
+                  ),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: results.isEmpty
+                  ? Center(
+                      child: Text(
+                        _query.isEmpty ? 'Sem conversas ainda' : 'Sem resultados para "$_query"',
+                        style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
+                      itemCount: results.length,
+                      itemBuilder: (_, i) {
+                        final item = results[i];
+                        return _SearchResultTile(
+                          s: s,
+                          item: item,
+                          onTap: () => widget.onOpenConversation(item.id),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchResultTile extends StatefulWidget {
+  final AppColorScheme s;
+  final ConversationItem item;
+  final VoidCallback onTap;
+  const _SearchResultTile({required this.s, required this.item, required this.onTap});
+  @override State<_SearchResultTile> createState() => _SearchResultTileState();
+}
+
+class _SearchResultTileState extends State<_SearchResultTile> {
+  bool _h = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: _h ? s.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.item.title,
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (widget.item.preview.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(widget.item.preview,
+                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ]),
+          ),
+          if (widget.item.pinned) ...[
+            const SizedBox(width: 8),
+            AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+          ],
+        ]),
       ),
     );
   }

@@ -122,6 +122,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 
   ConversationAction? _pendingConversationAction;
   int _aiTabInstance = 0;
+  String? _pendingConversationLoad;
 
   void _onConversationAction(ConversationAction action) {
     // O AiConversationMenuButton fica no _AppHeader (fora da AiTab),
@@ -135,6 +136,21 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
         _hasMessages = action == ConversationAction.newChat ? false : _hasMessages;
       }
     });
+  }
+
+  // Chamado pelo AppDrawer quando o utilizador toca numa conversa:
+  // troca para a tab AI (se necessário) e pede à AiTabHost para
+  // carregar essa conversa específica.
+  void _onOpenConversation(String id) {
+    setState(() {
+      _tab = AppTab.ai;
+      _pendingConversationLoad = id;
+      _hasMessages = true;
+    });
+  }
+
+  void _onConversationLoadConsumed() {
+    setState(() => _pendingConversationLoad = null);
   }
 
   String get _tabTitle {
@@ -154,6 +170,8 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           onFirstMessage: _onMessageSent,
           externalAction: _pendingConversationAction,
           onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
+          initialConversationId: _pendingConversationLoad,
+          onConversationLoadConsumed: _onConversationLoadConsumed,
         );
       case AppTab.edit:
         return EditTab(editorType: _editorType);
@@ -198,7 +216,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
                       onMenu: _openDrawer,
                       transparent: true,
                       trailing: AiConversationMenuButton(
-                          s: s, onSelect: _onConversationAction),
+                          s: s, hasMessages: _hasMessages, onSelect: _onConversationAction),
                     ),
                   ),
                 ])
@@ -250,6 +268,8 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
             onSettings: _openSettings,
             currentTab: _tab,
             onSelectTab: _selectTab,
+            onOpenConversation: _onOpenConversation,
+            onNewChat: () => _onConversationAction(ConversationAction.newChat),
           ),
         ),
       ]),
@@ -266,19 +286,37 @@ class AiTabHost extends StatefulWidget {
   final VoidCallback onFirstMessage;
   final ConversationAction? externalAction;
   final VoidCallback onExternalActionConsumed;
+  final String? initialConversationId;
+  final VoidCallback? onConversationLoadConsumed;
   const AiTabHost({
     super.key,
     required this.onFirstMessage,
     required this.externalAction,
     required this.onExternalActionConsumed,
+    this.initialConversationId,
+    this.onConversationLoadConsumed,
   });
   @override State<AiTabHost> createState() => _AiTabHostState();
 }
 
 class _AiTabHostState extends State<AiTabHost> {
   @override
+  void didUpdateWidget(covariant AiTabHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialConversationId != null &&
+        widget.initialConversationId != oldWidget.initialConversationId) {
+      widget.onConversationLoadConsumed?.call();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return AiTab(onFirstMessage: widget.onFirstMessage);
+    return AiTab(
+      onFirstMessage: widget.onFirstMessage,
+      externalAction: widget.externalAction,
+      onExternalActionConsumed: widget.onExternalActionConsumed,
+      initialConversationId: widget.initialConversationId,
+    );
   }
 }
 
