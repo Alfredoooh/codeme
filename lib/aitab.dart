@@ -2913,4 +2913,146 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                 builder: (_, child) {
                   final scale = _recording
                       ? 1.0 + (_pulse.value * 0.12)
-                      : 
+                      : 1.0;
+                  return Transform.scale(scale: scale, child: child);
+                },
+                child: Container(
+                  width: 76, height: 76,
+                  decoration: BoxDecoration(
+                    color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: s.error, width: 1.5),
+                  ),
+                  child: Icon(
+                    _recording ? Icons.mic : Icons.mic_none,
+                    color: s.error,
+                    size: 30,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: _recording ? _stopAndTranscribe : null,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: s.primary,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _recording ? 'Concluir' : 'A processar...',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: s.onPrimary),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODEL SELECT POPUP — popup ancorado ao botão de modelo, nasce a
+// partir da posição real do botão. Modelos: V4 / V4 Pro / R1.
+// ══════════════════════════════════════════════════════════════
+
+void showModelSelectPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required AiModel current,
+  required ValueChanged<AiModel> onSelect,
+}) {
+  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
+  final off = box.localToGlobal(Offset.zero);
+  final sz = box.size;
+  final screenSize = MediaQuery.of(context).size;
+
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    const width = 250.0;
+    const estimatedHeight = 200.0;
+    final spaceAbove = off.dy;
+    final opensUp = spaceAbove >= estimatedHeight + 24;
+    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
+
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      Positioned(
+        top: top,
+        left: left,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, child) => Opacity(
+            opacity: CurvedAnimation(
+                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                .value,
+            child: Transform.scale(
+              scale: Tween(begin: 0.92, end: 1.0)
+                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .value,
+              alignment: opensUp ? Alignment.bottomLeft : Alignment.topLeft,
+              child: child,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              width: width,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: AiModel.values
+                    .map((m) => _PopupRow<AiModel>(
+                          s: s,
+                          entry: PopupMenuEntry(
+                            value: m,
+                            label: m.label,
+                            subtitle: m.description,
+                            selected: current == m,
+                          ),
+                          onTap: () { close(); onSelect(m); },
+                        ))
+                    .toList(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  });
+
+  Overlay.of(context).insert(entry);
+  controller.forward();
+}
