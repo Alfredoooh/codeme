@@ -38,9 +38,9 @@ class _AuthGateState extends State<AuthGate> {
     switch (authController.status) {
       case AuthStatus.unknown:
         return ColoredBox(
-          color: s.surface,
+          color: s.pageBackground,
           child: Center(
-            child: CupertinoActivityIndicator(color: s.onSurfaceVariant, radius: 12),
+            child: _AuthLogo(s: s, pulsing: true),
           ),
         );
       case AuthStatus.authenticated:
@@ -57,23 +57,37 @@ class _AuthGateState extends State<AuthGate> {
 
 class _AuthLogo extends StatelessWidget {
   final AppColorScheme s;
-  const _AuthLogo({required this.s});
+  final bool pulsing;
+  const _AuthLogo({required this.s, this.pulsing = false});
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 64, height: 64,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: s.primary,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text('N',
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: s.onPrimary,
-            )),
-      );
+  Widget build(BuildContext context) {
+    final logo = Container(
+      width: 64, height: 64,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: s.primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text('N',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            color: s.onPrimary,
+          )),
+    );
+    if (!pulsing) return logo;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.85, end: 1.0),
+      duration: const Duration(milliseconds: 900),
+      curve: kCupertino,
+      builder: (context, value, child) => Opacity(
+        opacity: value.clamp(0.0, 1.0),
+        child: Transform.scale(scale: value, child: child),
+      ),
+      child: logo,
+    );
+  }
 }
 
 class _AuthField extends StatefulWidget {

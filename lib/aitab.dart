@@ -4,8 +4,8 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:clipboard/clipboard.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'edittab.dart';
@@ -88,6 +88,32 @@ extension AiModelX on AiModel {
       }[this]!;
 
   bool get think => this == AiModel.deepseekR1;
+}
+
+// ══════════════════════════════════════════════════════════════
+// TEXT CLEANUP — remove markdown "cru" (asteriscos, hashes, etc.)
+// que chegava sem ser renderizado. As bolhas de chat mostram texto
+// simples, por isso convertemos markdown básico para texto plano
+// bem formatado em vez de deixar os símbolos à mostra.
+// ══════════════════════════════════════════════════════════════
+
+String cleanAiText(String raw) {
+  var t = raw;
+  // Bold/italic: **texto** / __texto__ / *texto* / _texto_
+  t = t.replaceAllMapped(RegExp(r'\*\*\*(.+?)\*\*\*'), (m) => m.group(1)!);
+  t = t.replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => m.group(1)!);
+  t = t.replaceAllMapped(RegExp(r'__(.+?)__'), (m) => m.group(1)!);
+  t = t.replaceAllMapped(RegExp(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)'), (m) => m.group(1)!);
+  t = t.replaceAllMapped(RegExp(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)'), (m) => m.group(1)!);
+  // Headers: ### Título -> Título
+  t = t.replaceAllMapped(RegExp(r'^#{1,6}\s+', multiLine: true), (m) => '');
+  // Listas: "- item" / "* item" -> "• item"
+  t = t.replaceAllMapped(RegExp(r'^[\-\*]\s+', multiLine: true), (m) => '•  ');
+  // Inline code: `codigo` -> codigo
+  t = t.replaceAllMapped(RegExp(r'`([^`]+)`'), (m) => m.group(1)!);
+  // Blockquote: "> texto" -> "texto"
+  t = t.replaceAllMapped(RegExp(r'^>\s+', multiLine: true), (m) => '');
+  return t.trim();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -179,7 +205,7 @@ class _AiConversationMenuButtonState extends State<AiConversationMenuButton>
                 width: 220,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  color: s.floatingSurface,
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: s.floatingShadow,
                 ),
@@ -232,180 +258,30 @@ class _ConversationOption extends StatefulWidget {
 class _ConversationOptionState extends State<_ConversationOption> {
   bool _h = false;
   @override
-  Widget build(BuildContext context) {
-    final isIncognito = widget.action == ConversationAction.incognito;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _h ? widget.s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown:   (_) => setState(() => _h = true),
+        onTapCancel: ()  => setState(() => _h = false),
+        onTapUp:     (_) => setState(() => _h = false),
+        onTap:       widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _h ? widget.s.hover : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(children: [
+            AppIcon(widget.action.svgAsset, color: widget.s.onSurface, size: 18),
+            const SizedBox(width: 10),
+            Text(widget.action.label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: widget.s.onSurface,
+                  fontWeight: FontWeight.normal,
+                )),
+          ]),
         ),
-        child: Row(children: [
-          isIncognito
-              ? _GhostIcon(color: widget.s.onSurface, size: 18)
-              : AppIcon(widget.action.svgAsset, color: widget.s.onSurface, size: 18),
-          const SizedBox(width: 10),
-          Text(widget.action.label,
-              style: TextStyle(
-                fontSize: 14,
-                color: widget.s.onSurface,
-                fontWeight: FontWeight.normal,
-              )),
-        ]),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// GHOST ICON — desenhado via CustomPainter, sem depender de asset
-// externo. Usa sempre a cor recebida (nunca fixa cores próprias),
-// para que o modo incógnito respeite sempre o tema claro/escuro.
-// ══════════════════════════════════════════════════════════════
-
-class _GhostIcon extends StatelessWidget {
-  final Color color;
-  final double size;
-  const _GhostIcon({required this.color, required this.size});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: size,
-        height: size,
-        child: CustomPaint(painter: _GhostPainter(color: color)),
-      );
-}
-
-class _GhostPainter extends CustomPainter {
-  final Color color;
-  _GhostPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final bodyPaint = Paint()..color = color..style = PaintingStyle.fill;
-    final eyePaint = Paint()
-      ..color = Colors.black.withOpacity(color.computeLuminance() > 0.5 ? 0.82 : 0.55)
-      ..style = PaintingStyle.fill;
-
-    final domeTop = h * 0.06;
-    final bodyLeft = w * 0.14;
-    final bodyRight = w * 0.86;
-    final bodyWidth = bodyRight - bodyLeft;
-    final domeRadius = bodyWidth / 2;
-    final domeCenterY = domeTop + domeRadius;
-    final waveTop = h * 0.68;
-    final baseY = h * 0.92;
-
-    final path = Path();
-    // Cúpula semicircular no topo
-    path.moveTo(bodyLeft, domeCenterY);
-    path.arcTo(
-      Rect.fromCircle(center: Offset(bodyLeft + domeRadius, domeCenterY), radius: domeRadius),
-      3.14159, // pi — começa à esquerda
-      3.14159, // meia volta até à direita
-      false,
-    );
-    // Desce pelo lado direito até à zona das ondas
-    path.lineTo(bodyRight, waveTop);
-    // Base ondulada — 3 arcos côncavos (efeito clássico de fantasma)
-    final segW = bodyWidth / 3;
-    for (int i = 0; i < 3; i++) {
-      final xStart = bodyRight - segW * i;
-      final xEnd = bodyRight - segW * (i + 1);
-      final xMid = (xStart + xEnd) / 2;
-      path.quadraticBezierTo(xMid, baseY, xEnd, waveTop);
-    }
-    // Sobe pelo lado esquerdo de volta ao início da cúpula
-    path.lineTo(bodyLeft, domeCenterY);
-    path.close();
-
-    canvas.drawPath(path, bodyPaint);
-
-    // Olhos
-    final eyeY = domeCenterY + domeRadius * 0.12;
-    final eyeR = w * 0.055;
-    final eyeOffsetX = bodyWidth * 0.19;
-    canvas.drawCircle(Offset(w / 2 - eyeOffsetX, eyeY), eyeR, eyePaint);
-    canvas.drawCircle(Offset(w / 2 + eyeOffsetX, eyeY), eyeR, eyePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GhostPainter oldDelegate) => oldDelegate.color != color;
-}
-
-// ══════════════════════════════════════════════════════════════
-// DASHED ROUNDED BORDER — usado no input de chat quando incógnito
-// ══════════════════════════════════════════════════════════════
-
-class _DashedRRectBorderPainter extends CustomPainter {
-  final Color color;
-  final double radius;
-  final double dashWidth;
-  final double dashGap;
-  final double strokeWidth;
-  _DashedRRectBorderPainter({
-    required this.color,
-    required this.radius,
-    this.dashWidth = 5,
-    this.dashGap = 4,
-    this.strokeWidth = 1.3,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(strokeWidth / 2, strokeWidth / 2,
-          size.width - strokeWidth, size.height - strokeWidth),
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final next = distance + dashWidth;
-        canvas.drawPath(
-          metric.extractPath(distance, next.clamp(0, metric.length)),
-          paint,
-        );
-        distance = next + dashGap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRRectBorderPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.radius != radius;
-}
-
-class DashedRRectBorder extends StatelessWidget {
-  final Widget child;
-  final Color color;
-  final double radius;
-  const DashedRRectBorder({
-    super.key,
-    required this.child,
-    required this.color,
-    required this.radius,
-  });
-
-  @override
-  Widget build(BuildContext context) => CustomPaint(
-        foregroundPainter: _DashedRRectBorderPainter(color: color, radius: radius),
-        child: child,
       );
 }
 
@@ -666,8 +542,6 @@ class _AiTabState extends State<AiTab> {
         });
         break;
       case ConversationAction.rename:
-        // Sem UI de conversas guardadas neste ecrã para renomear ainda;
-        // aplica-se quando o histórico de conversas estiver ligado ao drawer.
         break;
       case ConversationAction.delete:
         if (_conversationId != null) {
@@ -699,9 +573,9 @@ class _AiTabState extends State<AiTab> {
   }
 
   void _onBubbleCopy(int index) {
-  final msg = _msgs[index];
-  FlutterClipboard.copy(msg.content);
-}
+    final msg = _msgs[index];
+    Clipboard.setData(ClipboardData(text: msg.content));
+  }
 
   void _onBubbleDelete(int index) {
     setState(() => _msgs.removeAt(index));
@@ -725,91 +599,87 @@ class _AiTabState extends State<AiTab> {
     final s = AppTheme.of(context);
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Column(children: [
-      Expanded(
-        child: _incognito
-            ? _IncognitoState(s: s)
-            : (_msgs.isEmpty && _streamingText.isEmpty && _showToggles)
-                ? _EmptyState(s: s, onQuickAction: _onQuickAction)
-                : (_msgs.isEmpty && _streamingText.isEmpty)
-                    ? const SizedBox.shrink()
-                    : ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        itemCount: _msgs.length + (_sending ? 1 : 0),
-                        itemBuilder: (_, i) {
-                          if (i >= _msgs.length) {
-                            return _StreamingBubble(
-                              s: s,
-                              text: _streamingText,
-                              thinking: _streamingThink,
-                            );
-                          }
-                          final msg = _msgs[i];
-                          if (msg.role == 'user') {
-                            return _Bubble(
-                              s: s,
-                              text: msg.content,
-                              onEdit: () => _onBubbleEdit(i),
-                              onCopy: () => _onBubbleCopy(i),
-                              onDelete: () => _onBubbleDelete(i),
-                              onSelectText: () => _onBubbleSelectText(i),
-                            );
-                          }
-                          return _AssistantBubble(s: s, text: msg.content);
-                        },
-                      ),
-      ),
-      _ChatInput(
-        s: s,
-        ctrl: _ctrl,
-        model: _model,
-        attachedTool: _attachedTool,
-        incognito: _incognito,
-        sending: _sending,
-        onSend: _send,
-        onAttach: _openAttachSheet,
-        onVoice: _openVoiceSheet,
-        onModel: _openModelSheet,
-        onClearTool: _onClearTool,
-      ),
-      AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: kCupertinoOut,
-        height: keyboardInset > 0 ? keyboardInset : 104,
-      ),
-    ]);
+    return Container(
+      color: _incognito ? s.pageBackground : null,
+      child: Column(children: [
+        Expanded(
+          child: _incognito
+              ? const _IncognitoState()
+              : (_msgs.isEmpty && _streamingText.isEmpty && _showToggles)
+                  ? _EmptyState(s: s, onQuickAction: _onQuickAction)
+                  : (_msgs.isEmpty && _streamingText.isEmpty)
+                      ? const SizedBox.shrink()
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          itemCount: _msgs.length + (_sending ? 1 : 0),
+                          itemBuilder: (_, i) {
+                            if (i >= _msgs.length) {
+                              return _StreamingBubble(
+                                s: s,
+                                text: cleanAiText(_streamingText),
+                                thinking: _streamingThink != null
+                                    ? cleanAiText(_streamingThink!)
+                                    : null,
+                              );
+                            }
+                            final msg = _msgs[i];
+                            if (msg.role == 'user') {
+                              return _Bubble(
+                                s: s,
+                                text: msg.content,
+                                onEdit: () => _onBubbleEdit(i),
+                                onCopy: () => _onBubbleCopy(i),
+                                onDelete: () => _onBubbleDelete(i),
+                                onSelectText: () => _onBubbleSelectText(i),
+                              );
+                            }
+                            return _AssistantBubble(s: s, text: cleanAiText(msg.content));
+                          },
+                        ),
+        ),
+        _ChatInput(
+          s: s,
+          ctrl: _ctrl,
+          model: _model,
+          attachedTool: _attachedTool,
+          incognito: _incognito,
+          sending: _sending,
+          onSend: _send,
+          onAttach: _openAttachSheet,
+          onVoice: _openVoiceSheet,
+          onModel: _openModelSheet,
+          onClearTool: _onClearTool,
+        ),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: kCupertinoOut,
+          height: keyboardInset > 0 ? keyboardInset : 104,
+        ),
+      ]),
+    );
   }
 }
 
-// ── Estado incógnito — nunca escurece o fundo; segue sempre o tema ──
+// ── Estado incógnito — nunca escurece o fundo; segue sempre o tema.
+// Mostra apenas o ícone filled centrado (o topo já tem o header
+// "Conversa incógnita" fora deste widget). ──
 
 class _IncognitoState extends StatelessWidget {
-  final AppColorScheme s;
-  const _IncognitoState({required this.s});
+  const _IncognitoState();
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _GhostIcon(color: s.onSurface, size: 72),
-              const SizedBox(height: 22),
-              Text('Conversa incógnita',
-                  style: TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
-              const SizedBox(height: 10),
-              Text(
-                'Esta conversa não é guardada nem usada para melhorar os modelos.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant, height: 1.4),
-              ),
-            ],
-          ),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Center(
+      child: AppIcon(
+        'incognito_filled.svg',
+        color: s.onSurface,
+        size: 72,
+        useColorAsset: false,
+      ),
+    );
+  }
 }
 
 // ── Toggle individual (chip compacto com ícone + label + borda) ─
@@ -963,39 +833,44 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _c,
-        builder: (_, child) => Opacity(
-          opacity: _op.value.clamp(0.0, 1.0),
-          child: Transform.scale(
-              scale: _scale.value, alignment: Alignment.centerRight, child: child),
-        ),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onLongPress: _onLongPress,
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.75),
-              decoration: BoxDecoration(
-                color: widget.s.isDark
-                    ? widget.s.primaryContainer
-                    : const Color(0xFFCFE1FF), // reforçado no claro — mais visível que primaryContainer padrão
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: widget.s.cardShadow,
-              ),
-              child: Text(widget.text,
-                  style: TextStyle(
-                      color: widget.s.isDark
-                          ? widget.s.onPrimaryContainer
-                          : const Color(0xFF002E6B),
-                      fontSize: 14)),
+  Widget build(BuildContext context) {
+    // Pill de mensagem do utilizador — reforçado no claro para ficar
+    // bem mais visível que um primaryContainer padrão desbotado.
+    final bubbleColor = widget.s.isDark
+        ? widget.s.primaryContainer
+        : const Color(0xFFD7E7FE);
+    final textColor = widget.s.isDark
+        ? widget.s.onPrimaryContainer
+        : const Color(0xFF0A3B72);
+
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) => Opacity(
+        opacity: _op.value.clamp(0.0, 1.0),
+        child: Transform.scale(
+            scale: _scale.value, alignment: Alignment.centerRight, child: child),
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: GestureDetector(
+          onLongPress: _onLongPress,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75),
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: widget.s.cardShadow,
             ),
+            child: Text(widget.text,
+                style: TextStyle(color: textColor, fontSize: 14)),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ── Bolha de resposta do assistente ──────────────────────────────
@@ -1094,10 +969,7 @@ void showMessageActionsMenu(
   }
 
   entry = OverlayEntry(builder: (ctx) {
-    // Ancora o popup por cima da bolha, alinhado à direita (mensagens
-    // do utilizador ficam à direita), com margem de segurança para não
-    // sair do ecrã.
-    final desiredTop = anchorOffset.dy - 6 - 176;
+    final desiredTop = anchorOffset.dy - 6 - 200;
     final top = desiredTop < 40 ? anchorOffset.dy + anchorSize.height + 6 : desiredTop;
     final right = (screenSize.width - anchorOffset.dx - anchorSize.width).clamp(12.0, screenSize.width - 244);
 
@@ -1132,7 +1004,7 @@ void showMessageActionsMenu(
               width: 224,
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                color: s.floatingSurface,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: s.floatingShadow,
               ),
@@ -1141,25 +1013,25 @@ void showMessageActionsMenu(
                 children: [
                   _MessageActionRow(
                     s: s,
-                    icon: Icons.edit_outlined,
+                    icon: 'edit.svg',
                     label: 'Editar',
                     onTap: () { close(); onEdit(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: Icons.copy_outlined,
+                    icon: 'copy.svg',
                     label: 'Copiar',
                     onTap: () { close(); onCopy(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: Icons.text_fields_rounded,
+                    icon: 'text_select.svg',
                     label: 'Selecionar texto',
                     onTap: () { close(); onSelectText(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: Icons.delete_outline_rounded,
+                    icon: 'trash.svg',
                     label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
@@ -1179,7 +1051,7 @@ void showMessageActionsMenu(
 
 class _MessageActionRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String icon;
   final String label;
   final bool destructive;
   final VoidCallback onTap;
@@ -1212,7 +1084,7 @@ class _MessageActionRowState extends State<_MessageActionRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, size: 18, color: color),
+          AppIcon(widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
@@ -1246,7 +1118,7 @@ Future<void> showSelectTextSheet(
           ),
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: s.floatingSurface,
             borderRadius: BorderRadius.circular(28),
             boxShadow: s.floatingShadow,
           ),
@@ -1254,16 +1126,7 @@ Future<void> showSelectTextSheet(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 36, height: 4,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: s.outline,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
+              Center(child: SheetGrabber(s: s)),
               Text('Selecionar texto',
                   style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
@@ -1319,7 +1182,7 @@ class _ChatInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final inner = Container(
       decoration: BoxDecoration(
-        color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+        color: s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
         boxShadow: s.floatingShadow,
       ),
@@ -1343,7 +1206,7 @@ class _ChatInput extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                hintText: incognito ? 'Mensagem incógnita...' : 'Escreve uma mensagem...',
+                hintText: incognito ? 'Mensagem incógnita...' : 'Conversar com Claude...',
                 hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
                 contentPadding: EdgeInsets.zero,
               ),
@@ -1487,7 +1350,6 @@ class _AttachedToolPill extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // ATTACH SHEET — 4 opções diretas com pngs (doc/sheet/slide/whiteboard)
-// substituem o item genérico "Ferramentas" com ícone tools.svg
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachSheet(
@@ -1553,22 +1415,15 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
           margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: s.floatingSurface,
             borderRadius: BorderRadius.circular(28),
             boxShadow: s.floatingShadow,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: s.outline,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              _SheetOptionsGroup(s: s, options: [
+              SheetGrabber(s: s),
+              SheetOptionsGroup(s: s, options: [
                 _SheetOption(
                   s: s,
                   icon: 'file.svg',
@@ -1592,9 +1447,9 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
                 ),
               ]),
               const SizedBox(height: 6),
-              // 4 opções diretas com pngs — substitui o item único
-              // "Ferramentas" com o ícone genérico tools.svg
-              _SheetOptionsGroup(
+              // 4 opções diretas com PNGs reais — doc.png / sheet.png /
+              // slide.png / whiteboard.png de assets/icons/png/
+              SheetOptionsGroup(
                 s: s,
                 options: EditorType.values
                     .map((t) => _ToolPngSheetOption(
@@ -1608,7 +1463,7 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
                     .toList(),
               ),
               const SizedBox(height: 6),
-              _SettingsStyleCard(
+              SettingsStyleCard(
                 s: s,
                 radius: BorderRadius.circular(16),
                 child: Padding(
@@ -1643,7 +1498,9 @@ class _AttachSheetContentState extends State<_AttachSheetContent> {
   }
 }
 
-// ── Opção do attach sheet com png real (doc/sheet/slide/whiteboard) ─
+// ── Opção do attach sheet com png real (doc/sheet/slide/whiteboard).
+// type.pngAsset já resolve para "doc.png"/"sheet.png"/"slide.png"/
+// "whiteboard.png" em assets/icons/png/ (ver EditorType em edittab.dart). ─
 
 class _ToolPngSheetOption extends StatefulWidget {
   final AppColorScheme s;
@@ -1681,62 +1538,7 @@ class _ToolPngSheetOptionState extends State<_ToolPngSheetOption> {
       );
 }
 
-// ── Card genérico (mesmo padrão do _SettingsCard) ──────────────
-
-class _SettingsStyleCard extends StatelessWidget {
-  final AppColorScheme s;
-  final BorderRadius radius;
-  final Widget child;
-  const _SettingsStyleCard(
-      {required this.s, required this.radius, required this.child});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(color: s.cardBackground, borderRadius: radius),
-        clipBehavior: Clip.antiAlias,
-        child: child,
-      );
-}
-
-class _SheetOptionsGroup extends StatelessWidget {
-  final AppColorScheme s;
-  final List<Widget> options;
-  const _SheetOptionsGroup({required this.s, required this.options});
-
-  static const double _outerRadius = 16;
-  static const double _innerRadius = 4;
-  static const double _gap = 2;
-
-  @override
-  Widget build(BuildContext context) {
-    final count = options.length;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (int i = 0; i < count; i++) ...[
-          if (i > 0) const SizedBox(height: _gap),
-          _SettingsStyleCard(
-            s: s,
-            radius: _radiusFor(i, count),
-            child: options[i],
-          ),
-        ],
-      ],
-    );
-  }
-
-  BorderRadius _radiusFor(int index, int count) {
-    if (count == 1) return BorderRadius.circular(_outerRadius);
-    final isFirst = index == 0;
-    final isLast  = index == count - 1;
-    return BorderRadius.only(
-      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
-      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
-    );
-  }
-}
+// ── Opção genérica do sheet (arquivos/fotos/câmera) — usa SVG ───
 
 class _SheetOption extends StatefulWidget {
   final AppColorScheme s;
@@ -1871,21 +1673,14 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
           margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: s.floatingSurface,
             borderRadius: BorderRadius.circular(28),
             boxShadow: s.floatingShadow,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: s.outline,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
+              SheetGrabber(s: s),
               Text(
                 _recording ? 'A ouvir...' : 'A transcrever...',
                 style: TextStyle(
@@ -1972,22 +1767,15 @@ Future<void> showModelSelectSheet(
           margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: s.floatingSurface,
             borderRadius: BorderRadius.circular(28),
             boxShadow: s.floatingShadow,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(bottom: 10, top: 2),
-                decoration: BoxDecoration(
-                  color: s.outline,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              _SheetOptionsGroup(
+              SheetGrabber(s: s),
+              SheetOptionsGroup(
                 s: s,
                 options: AiModel.values
                     .map((m) => _ModelOption(

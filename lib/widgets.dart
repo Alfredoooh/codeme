@@ -134,3 +134,143 @@ class AppSwitch extends StatelessWidget {
         ),
       );
 }
+
+// ══════════════════════════════════════════════════════════════
+// DASHED ROUNDED BORDER — usado no input de chat quando incógnito
+// ══════════════════════════════════════════════════════════════
+
+class DashedRRectBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+  final double dashWidth;
+  final double dashGap;
+  final double strokeWidth;
+  DashedRRectBorderPainter({
+    required this.color,
+    required this.radius,
+    this.dashWidth = 5,
+    this.dashGap = 4,
+    this.strokeWidth = 1.3,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(strokeWidth / 2, strokeWidth / 2,
+          size.width - strokeWidth, size.height - strokeWidth),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    for (final metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final next = distance + dashWidth;
+        canvas.drawPath(
+          metric.extractPath(distance, next.clamp(0, metric.length)),
+          paint,
+        );
+        distance = next + dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant DashedRRectBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+class DashedRRectBorder extends StatelessWidget {
+  final Widget child;
+  final Color color;
+  final double radius;
+  const DashedRRectBorder({
+    super.key,
+    required this.child,
+    required this.color,
+    required this.radius,
+  });
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        foregroundPainter: DashedRRectBorderPainter(color: color, radius: radius),
+        child: child,
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
+// GENERIC BOTTOM SHEET CARD (usado em drawer/settings/aitab)
+// ══════════════════════════════════════════════════════════════
+
+class SettingsStyleCard extends StatelessWidget {
+  final AppColorScheme s;
+  final BorderRadius radius;
+  final Widget child;
+  const SettingsStyleCard(
+      {super.key, required this.s, required this.radius, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(color: s.cardBackground, borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
+}
+
+class SheetOptionsGroup extends StatelessWidget {
+  final AppColorScheme s;
+  final List<Widget> options;
+  const SheetOptionsGroup({super.key, required this.s, required this.options});
+
+  static const double _outerRadius = 16;
+  static const double _innerRadius = 4;
+  static const double _gap = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = options.length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < count; i++) ...[
+          if (i > 0) const SizedBox(height: _gap),
+          SettingsStyleCard(
+            s: s,
+            radius: _radiusFor(i, count),
+            child: options[i],
+          ),
+        ],
+      ],
+    );
+  }
+
+  BorderRadius _radiusFor(int index, int count) {
+    if (count == 1) return BorderRadius.circular(_outerRadius);
+    final isFirst = index == 0;
+    final isLast  = index == count - 1;
+    return BorderRadius.only(
+      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
+    );
+  }
+}
+
+class SheetGrabber extends StatelessWidget {
+  final AppColorScheme s;
+  const SheetGrabber({super.key, required this.s});
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 36, height: 4,
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: s.outline,
+          borderRadius: BorderRadius.circular(999),
+        ),
+      );
+}
