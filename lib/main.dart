@@ -172,6 +172,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
           initialConversationId: _pendingConversationLoad,
           onConversationLoadConsumed: _onConversationLoadConsumed,
+          onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
         );
       case AppTab.edit:
         return EditTab(editorType: _editorType);
@@ -190,12 +191,17 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     return Material(
       type: MaterialType.transparency,
       child: Stack(children: [
+        // A tela AI usa o mesmo fundo (s.pageBackground) que a tela de
+        // definições — item 6. As restantes tabs mantêm s.surface, que
+        // é o fundo padrão do resto da app.
         ColoredBox(
-          color: s.surface,
+          color: isAiTab ? s.pageBackground : s.surface,
           child: isAiTab
               // Header transparente sobreposto (mesmo padrão de gradiente
               // do settingsscreen.dart) apenas na tab de chat — o conteúdo
-              // ocupa o ecrã todo por baixo.
+              // ocupa o ecrã todo por baixo. O gradiente parte agora de
+              // s.pageBackground (em vez de s.surface) para combinar
+              // exatamente com o fundo da própria AiTab por baixo.
               ? Stack(children: [
                   Positioned.fill(
                     top: 0,
@@ -215,8 +221,18 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
                       title: _tabTitle,
                       onMenu: _openDrawer,
                       transparent: true,
+                      headerBackground: s.pageBackground,
                       trailing: AiConversationMenuButton(
-                          s: s, hasMessages: _hasMessages, onSelect: _onConversationAction),
+                        s: s,
+                        hasMessages: _hasMessages,
+                        onSelect: _onConversationAction,
+                        canvasCount: 0,
+                        onOpenCanvas: () {},
+                        webSearchEnabled: false,
+                        onToggleWebSearch: (_) {},
+                        widgetsEnabled: false,
+                        onToggleWidgets: (_) {},
+                      ),
                     ),
                   ),
                 ])
@@ -226,6 +242,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
                     title: _tabTitle,
                     onMenu: _openDrawer,
                     transparent: false,
+                    headerBackground: s.surface,
                     trailing: _tab == AppTab.edit
                         ? EditTypeButton(
                             s: s, current: _editorType, onSelect: _setEditorType)
@@ -288,6 +305,7 @@ class AiTabHost extends StatefulWidget {
   final VoidCallback onExternalActionConsumed;
   final String? initialConversationId;
   final VoidCallback? onConversationLoadConsumed;
+  final ValueChanged<bool>? onHasMessagesChanged;
   const AiTabHost({
     super.key,
     required this.onFirstMessage,
@@ -295,6 +313,7 @@ class AiTabHost extends StatefulWidget {
     required this.onExternalActionConsumed,
     this.initialConversationId,
     this.onConversationLoadConsumed,
+    this.onHasMessagesChanged,
   });
   @override State<AiTabHost> createState() => _AiTabHostState();
 }
@@ -316,12 +335,16 @@ class _AiTabHostState extends State<AiTabHost> {
       externalAction: widget.externalAction,
       onExternalActionConsumed: widget.onExternalActionConsumed,
       initialConversationId: widget.initialConversationId,
+      onHasMessagesChanged: widget.onHasMessagesChanged,
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// APP HEADER
+// APP HEADER — no modo transparente, o gradiente parte agora de
+// `headerBackground` (passado pelo chamador) em vez de sempre
+// s.surface, para que a AI tab combine com o mesmo fundo usado em
+// settingsscreen.dart (s.pageBackground) — item 6.
 // ══════════════════════════════════════════════════════════════
 
 class _AppHeader extends StatelessWidget {
@@ -330,11 +353,13 @@ class _AppHeader extends StatelessWidget {
   final VoidCallback onMenu;
   final Widget? trailing;
   final bool transparent;
+  final Color headerBackground;
 
   const _AppHeader({
     required this.s,
     required this.title,
     required this.onMenu,
+    required this.headerBackground,
     this.trailing,
     this.transparent = false,
   });
@@ -367,19 +392,21 @@ class _AppHeader extends StatelessWidget {
     );
 
     if (!transparent) {
-      return Container(color: s.surface, child: content);
+      return Container(color: headerBackground, child: content);
     }
 
     // Mesmo padrão do header sobreposto em settingsscreen.dart: gradiente
-    // contínuo de opaco para transparente, sem blur — nunca sólido.
+    // contínuo de opaco para transparente, sem blur — nunca sólido —
+    // mas agora a partir de headerBackground em vez de s.surface fixo,
+    // garantindo que combina com o fundo real por baixo em cada tab.
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            s.surface,
-            s.surface.withOpacity(0.0),
+            headerBackground,
+            headerBackground.withOpacity(0.0),
           ],
         ),
       ),

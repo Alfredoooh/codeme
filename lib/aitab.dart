@@ -54,6 +54,8 @@ extension AiModelX on AiModel {
 // (highlight) via comandos editorApi.setColor / editorApi.setHighlight
 // no documento HTML gerado. kAiWidgetsInstructions é anexado condicio-
 // nalmente quando o switch de Widgets está ativo (ver AiTabState).
+// kAiWebSearchInstructions é anexado condicionalmente quando o switch
+// de Pesquisar Web está ativo.
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
@@ -113,6 +115,16 @@ Nunca expliques ao utilizador que estás a gerar um bloco widget — ele é
 processado automaticamente e transformado num cartão interativo.
 ''';
 
+const String kAiWebSearchInstructions = '''
+
+Tens acesso a pesquisa na web em tempo real para esta conversa. Quando a
+pergunta do utilizador beneficiar de informação atual, recente ou que possa
+ter mudado (notícias, preços, eventos, versões de software, datas), utiliza
+essa capacidade de pesquisa antes de responderes, e baseia a resposta nos
+resultados encontrados. Quando citares algo encontrado na pesquisa, sê claro
+sobre a fonte de forma natural no texto.
+''';
+
 // ══════════════════════════════════════════════════════════════
 // TEXT CLEANUP — agora preserva markdown estrutural (negrito, listas,
 // tabelas, títulos) para o MarkdownBody renderizar; só limpa artefactos
@@ -151,7 +163,14 @@ extension ConversationActionX on ConversationAction {
 
 /// Popup unificado — substitui os antigos modais (attach/model/message
 /// actions) por um único padrão de popup ancorado, igual ao usado em
-/// EditTypeButton e AiConversationMenuButton. Item 1 do pedido.
+/// EditTypeButton e AiConversationMenuButton.
+///
+/// O anchor é embrulhado num GestureDetector interno próprio (em vez de
+/// depender de um widget filho no-op) para garantir que o toque É sempre
+/// capturado e chama toggle(), independentemente do que o chamador passe
+/// como `anchor`. Isto corrige o bug em que o popup nunca abria porque o
+/// filho (ex: AppTap com onTap vazio) engolia o gesto antes de chegar ao
+/// GestureDetector externo.
 class PopupMenu<T> extends StatefulWidget {
   final AppColorScheme s;
   final Widget anchor;
@@ -201,6 +220,7 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
+  final GlobalKey _anchorBoxKey = GlobalKey();
 
   @override
   void initState() {
@@ -215,7 +235,7 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
   void toggle() => _ov == null ? open() : close();
 
   void open() {
-    final box = context.findRenderObject() as RenderBox;
+    final box = _anchorBoxKey.currentContext!.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz  = box.size;
     _ac.forward(from: 0);
@@ -296,9 +316,10 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
 
   @override
   Widget build(BuildContext context) => GestureDetector(
+        key: _anchorBoxKey,
         behavior: HitTestBehavior.opaque,
         onTap: toggle,
-        child: widget.anchor,
+        child: IgnorePointer(child: widget.anchor),
       );
 }
 
@@ -379,58 +400,386 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON — agora usa PopupMenu genérico e
-// desativa a opção incógnito quando já existe conversa em curso
-// (item 4: incógnito só pode ser escolhido antes da 1ª mensagem).
+// AI CONVERSATION MENU BUTTON — usa PopupMenu genérico. O bug em que
+// o popup nunca abria (anchor AppTap com onTap vazio a engolir o
+// toque) foi corrigido dentro do próprio PopupMenu acima: agora o
+// anchor visual é sempre envolto em IgnorePointer, e é o
+// GestureDetector do PopupMenu que trata o toque, sempre.
+// "Canvas" está sempre presente no popup (não depende de contagem),
+// e "Pesquisar web" replica o padrão settings: ícone + AppSwitch.
 // ══════════════════════════════════════════════════════════════
 
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
   final bool hasMessages;
+  final int canvasCount;
+  final VoidCallback onOpenCanvas;
+  final bool webSearchEnabled;
+  final ValueChanged<bool> onToggleWebSearch;
+  final bool widgetsEnabled;
+  final ValueChanged<bool> onToggleWidgets;
+
   const AiConversationMenuButton({
     super.key,
     required this.s,
     required this.onSelect,
     required this.hasMessages,
+    required this.canvasCount,
+    required this.onOpenCanvas,
+    required this.webSearchEnabled,
+    required this.onToggleWebSearch,
+    required this.widgetsEnabled,
+    required this.onToggleWidgets,
   });
 
   @override
   Widget build(BuildContext context) {
-    final entries = <PopupMenuEntry<ConversationAction>>[
-      PopupMenuEntry(
-        value: ConversationAction.newChat,
-        label: ConversationAction.newChat.label,
-        svgIcon: ConversationAction.newChat.svgAsset,
-      ),
-      PopupMenuEntry(
-        value: ConversationAction.incognito,
-        label: ConversationAction.incognito.label,
-        svgIcon: ConversationAction.incognito.svgAsset,
-        disabled: hasMessages, // item 4
-      ),
-      PopupMenuEntry(
-        value: ConversationAction.rename,
-        label: ConversationAction.rename.label,
-        svgIcon: ConversationAction.rename.svgAsset,
-      ),
-      PopupMenuEntry(
-        value: ConversationAction.delete,
-        label: ConversationAction.delete.label,
-        svgIcon: ConversationAction.delete.svgAsset,
-        destructive: true,
-      ),
-    ];
-
-    return PopupMenu<ConversationAction>(
+    return _HeaderMenuButton(
       s: s,
-      entries: entries,
+      hasMessages: hasMessages,
+      canvasCount: canvasCount,
       onSelect: onSelect,
-      anchor: AppTap(
-        onTap: () {},
-        s: s,
-        child: AppIcon('more_filled.svg', color: s.onSurface, size: 20),
+      onOpenCanvas: onOpenCanvas,
+      webSearchEnabled: webSearchEnabled,
+      onToggleWebSearch: onToggleWebSearch,
+      widgetsEnabled: widgetsEnabled,
+      onToggleWidgets: onToggleWidgets,
+    );
+  }
+}
+
+/// Implementação própria (em vez de PopupMenu<T> genérico) porque este
+/// popup específico mistura linhas de ação normais com duas linhas de
+/// switch (Pesquisar web / Widgets) e uma linha "Canvas" com contador
+/// dinâmico — conteúdo que o PopupMenuEntry simples não modela bem.
+/// Segue exatamente o mesmo padrão visual/animação/ancoragem do
+/// PopupMenu acima para manter consistência.
+class _HeaderMenuButton extends StatefulWidget {
+  final AppColorScheme s;
+  final bool hasMessages;
+  final int canvasCount;
+  final ValueChanged<ConversationAction> onSelect;
+  final VoidCallback onOpenCanvas;
+  final bool webSearchEnabled;
+  final ValueChanged<bool> onToggleWebSearch;
+  final bool widgetsEnabled;
+  final ValueChanged<bool> onToggleWidgets;
+
+  const _HeaderMenuButton({
+    required this.s,
+    required this.hasMessages,
+    required this.canvasCount,
+    required this.onSelect,
+    required this.onOpenCanvas,
+    required this.webSearchEnabled,
+    required this.onToggleWebSearch,
+    required this.widgetsEnabled,
+    required this.onToggleWidgets,
+  });
+
+  @override
+  State<_HeaderMenuButton> createState() => _HeaderMenuButtonState();
+}
+
+class _HeaderMenuButtonState extends State<_HeaderMenuButton>
+    with SingleTickerProviderStateMixin {
+  OverlayEntry? _ov;
+  late AnimationController _ac;
+  final GlobalKey _anchorKey = GlobalKey();
+  late ValueNotifier<bool> _webNotifier;
+  late ValueNotifier<bool> _widgetsNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
+    _webNotifier = ValueNotifier(widget.webSearchEnabled);
+    _widgetsNotifier = ValueNotifier(widget.widgetsEnabled);
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    _ov?.remove();
+    _webNotifier.dispose();
+    _widgetsNotifier.dispose();
+    super.dispose();
+  }
+
+  void _toggle() => _ov == null ? _open() : _close();
+
+  void _open() {
+    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
+    final off = box.localToGlobal(Offset.zero);
+    final sz  = box.size;
+    _ac.forward(from: 0);
+    _webNotifier.value = widget.webSearchEnabled;
+    _widgetsNotifier.value = widget.widgetsEnabled;
+
+    _ov = OverlayEntry(builder: (ctx) {
+      final s = widget.s;
+      final screenSize = MediaQuery.of(ctx).size;
+      const width = 260.0;
+
+      return Stack(children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: _close,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        Positioned(
+          top: off.dy + sz.height + 6,
+          right: (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - width - 12),
+          child: AnimatedBuilder(
+            animation: _ac,
+            builder: (_, child) => Opacity(
+              opacity: CurvedAnimation(
+                      parent: _ac,
+                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                  .value,
+              child: Transform.scale(
+                scale: Tween(begin: 0.92, end: 1.0)
+                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
+                    .value,
+                alignment: Alignment.topRight,
+                child: child,
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                width: width,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: s.floatingShadow,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.newChat.svgAsset,
+                      label: ConversationAction.newChat.label,
+                      onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
+                    ),
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.incognito.svgAsset,
+                      label: ConversationAction.incognito.label,
+                      disabled: widget.hasMessages,
+                      onTap: () {
+                        if (widget.hasMessages) return;
+                        _close();
+                        widget.onSelect(ConversationAction.incognito);
+                      },
+                    ),
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.rename.svgAsset,
+                      label: ConversationAction.rename.label,
+                      onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
+                    ),
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.delete.svgAsset,
+                      label: ConversationAction.delete.label,
+                      destructive: true,
+                      onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                      child: Divider(height: 1),
+                    ),
+                    // Item permanente — não depende de canvasCount > 0.
+                    _MenuActionRow(
+                      s: s,
+                      icon: 'cards.svg',
+                      label: 'Canvas',
+                      subtitle: widget.canvasCount == 0
+                          ? 'Ainda sem documentos'
+                          : '${widget.canvasCount} documento${widget.canvasCount == 1 ? '' : 's'} nesta conversa',
+                      onTap: () { _close(); widget.onOpenCanvas(); },
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                      child: Divider(height: 1),
+                    ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _webNotifier,
+                      builder: (_, enabled, __) => _MenuSwitchRow(
+                        s: s,
+                        icon: 'globe.svg',
+                        label: 'Pesquisar web',
+                        subtitle: enabled ? 'Ativado' : 'Desativado',
+                        value: enabled,
+                        onChanged: (v) {
+                          _webNotifier.value = v;
+                          widget.onToggleWebSearch(v);
+                        },
+                      ),
+                    ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _widgetsNotifier,
+                      builder: (_, enabled, __) => _MenuSwitchRow(
+                        s: s,
+                        icon: 'widgets.svg',
+                        label: 'Widgets',
+                        subtitle: enabled ? 'Gráficos, mapas e cartões' : 'Desativado',
+                        value: enabled,
+                        onChanged: (v) {
+                          _widgetsNotifier.value = v;
+                          widget.onToggleWidgets(v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    });
+    Overlay.of(context).insert(_ov!);
+    setState(() {});
+  }
+
+  void _close() {
+    _ac.reverse().then((_) {
+      _ov?.remove();
+      _ov = null;
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        key: _anchorKey,
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggle,
+        child: IgnorePointer(
+          child: AppTap(
+            onTap: () {},
+            s: widget.s,
+            child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+          ),
+        ),
+      );
+}
+
+class _MenuActionRow extends StatefulWidget {
+  final AppColorScheme s;
+  final String icon;
+  final String label;
+  final String? subtitle;
+  final bool destructive;
+  final bool disabled;
+  final VoidCallback onTap;
+  const _MenuActionRow({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.subtitle,
+    this.destructive = false,
+    this.disabled = false,
+  });
+  @override State<_MenuActionRow> createState() => _MenuActionRowState();
+}
+
+class _MenuActionRowState extends State<_MenuActionRow> {
+  bool _h = false;
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.disabled
+        ? widget.s.onSurfaceVariant.withOpacity(0.4)
+        : widget.destructive
+            ? widget.s.error
+            : widget.s.onSurface;
+    return Opacity(
+      opacity: widget.disabled ? 0.55 : 1.0,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown:   widget.disabled ? null : (_) => setState(() => _h = true),
+        onTapCancel: widget.disabled ? null : ()  => setState(() => _h = false),
+        onTapUp:     widget.disabled ? null : (_) => setState(() => _h = false),
+        onTap:       widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: _h && !widget.disabled ? widget.s.hover : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(children: [
+            AppIcon(widget.icon, size: 18, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.label,
+                      style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+                  if (widget.subtitle != null) ...[
+                    const SizedBox(height: 1),
+                    Text(widget.subtitle!,
+                        style: TextStyle(fontSize: 11.5, color: widget.s.onSurfaceVariant)),
+                  ],
+                ],
+              ),
+            ),
+          ]),
+        ),
       ),
+    );
+  }
+}
+
+/// Linha com switch — mesmo padrão visual do toggle "Modo escuro" em
+/// settingsscreen.dart (AppSwitch), em vez do Switch.adaptive genérico
+/// que destoava do resto da app.
+class _MenuSwitchRow extends StatelessWidget {
+  final AppColorScheme s;
+  final String icon;
+  final String label;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _MenuSwitchRow({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(children: [
+        AppIcon(icon, size: 18, color: s.onSurface),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface)),
+              Text(subtitle,
+                  style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        AppSwitch(value: value, s: s, onChanged: onChanged),
+      ]),
     );
   }
 }
@@ -442,7 +791,6 @@ class AiConversationMenuButton extends StatelessWidget {
 class AiTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
   /// Conversa a carregar de imediato (ex: aberta a partir do drawer).
-  /// Item 7 do pedido.
   final String? initialConversationId;
   final ConversationAction? externalAction;
   final VoidCallback? onExternalActionConsumed;
@@ -467,6 +815,7 @@ class AiTabState extends State<AiTab> {
   bool     _incognito    = false;
   bool     _sending      = false;
   bool     _widgetsEnabled = false;
+  bool     _webSearchEnabled = false;
   String   _streamingText = '';
   String?  _streamingThink;
   String?  _conversationId;
@@ -530,8 +879,12 @@ class AiTabState extends State<AiTab> {
 
   String _nextCanvasId() => 'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
 
-  String get _effectiveSystemPrompt =>
-      _widgetsEnabled ? kAiSystemPrompt + kAiWidgetsInstructions : kAiSystemPrompt;
+  String get _effectiveSystemPrompt {
+    var prompt = kAiSystemPrompt;
+    if (_widgetsEnabled) prompt += kAiWidgetsInstructions;
+    if (_webSearchEnabled) prompt += kAiWebSearchInstructions;
+    return prompt;
+  }
 
   Future<void> _send() async {
     final t = _ctrl.text.trim();
@@ -715,6 +1068,7 @@ class AiTabState extends State<AiTab> {
   void _onClearTool() => setState(() => _attachedTool = null);
 
   void _onToggleWidgets(bool value) => setState(() => _widgetsEnabled = value);
+  void _onToggleWebSearch(bool value) => setState(() => _webSearchEnabled = value);
 
   void _openAttachSheet(GlobalKey anchorKey) {
     showAttachPopup(
@@ -725,10 +1079,6 @@ class AiTabState extends State<AiTab> {
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
       onSelectTool: _onToolSelected,
-      onOpenCanvasPopup: _openCanvasPopup,
-      canvasCount: _canvases.length,
-      widgetsEnabled: _widgetsEnabled,
-      onToggleWidgets: _onToggleWidgets,
     );
   }
 
@@ -765,7 +1115,7 @@ class AiTabState extends State<AiTab> {
   }
 
   void _onOpenCanvas(CanvasItem item) {
-    // Item 8: ao tocar num canvas, navega para o EditTab já carregado.
+    // Ao tocar num canvas, navega para o EditTab já carregado.
     editTabController.requestLoad(item);
     AiTabHostNavigation.of(context)?.goToEditTab(
       EditorTypeX.fromCanvasKind(item.kind),
@@ -789,7 +1139,7 @@ class AiTabState extends State<AiTab> {
         widget.onHasMessagesChanged?.call(false);
         break;
       case ConversationAction.incognito:
-        if (_hasMessages) return; // item 4: bloqueado depois de iniciar conversa
+        if (_hasMessages) return; // bloqueado depois de iniciar conversa
         _streamSub?.cancel();
         setState(() {
           _msgs.clear();
@@ -896,10 +1246,11 @@ class AiTabState extends State<AiTab> {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
+    // Fundo desta tela alinhado ao mesmo tom usado em settingsscreen.dart
+    // (s.pageBackground), em vez do transparente/surface anterior — item 6.
     return Container(
-      color: _incognito ? s.pageBackground : null,
+      color: _incognito ? s.pageBackground : s.pageBackground,
       child: Column(children: [
         Expanded(
           child: _incognito
@@ -943,6 +1294,9 @@ class AiTabState extends State<AiTab> {
                       },
                     ),
         ),
+        // O input já vive dentro de um SafeArea próprio (ver _ChatInput)
+        // e assenta diretamente no fundo real do ecrã — sem faixa vazia
+        // artificial por baixo (item 1). Só cresce com o teclado.
         _ChatInput(
           s: s,
           ctrl: _ctrl,
@@ -957,13 +1311,6 @@ class AiTabState extends State<AiTab> {
           onVoice: _openVoiceSheet,
           onModel: () => _openModelPopup(_modelAnchorKey),
           onClearTool: _onClearTool,
-        ),
-        // Item 2: respiro extra por baixo do input, para não ficar
-        // colado à borda do teclado/gesture bar do telemóvel.
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: kCupertinoOut,
-          height: keyboardInset > 0 ? keyboardInset + 12 : 132,
         ),
       ]),
     );
@@ -1007,8 +1354,8 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Empty state — item 3: sem toggles/chips de ação rápida, apenas
-// um estado neutro e acolhedor. ──
+// ── Empty state — sem toggles/chips de ação rápida, apenas um estado
+// neutro e acolhedor. ──
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
@@ -1132,9 +1479,11 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 }
 
 // ── Bolha de resposta do assistente — agora com formatação rica
-// (negrito, listas, tabelas, títulos) e uma barra de ações por baixo
-// com thumb_up, thumb_down, copiar e regenerar, em ícones ligeiramente
-// mais pequenos do que o resto da interface. ──
+// (negrito, listas, tabelas, títulos), fundo de card alinhado ao
+// mesmo tom usado no settingsscreen.dart (s.cardBackground), e uma
+// barra de ações por baixo com thumb_up, thumb_down, copiar e
+// regenerar, em ícones ligeiramente mais pequenos do que o resto
+// da interface. ──
 
 class _AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
@@ -1157,8 +1506,12 @@ class _AssistantBubble extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1178,8 +1531,7 @@ class _AssistantBubble extends StatelessWidget {
 }
 
 // ── Barra de ações sob cada resposta da IA. Ícones ligeiramente
-// menores (16px) do que os padrão da interface (18-20px), conforme
-// pedido — "um pouco mais pequenos do que os de toda a interface". ──
+// menores (16px) do que os padrão da interface (18-20px). ──
 
 class _AssistantActionBar extends StatelessWidget {
   final AppColorScheme s;
@@ -1250,8 +1602,9 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ── Bolha de streaming (resposta a chegar em tempo real) ────────
-// Item 8: mostra "A criar documento..." com ícone tools.svg quando
-// a IA está a meio de gerar um bloco de canvas.
+// Mostra "A criar documento..." com ícone tools.svg quando a IA está
+// a meio de gerar um bloco de canvas. Fundo alinhado ao mesmo card
+// usado nas respostas já finalizadas.
 
 class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
@@ -1280,8 +1633,12 @@ class _StreamingBubble extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1300,8 +1657,8 @@ class _StreamingBubble extends StatelessWidget {
                 if (text.isNotEmpty) const SizedBox(height: 10),
                 _CanvasCreatingPill(s: s, label: _creatingLabel),
               ] else if (text.isEmpty)
-                // Item 6: loader de grade piscando enquanto não há nenhum
-                // token de texto ainda (arranque da resposta).
+                // Loader de grade piscando enquanto não há nenhum token
+                // de texto ainda (arranque da resposta).
                 BlinkingGridLoader(color: s.onSurfaceVariant),
             ],
           ),
@@ -1337,9 +1694,9 @@ class _CanvasCreatingPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// BLINKING GRID LOADER — item 6 do pedido. Grelha 3x3 de pontos que
-// piscam em cascata, tradução direta do loader "13. Grade piscando"
-// do mockup de referência, feito em Flutter puro (sem CSS/HTML).
+// BLINKING GRID LOADER — grelha 3x3 de pontos que piscam em cascata,
+// tradução direta do loader "13. Grade piscando" do mockup de
+// referência, feito em Flutter puro (sem CSS/HTML).
 // ══════════════════════════════════════════════════════════════
 
 class BlinkingGridLoader extends StatefulWidget {
@@ -1430,7 +1787,7 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
 // ══════════════════════════════════════════════════════════════
 // RICH AI TEXT — renderizador de markdown leve, sem dependências
 // externas: negrito, itálico, títulos, listas com marcadores e
-// numeradas, tabelas — e agora widgets interativos (```widget_x```)
+// numeradas, tabelas — e widgets interativos (```widget_x```)
 // intercalados com o texto normal, via aiwidgets.dart. A deteção de
 // widgets acontece ANTES do parse de markdown: o texto é dividido em
 // segmentos por parseAiWidgetBlocks(), cada segmento de texto passa
@@ -1729,6 +2086,9 @@ class _AiTable extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // MESSAGE ACTIONS POPUP (editar / copiar / eliminar / selecionar texto)
+// Nasce ancorado à própria bolha long-pressionada, com fallback para
+// abrir para baixo quando não há espaço acima (mesma lógica usada em
+// showConversationOptionsPopup no drawer, para consistência).
 // ══════════════════════════════════════════════════════════════
 
 void showMessageActionsPopup(
@@ -1756,8 +2116,10 @@ void showMessageActionsPopup(
   }
 
   entry = OverlayEntry(builder: (ctx) {
-    final desiredTop = anchorOffset.dy - 6 - 200;
-    final top = desiredTop < 40 ? anchorOffset.dy + anchorSize.height + 6 : desiredTop;
+    const menuHeight = 216.0;
+    final desiredTop = anchorOffset.dy - 6 - menuHeight;
+    final opensUp = desiredTop >= 40;
+    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
     final right = (screenSize.width - anchorOffset.dx - anchorSize.width).clamp(12.0, screenSize.width - 244);
 
     return Stack(children: [
@@ -1781,7 +2143,7 @@ void showMessageActionsPopup(
               scale: Tween(begin: 0.92, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: Alignment.topRight,
+              alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
               child: child,
             ),
           ),
@@ -1935,9 +2297,10 @@ Future<void> showSelectTextSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT — item 2 (mais respiro por baixo) e item 3 (sem toggles)
-// e item 5 (ícone do botão de enviar muda para progress.svg enquanto
-// a IA está a responder).
+// CHAT INPUT — assenta diretamente no fundo do ecrã via SafeArea
+// próprio (sem faixa vazia artificial por baixo — item 1), sombra
+// do container reduzida (item 6), e ícone do botão de enviar muda
+// para progress.svg enquanto a IA está a responder.
 // ══════════════════════════════════════════════════════════════
 
 class _ChatInput extends StatelessWidget {
@@ -1973,11 +2336,21 @@ class _ChatInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sombra reduzida (era s.floatingShadow, muito pesada para um
+    // elemento fixo sempre visível no fundo do ecrã) — item 6.
+    final reducedShadow = <BoxShadow>[
+      BoxShadow(
+        color: Colors.black.withOpacity(s.isDark ? 0.16 : 0.05),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ];
+
     final inner = Container(
       decoration: BoxDecoration(
         color: s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: s.floatingShadow,
+        boxShadow: reducedShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2076,8 +2449,8 @@ class _ChatInput extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: sending ? s.primary.withOpacity(0.5) : s.primary,
                         shape: BoxShape.circle),
-                    // Item 5: enquanto `sending` é true, mostra progress.svg
-                    // (com rotação contínua) em vez do CircularProgressIndicator
+                    // Enquanto `sending` é true, mostra progress.svg (com
+                    // rotação contínua) em vez do CircularProgressIndicator
                     // genérico; volta a send.svg assim que a resposta termina.
                     child: sending
                         ? _SpinningIcon(asset: 'progress.svg', color: s.onPrimary)
@@ -2091,11 +2464,21 @@ class _ChatInput extends StatelessWidget {
       ),
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: incognito
-          ? DashedRRectBorder(color: s.outline, radius: 22, child: inner)
-          : inner,
+    final bordered = incognito
+        ? DashedRRectBorder(color: s.outline, radius: 22, child: inner)
+        : inner;
+
+    // SafeArea próprio garante que o input assenta no fundo real do
+    // ecrã (respeitando apenas a gesture bar do sistema), sem a faixa
+    // vazia fixa de 132px que antes empurrava tudo para o meio do
+    // ecrã quando o teclado estava fechado (item 1).
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+        child: bordered,
+      ),
     );
   }
 }
@@ -2166,14 +2549,14 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP — item 1: agora é popup ancorado, não modal de baixo.
-// Inclui a entrada "Canvas" (item 8) com cards.svg e contador, e
-// agora também a entrada "Widgets" com switch, que ativa/desativa o
-// modo de widgets interativos (gráficos, mapas, calendário, etc.)
-// sem fechar o popup ao ser tocada — só o switch reage.
+// ATTACH POPUP — popup ancorado ao botão '+', abrindo diretamente a
+// partir da posição real do botão (nunca mais no centro do ecrã).
+// Contém apenas Arquivos / Fotos / Câmera — "Canvas" e "Widgets"
+// moveram-se definitivamente para o popup do appbar (item 5), pelo
+// que deixaram de fazer parte deste popup.
 // ══════════════════════════════════════════════════════════════
 
-enum _AttachAction { files, photos, camera, canvas }
+enum _AttachAction { files, photos, camera }
 
 void showAttachPopup(
   BuildContext context,
@@ -2183,10 +2566,6 @@ void showAttachPopup(
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
   required ValueChanged<EditorType> onSelectTool,
-  required VoidCallback onOpenCanvasPopup,
-  required int canvasCount,
-  required bool widgetsEnabled,
-  required ValueChanged<bool> onToggleWidgets,
 }) {
   final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
   final off = box.localToGlobal(Offset.zero);
@@ -2199,34 +2578,29 @@ void showAttachPopup(
     duration: const Duration(milliseconds: 200),
   );
 
-  // Notifier local para o switch de Widgets re-renderizar sem fechar
-  // o popup nem precisar de setState no widget pai a cada toque.
-  final widgetsNotifier = ValueNotifier<bool>(widgetsEnabled);
-
   void close() {
     controller.reverse().then((_) {
       entry.remove();
       controller.dispose();
-      widgetsNotifier.dispose();
     });
   }
 
   entry = OverlayEntry(builder: (ctx) {
-    final width = 240.0;
-    final desiredTop = off.dy - 6 - 420;
-    final top = desiredTop < 40 ? null : desiredTop;
-    final bottom = desiredTop < 40 ? screenSize.height - off.dy + 6 : null;
+    const width = 240.0;
+    // Altura real do conteúdo (3 linhas ~58px cada + padding) — usada
+    // para decidir se cabe acima do botão antes de decidir abrir para
+    // cima ou para baixo (item 3/4: nunca mais nasce no centro do ecrã
+    // nem desalinhado do ponto de toque).
+    const estimatedHeight = 210.0;
+    final spaceAbove = off.dy;
+    final opensUp = spaceAbove >= estimatedHeight + 24;
+    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
 
     final entries = <PopupMenuEntry<_AttachAction>>[
       const PopupMenuEntry(value: _AttachAction.files, label: 'Arquivos', subtitle: 'Enviar qualquer tipo de arquivo', svgIcon: 'file.svg'),
       const PopupMenuEntry(value: _AttachAction.photos, label: 'Fotos', subtitle: 'Enviar fotos da galeria', svgIcon: 'image.svg'),
       const PopupMenuEntry(value: _AttachAction.camera, label: 'Câmera', subtitle: 'Tirar uma foto agora', svgIcon: 'camera.svg'),
-      PopupMenuEntry(
-        value: _AttachAction.canvas,
-        label: 'Canvas',
-        subtitle: canvasCount == 0 ? 'Ainda sem documentos' : '$canvasCount documento${canvasCount == 1 ? '' : 's'} nesta conversa',
-        svgIcon: 'cards.svg',
-      ),
     ];
 
     return Stack(children: [
@@ -2239,8 +2613,7 @@ void showAttachPopup(
       ),
       Positioned(
         top: top,
-        bottom: bottom,
-        left: off.dx,
+        left: left,
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -2251,7 +2624,7 @@ void showAttachPopup(
               scale: Tween(begin: 0.92, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: top == null ? Alignment.bottomLeft : Alignment.topLeft,
+              alignment: opensUp ? Alignment.bottomLeft : Alignment.topLeft,
               child: child,
             ),
           ),
@@ -2268,7 +2641,7 @@ void showAttachPopup(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final e in entries.sublist(0, 3))
+                  for (final e in entries)
                     _PopupRow<_AttachAction>(
                       s: s,
                       entry: e,
@@ -2278,34 +2651,9 @@ void showAttachPopup(
                           case _AttachAction.files: onFiles(); break;
                           case _AttachAction.photos: onPhotos(); break;
                           case _AttachAction.camera: onCamera(); break;
-                          case _AttachAction.canvas: break;
                         }
                       },
                     ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                    child: Divider(height: 1),
-                  ),
-                  _PopupRow<_AttachAction>(
-                    s: s,
-                    entry: entries[3],
-                    onTap: () { close(); onOpenCanvasPopup(); },
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                    child: Divider(height: 1),
-                  ),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: widgetsNotifier,
-                    builder: (_, enabled, __) => _WidgetsToggleRow(
-                      s: s,
-                      enabled: enabled,
-                      onChanged: (v) {
-                        widgetsNotifier.value = v;
-                        onToggleWidgets(v);
-                      },
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -2319,51 +2667,10 @@ void showAttachPopup(
   controller.forward();
 }
 
-// ── Linha "Widgets" com switch — não fecha o popup ao ser tocada,
-// apenas alterna o estado (o próprio Switch já intercepta o gesto). ──
-
-class _WidgetsToggleRow extends StatelessWidget {
-  final AppColorScheme s;
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-  const _WidgetsToggleRow({required this.s, required this.enabled, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(children: [
-        AppIcon('widgets.svg', size: 18, color: s.onSurface),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Widgets',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface)),
-              Text(
-                enabled ? 'Gráficos, mapas e cartões interativos' : 'Desativado',
-                style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
-        Transform.scale(
-          scale: 0.8,
-          child: Switch.adaptive(
-            value: enabled,
-            onChanged: onChanged,
-            activeColor: s.primary,
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
 // ══════════════════════════════════════════════════════════════
-// CANVAS SHEET — item 8: modal com todos os documentos/folhas/slides
-// criados nesta conversa, navegável verticalmente (swipe).
+// CANVAS SHEET — modal com todos os documentos/folhas/slides criados
+// nesta conversa, navegável verticalmente (swipe). Aberto agora a
+// partir da entrada "Canvas" no popup do appbar.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showCanvasSheet(
@@ -2606,145 +2913,4 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                 builder: (_, child) {
                   final scale = _recording
                       ? 1.0 + (_pulse.value * 0.12)
-                      : 1.0;
-                  return Transform.scale(scale: scale, child: child);
-                },
-                child: Container(
-                  width: 76, height: 76,
-                  decoration: BoxDecoration(
-                    color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: s.error, width: 1.5),
-                  ),
-                  child: Icon(
-                    _recording ? Icons.mic : Icons.mic_none,
-                    color: s.error,
-                    size: 30,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: _recording ? _stopAndTranscribe : null,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.primary,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _recording ? 'Concluir' : 'A processar...',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: s.onPrimary),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP — item 1: agora popup ancorado ao botão de
-// modelo, não modal de baixo. Modelos: V4 / V4 Pro / R1.
-// ══════════════════════════════════════════════════════════════
-
-void showModelSelectPopup(
-  BuildContext context,
-  AppColorScheme s, {
-  required GlobalKey anchorKey,
-  required AiModel current,
-  required ValueChanged<AiModel> onSelect,
-}) {
-  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
-  final off = box.localToGlobal(Offset.zero);
-  final sz = box.size;
-  final screenSize = MediaQuery.of(context).size;
-
-  late OverlayEntry entry;
-  final controller = AnimationController(
-    vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 200),
-  );
-
-  void close() {
-    controller.reverse().then((_) {
-      entry.remove();
-      controller.dispose();
-    });
-  }
-
-  entry = OverlayEntry(builder: (ctx) {
-    final width = 250.0;
-    final desiredTop = off.dy - 6 - 220;
-    final top = desiredTop < 40 ? null : desiredTop;
-    final bottom = desiredTop < 40 ? screenSize.height - off.dy + 6 : null;
-
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      Positioned(
-        top: top,
-        bottom: bottom,
-        left: off.dx,
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: top == null ? Alignment.bottomLeft : Alignment.topLeft,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: AiModel.values
-                    .map((m) => _PopupRow<AiModel>(
-                          s: s,
-                          entry: PopupMenuEntry(
-                            value: m,
-                            label: m.label,
-                            subtitle: m.description,
-                            selected: current == m,
-                          ),
-                          onTap: () { close(); onSelect(m); },
-                        ))
-                    .toList(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  });
-
-  Overlay.of(context).insert(entry);
-  controller.forward();
-}
+                      : 

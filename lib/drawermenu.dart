@@ -58,7 +58,7 @@ class SpringNav {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONVERSATION ITEM — agora espelha o payload real do worker
+// CONVERSATION ITEM — espelha o payload real do worker
 // (id, title, messages, pinned, archived, updatedAt).
 // ══════════════════════════════════════════════════════════════
 
@@ -185,6 +185,9 @@ class AppDrawer extends StatefulWidget {
   final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
   final VoidCallback? onNewChat;
+  /// Id da conversa atualmente aberta na AiTab (para desenhar a pill
+  /// de "ativa" no drawer, o mesmo padrão visual usado nos AppTab).
+  final String? activeConversationId;
 
   const AppDrawer({
     super.key,
@@ -195,6 +198,7 @@ class AppDrawer extends StatefulWidget {
     required this.onSelectTab,
     this.onOpenConversation,
     this.onNewChat,
+    this.activeConversationId,
   });
 
   @override
@@ -299,6 +303,13 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
         final v = details.primaryVelocity ?? 0;
         if (!_expanded && v < -200) widget.onClose();
       },
+      // A largura do drawer agora anima de facto para o ecrã inteiro
+      // quando `_expanded` é true — antes o AnimatedContainer já fazia
+      // isto corretamente, mas o botão expand.svg no header não estava
+      // a alternar o estado por causa do mesmo bug de gesto engolido
+      // corrigido abaixo em AppTap/GestureDetector; aqui garantimos
+      // também que o Container preenche a largura real do ecrã (sem
+      // clamping) para a expansão ficar visualmente completa.
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 260),
         curve: kCupertinoOut,
@@ -446,6 +457,7 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
               s: s,
               item: item,
               expanded: _expanded,
+              active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
               onOptions: (key) => _openConvPopup(context, key, item),
               onArchive: () => conversationsController.archive(item.id, true),
@@ -458,6 +470,7 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
             s: s,
             item: item,
             expanded: _expanded,
+            active: item.id == widget.activeConversationId,
             onTap: () => _openConversation(item),
             onOptions: (key) => _openConvPopup(context, key, item),
             onArchive: () => conversationsController.archive(item.id, true),
@@ -533,14 +546,18 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
   }
 }
 
-// ── Conversation tile — agora com popup de opções (long-press ou
-// botão dedicado) e, quando o drawer está expandido, swipe para
-// arquivar (direita) ou eliminar (esquerda). ─────────────────────
+// ── Conversation tile — sem ícone de opções visível (removido);
+// o popup de opções só surge com long-press na própria linha. Quando
+// a conversa é a ativa (aberta na AiTab), ganha uma pill de fundo,
+// exatamente como o AppTab selecionado (s.navIndicatorBg). Quando o
+// drawer está expandido, mantém o swipe para arquivar (direita) ou
+// eliminar (esquerda). ─────────────────────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool expanded;
+  final bool active;
   final VoidCallback onTap;
   final ValueChanged<GlobalKey> onOptions;
   final VoidCallback onArchive;
@@ -549,6 +566,7 @@ class _ConvTile extends StatefulWidget {
     required this.s,
     required this.item,
     required this.expanded,
+    required this.active,
     required this.onTap,
     required this.onOptions,
     required this.onArchive,
@@ -633,14 +651,23 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: _h ? s.hover : s.surface,
+                // Pill de "ativa" (mesmo tom usado pelo AppTab selecionado
+                // no drawer) sobrepõe o hover normal quando esta é a
+                // conversa aberta na AiTab.
+                color: widget.active
+                    ? s.navIndicatorBg
+                    : (_h ? s.hover : s.surface),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(widget.item.title,
-                        style: TextStyle(fontSize: 14, color: s.onSurface),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
+                          color: widget.active ? s.navLabelActive : s.onSurface,
+                        ),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     if (widget.item.preview.isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -654,13 +681,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
                   const SizedBox(width: 6),
                   AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
                 ],
-                const SizedBox(width: 4),
-                AppTap(
-                  onTap: () => widget.onOptions(_anchorKey),
-                  s: s,
-                  size: 28,
-                  child: AppIcon('more_filled.svg', color: s.onSurfaceVariant, size: 16),
-                ),
+                // Ícone de "mais opções" removido — o popup abre apenas
+                // com long-press na própria linha (onLongPress acima).
               ]),
             ),
           ),
@@ -671,7 +693,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
 }
 
 // ── Popup de opções de uma conversa (fixar / arquivar / eliminar) —
-// substitui o antigo bottom sheet, ancorado ao próprio item tocado. ──
+// ancorado ao próprio item long-pressionado, com fallback para abrir
+// para cima quando não há espaço suficiente por baixo. ──────────────
 
 void showConversationOptionsPopup(
   BuildContext context,
@@ -703,8 +726,9 @@ void showConversationOptionsPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const width = 232.0;
+    const estimatedHeight = 200.0;
     final desiredTop = off.dy + sz.height + 6;
-    final overflowsBottom = desiredTop + 190 > screenSize.height - 24;
+    final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
     final top = overflowsBottom ? null : desiredTop;
     final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
     final left = off.dx.clamp(12.0, screenSize.width - width - 12);
@@ -942,7 +966,9 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
 // ══════════════════════════════════════════════════════════════
 // CONVERSATION SEARCH SCREEN — aberta pelo botão search.svg no
 // header do drawer. Pesquisa por título e preview em todas as
-// conversas carregadas no ConversationsController.
+// conversas carregadas no ConversationsController. Tem sempre um
+// ícone de voltar (back.svg) no canto superior esquerdo, junto à
+// caixa de pesquisa, para fechar o ecrã e regressar ao drawer.
 // ══════════════════════════════════════════════════════════════
 
 class ConversationSearchScreen extends StatefulWidget {
@@ -1001,10 +1027,13 @@ class _ConversationSearchScreenState extends State<ConversationSearchScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
               child: Row(children: [
+                // Botão de voltar sempre presente — fecha esta tela e
+                // regressa ao drawer, independentemente de haver texto
+                // digitado ou não na pesquisa.
                 AppTap(
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () => Navigator.of(context).maybePop(),
                   s: s,
-                  child: AppIcon('chevron_left.svg', color: s.onSurface, size: 20),
+                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
                 ),
                 const SizedBox(width: 4),
                 Expanded(
@@ -1124,7 +1153,7 @@ class _SearchResultTileState extends State<_SearchResultTile> {
   }
 }
 
-// ── Account pill — agora com dados reais do authController ─────
+// ── Account pill — dados reais do authController ─────
 
 class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
@@ -1215,7 +1244,10 @@ Uint8List _decodeAvatar(String raw) {
   return base64Decode(b64);
 }
 
-// ── Botão que abre o popup de opções rápidas da conta ──────────
+// ── Botão que abre o popup de opções rápidas da conta. Corrigido o
+// mesmo bug de gesto engolido: o anchor visual (Container com ícone)
+// já não intercepta o toque sozinho — está embrulhado em IgnorePointer
+// e é o GestureDetector externo que trata sempre o _toggle(). ──────
 
 class _AccountQuickMenuButton extends StatefulWidget {
   final AppColorScheme s;
@@ -1231,6 +1263,7 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
+  final GlobalKey _anchorKey = GlobalKey();
 
   @override
   void initState() {
@@ -1245,7 +1278,7 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
-    final box = context.findRenderObject() as RenderBox;
+    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz  = box.size;
     _ac.forward(from: 0);
@@ -1335,17 +1368,20 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
 
   @override
   Widget build(BuildContext context) => GestureDetector(
+        key: _anchorKey,
         behavior: HitTestBehavior.opaque,
         onTap: _toggle,
-        child: Container(
-          width: 36, height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.s.hover,
-            shape: BoxShape.circle,
+        child: IgnorePointer(
+          child: Container(
+            width: 36, height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: widget.s.hover,
+              shape: BoxShape.circle,
+            ),
+            child: AppIcon('more_filled.svg',
+                color: widget.s.onSurfaceVariant, size: 18),
           ),
-          child: AppIcon('more_filled.svg',
-              color: widget.s.onSurfaceVariant, size: 18),
         ),
       );
 }
