@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:clipboard/clipboard.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'edittab.dart';
@@ -698,9 +699,9 @@ class _AiTabState extends State<AiTab> {
   }
 
   void _onBubbleCopy(int index) {
-    final msg = _msgs[index];
-    Clipboard.setData(ClipboardData(text: msg.content));
-  }
+  final msg = _msgs[index];
+  FlutterClipboard.copy(msg.content);
+}
 
   void _onBubbleDelete(int index) {
     setState(() => _msgs.removeAt(index));
