@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:record/record.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'edittab.dart';
@@ -553,9 +552,7 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// POPUP BASE — helper genérico para popups ancorados (fade+scale),
-// reaproveitado por anexar, ferramentas e selector de modelo,
-// evitando repetir a lógica de OverlayEntry em cada botão.
+// POPUP BASE — helper genérico para popups ancorados
 // ══════════════════════════════════════════════════════════════
 
 class _AnchoredPopupButton extends StatefulWidget {
@@ -563,13 +560,11 @@ class _AnchoredPopupButton extends StatefulWidget {
   final Widget Function(BuildContext, VoidCallback close) menuBuilder;
   final Widget child;
   final double width;
-  final Alignment anchor; // topRight, bottomLeft, bottomRight...
   const _AnchoredPopupButton({
     required this.s,
     required this.menuBuilder,
     required this.child,
     this.width = 240,
-    this.anchor = Alignment.bottomLeft,
   });
 
   @override
@@ -749,12 +744,10 @@ class _AttachMenuButton extends StatefulWidget {
 }
 
 class _AttachMenuButtonState extends State<_AttachMenuButton> {
-  final _key = GlobalKey<_AnchoredPopupButtonState>();
   late bool _webSearchOn = widget.webSearchOn;
 
   @override
   Widget build(BuildContext context) => _AnchoredPopupButton(
-        key: _key,
         s: widget.s,
         width: 240,
         menuBuilder: (ctx, close) => StatefulBuilder(
@@ -773,9 +766,6 @@ class _AttachMenuButtonState extends State<_AttachMenuButton> {
                 s: widget.s, icon: 'camera.svg', label: 'Câmera',
                 onTap: () { widget.onCamera(); close(); },
               ),
-              // Ferramentas — agora expande inline no próprio popup
-              // (submenu) em vez de abrir um segundo bottom sheet,
-              // mantendo tudo dentro de um único popup ancorado.
               ...EditorType.values.map((t) => _MenuOption(
                     s: widget.s,
                     icon: 'tools.svg',
@@ -892,8 +882,21 @@ class _ModelMenuButton extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// VOICE RECORD SHEET — ondas reagem à amplitude real do microfone
-// via package:record (AmplitudeListener em stream).
+// VOICE RECORD SHEET
+// ── SEM dependência de pacote de áudio nenhum (nem 'record', nem
+// qualquer outro): o projeto compila para Web via Render e o teu
+// pubspec.yaml não tinha 'record' instalado, o que causou a falha
+// de build reportada ("Compilation failed" no import de
+// package:record). Em vez de acrescentar mais uma dependência
+// nova (risco de build outra vez, especialmente em Web, onde nem
+// todo pacote de áudio tem suporte pleno), as ondas aqui são
+// puramente visuais: alturas geradas localmente por Timer, sem
+// captar o microfone real.
+// Se mais tarde quiseres ondas ligadas à amplitude REAL do som,
+// terás de correr `flutter pub add record` tu mesmo (ou escolher
+// outro pacote), confirmar que builda em Web, e então eu ligo o
+// stream de amplitude aqui — não posso adicionar essa dependência
+// sem essa confirmação prévia, para não repetir este erro.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -923,55 +926,44 @@ class _VoiceRecordSheetContent extends StatefulWidget {
 }
 
 class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent> {
-  final AudioRecorder _recorder = AudioRecorder();
-  StreamSubscription<Amplitude>? _ampSub;
-  Timer? _timer;
+  Timer? _clock;
+  Timer? _waveTimer;
   int _seconds = 0;
   bool _recording = true;
+  final math.Random _rnd = math.Random();
 
-  // Histórico curto de amplitudes normalizadas (0.0–1.0), usado
-  // para desenhar as barras da forma de onda.
+  // Histórico de "níveis" (0.0–1.0) só visual, suavizado para não
+  // saltar de forma brusca entre frames.
   final List<double> _levels = List.filled(28, 0.06);
 
   @override
   void initState() {
     super.initState();
-    _start();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _seconds++);
     });
-  }
-
-  Future<void> _start() async {
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) {
-      if (mounted) setState(() => _recording = false);
-      return;
-    }
-    await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc),
-      path: '', // TODO: definir path real de destino do ficheiro gravado.
-    );
-    // dB tipicamente entre -45 (silêncio) e 0 (pico). Normalizamos
-    // para 0.0–1.0 para desenhar a altura das barras.
-    _ampSub = _recorder
-        .onAmplitudeChanged(const Duration(milliseconds: 80))
-        .listen((amp) {
-      final normalized = ((amp.current + 45) / 45).clamp(0.0, 1.0);
-      if (mounted) {
-        setState(() {
-          _levels.removeAt(0);
-          _levels.add(math.max(0.06, normalized));
-        });
-      }
+    _waveTimer = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (!mounted || !_recording) return;
+      setState(() {
+        _levels.removeAt(0);
+        // Passeio aleatório suave em torno do último valor, com
+        // picos ocasionais — dá uma sensação orgânica sem ligação
+        // real ao som do utilizador.
+        final last = _levels.isNotEmpty ? _levels.last : 0.3;
+        final spike = _rnd.nextDouble() < 0.12
+            ? _rnd.nextDouble() * 0.5
+            : 0.0;
+        final next = (last + (_rnd.nextDouble() - 0.5) * 0.35 + spike)
+            .clamp(0.06, 1.0);
+        _levels.add(next);
+      });
     });
   }
 
   @override
   void dispose() {
-    _ampSub?.cancel();
-    _timer?.cancel();
-    _recorder.dispose();
+    _clock?.cancel();
+    _waveTimer?.cancel();
     super.dispose();
   }
 
@@ -981,10 +973,8 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent> {
     return '$m:$sec';
   }
 
-  void _stopAndTranscribe() async {
+  void _stopAndTranscribe() {
     setState(() => _recording = false);
-    await _ampSub?.cancel();
-    await _recorder.stop();
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) Navigator.pop(context);
     });
