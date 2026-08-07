@@ -147,7 +147,7 @@ enum ConversationAction { newChat, incognito, rename, delete }
 
 extension ConversationActionX on ConversationAction {
   String get svgAsset => const {
-        ConversationAction.newChat:   'plus.svg',
+        ConversationAction.newChat:   'newchat.svg',
         ConversationAction.incognito: 'incognito.svg',
         ConversationAction.rename:    'edit.svg',
         ConversationAction.delete:    'trash.svg',
