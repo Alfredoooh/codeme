@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'dart:convert';
@@ -24,11 +25,15 @@ extension AppTabX on AppTab {
         AppTab.projects:  'projects.svg',
       }[this]!;
 
+  // Ícones "filled" (usados quando o tab está ativo) agora são PNG,
+  // sem o sufixo "_filled" — mesmo nome-base do svg normal, extensão
+  // .png. AppIcon (widgets.dart) já sabe rotear .png para
+  // assets/icons/png/ automaticamente, sem tint aplicado.
   String get svgFilled => const {
-        AppTab.ai:        'ai_tab_filled.svg',
-        AppTab.edit:      'edit_tab_filled.svg',
-        AppTab.templates: 'templates_filled.svg',
-        AppTab.projects:  'projects_filled.svg',
+        AppTab.ai:        'ai_tab.png',
+        AppTab.edit:      'edit_tab.png',
+        AppTab.templates: 'templates.png',
+        AppTab.projects:  'projects.png',
       }[this]!;
 
   String get label => const {
@@ -187,6 +192,12 @@ class AppDrawer extends StatefulWidget {
   final VoidCallback? onNewChat;
   /// Id da conversa atualmente aberta na AiTab (para desenhar a pill
   /// de "ativa" no drawer, o mesmo padrão visual usado nos AppTab).
+  ///
+  /// ⚠️ Para a pill aparecer de facto, quem instancia AppDrawer (o
+  /// Scaffold/shell que abre este drawer) precisa passar aqui o id
+  /// da conversa atualmente aberta na AiTab. Se este parâmetro nunca
+  /// chegar preenchido, a pill nunca vai aparecer — a lógica de
+  /// desenho já está pronta em _ConvTile mais abaixo.
   final String? activeConversationId;
 
   const AppDrawer({
@@ -215,6 +226,12 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
 
   bool _expanded = false;
 
+  // Ancoragem do botão de pesquisa — usado para medir a posição/tamanho
+  // exatos do search.svg no header e nascer o container transform
+  // circular exatamente dali (e encolher de volta pro mesmo sítio
+  // quando a busca fecha).
+  final GlobalKey _searchAnchorKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -235,24 +252,22 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
   void _toggleExpanded() => setState(() => _expanded = !_expanded);
 
   void _openSearch(BuildContext context) {
-    Navigator.of(context).push(PageRouteBuilder(
-      opaque: false,
-      transitionDuration: const Duration(milliseconds: 260),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (_, __, ___) => ConversationSearchScreen(
+    final box = _searchAnchorKey.currentContext!.findRenderObject() as RenderBox;
+    final origin = box.localToGlobal(Offset.zero) & box.size;
+
+    Navigator.of(context).push(_ContainerTransformRoute(
+      origin: origin,
+      builder: (_) => ConversationSearchScreen(
         s: widget.s,
+        originRect: origin,
         onOpenConversation: (id) {
+          // Abre instantaneamente na AiTab: primeiro fecha o drawer
+          // inteiro (busca + drawer), só depois troca a conversa —
+          // assim não há transição visível de volta ao drawer antes
+          // do chat aparecer.
           widget.onOpenConversation?.call(id);
           widget.onClose();
         },
-      ),
-      transitionsBuilder: (_, anim, __, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.04), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim, curve: kCupertinoOut)),
-          child: child,
-        ),
       ),
     ));
   }
@@ -303,15 +318,14 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
         final v = details.primaryVelocity ?? 0;
         if (!_expanded && v < -200) widget.onClose();
       },
-      // A largura do drawer agora anima de facto para o ecrã inteiro
-      // quando `_expanded` é true — antes o AnimatedContainer já fazia
-      // isto corretamente, mas o botão expand.svg no header não estava
-      // a alternar o estado por causa do mesmo bug de gesto engolido
-      // corrigido abaixo em AppTap/GestureDetector; aqui garantimos
-      // também que o Container preenche a largura real do ecrã (sem
-      // clamping) para a expansão ficar visualmente completa.
+      // A expansão cobre o ecrã progressivamente a partir da direita:
+      // o Container mantém-se ancorado à esquerda (x=0) e só a largura
+      // cresce, então visualmente a borda direita "avança" e engole o
+      // resto do ecrã — exatamente o efeito pedido, sem precisar de
+      // clipping adicional porque o drawer já vive no topo da árvore
+      // visual (alinhado à esquerda).
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 260),
+        duration: const Duration(milliseconds: 320),
         curve: kCupertinoOut,
         width: _expanded ? screenWidth : 280,
         color: s.surface,
@@ -332,23 +346,32 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                         color: s.onSurface,
                       ),
                     ),
+                    // Grupo de ações do header: search + expand ficam
+                    // menores (16px, em linha com o tamanho geral dos
+                    // outros ícones da UI) e o Row já os empurra
+                    // naturalmente para a direita por estar dentro de
+                    // um spaceBetween — sem espaçamento extra a mais
+                    // entre eles para não "flutuarem" soltos.
                     Row(children: [
                       AppTap(
+                        key: _searchAnchorKey,
                         onTap: () => _openSearch(context),
                         s: s,
-                        child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 20),
+                        size: 32,
+                        child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 2),
                       AppTap(
                         onTap: _toggleExpanded,
                         s: s,
+                        size: 32,
                         child: AppIcon(
-                          _expanded ? 'decrease.svg' : 'expand.svg',
+                          _expanded ? 'shrink.svg' : 'expand.svg',
                           color: s.onSurfaceVariant,
-                          size: 20,
+                          size: 16,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 2),
                       AppTap(
                         onTap: () {
                           widget.onNewChat?.call();
@@ -527,8 +550,12 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
+          // Quando selecionado, usa o ícone PNG "filled" (já colorido
+          // de fábrica — sem tint, useColorAsset não se aplica a PNG
+          // mas mantemos por clareza semântica e para o dia em que
+          // este mesmo asset volte a ser SVG).
           sel
-              ? AppIcon(widget.tab.svg,
+              ? AppIcon(widget.tab.svgFilled,
                   color: s.onSurface, size: 20, useColorAsset: true)
               : AppIcon(widget.tab.svg, color: s.onSurfaceVariant, size: 20),
           const SizedBox(width: 12),
@@ -550,8 +577,10 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
 // o popup de opções só surge com long-press na própria linha. Quando
 // a conversa é a ativa (aberta na AiTab), ganha uma pill de fundo,
 // exatamente como o AppTab selecionado (s.navIndicatorBg). Quando o
-// drawer está expandido, mantém o swipe para arquivar (direita) ou
-// eliminar (esquerda). ─────────────────────────────────────────────
+// drawer está expandido, ganha swipe no estilo mais reconhecido
+// (Gmail/WhatsApp): arrastar para a ESQUERDA revela eliminar
+// (vermelho), arrastar para a DIREITA revela arquivar (cor primária).
+// ─────────────────────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -594,6 +623,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
       setState(() => _dragDx = 0);
       return;
     }
+    // Esquerda (dx negativo) = eliminar · Direita (dx positivo) = arquivar
+    // — este é o padrão mais reconhecido (Gmail, WhatsApp).
     if (_dragDx <= -_threshold) {
       setState(() => _resolved = true);
       widget.onDelete();
@@ -653,7 +684,10 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
               decoration: BoxDecoration(
                 // Pill de "ativa" (mesmo tom usado pelo AppTab selecionado
                 // no drawer) sobrepõe o hover normal quando esta é a
-                // conversa aberta na AiTab.
+                // conversa aberta na AiTab. Depende de widget.active vir
+                // true, que depende de AppDrawer.activeConversationId
+                // estar preenchido por quem chama o drawer (ver nota em
+                // AppDrawer acima).
                 color: widget.active
                     ? s.navIndicatorBg
                     : (_h ? s.hover : s.surface),
@@ -964,20 +998,93 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
 }
 
 // ══════════════════════════════════════════════════════════════
+// CONTAINER TRANSFORM ROUTE — a tela de pesquisa nasce visualmente
+// de um círculo pequeno na posição exata do botão search.svg e
+// cresce (clipOval animado) até cobrir o drawer inteiro. No fecho,
+// a mesma rota faz o inverso: encolhe de volta para o mesmo ponto.
+// O raio final é calculado para o círculo cobrir todo o retângulo
+// do drawer a partir do centro do botão de origem (distância até o
+// canto mais afastado), garantindo que nenhuma borda fica descoberta.
+// ══════════════════════════════════════════════════════════════
+
+class _ContainerTransformRoute extends PageRouteBuilder {
+  final Rect origin;
+  final WidgetBuilder builder;
+
+  _ContainerTransformRoute({required this.origin, required this.builder})
+      : super(
+          opaque: false,
+          barrierColor: Colors.transparent,
+          transitionDuration: const Duration(milliseconds: 380),
+          reverseTransitionDuration: const Duration(milliseconds: 300),
+          pageBuilder: (context, animation, secondaryAnimation) {
+            final screen = MediaQuery.of(context).size;
+            final center = origin.center;
+
+            // Maior distância do centro de origem a qualquer canto do
+            // ecrã — garante que o círculo, ao atingir esse raio, cobre
+            // a área inteira sem deixar canto descoberto.
+            final corners = [
+              Offset.zero,
+              Offset(screen.width, 0),
+              Offset(0, screen.height),
+              Offset(screen.width, screen.height),
+            ];
+            final maxRadius = corners
+                .map((c) => (c - center).distance)
+                .reduce(math.max);
+            final minRadius = origin.shortestSide / 2;
+
+            final curved = CurvedAnimation(parent: animation, curve: kCupertinoOut);
+            final radius = Tween<double>(begin: minRadius, end: maxRadius)
+                .animate(curved);
+
+            return AnimatedBuilder(
+              animation: radius,
+              builder: (context, child) => ClipPath(
+                clipper: _CircleRevealClipper(center: center, radius: radius.value),
+                child: child,
+              ),
+              child: builder(context),
+            );
+          },
+        );
+}
+
+class _CircleRevealClipper extends CustomClipper<Path> {
+  final Offset center;
+  final double radius;
+  _CircleRevealClipper({required this.center, required this.radius});
+
+  @override
+  Path getClip(Size size) => Path()
+    ..addOval(Rect.fromCircle(center: center, radius: radius));
+
+  @override
+  bool shouldReclip(covariant _CircleRevealClipper oldClipper) =>
+      oldClipper.center != center || oldClipper.radius != radius;
+}
+
+// ══════════════════════════════════════════════════════════════
 // CONVERSATION SEARCH SCREEN — aberta pelo botão search.svg no
-// header do drawer. Pesquisa por título e preview em todas as
-// conversas carregadas no ConversationsController. Tem sempre um
-// ícone de voltar (back.svg) no canto superior esquerdo, junto à
-// caixa de pesquisa, para fechar o ecrã e regressar ao drawer.
+// header do drawer via container transform (ver _ContainerTransformRoute
+// acima). O botão de voltar fica na MESMA posição/tamanho que o
+// search.svg de origem (originRect), para que Navigator.pop() dispare
+// o clipOval inverso a partir exatamente desse ponto, devolvendo o
+// utilizador ao drawer — nunca diretamente ao chat.
 // ══════════════════════════════════════════════════════════════
 
 class ConversationSearchScreen extends StatefulWidget {
   final AppColorScheme s;
   final ValueChanged<String> onOpenConversation;
+  /// Posição/tamanho do botão search.svg no drawer — usado para
+  /// posicionar o botão de voltar exatamente no mesmo lugar.
+  final Rect originRect;
   const ConversationSearchScreen({
     super.key,
     required this.s,
     required this.onOpenConversation,
+    required this.originRect,
   });
 
   @override
@@ -1017,6 +1124,7 @@ class _ConversationSearchScreenState extends State<ConversationSearchScreen> {
   Widget build(BuildContext context) {
     final s = widget.s;
     final results = _results;
+    final origin = widget.originRect;
 
     return Material(
       color: s.surface,
@@ -1027,13 +1135,20 @@ class _ConversationSearchScreenState extends State<ConversationSearchScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
               child: Row(children: [
-                // Botão de voltar sempre presente — fecha esta tela e
-                // regressa ao drawer, independentemente de haver texto
-                // digitado ou não na pesquisa.
-                AppTap(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  s: s,
-                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                // Botão de voltar posicionado com o MESMO tamanho do
+                // search.svg de origem (originRect.height), para o
+                // clipOval reverso nascer/morrer exatamente aqui —
+                // é este toque que aciona Navigator.pop(), portanto é
+                // aqui, e não noutro sítio, que o fecho tem de ocorrer.
+                SizedBox(
+                  width: origin.height,
+                  height: origin.height,
+                  child: AppTap(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    s: s,
+                    size: origin.height,
+                    child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 Expanded(
