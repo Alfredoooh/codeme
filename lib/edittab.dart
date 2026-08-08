@@ -5,7 +5,7 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'sheets.dart';
 import 'api_service.dart';
-import 'aitab.dart' show LocalCanvasItem, LocalCanvasKind;
+import 'aitab.dart' show LocalCanvasItem, LocalCanvasKind, LocalCanvasKindX;
 
 // ══════════════════════════════════════════════════════════════
 // EDITOR TYPE ENUM
