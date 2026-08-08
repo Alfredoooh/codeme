@@ -5,6 +5,7 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'sheets.dart';
 import 'api_service.dart';
+import 'aitab.dart' show LocalCanvasItem, LocalCanvasKind;
 
 // ══════════════════════════════════════════════════════════════
 // EDITOR TYPE ENUM
@@ -45,23 +46,38 @@ extension EditorTypeX on EditorType {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TAB CONTROLLER — permite que widgets fora do EditTab (ex:
-// o Canvas Popup na AiTab) mandem carregar um CanvasItem específico
-// dentro do WebView certo, sem acoplar EditTab ao AiTab diretamente.
+// EDIT TAB CONTROLLER — agora suporta dois tipos de pedido de carga:
+// o antigo CanvasItem (vindo de api_service.dart, usado noutros
+// pontos da app se existirem) e o novo LocalCanvasItem (vindo da
+// AiTab, que inclui também blocos de código genéricos tratados como
+// "documento" — ponto 6/7 do pedido).
 // ══════════════════════════════════════════════════════════════
 
 class EditTabController extends ChangeNotifier {
   CanvasItem? _pendingLoad;
+  LocalCanvasItem? _pendingLocalLoad;
 
   CanvasItem? get pendingLoad => _pendingLoad;
+  LocalCanvasItem? get pendingLocalLoad => _pendingLocalLoad;
 
   void requestLoad(CanvasItem item) {
     _pendingLoad = item;
+    _pendingLocalLoad = null;
+    notifyListeners();
+  }
+
+  void requestLoadLocal(LocalCanvasItem item) {
+    _pendingLocalLoad = item;
+    _pendingLoad = null;
     notifyListeners();
   }
 
   void consumePendingLoad() {
     _pendingLoad = null;
+  }
+
+  void consumePendingLocalLoad() {
+    _pendingLocalLoad = null;
   }
 }
 
@@ -86,8 +102,6 @@ class _EditTabState extends State<EditTab> {
   void initState() {
     super.initState();
     editTabController.addListener(_onPendingLoad);
-    // Se já houver um pedido pendente (ex: navegou-se para esta tab
-    // exatamente por causa de um clique no canvas popup), processa já.
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingLoad());
   }
 
@@ -99,20 +113,62 @@ class _EditTabState extends State<EditTab> {
 
   void _onPendingLoad() {
     final pending = editTabController.pendingLoad;
-    if (pending == null) return;
-    final targetType = EditorTypeX.fromCanvasKind(pending.kind);
-    final ctrl = _controllers[targetType];
-    if (ctrl == null) return; // WebView ainda não foi criado — tenta de novo ao criar
-    _injectCanvas(ctrl, pending);
-    editTabController.consumePendingLoad();
+    if (pending != null) {
+      final targetType = EditorTypeX.fromCanvasKind(pending.kind);
+      final ctrl = _controllers[targetType];
+      if (ctrl != null) {
+        _injectCanvas(ctrl, pending.content);
+        editTabController.consumePendingLoad();
+      }
+    }
+
+    final pendingLocal = editTabController.pendingLocalLoad;
+    if (pendingLocal != null) {
+      final targetType = pendingLocal.kind.editorType;
+      final ctrl = _controllers[targetType];
+      if (ctrl != null) {
+        _injectLocalCanvas(ctrl, pendingLocal);
+        editTabController.consumePendingLocalLoad();
+      }
+    }
   }
 
-  void _injectCanvas(InAppWebViewController ctrl, CanvasItem item) {
-    final escaped = item.content
+  void _injectCanvas(InAppWebViewController ctrl, String content) {
+    final escaped = content
         .replaceAll('\\', '\\\\')
         .replaceAll("'", "\\'")
         .replaceAll('\n', '\\n');
     ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
+  }
+
+  /// Injeta um LocalCanvasItem no editor certo. Blocos de código
+  /// (LocalCanvasKind.code) são envolvidos num <pre><code> simples
+  /// antes de irem para o editor de documentos, para ficarem
+  /// legíveis/monoespaçados dentro do docs.html — ponto 6/7.
+  void _injectLocalCanvas(InAppWebViewController ctrl, LocalCanvasItem item) {
+    String htmlContent;
+    switch (item.kind) {
+      case LocalCanvasKind.code:
+        final escapedCode = item.content
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;');
+        htmlContent = '<pre style="font-family:monospace;white-space:pre-wrap;background:#f4f4f4;padding:12px;border-radius:8px;">$escapedCode</pre>';
+        break;
+      case LocalCanvasKind.doc:
+        htmlContent = item.content;
+        break;
+      case LocalCanvasKind.sheet:
+      case LocalCanvasKind.slide:
+      case LocalCanvasKind.whiteboard:
+        // Conteúdo JSON cru — o próprio editor (sheets.html/slides.html/
+        // whiteboard.html) é responsável por interpretar via a mesma
+        // editorApi.setContent, exatamente como já fazia para
+        // CanvasItem.content antes desta alteração.
+        htmlContent = item.content;
+        break;
+    }
+    _injectCanvas(ctrl, htmlContent);
   }
 
   void _runJs(String script) =>
@@ -173,7 +229,8 @@ class _EditTabState extends State<EditTab> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TYPE BUTTON (dropdown no header)
+// EDIT TYPE BUTTON (dropdown no header) — posição corrigida
+// (ponto 2, mesma lógica de fallback simétrico usada em aitab.dart).
 // ══════════════════════════════════════════════════════════════
 
 class EditTypeButton extends StatefulWidget {
@@ -189,6 +246,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
+  final GlobalKey _anchorBoxKey = GlobalKey();
 
   @override
   void initState() {
@@ -203,13 +261,21 @@ class _EditTypeButtonState extends State<EditTypeButton>
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
-    final box = context.findRenderObject() as RenderBox;
+    final box = _anchorBoxKey.currentContext!.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz  = box.size;
     _ac.forward(from: 0);
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
+      final screenSize = MediaQuery.of(ctx).size;
+      const estimatedHeight = 200.0;
+      final desiredTop = off.dy + sz.height + 6;
+      final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
+      final top = overflowsBottom ? null : desiredTop;
+      final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
+      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - 220 - 12);
+
       return Stack(children: [
         Positioned.fill(
           child: GestureDetector(
@@ -219,8 +285,9 @@ class _EditTypeButtonState extends State<EditTypeButton>
           ),
         ),
         Positioned(
-          top: off.dy + sz.height + 6,
-          right: MediaQuery.of(ctx).size.width - off.dx - sz.width,
+          top: top,
+          bottom: bottom,
+          right: right,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -232,7 +299,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 scale: Tween(begin: 0.92, end: 1.0)
                     .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
                     .value,
-                alignment: Alignment.topRight,
+                alignment: overflowsBottom ? Alignment.bottomRight : Alignment.topRight,
                 child: child,
               ),
             ),
@@ -242,7 +309,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 width: 220,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: s.isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  color: s.floatingSurface,
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: s.floatingShadow,
                 ),
@@ -276,11 +343,18 @@ class _EditTypeButtonState extends State<EditTypeButton>
   }
 
   @override
-  Widget build(BuildContext context) => AppTap(
+  Widget build(BuildContext context) => GestureDetector(
+        key: _anchorBoxKey,
+        behavior: HitTestBehavior.opaque,
         onTap: _toggle,
-        s: widget.s,
-        size: 36,
-        child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+        child: IgnorePointer(
+          child: AppTap(
+            onTap: () {},
+            s: widget.s,
+            size: 36,
+            child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+          ),
+        ),
       );
 }
 

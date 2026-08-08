@@ -2,6 +2,7 @@
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,8 +15,7 @@ import 'auth_service.dart';
 import 'aiwidgets.dart';
 
 // ══════════════════════════════════════════════════════════════
-// AI MODEL — deepseek v4 / v4 pro / R1, ligados aos providers reais
-// do worker (gemini / groq) via kProviderMap em api_service.dart
+// AI MODEL
 // ══════════════════════════════════════════════════════════════
 
 enum AiModel { deepseekV4, deepseekV4Pro, deepseekR1 }
@@ -49,13 +49,7 @@ extension AiModelX on AiModel {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SYSTEM PROMPT — pede formatação rica e ensina a IA a usar o
-// protocolo de canvas, agora incluindo cor de texto e destaque
-// (highlight) via comandos editorApi.setColor / editorApi.setHighlight
-// no documento HTML gerado. kAiWidgetsInstructions é anexado condicio-
-// nalmente quando o switch de Widgets está ativo (ver AiTabState).
-// kAiWebSearchInstructions é anexado condicionalmente quando o switch
-// de Pesquisar Web está ativo.
+// SYSTEM PROMPT
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
@@ -88,7 +82,9 @@ aplicação e transformado num cartão de documento navegável.
 
 Blocos de código normais (```dart, ```python, ```js, etc.) são sempre bem-vindos
 sempre que ajudarem a explicar algo técnico, independentemente de qualquer outra
-funcionalidade estar ativa.
+funcionalidade estar ativa. Estes blocos também são transformados automaticamente
+num cartão navegável, exatamente como os documentos — não precisas de os embrulhar
+em canvas separadamente, um bloco de código normal já basta.
 ''';
 
 const String kAiWidgetsInstructions = '''
@@ -100,7 +96,6 @@ contendo APENAS um objeto JSON válido no corpo do bloco:
 - ```widget_table``` — { "headers": ["Col1","Col2"], "rows": [["a","b"]] }
 - ```widget_bar``` — { "data": [{"label":"Jan","value":10,"unit":"","color":"#6F5AF6"}] }
 - ```widget_pie``` — { "data": [{"label":"A","value":30,"color":"#2F80ED"}] }
-- ```widget_code``` — { "language": "python", "code": "print('hi')" } (só usa isto em vez de um bloco de código normal se quiseres o cartão com botão de copiar dedicado; blocos de código normais já funcionam sempre)
 - ```widget_sheet``` — { "lines": [{"text":"Título","title":true},{"text":"linha normal"}] }
 - ```widget_market``` — { "type": "crypto", "symbol": "BTC", "name": "Bitcoin" } ou { "type": "forex", "symbol": "USDEUR" }
 - ```widget_calendar``` — { "events": [{"date":"2026-08-10","name":"Reunião","time":"14:00","color":"#6F5AF6"}] }
@@ -109,6 +104,7 @@ contendo APENAS um objeto JSON válido no corpo do bloco:
 - ```widget_graph``` — { "expression": "sin(x)", "xMin": -10, "xMax": 10 }
 - ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
 
+Não uses widget_code — blocos de código normais já viram cartões automaticamente.
 Usa estes widgets apenas quando acrescentam valor real à resposta (dados
 quantitativos, comparações visuais, localização, tempo), nunca como enfeite.
 Nunca expliques ao utilizador que estás a gerar um bloco widget — ele é
@@ -126,21 +122,113 @@ sobre a fonte de forma natural no texto.
 ''';
 
 // ══════════════════════════════════════════════════════════════
-// TEXT CLEANUP — agora preserva markdown estrutural (negrito, listas,
-// tabelas, títulos) para o MarkdownBody renderizar; só limpa artefactos
-// que não fazem sentido dentro de uma bolha de chat.
+// TEXT CLEANUP
 // ══════════════════════════════════════════════════════════════
 
 String cleanAiText(String raw) {
   var t = raw;
-  // Remove blocos de canvas residuais que não tenham sido apanhados pelo
-  // parser (ex: streaming interrompido) para nunca vazarem para a bolha.
   t = t.replaceAll(RegExp(r'\[\[canvas:[\s\S]*?\]\]'), '');
   return t.trim();
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONVERSATION MENU (popup — mesmo padrão do EditTypeButton)
+// LOCAL CANVAS — item 6/7 do pedido. Guarda QUALQUER conteúdo que
+// deva abrir no EditTab: tanto os blocos [[canvas:...]] explícitos
+// (doc/sheet/slide/whiteboard) como blocos de código genéricos
+// (```dart, ```python, etc — exceto widget_*), que também passam a
+// ser tratados como "documentos" navegáveis a partir do popup Canvas.
+// Isto é local ao aitab.dart, não depende de CanvasKind vindo de
+// api_service.dart, para não precisar de alterar esse ficheiro.
+// ══════════════════════════════════════════════════════════════
+
+enum LocalCanvasKind { doc, sheet, slide, whiteboard, code }
+
+extension LocalCanvasKindX on LocalCanvasKind {
+  EditorType get editorType {
+    switch (this) {
+      case LocalCanvasKind.sheet:      return EditorType.sheets;
+      case LocalCanvasKind.slide:      return EditorType.slides;
+      case LocalCanvasKind.whiteboard: return EditorType.whiteboard;
+      case LocalCanvasKind.doc:        return EditorType.docs;
+      case LocalCanvasKind.code:       return EditorType.docs;
+    }
+  }
+}
+
+class LocalCanvasItem {
+  final String id;
+  final LocalCanvasKind kind;
+  final String title;
+  final String content; // HTML para doc/code; JSON cru para sheet/slide
+  const LocalCanvasItem({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.content,
+  });
+}
+
+/// Resultado de um parse de streaming: texto limpo (sem os blocos de
+/// canvas/código consumidos) + lista de itens de canvas encontrados,
+/// na ordem em que apareceram.
+class _CanvasScanResult {
+  final String cleanText;
+  final List<LocalCanvasItem> items;
+  const _CanvasScanResult({required this.cleanText, required this.items});
+}
+
+final RegExp _kExplicitCanvasRe = RegExp(
+  r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
+);
+
+// Bloco de código genérico ```lang\n...\n``` — exclui explicitamente
+// qualquer linguagem widget_* (essas são widgets, não canvas).
+final RegExp _kGenericCodeRe = RegExp(
+  r'```(?!widget_)([a-zA-Z0-9_+-]*)\s*\n([\s\S]*?)```',
+);
+
+_CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
+  final items = <LocalCanvasItem>[];
+
+  // 1) blocos [[canvas:...]] explícitos
+  var text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
+    final kindStr = m.group(1)!;
+    final title = m.group(2)!.trim();
+    final content = m.group(3)!;
+    final kind = switch (kindStr) {
+      'sheet' => LocalCanvasKind.sheet,
+      'slide' => LocalCanvasKind.slide,
+      'whiteboard' => LocalCanvasKind.whiteboard,
+      _ => LocalCanvasKind.doc,
+    };
+    items.add(LocalCanvasItem(
+      id: idGen(),
+      kind: kind,
+      title: title.isEmpty ? 'Documento' : title,
+      content: content,
+    ));
+    return '';
+  });
+
+  // 2) blocos de código genéricos (não widget_*) — também viram canvas
+  text = text.replaceAllMapped(_kGenericCodeRe, (m) {
+    final lang = m.group(1)!.trim();
+    final code = m.group(2)!;
+    final label = lang.isEmpty ? 'Código' : lang;
+    items.add(LocalCanvasItem(
+      id: idGen(),
+      kind: LocalCanvasKind.code,
+      title: 'Código ($label)',
+      content: code,
+    ));
+    return '';
+  });
+
+  return _CanvasScanResult(cleanText: text.trim(), items: items);
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONVERSATION MENU
 // ══════════════════════════════════════════════════════════════
 
 enum ConversationAction { newChat, incognito, rename, delete }
@@ -161,24 +249,19 @@ extension ConversationActionX on ConversationAction {
       }[this]!;
 }
 
-/// Popup unificado — substitui os antigos modais (attach/model/message
-/// actions) por um único padrão de popup ancorado, igual ao usado em
-/// EditTypeButton e AiConversationMenuButton.
-///
-/// O anchor é embrulhado num GestureDetector interno próprio (em vez de
-/// depender de um widget filho no-op) para garantir que o toque É sempre
-/// capturado e chama toggle(), independentemente do que o chamador passe
-/// como `anchor`. Isto corrige o bug em que o popup nunca abria porque o
-/// filho (ex: AppTap com onTap vazio) engolia o gesto antes de chegar ao
-/// GestureDetector externo.
+/// Popup unificado. O anchor é sempre envolto em IgnorePointer, e é o
+/// GestureDetector externo que trata o toque — isto evita o bug de
+/// popups que nunca abriam. A posição é sempre calculada com uma
+/// altura estimada real do conteúdo e um fallback simétrico topo/baixo
+/// (nunca mais salta para o centro do ecrã nem foge do ponto tocado —
+/// item 2 do pedido).
 class PopupMenu<T> extends StatefulWidget {
   final AppColorScheme s;
   final Widget anchor;
-  final double anchorSize;
   final List<PopupMenuEntry<T>> entries;
   final ValueChanged<T> onSelect;
   final double width;
-  final Alignment alignFrom; // topRight (abre para baixo) ou bottomRight (abre para cima)
+  final double estimatedHeight;
 
   const PopupMenu({
     super.key,
@@ -186,9 +269,8 @@ class PopupMenu<T> extends StatefulWidget {
     required this.anchor,
     required this.entries,
     required this.onSelect,
-    this.anchorSize = 36,
     this.width = 240,
-    this.alignFrom = Alignment.topRight,
+    this.estimatedHeight = 200,
   });
 
   @override
@@ -240,11 +322,16 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
     final sz  = box.size;
     _ac.forward(from: 0);
 
-    final opensUp = widget.alignFrom == Alignment.bottomRight;
-
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
       final screenSize = MediaQuery.of(ctx).size;
+      final desiredTop = off.dy + sz.height + 6;
+      final overflowsBottom = desiredTop + widget.estimatedHeight > screenSize.height - 24;
+      final opensUp = overflowsBottom;
+      final top = opensUp ? null : desiredTop;
+      final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
+      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - widget.width - 12);
+
       return Stack(children: [
         Positioned.fill(
           child: GestureDetector(
@@ -254,9 +341,9 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
           ),
         ),
         Positioned(
-          top: opensUp ? null : off.dy + sz.height + 6,
-          bottom: opensUp ? screenSize.height - off.dy + 6 : null,
-          right: (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - widget.width - 12),
+          top: top,
+          bottom: bottom,
+          right: right,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -400,13 +487,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON — usa PopupMenu genérico. O bug em que
-// o popup nunca abria (anchor AppTap com onTap vazio a engolir o
-// toque) foi corrigido dentro do próprio PopupMenu acima: agora o
-// anchor visual é sempre envolto em IgnorePointer, e é o
-// GestureDetector do PopupMenu que trata o toque, sempre.
-// "Canvas" está sempre presente no popup (não depende de contagem),
-// e "Pesquisar web" replica o padrão settings: ícone + AppSwitch.
+// AI CONVERSATION MENU BUTTON — header do appbar (ponto 2/4/6).
 // ══════════════════════════════════════════════════════════════
 
 class AiConversationMenuButton extends StatelessWidget {
@@ -449,12 +530,6 @@ class AiConversationMenuButton extends StatelessWidget {
   }
 }
 
-/// Implementação própria (em vez de PopupMenu<T> genérico) porque este
-/// popup específico mistura linhas de ação normais com duas linhas de
-/// switch (Pesquisar web / Widgets) e uma linha "Canvas" com contador
-/// dinâmico — conteúdo que o PopupMenuEntry simples não modela bem.
-/// Segue exatamente o mesmo padrão visual/animação/ancoragem do
-/// PopupMenu acima para manter consistência.
 class _HeaderMenuButton extends StatefulWidget {
   final AppColorScheme s;
   final bool hasMessages;
@@ -500,6 +575,18 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   }
 
   @override
+  void didUpdateWidget(covariant _HeaderMenuButton old) {
+    super.didUpdateWidget(old);
+    // Mantém os notifiers do popup sincronizados se o estado externo
+    // mudar enquanto o popup NÃO está aberto (ex: outra fonte alterou
+    // o switch). Enquanto está aberto, _open() já sincroniza no início.
+    if (_ov == null) {
+      _webNotifier.value = widget.webSearchEnabled;
+      _widgetsNotifier.value = widget.widgetsEnabled;
+    }
+  }
+
+  @override
   void dispose() {
     _ac.dispose();
     _ov?.remove();
@@ -522,6 +609,13 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
       final s = widget.s;
       final screenSize = MediaQuery.of(ctx).size;
       const width = 260.0;
+      const estimatedHeight = 400.0;
+
+      final desiredTop = off.dy + sz.height + 6;
+      final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
+      final top = overflowsBottom ? null : desiredTop;
+      final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
+      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - width - 12);
 
       return Stack(children: [
         Positioned.fill(
@@ -532,8 +626,9 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
           ),
         ),
         Positioned(
-          top: off.dy + sz.height + 6,
-          right: (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - width - 12),
+          top: top,
+          bottom: bottom,
+          right: right,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -545,100 +640,104 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                 scale: Tween(begin: 0.92, end: 1.0)
                     .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
                     .value,
-                alignment: Alignment.topRight,
+                alignment: overflowsBottom ? Alignment.bottomRight : Alignment.topRight,
                 child: child,
               ),
             ),
             child: Material(
               type: MaterialType.transparency,
-              child: Container(
-                width: width,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: s.floatingShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _MenuActionRow(
-                      s: s,
-                      icon: ConversationAction.newChat.svgAsset,
-                      label: ConversationAction.newChat.label,
-                      onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: screenSize.height * 0.7),
+                child: SingleChildScrollView(
+                  child: Container(
+                    width: width,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: s.floatingSurface,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: s.floatingShadow,
                     ),
-                    _MenuActionRow(
-                      s: s,
-                      icon: ConversationAction.incognito.svgAsset,
-                      label: ConversationAction.incognito.label,
-                      disabled: widget.hasMessages,
-                      onTap: () {
-                        if (widget.hasMessages) return;
-                        _close();
-                        widget.onSelect(ConversationAction.incognito);
-                      },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _MenuActionRow(
+                          s: s,
+                          icon: ConversationAction.newChat.svgAsset,
+                          label: ConversationAction.newChat.label,
+                          onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
+                        ),
+                        _MenuActionRow(
+                          s: s,
+                          icon: ConversationAction.incognito.svgAsset,
+                          label: ConversationAction.incognito.label,
+                          disabled: widget.hasMessages,
+                          onTap: () {
+                            if (widget.hasMessages) return;
+                            _close();
+                            widget.onSelect(ConversationAction.incognito);
+                          },
+                        ),
+                        _MenuActionRow(
+                          s: s,
+                          icon: ConversationAction.rename.svgAsset,
+                          label: ConversationAction.rename.label,
+                          onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
+                        ),
+                        _MenuActionRow(
+                          s: s,
+                          icon: ConversationAction.delete.svgAsset,
+                          label: ConversationAction.delete.label,
+                          destructive: true,
+                          onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          child: Divider(height: 1),
+                        ),
+                        _MenuActionRow(
+                          s: s,
+                          icon: 'cards.svg',
+                          label: 'Canvas',
+                          subtitle: widget.canvasCount == 0
+                              ? 'Ainda sem documentos'
+                              : '${widget.canvasCount} documento${widget.canvasCount == 1 ? '' : 's'} nesta conversa',
+                          onTap: () { _close(); widget.onOpenCanvas(); },
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          child: Divider(height: 1),
+                        ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: _webNotifier,
+                          builder: (_, enabled, __) => _MenuSwitchRow(
+                            s: s,
+                            icon: 'globe.svg',
+                            label: 'Pesquisar web',
+                            subtitle: enabled ? 'Ativado' : 'Desativado',
+                            value: enabled,
+                            onChanged: (v) {
+                              _webNotifier.value = v;
+                              widget.onToggleWebSearch(v);
+                            },
+                          ),
+                        ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: _widgetsNotifier,
+                          builder: (_, enabled, __) => _MenuSwitchRow(
+                            s: s,
+                            icon: 'widgets.svg',
+                            label: 'Widgets',
+                            subtitle: enabled ? 'Gráficos, mapas e cartões' : 'Desativado',
+                            value: enabled,
+                            onChanged: (v) {
+                              _widgetsNotifier.value = v;
+                              widget.onToggleWidgets(v);
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    _MenuActionRow(
-                      s: s,
-                      icon: ConversationAction.rename.svgAsset,
-                      label: ConversationAction.rename.label,
-                      onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
-                    ),
-                    _MenuActionRow(
-                      s: s,
-                      icon: ConversationAction.delete.svgAsset,
-                      label: ConversationAction.delete.label,
-                      destructive: true,
-                      onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      child: Divider(height: 1),
-                    ),
-                    // Item permanente — não depende de canvasCount > 0.
-                    _MenuActionRow(
-                      s: s,
-                      icon: 'cards.svg',
-                      label: 'Canvas',
-                      subtitle: widget.canvasCount == 0
-                          ? 'Ainda sem documentos'
-                          : '${widget.canvasCount} documento${widget.canvasCount == 1 ? '' : 's'} nesta conversa',
-                      onTap: () { _close(); widget.onOpenCanvas(); },
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      child: Divider(height: 1),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: _webNotifier,
-                      builder: (_, enabled, __) => _MenuSwitchRow(
-                        s: s,
-                        icon: 'globe.svg',
-                        label: 'Pesquisar web',
-                        subtitle: enabled ? 'Ativado' : 'Desativado',
-                        value: enabled,
-                        onChanged: (v) {
-                          _webNotifier.value = v;
-                          widget.onToggleWebSearch(v);
-                        },
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: _widgetsNotifier,
-                      builder: (_, enabled, __) => _MenuSwitchRow(
-                        s: s,
-                        icon: 'widgets.svg',
-                        label: 'Widgets',
-                        subtitle: enabled ? 'Gráficos, mapas e cartões' : 'Desativado',
-                        value: enabled,
-                        onChanged: (v) {
-                          _widgetsNotifier.value = v;
-                          widget.onToggleWidgets(v);
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -741,9 +840,6 @@ class _MenuActionRowState extends State<_MenuActionRow> {
   }
 }
 
-/// Linha com switch — mesmo padrão visual do toggle "Modo escuro" em
-/// settingsscreen.dart (AppSwitch), em vez do Switch.adaptive genérico
-/// que destoava do resto da app.
 class _MenuSwitchRow extends StatelessWidget {
   final AppColorScheme s;
   final String icon;
@@ -790,11 +886,14 @@ class _MenuSwitchRow extends StatelessWidget {
 
 class AiTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
-  /// Conversa a carregar de imediato (ex: aberta a partir do drawer).
   final String? initialConversationId;
   final ConversationAction? externalAction;
   final VoidCallback? onExternalActionConsumed;
   final ValueChanged<bool>? onHasMessagesChanged;
+  /// Chamado sempre que estado que afeta o header (canvasCount,
+  /// widgetsEnabled, webSearchEnabled) muda, para o RootShell saber
+  /// que precisa de reconstruir o popup do appbar (ponto 2/4).
+  final VoidCallback? onHeaderStateChanged;
   const AiTab({
     super.key,
     required this.onFirstMessage,
@@ -802,6 +901,7 @@ class AiTab extends StatefulWidget {
     this.externalAction,
     this.onExternalActionConsumed,
     this.onHasMessagesChanged,
+    this.onHeaderStateChanged,
   });
   @override State<AiTab> createState() => AiTabState();
 }
@@ -810,7 +910,7 @@ class AiTabState extends State<AiTab> {
   final TextEditingController _ctrl   = TextEditingController();
   final ScrollController       _scroll = ScrollController();
   final List<ChatMessage>      _msgs  = [];
-  final List<CanvasItem>       _canvases = [];
+  final List<LocalCanvasItem>  _canvases = [];
 
   bool     _incognito    = false;
   bool     _sending      = false;
@@ -822,11 +922,22 @@ class AiTabState extends State<AiTab> {
   AiModel  _model        = AiModel.deepseekV4;
   EditorType? _attachedTool;
   int      _canvasIdSeq  = 0;
-  CanvasKind? _creatingCanvasKind; // não-nulo enquanto a IA está a "desenhar" um canvas
+
+  /// Não-nulo enquanto a IA está a "desenhar" um canvas OU um widget —
+  /// ponto 5: enquanto isto for != null, a bolha de streaming mostra
+  /// SÓ o pill tools.svg + texto, nunca o JSON/HTML cru.
+  String? _creatingLabel;
+
+  // ── Getters públicos lidos pelo header no RootShell (ponto 2/4) ──
+  int get canvasCount => _canvases.length;
+  bool get widgetsEnabled => _widgetsEnabled;
+  bool get webSearchEnabled => _webSearchEnabled;
 
   bool get _hasMessages => _msgs.isNotEmpty;
 
   StreamSubscription<ChatStreamEvent>? _streamSub;
+
+  final FocusNode _inputFocus = FocusNode();
 
   @override
   void initState() {
@@ -850,21 +961,42 @@ class AiTabState extends State<AiTab> {
     }
   }
 
+  void _notifyHeader() => widget.onHeaderStateChanged?.call();
+
+  // ── Chamados pelo RootShell a partir do header (ponto 2/4) ──────
+
+  void setWidgetsEnabled(bool v) {
+    setState(() => _widgetsEnabled = v);
+    _notifyHeader();
+  }
+
+  void setWebSearchEnabled(bool v) {
+    setState(() => _webSearchEnabled = v);
+    _notifyHeader();
+  }
+
+  void openCanvasPopupExternally() => _openCanvasPopup();
+
   Future<void> _loadConversation(String id) async {
     final token = authController.token;
     if (token == null) return;
     final data = await ConversationsApiService.get(token, id);
     if (!mounted || data == null) return;
     final rawMsgs = data['messages'];
-    final rawCanvases = data['canvases'];
     setState(() {
       _msgs.clear();
       if (rawMsgs is List) {
         _msgs.addAll(rawMsgs.whereType<Map<String, dynamic>>().map(ChatMessage.fromJson));
       }
       _canvases.clear();
-      if (rawCanvases is List) {
-        _canvases.addAll(rawCanvases.whereType<Map<String, dynamic>>().map(CanvasItem.fromJson));
+      // Reconstrói canvases locais a partir do histórico de mensagens,
+      // já que persistimos apenas texto — qualquer bloco [[canvas:...]]
+      // ou de código ainda presente no conteúdo salvo é re-detetado aqui.
+      for (final m in _msgs) {
+        if (m.role == 'assistant') {
+          final scan = _scanForCanvasItems(m.content, _nextCanvasId);
+          _canvases.addAll(scan.items);
+        }
       }
       _conversationId = id;
       _incognito = false;
@@ -874,6 +1006,7 @@ class AiTabState extends State<AiTab> {
     });
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
+    _notifyHeader();
     _scrollToEnd();
   }
 
@@ -884,6 +1017,37 @@ class AiTabState extends State<AiTab> {
     if (_widgetsEnabled) prompt += kAiWidgetsInstructions;
     if (_webSearchEnabled) prompt += kAiWebSearchInstructions;
     return prompt;
+  }
+
+  /// Detecta, durante o streaming, se há um bloco de canvas ou widget
+  /// aberto mas ainda não fechado — usado para decidir a label do pill
+  /// "A criar..." (ponto 5).
+  String? _detectOpeningLabel(String text) {
+    // Canvas explícito aberto: "[[canvas:doc:" sem "]]" a fechar depois.
+    final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
+    if (canvasOpenMatch.isNotEmpty) {
+      final closesAfter = text.substring(canvasOpenMatch.last.start).contains(']]');
+      if (!closesAfter) {
+        final kindStr = canvasOpenMatch.last.group(1)!;
+        return switch (kindStr) {
+          'sheet' => 'A criar folha de cálculo...',
+          'slide' => 'A criar apresentação...',
+          'whiteboard' => 'A criar quadro branco...',
+          _ => 'A criar documento...',
+        };
+      }
+    }
+    // Bloco de código genérico aberto (não widget_*).
+    final codeOpens = RegExp(r'```(?!widget_)[a-zA-Z0-9_+-]*\s*\n').allMatches(text).length;
+    final allFences = '```'.allMatches(text).length;
+    if (codeOpens > 0 && allFences % 2 == 1) {
+      return 'A criar bloco de código...';
+    }
+    // Widget aberto.
+    if (hasOpenWidgetBlock(text)) {
+      return 'A criar widget...';
+    }
+    return null;
   }
 
   Future<void> _send() async {
@@ -899,7 +1063,7 @@ class AiTabState extends State<AiTab> {
       _sending = true;
       _streamingText = '';
       _streamingThink = null;
-      _creatingCanvasKind = null;
+      _creatingLabel = null;
     });
     if (isFirst) {
       widget.onFirstMessage();
@@ -932,9 +1096,7 @@ class AiTabState extends State<AiTab> {
           case ChatTokenEvent(text: final text):
             setState(() {
               _streamingText += text;
-              _creatingCanvasKind = CanvasParser.hasOpenBlock(_streamingText)
-                  ? CanvasParser.openBlockKind(_streamingText)
-                  : null;
+              _creatingLabel = _detectOpeningLabel(_streamingText);
             });
             _scrollToEnd();
             break;
@@ -943,17 +1105,23 @@ class AiTabState extends State<AiTab> {
             break;
           case ChatDoneEvent(fullText: final fullText):
             final finalText = fullText.isNotEmpty ? fullText : _streamingText;
-            final parsed = CanvasParser.parse(finalText, idGen: _nextCanvasId);
+            final scan = _scanForCanvasItems(finalText, _nextCanvasId);
             setState(() {
-              if (parsed.cleanText.trim().isNotEmpty) {
-                _msgs.add(ChatMessage(role: 'assistant', content: parsed.cleanText));
+              if (scan.cleanText.trim().isNotEmpty || scan.items.isNotEmpty) {
+                // Guarda o texto ORIGINAL (com os blocos de canvas/código
+                // ainda presentes) na mensagem persistida, para que ao
+                // recarregar a conversa consigamos re-detetar os canvases
+                // via _scanForCanvasItems em _loadConversation. Só a
+                // exibição na bolha usa scan.cleanText.
+                _msgs.add(ChatMessage(role: 'assistant', content: finalText));
               }
-              _canvases.addAll(parsed.items);
+              _canvases.addAll(scan.items);
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _creatingCanvasKind = null;
+              _creatingLabel = null;
             });
+            _notifyHeader();
             _scrollToEnd();
             _persistConversation();
             if (isFirst) _generateTitleInBackground(t);
@@ -963,7 +1131,7 @@ class AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _creatingCanvasKind = null;
+              _creatingLabel = null;
               _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
             });
             _scrollToEnd();
@@ -973,7 +1141,7 @@ class AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _creatingCanvasKind = null;
+              _creatingLabel = null;
               _msgs.add(const ChatMessage(
                   role: 'assistant',
                   content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
@@ -989,7 +1157,7 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingCanvasKind = null;
+          _creatingLabel = null;
           _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
         });
         _scrollToEnd();
@@ -1002,25 +1170,25 @@ class AiTabState extends State<AiTab> {
     if (token == null) return;
     final title = await AiApiService.generateTitle(token, firstMessage);
     if (!mounted) return;
-    if (_incognito) return; // conversas incógnitas nunca são persistidas
+    if (_incognito) return;
     if (_conversationId == null) {
       final created = await ConversationsApiService.create(
         token,
         title: title,
         messages: _msgs,
-        canvases: _canvases,
+        canvases: const [],
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
       }
     } else {
       await ConversationsApiService.update(token, _conversationId!,
-          title: title, messages: _msgs, canvases: _canvases);
+          title: title, messages: _msgs, canvases: const []);
     }
   }
 
   Future<void> _persistConversation() async {
-    if (_incognito) return; // nunca guarda conversas incógnitas
+    if (_incognito) return;
     final token = authController.token;
     if (token == null) return;
     if (_conversationId == null) {
@@ -1028,14 +1196,14 @@ class AiTabState extends State<AiTab> {
         token,
         title: 'Nova conversa',
         messages: _msgs,
-        canvases: _canvases,
+        canvases: const [],
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
       }
     } else {
       await ConversationsApiService.update(token, _conversationId!,
-          messages: _msgs, canvases: _canvases);
+          messages: _msgs, canvases: const []);
     }
   }
 
@@ -1066,9 +1234,6 @@ class AiTabState extends State<AiTab> {
 
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
-
-  void _onToggleWidgets(bool value) => setState(() => _widgetsEnabled = value);
-  void _onToggleWebSearch(bool value) => setState(() => _webSearchEnabled = value);
 
   void _openAttachSheet(GlobalKey anchorKey) {
     showAttachPopup(
@@ -1114,12 +1279,9 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  void _onOpenCanvas(CanvasItem item) {
-    // Ao tocar num canvas, navega para o EditTab já carregado.
-    editTabController.requestLoad(item);
-    AiTabHostNavigation.of(context)?.goToEditTab(
-      EditorTypeX.fromCanvasKind(item.kind),
-    );
+  void _onOpenCanvas(LocalCanvasItem item) {
+    editTabController.requestLoadLocal(item);
+    AiTabHostNavigation.of(context)?.goToEditTab(item.kind.editorType);
   }
 
   void _onConversationAction(ConversationAction action) {
@@ -1133,13 +1295,14 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingCanvasKind = null;
+          _creatingLabel = null;
           _conversationId = null;
         });
         widget.onHasMessagesChanged?.call(false);
+        _notifyHeader();
         break;
       case ConversationAction.incognito:
-        if (_hasMessages) return; // bloqueado depois de iniciar conversa
+        if (_hasMessages) return;
         _streamSub?.cancel();
         setState(() {
           _msgs.clear();
@@ -1148,10 +1311,11 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingCanvasKind = null;
+          _creatingLabel = null;
           _conversationId = null;
         });
         widget.onHasMessagesChanged?.call(false);
+        _notifyHeader();
         break;
       case ConversationAction.rename:
         break;
@@ -1168,10 +1332,11 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingCanvasKind = null;
+          _creatingLabel = null;
           _conversationId = null;
         });
         widget.onHasMessagesChanged?.call(false);
+        _notifyHeader();
         break;
     }
   }
@@ -1200,15 +1365,8 @@ class AiTabState extends State<AiTab> {
     showSelectTextSheet(context, AppTheme.of(context), text: _msgs[index].content);
   }
 
-  // ── Ações da barra de reação sob cada resposta da IA ────────────
-
-  void _onAssistantThumbUp(int index) {
-    // Ponto de extensão para telemetria/feedback no worker, se/quando existir.
-  }
-
-  void _onAssistantThumbDown(int index) {
-    // Ponto de extensão para telemetria/feedback no worker, se/quando existir.
-  }
+  void _onAssistantThumbUp(int index) {}
+  void _onAssistantThumbDown(int index) {}
 
   void _onAssistantCopy(int index) {
     final msg = _msgs[index];
@@ -1216,8 +1374,6 @@ class AiTabState extends State<AiTab> {
   }
 
   void _onAssistantRefresh(int index) {
-    // Reenvia a última mensagem do utilizador anterior a esta resposta,
-    // removendo a resposta atual e tudo o que vem depois.
     if (_sending) return;
     int userIdx = index - 1;
     while (userIdx >= 0 && _msgs[userIdx].role != 'user') {
@@ -1239,87 +1395,132 @@ class AiTabState extends State<AiTab> {
   void dispose() {
     _ctrl.dispose();
     _scroll.dispose();
+    _inputFocus.dispose();
     _streamSub?.cancel();
     super.dispose();
+  }
+
+  /// Retorna, para uma mensagem já finalizada, os canvases que essa
+  /// mensagem específica gerou (pelo texto bruto ainda conter os
+  /// marcadores originais). Usado para desenhar o link azul (ponto 7)
+  /// logo abaixo da bolha correta, e não misturado com outras.
+  List<LocalCanvasItem> _canvasesForMessage(String rawContent) {
+    // Re-scan local, sem consumir _canvases global: apenas para saber
+    // QUANTOS e QUAIS itens esta mensagem específica originou, casando
+    // por título/conteúdo com o que já está em _canvases (mesma ordem
+    // de criação, já que _scanForCanvasItems é determinístico).
+    final scan = _scanForCanvasItems(rawContent, () => '');
+    if (scan.items.isEmpty) return const [];
+    // Localiza na lista global os itens cujo (kind,title,content) bate
+    // com os detetados agora — evita duplicar ids.
+    final matched = <LocalCanvasItem>[];
+    for (final local in scan.items) {
+      final found = _canvases.firstWhere(
+        (c) => c.kind == local.kind && c.title == local.title && c.content == local.content,
+        orElse: () => local,
+      );
+      matched.add(found);
+    }
+    return matched;
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final topInset = MediaQuery.of(context).padding.top;
+    // Altura real ocupada pelo _AppHeader transparente no RootShell:
+    // padding.top + 6 (top) + ~34 de conteúdo (ícone 20 + paddings
+    // verticais 10+10) + folga. Isto substitui o valor fixo antigo
+    // que fazia o conteúdo aparecer sempre por baixo do appbar — item 1.
+    final headerHeight = topInset + 6 + 40 + 12;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // Fundo desta tela alinhado ao mesmo tom usado em settingsscreen.dart
-    // (s.pageBackground), em vez do transparente/surface anterior — item 6.
-    return Container(
-      color: _incognito ? s.pageBackground : s.pageBackground,
-      child: Column(children: [
-        Expanded(
-          child: _incognito
-              ? const _IncognitoState()
-              : (_msgs.isEmpty && _streamingText.isEmpty)
-                  ? _EmptyState(s: s)
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      itemCount: _msgs.length + (_sending ? 1 : 0),
-                      itemBuilder: (_, i) {
-                        if (i >= _msgs.length) {
-                          return _StreamingBubble(
+    return GestureDetector(
+      // Item 3: toca em qualquer parte da tela fora dos controlos de
+      // texto → esconde teclado e remove o foco (o cursor piscando
+      // desaparece junto, porque o TextField deixa de estar focado).
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        color: _incognito ? s.pageBackground : s.pageBackground,
+        child: Column(children: [
+          Expanded(
+            child: _incognito
+                ? const _IncognitoState()
+                : (_msgs.isEmpty && _streamingText.isEmpty)
+                    ? _EmptyState(s: s, topPadding: headerHeight)
+                    : ListView.builder(
+                        controller: _scroll,
+                        padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
+                        itemCount: _msgs.length + (_sending ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (i >= _msgs.length) {
+                            return _StreamingBubble(
+                              s: s,
+                              text: cleanAiText(_scanForCanvasItems(_streamingText, () => '').cleanText),
+                              thinking: _streamingThink != null
+                                  ? cleanAiText(_streamingThink!)
+                                  : null,
+                              creatingLabel: _creatingLabel,
+                            );
+                          }
+                          final msg = _msgs[i];
+                          if (msg.role == 'user') {
+                            return _Bubble(
+                              s: s,
+                              text: msg.content,
+                              onEdit: () => _onBubbleEdit(i),
+                              onCopy: () => _onBubbleCopy(i),
+                              onDelete: () => _onBubbleDelete(i),
+                              onSelectText: () => _onBubbleSelectText(i),
+                            );
+                          }
+                          final scan = _scanForCanvasItems(msg.content, () => '');
+                          final msgCanvases = _canvasesForMessage(msg.content);
+                          return _AssistantBubble(
                             s: s,
-                            text: cleanAiText(_streamingText),
-                            thinking: _streamingThink != null
-                                ? cleanAiText(_streamingThink!)
-                                : null,
-                            creatingCanvasKind: _creatingCanvasKind,
+                            text: cleanAiText(scan.cleanText),
+                            canvases: msgCanvases,
+                            onOpenCanvas: _onOpenCanvas,
+                            onThumbUp: () => _onAssistantThumbUp(i),
+                            onThumbDown: () => _onAssistantThumbDown(i),
+                            onCopy: () => _onAssistantCopy(i),
+                            onRefresh: () => _onAssistantRefresh(i),
                           );
-                        }
-                        final msg = _msgs[i];
-                        if (msg.role == 'user') {
-                          return _Bubble(
-                            s: s,
-                            text: msg.content,
-                            onEdit: () => _onBubbleEdit(i),
-                            onCopy: () => _onBubbleCopy(i),
-                            onDelete: () => _onBubbleDelete(i),
-                            onSelectText: () => _onBubbleSelectText(i),
-                          );
-                        }
-                        return _AssistantBubble(
-                          s: s,
-                          text: cleanAiText(msg.content),
-                          onThumbUp: () => _onAssistantThumbUp(i),
-                          onThumbDown: () => _onAssistantThumbDown(i),
-                          onCopy: () => _onAssistantCopy(i),
-                          onRefresh: () => _onAssistantRefresh(i),
-                        );
-                      },
-                    ),
-        ),
-        // O input já vive dentro de um SafeArea próprio (ver _ChatInput)
-        // e assenta diretamente no fundo real do ecrã — sem faixa vazia
-        // artificial por baixo (item 1). Só cresce com o teclado.
-        _ChatInput(
-          s: s,
-          ctrl: _ctrl,
-          model: _model,
-          attachedTool: _attachedTool,
-          incognito: _incognito,
-          sending: _sending,
-          attachAnchorKey: _attachAnchorKey,
-          modelAnchorKey: _modelAnchorKey,
-          onSend: _send,
-          onAttach: () => _openAttachSheet(_attachAnchorKey),
-          onVoice: _openVoiceSheet,
-          onModel: () => _openModelPopup(_modelAnchorKey),
-          onClearTool: _onClearTool,
-        ),
-      ]),
+                        },
+                      ),
+          ),
+          _ChatInput(
+            s: s,
+            ctrl: _ctrl,
+            focusNode: _inputFocus,
+            model: _model,
+            attachedTool: _attachedTool,
+            incognito: _incognito,
+            sending: _sending,
+            attachAnchorKey: _attachAnchorKey,
+            modelAnchorKey: _modelAnchorKey,
+            onSend: _send,
+            onAttach: () => _openAttachSheet(_attachAnchorKey),
+            onVoice: _openVoiceSheet,
+            onModel: () => _openModelPopup(_modelAnchorKey),
+            onClearTool: _onClearTool,
+          ),
+          // Item 3: cresce/encolhe junto com o teclado de verdade —
+          // AnimatedContainer reage a viewInsets.bottom a cada frame de
+          // teclado (o antigo valor fixo de 132 não subia com o teclado).
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: kCupertinoOut,
+            height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
+          ),
+        ]),
+      ),
     );
   }
 }
 
-/// InheritedWidget leve para permitir que a AiTab (aninhada dentro de
-/// AiTabHost) peça ao RootShell para mudar para a tab Editor com um
-/// EditorType específico, sem acoplamento direto entre os dois widgets.
+/// InheritedWidget leve para navegação AiTab → EditTab.
 class AiTabHostNavigation extends InheritedWidget {
   final void Function(EditorType type) goToEditTab;
   const AiTabHostNavigation({
@@ -1335,7 +1536,7 @@ class AiTabHostNavigation extends InheritedWidget {
   bool updateShouldNotify(AiTabHostNavigation oldWidget) => true;
 }
 
-// ── Estado incógnito — nunca escurece o fundo; segue sempre o tema. ──
+// ── Estado incógnito ─────────────────────────────────────────
 
 class _IncognitoState extends StatelessWidget {
   const _IncognitoState();
@@ -1354,38 +1555,44 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Empty state — sem toggles/chips de ação rápida, apenas um estado
-// neutro e acolhedor. ──
+// ── Empty state — recebe topPadding para nunca ficar atrás do
+// appbar transparente (item 1). ──
 
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
-  const _EmptyState({required this.s});
+  final double topPadding;
+  const _EmptyState({required this.s, required this.topPadding});
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppIcon('ai_tab_filled.svg', color: s.onSurfaceVariant, size: 40, useColorAsset: true),
-              const SizedBox(height: 14),
-              Text(
-                'Como posso ajudar?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: s.onSurface,
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.only(top: topPadding),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppIcon('ai_tab_filled.svg', color: s.onSurfaceVariant, size: 40, useColorAsset: true),
+                const SizedBox(height: 14),
+                Text(
+                  'Como posso ajudar?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
 }
 
-// ── Bolha de mensagem do utilizador ─────────────────────────────
+// ── Bolha de mensagem do utilizador — mantém-se como pill (faz
+// sentido visualmente distinguir utilizador de IA), mas as respostas
+// da IA (abaixo) deixam de ter container — item 1. ──
 
 class _Bubble extends StatefulWidget {
   final AppColorScheme s;
@@ -1478,16 +1685,15 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   }
 }
 
-// ── Bolha de resposta do assistente — agora com formatação rica
-// (negrito, listas, tabelas, títulos), fundo de card alinhado ao
-// mesmo tom usado no settingsscreen.dart (s.cardBackground), e uma
-// barra de ações por baixo com thumb_up, thumb_down, copiar e
-// regenerar, em ícones ligeiramente mais pequenos do que o resto
-// da interface. ──
+// ── Resposta da IA — item 1: SEM container/fundo, texto solto na
+// tela. Item 7: link azul sublinhado bold para cada canvas gerado
+// por esta mensagem específica. ──
 
 class _AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
+  final List<LocalCanvasItem> canvases;
+  final ValueChanged<LocalCanvasItem> onOpenCanvas;
   final VoidCallback onThumbUp;
   final VoidCallback onThumbDown;
   final VoidCallback onCopy;
@@ -1495,6 +1701,8 @@ class _AssistantBubble extends StatelessWidget {
   const _AssistantBubble({
     required this.s,
     required this.text,
+    required this.canvases,
+    required this.onOpenCanvas,
     required this.onThumbUp,
     required this.onThumbDown,
     required this.onCopy,
@@ -1505,17 +1713,16 @@ class _AssistantBubble extends StatelessWidget {
   Widget build(BuildContext context) => Align(
         alignment: Alignment.centerLeft,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: BorderRadius.circular(18),
-          ),
+          margin: const EdgeInsets.only(bottom: 18),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RichAiText(text: text, s: s),
+              if (text.isNotEmpty) RichAiText(text: text, s: s),
+              for (final item in canvases) ...[
+                const SizedBox(height: 8),
+                _CanvasLink(s: s, item: item, onTap: () => onOpenCanvas(item)),
+              ],
               const SizedBox(height: 6),
               _AssistantActionBar(
                 s: s,
@@ -1530,8 +1737,57 @@ class _AssistantBubble extends StatelessWidget {
       );
 }
 
-// ── Barra de ações sob cada resposta da IA. Ícones ligeiramente
-// menores (16px) do que os padrão da interface (18-20px). ──
+/// Link azul, sublinhado, bold — ponto 7 do pedido. Abre o EditTab já
+/// carregado com o conteúdo do canvas correspondente.
+class _CanvasLink extends StatefulWidget {
+  final AppColorScheme s;
+  final LocalCanvasItem item;
+  final VoidCallback onTap;
+  const _CanvasLink({required this.s, required this.item, required this.onTap});
+  @override State<_CanvasLink> createState() => _CanvasLinkState();
+}
+
+class _CanvasLinkState extends State<_CanvasLink> {
+  bool _h = false;
+
+  IconData get _leadingIcon {
+    switch (widget.item.kind) {
+      case LocalCanvasKind.code: return Icons.code;
+      default: return Icons.description_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final linkColor = widget.s.isDark ? const Color(0xFF6CB6FF) : const Color(0xFF0F6CBD);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       widget.onTap,
+      child: Opacity(
+        opacity: _h ? 0.7 : 1.0,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(_leadingIcon, size: 16, color: linkColor),
+          const SizedBox(width: 6),
+          Text(
+            widget.item.title,
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+              color: linkColor,
+              decoration: TextDecoration.underline,
+              decorationColor: linkColor,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Barra de ações sob cada resposta da IA ──────────────────────
 
 class _AssistantActionBar extends StatelessWidget {
   final AppColorScheme s;
@@ -1593,52 +1849,35 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
           color: _h ? s.hover : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        // 16px — ligeiramente menor do que o padrão de 18-20px usado
-        // no resto da interface (ex: more_filled.svg, add.svg).
         child: AppIcon(widget.asset, color: s.onSurfaceVariant, size: 16),
       ),
     );
   }
 }
 
-// ── Bolha de streaming (resposta a chegar em tempo real) ────────
-// Mostra "A criar documento..." com ícone tools.svg quando a IA está
-// a meio de gerar um bloco de canvas. Fundo alinhado ao mesmo card
-// usado nas respostas já finalizadas.
+// ── Bolha de streaming — item 5: enquanto _creatingLabel != null,
+// mostra SÓ o pill tools.svg + texto, nunca conteúdo bruto de
+// canvas/widget. O texto normal antes/depois do bloco continua
+// visível fora do processo de criação. ──
 
 class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
   final String? thinking;
-  final CanvasKind? creatingCanvasKind;
+  final String? creatingLabel;
   const _StreamingBubble({
     required this.s,
     required this.text,
     this.thinking,
-    this.creatingCanvasKind,
+    this.creatingLabel,
   });
-
-  String get _creatingLabel {
-    switch (creatingCanvasKind) {
-      case CanvasKind.doc:        return 'A criar documento...';
-      case CanvasKind.sheet:      return 'A criar folha de cálculo...';
-      case CanvasKind.slide:      return 'A criar apresentação...';
-      case CanvasKind.whiteboard: return 'A criar quadro branco...';
-      case null:                  return '';
-    }
-  }
 
   @override
   Widget build(BuildContext context) => Align(
         alignment: Alignment.centerLeft,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: BorderRadius.circular(18),
-          ),
+          margin: const EdgeInsets.only(bottom: 18),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1653,13 +1892,11 @@ class _StreamingBubble extends StatelessWidget {
                           height: 1.4)),
                 ),
               if (text.isNotEmpty) RichAiText(text: text, s: s),
-              if (creatingCanvasKind != null) ...[
+              if (creatingLabel != null) ...[
                 if (text.isNotEmpty) const SizedBox(height: 10),
-                _CanvasCreatingPill(s: s, label: _creatingLabel),
+                _CanvasCreatingPill(s: s, label: creatingLabel!),
               ] else if (text.isEmpty)
-                // Loader de grade piscando enquanto não há nenhum token
-                // de texto ainda (arranque da resposta).
-                BlinkingGridLoader(color: s.onSurfaceVariant),
+                AiSmallDotsLoader(color: s.onSurfaceVariant),
             ],
           ),
         ),
@@ -1672,129 +1909,22 @@ class _CanvasCreatingPill extends StatelessWidget {
   const _CanvasCreatingPill({required this.s, required this.label});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: s.primaryContainer.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon('tools.svg', color: s.primary, size: 15),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: s.primary)),
-          ],
-        ),
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon('tools.svg', color: s.primary, size: 15),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: s.primary)),
+        ],
       );
 }
 
 // ══════════════════════════════════════════════════════════════
-// BLINKING GRID LOADER — grelha 3x3 de pontos que piscam em cascata,
-// tradução direta do loader "13. Grade piscando" do mockup de
-// referência, feito em Flutter puro (sem CSS/HTML).
-// ══════════════════════════════════════════════════════════════
-
-class BlinkingGridLoader extends StatefulWidget {
-  final Color color;
-  final double dotSize;
-  final double gap;
-  const BlinkingGridLoader({
-    super.key,
-    required this.color,
-    this.dotSize = 7,
-    this.gap = 5,
-  });
-
-  @override
-  State<BlinkingGridLoader> createState() => _BlinkingGridLoaderState();
-}
-
-class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-
-  static const int _cols = 3;
-  static const int _rows = 3;
-  static const double _cycleMs = 1200;
-  static const double _stepDelayMs = 100;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: _cycleMs.round()),
-    )..repeat();
-  }
-
-  @override
-  void dispose() { _c.dispose(); super.dispose(); }
-
-  double _opacityFor(int index, double t) {
-    final delay = (index * _stepDelayMs) / _cycleMs;
-    var local = (t - delay) % 1.0;
-    if (local < 0) local += 1.0;
-    // Replica keyframes 0%,100%{opacity:.15} 50%{opacity:1}
-    final phase = (local * 2).clamp(0.0, 2.0);
-    final eased = phase <= 1.0 ? phase : (2.0 - phase);
-    return 0.15 + (0.85 * eased);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final size = _cols * widget.dotSize + (_cols - 1) * widget.gap;
-    return SizedBox(
-      width: size,
-      height: _rows * widget.dotSize + (_rows - 1) * widget.gap,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (_, __) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(_rows, (r) => Padding(
-            padding: EdgeInsets.only(bottom: r == _rows - 1 ? 0 : widget.gap),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(_cols, (c) {
-                final index = r * _cols + c;
-                return Padding(
-                  padding: EdgeInsets.only(right: c == _cols - 1 ? 0 : widget.gap),
-                  child: Opacity(
-                    opacity: _opacityFor(index, _c.value),
-                    child: Container(
-                      width: widget.dotSize,
-                      height: widget.dotSize,
-                      decoration: BoxDecoration(
-                        color: widget.color,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          )),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// RICH AI TEXT — renderizador de markdown leve, sem dependências
-// externas: negrito, itálico, títulos, listas com marcadores e
-// numeradas, tabelas — e widgets interativos (```widget_x```)
-// intercalados com o texto normal, via aiwidgets.dart. A deteção de
-// widgets acontece ANTES do parse de markdown: o texto é dividido em
-// segmentos por parseAiWidgetBlocks(), cada segmento de texto passa
-// pelo parser de markdown normal, e cada bloco de widget é renderizado
-// diretamente pelo dispatcher buildAiWidget(). Blocos de código comuns
-// (```dart, ```python, etc.) não são widget_* e continuam a cair no
-// tratamento de código já existente mais abaixo, sempre visíveis.
+// RICH AI TEXT — markdown leve + widgets interativos intercalados.
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
@@ -1813,8 +1943,6 @@ class RichAiText extends StatelessWidget {
       );
     }
 
-    // Divide o texto-com-marcadores em segmentos alternados de
-    // texto-markdown e placeholders \u0000WB<i>\u0000, preservando a ordem.
     final markerRe = RegExp(r'\u0000WB(\d+)\u0000');
     final children = <Widget>[];
     int last = 0;
@@ -1864,9 +1992,7 @@ class RichAiText extends StatelessWidget {
       final line = lines[i];
       final trimmed = line.trim();
 
-      // Linha de tabela markdown: | a | b | c |
       if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.contains('|', 1)) {
-        // ignora a linha separadora |---|---|
         final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(trimmed);
         if (!isSeparator) {
           final cells = trimmed
@@ -1889,7 +2015,6 @@ class RichAiText extends StatelessWidget {
         continue;
       }
 
-      // Títulos: ### Texto
       final headerMatch = RegExp(r'^(#{1,4})\s+(.*)$').firstMatch(trimmed);
       if (headerMatch != null) {
         final level = headerMatch.group(1)!.length;
@@ -1906,7 +2031,6 @@ class RichAiText extends StatelessWidget {
         continue;
       }
 
-      // Lista com marcadores: - item / * item
       final bulletMatch = RegExp(r'^[\-\*]\s+(.*)$').firstMatch(trimmed);
       if (bulletMatch != null) {
         widgets.add(Padding(
@@ -1930,7 +2054,6 @@ class RichAiText extends StatelessWidget {
         continue;
       }
 
-      // Lista numerada: 1. item
       final numberedMatch = RegExp(r'^(\d+)\.\s+(.*)$').firstMatch(trimmed);
       if (numberedMatch != null) {
         widgets.add(Padding(
@@ -1952,32 +2075,12 @@ class RichAiText extends StatelessWidget {
         continue;
       }
 
-      // Bloco de código normal (```lang ... ```) — SEMPRE visível,
-      // independentemente do switch de widgets. Detetado aqui porque
-      // já não é widget_* (esses foram extraídos antes pelo parser).
-      if (trimmed.startsWith('```')) {
-        final lang = trimmed.substring(3).trim();
-        final codeLines = <String>[];
-        i++;
-        while (i < lines.length && !lines[i].trim().startsWith('```')) {
-          codeLines.add(lines[i]);
-          i++;
-        }
-        if (i < lines.length) i++; // consome a fence de fecho
-        widgets.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: buildAiWidget(
-            AiWidgetBlock(id: 'widget_code', json: {
-              'language': lang.isEmpty ? 'text' : lang,
-              'code': codeLines.join('\n'),
-            }),
-            s,
-          ),
-        ));
-        continue;
-      }
-
-      // Parágrafo normal
+      // NOTA: blocos ``` genéricos já foram removidos do texto antes de
+      // chegar aqui (consumidos por _scanForCanvasItems em AiTabState,
+      // que os transforma em LocalCanvasItem + link azul). Se por
+      // alguma razão um ``` sobreviver até aqui, tratamo-lo como texto
+      // normal em vez de tentar renderizar código inline — mantém o
+      // comportamento previsível do ponto 6.
       widgets.add(Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: _formattedText(trimmed, s),
@@ -2085,10 +2188,7 @@ class _AiTable extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MESSAGE ACTIONS POPUP (editar / copiar / eliminar / selecionar texto)
-// Nasce ancorado à própria bolha long-pressionada, com fallback para
-// abrir para baixo quando não há espaço acima (mesma lógica usada em
-// showConversationOptionsPopup no drawer, para consistência).
+// MESSAGE ACTIONS POPUP — posição corrigida (ponto 2).
 // ══════════════════════════════════════════════════════════════
 
 void showMessageActionsPopup(
@@ -2244,7 +2344,7 @@ class _MessageActionRowState extends State<_MessageActionRow> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SELECT TEXT SHEET — modal estilo settings, texto só selecionável
+// SELECT TEXT SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showSelectTextSheet(
@@ -2297,15 +2397,15 @@ Future<void> showSelectTextSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT — assenta diretamente no fundo do ecrã via SafeArea
-// próprio (sem faixa vazia artificial por baixo — item 1), sombra
-// do container reduzida (item 6), e ícone do botão de enviar muda
-// para progress.svg enquanto a IA está a responder.
+// CHAT INPUT — item 3: sobe com o teclado de verdade via
+// viewInsets.bottom (não apenas SafeArea), e passa focusNode para
+// que o unfocus global no GestureDetector pai remova o cursor.
 // ══════════════════════════════════════════════════════════════
 
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
+  final FocusNode focusNode;
   final AiModel model;
   final EditorType? attachedTool;
   final bool incognito;
@@ -2321,6 +2421,7 @@ class _ChatInput extends StatelessWidget {
   const _ChatInput({
     required this.s,
     required this.ctrl,
+    required this.focusNode,
     required this.model,
     required this.attachedTool,
     required this.incognito,
@@ -2336,8 +2437,6 @@ class _ChatInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sombra reduzida (era s.floatingShadow, muito pesada para um
-    // elemento fixo sempre visível no fundo do ecrã) — item 6.
     final reducedShadow = <BoxShadow>[
       BoxShadow(
         color: Colors.black.withOpacity(s.isDark ? 0.16 : 0.05),
@@ -2366,6 +2465,7 @@ class _ChatInput extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
               controller: ctrl,
+              focusNode: focusNode,
               minLines: 1, maxLines: 6,
               style: TextStyle(fontSize: 15, color: s.onSurface),
               cursorColor: s.primary,
@@ -2449,9 +2549,6 @@ class _ChatInput extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: sending ? s.primary.withOpacity(0.5) : s.primary,
                         shape: BoxShape.circle),
-                    // Enquanto `sending` é true, mostra progress.svg (com
-                    // rotação contínua) em vez do CircularProgressIndicator
-                    // genérico; volta a send.svg assim que a resposta termina.
                     child: sending
                         ? _SpinningIcon(asset: 'progress.svg', color: s.onPrimary)
                         : AppIcon('send.svg', color: s.onPrimary, size: 20),
@@ -2468,17 +2565,9 @@ class _ChatInput extends StatelessWidget {
         ? DashedRRectBorder(color: s.outline, radius: 22, child: inner)
         : inner;
 
-    // SafeArea próprio garante que o input assenta no fundo real do
-    // ecrã (respeitando apenas a gesture bar do sistema), sem a faixa
-    // vazia fixa de 132px que antes empurrava tudo para o meio do
-    // ecrã quando o teclado estava fechado (item 1).
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-        child: bordered,
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: bordered,
     );
   }
 }
@@ -2508,7 +2597,7 @@ class _SpinningIconState extends State<_SpinningIcon>
       );
 }
 
-// ── Pill que mostra a ferramenta ligada (aparece acima do input) ─
+// ── Pill que mostra a ferramenta ligada ─────────────────────────
 
 class _AttachedToolPill extends StatelessWidget {
   final AppColorScheme s;
@@ -2549,11 +2638,8 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP — popup ancorado ao botão '+', abrindo diretamente a
-// partir da posição real do botão (nunca mais no centro do ecrã).
-// Contém apenas Arquivos / Fotos / Câmera — "Canvas" e "Widgets"
-// moveram-se definitivamente para o popup do appbar (item 5), pelo
-// que deixaram de fazer parte deste popup.
+// ATTACH POPUP — posição corrigida (ponto 2). Só Arquivos/Fotos/
+// Câmera; Canvas e Widgets vivem no popup do appbar.
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera }
@@ -2587,10 +2673,6 @@ void showAttachPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const width = 240.0;
-    // Altura real do conteúdo (3 linhas ~58px cada + padding) — usada
-    // para decidir se cabe acima do botão antes de decidir abrir para
-    // cima ou para baixo (item 3/4: nunca mais nasce no centro do ecrã
-    // nem desalinhado do ponto de toque).
     const estimatedHeight = 210.0;
     final spaceAbove = off.dy;
     final opensUp = spaceAbove >= estimatedHeight + 24;
@@ -2668,16 +2750,15 @@ void showAttachPopup(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CANVAS SHEET — modal com todos os documentos/folhas/slides criados
-// nesta conversa, navegável verticalmente (swipe). Aberto agora a
-// partir da entrada "Canvas" no popup do appbar.
+// CANVAS SHEET — modal com todos os documentos/código desta
+// conversa. Ao clicar, abre em EditTab já carregado (ponto 6).
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showCanvasSheet(
   BuildContext context,
   AppColorScheme s, {
-  required List<CanvasItem> canvases,
-  required ValueChanged<CanvasItem> onOpenCanvas,
+  required List<LocalCanvasItem> canvases,
+  required ValueChanged<LocalCanvasItem> onOpenCanvas,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -2724,7 +2805,7 @@ Future<void> showCanvasSheet(
                     itemCount: canvases.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (_, i) {
-                      final item = canvases[canvases.length - 1 - i]; // mais recente primeiro
+                      final item = canvases[canvases.length - 1 - i];
                       return _CanvasCard(
                         s: s,
                         item: item,
@@ -2746,7 +2827,7 @@ Future<void> showCanvasSheet(
 
 class _CanvasCard extends StatefulWidget {
   final AppColorScheme s;
-  final CanvasItem item;
+  final LocalCanvasItem item;
   final VoidCallback onTap;
   const _CanvasCard({required this.s, required this.item, required this.onTap});
   @override State<_CanvasCard> createState() => _CanvasCardState();
@@ -2755,7 +2836,7 @@ class _CanvasCard extends StatefulWidget {
 class _CanvasCardState extends State<_CanvasCard> {
   bool _h = false;
 
-  EditorType get _editorType => EditorTypeX.fromCanvasKind(widget.item.kind);
+  EditorType get _editorType => widget.item.kind.editorType;
 
   @override
   Widget build(BuildContext context) {
@@ -2782,7 +2863,9 @@ class _CanvasCardState extends State<_CanvasCard> {
               color: s.primaryContainer.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: EditorTypeIcon(_editorType.pngAsset, size: 20),
+            child: widget.item.kind == LocalCanvasKind.code
+                ? Icon(Icons.code, size: 20, color: s.primary)
+                : EditorTypeIcon(_editorType.pngAsset, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2807,7 +2890,7 @@ class _CanvasCardState extends State<_CanvasCard> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// VOICE RECORD SHEET — grava com whisper via /ai/transcribe
+// VOICE RECORD SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -2959,8 +3042,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP — popup ancorado ao botão de modelo, nasce a
-// partir da posição real do botão. Modelos: V4 / V4 Pro / R1.
+// MODEL SELECT POPUP — posição corrigida (ponto 2).
 // ══════════════════════════════════════════════════════════════
 
 void showModelSelectPopup(

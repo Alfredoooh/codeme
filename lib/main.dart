@@ -25,6 +25,21 @@ void main() async {
       DeviceOrientation.portraitDown,
     ]);
   }
+  // Torna a status bar (e a navigation bar) verdadeiramente
+  // transparentes ao nível do sistema, uma única vez, antes de
+  // qualquer build. O brilho dos ícones (claro/escuro) é decidido
+  // depois, a cada frame, dentro de CraftLabApp.build() conforme o
+  // tema atual — aqui só se garante que a cor de fundo nativa nunca
+  // é opaca, mesmo antes do primeiro frame renderizar.
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+  ));
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // Carrega o tema persistido ANTES de runApp(), para a app já nascer
+  // com o tema certo em vez de "piscar" claro e só depois escurecer.
+  await appTheme.load();
   runApp(const CraftLabApp());
 }
 
@@ -40,12 +55,19 @@ class CraftLabApp extends StatelessWidget {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
+        // Status bar e nav bar SEMPRE transparentes (Colors.transparent),
+        // nunca a cor da superfície — só o brilho dos ícones muda com o
+        // tema. É isto que corrige o "cinza opaco" reportado: antes o
+        // statusBarColor era s.surface (uma cor sólida), agora é sempre
+        // transparente e o conteúdo da app é que se vê por trás.
         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: s.surface,
+          statusBarColor: Colors.transparent,
           statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
-          systemNavigationBarColor: s.surface,
+          statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
           systemNavigationBarIconBrightness:
               s.isDark ? Brightness.light : Brightness.dark,
+          systemNavigationBarDividerColor: Colors.transparent,
         ));
         return MaterialApp(
           title: 'CraftLab',
@@ -89,7 +111,11 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   EditorType _editorType = EditorType.docs;
   bool       _hasMessages = false;
 
-  final GlobalKey<State<AiTab>> _aiTabKey = GlobalKey<State<AiTab>>();
+  // Key real para o estado vivo da AiTab, para o header conseguir ler
+  // canvasCount / widgetsEnabled / webSearchEnabled diretamente do
+  // estado interno em vez de valores fixos falsos — isto é o que
+  // fazia o popup do appbar nunca refletir o estado real dos switches.
+  final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
   @override
   void initState() {
@@ -125,11 +151,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   String? _pendingConversationLoad;
 
   void _onConversationAction(ConversationAction action) {
-    // O AiConversationMenuButton fica no _AppHeader (fora da AiTab),
-    // então propagamos a ação para o estado interno da AiTab via
-    // rebuild com callback direto — a AiTab trata newChat/incognito/
-    // rename/delete internamente através do seu próprio _onConversationAction,
-    // que é injectado como callback do próprio widget abaixo.
     setState(() {
       _pendingConversationAction = action;
       if (action == ConversationAction.newChat || action == ConversationAction.incognito) {
@@ -138,9 +159,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     });
   }
 
-  // Chamado pelo AppDrawer quando o utilizador toca numa conversa:
-  // troca para a tab AI (se necessário) e pede à AiTabHost para
-  // carregar essa conversa específica.
   void _onOpenConversation(String id) {
     setState(() {
       _tab = AppTab.ai;
@@ -167,6 +185,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
       case AppTab.ai:
         return AiTabHost(
           key: ValueKey('ai_$_aiTabInstance'),
+          aiTabKey: _aiTabKey,
           onFirstMessage: _onMessageSent,
           externalAction: _pendingConversationAction,
           onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
@@ -191,17 +210,9 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     return Material(
       type: MaterialType.transparency,
       child: Stack(children: [
-        // A tela AI usa o mesmo fundo (s.pageBackground) que a tela de
-        // definições — item 6. As restantes tabs mantêm s.surface, que
-        // é o fundo padrão do resto da app.
         ColoredBox(
           color: isAiTab ? s.pageBackground : s.surface,
           child: isAiTab
-              // Header transparente sobreposto (mesmo padrão de gradiente
-              // do settingsscreen.dart) apenas na tab de chat — o conteúdo
-              // ocupa o ecrã todo por baixo. O gradiente parte agora de
-              // s.pageBackground (em vez de s.surface) para combinar
-              // exatamente com o fundo da própria AiTab por baixo.
               ? Stack(children: [
                   Positioned.fill(
                     top: 0,
@@ -216,23 +227,35 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
                   ),
                   Positioned(
                     top: 0, left: 0, right: 0,
-                    child: _AppHeader(
-                      s: s,
-                      title: _tabTitle,
-                      onMenu: _openDrawer,
-                      transparent: true,
-                      headerBackground: s.pageBackground,
-                      trailing: AiConversationMenuButton(
-                        s: s,
-                        hasMessages: _hasMessages,
-                        onSelect: _onConversationAction,
-                        canvasCount: 0,
-                        onOpenCanvas: () {},
-                        webSearchEnabled: false,
-                        onToggleWebSearch: (_) {},
-                        widgetsEnabled: false,
-                        onToggleWidgets: (_) {},
-                      ),
+                    // AnimatedBuilder ouve o próprio AiTabState (via
+                    // Listenable exposto abaixo) para o trailing
+                    // re-renderizar sempre que canvasCount / widgetsEnabled
+                    // / webSearchEnabled mudarem — sem isto, o popup do
+                    // appbar mostrava sempre valores presos no primeiro
+                    // build (bug do ponto 2/4 do pedido).
+                    child: AnimatedBuilder(
+                      animation: _AiTabHeaderRefresh.of(context),
+                      builder: (_, __) {
+                        final st = _aiTabKey.currentState;
+                        return _AppHeader(
+                          s: s,
+                          title: _tabTitle,
+                          onMenu: _openDrawer,
+                          transparent: true,
+                          headerBackground: s.pageBackground,
+                          trailing: AiConversationMenuButton(
+                            s: s,
+                            hasMessages: _hasMessages,
+                            onSelect: _onConversationAction,
+                            canvasCount: st?.canvasCount ?? 0,
+                            onOpenCanvas: () => st?.openCanvasPopupExternally(),
+                            webSearchEnabled: st?.webSearchEnabled ?? false,
+                            onToggleWebSearch: (v) => st?.setWebSearchEnabled(v),
+                            widgetsEnabled: st?.widgetsEnabled ?? false,
+                            onToggleWidgets: (v) => st?.setWidgetsEnabled(v),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ])
@@ -295,11 +318,29 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI TAB HOST — encapsula AiTab e escuta ações externas vindas do
-// menu de conversa que fica no _AppHeader (fora da AiTab em si)
+// AI TAB HEADER REFRESH — Listenable minúsculo e global-ao-widget-tree
+// que a AiTabState "pinga" sempre que canvasCount/widgetsEnabled/
+// webSearchEnabled mudam, para o _AppHeader no RootShell (que vive
+// FORA da árvore da AiTab) saber que precisa de reconstruir o popup.
+// Sem isto não há forma limpa do header ler estado interno da AiTab
+// sem prop-drilling constante já que o header é irmão, não pai.
+// ══════════════════════════════════════════════════════════════
+
+class _AiTabHeaderRefresh extends ChangeNotifier {
+  static final _AiTabHeaderRefresh _instance = _AiTabHeaderRefresh._();
+  _AiTabHeaderRefresh._();
+  static _AiTabHeaderRefresh of(BuildContext context) => _instance;
+  void ping() => notifyListeners();
+}
+
+final _aiTabHeaderRefresh = _AiTabHeaderRefresh.of as _AiTabHeaderRefresh Function(BuildContext);
+
+// ══════════════════════════════════════════════════════════════
+// AI TAB HOST
 // ══════════════════════════════════════════════════════════════
 
 class AiTabHost extends StatefulWidget {
+  final GlobalKey<AiTabState> aiTabKey;
   final VoidCallback onFirstMessage;
   final ConversationAction? externalAction;
   final VoidCallback onExternalActionConsumed;
@@ -308,6 +349,7 @@ class AiTabHost extends StatefulWidget {
   final ValueChanged<bool>? onHasMessagesChanged;
   const AiTabHost({
     super.key,
+    required this.aiTabKey,
     required this.onFirstMessage,
     required this.externalAction,
     required this.onExternalActionConsumed,
@@ -331,20 +373,19 @@ class _AiTabHostState extends State<AiTabHost> {
   @override
   Widget build(BuildContext context) {
     return AiTab(
+      key: widget.aiTabKey,
       onFirstMessage: widget.onFirstMessage,
       externalAction: widget.externalAction,
       onExternalActionConsumed: widget.onExternalActionConsumed,
       initialConversationId: widget.initialConversationId,
       onHasMessagesChanged: widget.onHasMessagesChanged,
+      onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// APP HEADER — no modo transparente, o gradiente parte agora de
-// `headerBackground` (passado pelo chamador) em vez de sempre
-// s.surface, para que a AI tab combine com o mesmo fundo usado em
-// settingsscreen.dart (s.pageBackground) — item 6.
+// APP HEADER
 // ══════════════════════════════════════════════════════════════
 
 class _AppHeader extends StatelessWidget {
@@ -395,10 +436,6 @@ class _AppHeader extends StatelessWidget {
       return Container(color: headerBackground, child: content);
     }
 
-    // Mesmo padrão do header sobreposto em settingsscreen.dart: gradiente
-    // contínuo de opaco para transparente, sem blur — nunca sólido —
-    // mas agora a partir de headerBackground em vez de s.surface fixo,
-    // garantindo que combina com o fundo real por baixo em cada tab.
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(

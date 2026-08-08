@@ -9,8 +9,7 @@
 //   ```
 // e é detetado por parseAiWidgetBlocks() a partir do texto bruto da
 // resposta da IA. Blocos de código normais (```dart, ```python, etc)
-// NÃO passam por aqui — continuam a ser tratados como código simples
-// em aitab.dart, independentemente do switch de widgets.
+// NÃO passam por aqui — vão para o sistema de Canvas em aitab.dart.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -37,10 +36,7 @@ const Set<String> kAiWidgetIds = {
 };
 
 // ══════════════════════════════════════════════════════════════
-// PARSER — extrai blocos ```widget_x { json } ``` do texto bruto.
-// Devolve o texto com os blocos substituídos por um marcador nulo e
-// a lista ordenada de blocos encontrados, para o chamador poder
-// intercalar texto normal + widgets na ordem correta.
+// PARSER
 // ══════════════════════════════════════════════════════════════
 
 class AiWidgetBlock {
@@ -50,7 +46,7 @@ class AiWidgetBlock {
 }
 
 class AiWidgetParseResult {
-  final String textWithMarkers; // texto com \u0000WB<i>\u0000 no lugar dos blocos
+  final String textWithMarkers;
   final List<AiWidgetBlock> blocks;
   const AiWidgetParseResult({required this.textWithMarkers, required this.blocks});
 }
@@ -64,7 +60,7 @@ AiWidgetParseResult parseAiWidgetBlocks(String raw) {
   final blocks = <AiWidgetBlock>[];
   final replaced = raw.replaceAllMapped(_kWidgetBlockRe, (m) {
     final id = m.group(1)!;
-    if (!kAiWidgetIds.contains(id)) return m.group(0)!; // não reconhecido: deixa como código normal
+    if (!kAiWidgetIds.contains(id)) return m.group(0)!;
     final body = m.group(2)!.trim();
     Map<String, dynamic> json;
     try {
@@ -80,8 +76,21 @@ AiWidgetParseResult parseAiWidgetBlocks(String raw) {
   return AiWidgetParseResult(textWithMarkers: replaced, blocks: blocks);
 }
 
+/// Deteta se `raw` contém, neste momento (possivelmente a meio do
+/// streaming), um bloco ```widget_x``` aberto mas ainda não fechado.
+/// Usado para decidir se devemos mostrar o pill "A criar..." em vez
+/// de tentar renderizar JSON incompleto.
+bool hasOpenWidgetBlock(String raw) {
+  final opens = RegExp(r'```widget_[a-z]+').allMatches(raw).length;
+  final closesTotal = '```'.allMatches(raw).length;
+  // Cada bloco widget consome 2 marcadores ``` (abertura+fecho). Se o
+  // total de ``` no texto for ímpar relativamente ao número de aberturas
+  // widget_*, há um bloco widget em aberto.
+  return opens > 0 && closesTotal % 2 == 1;
+}
+
 // ══════════════════════════════════════════════════════════════
-// DISPATCHER — devolve o widget Flutter correto para um bloco.
+// DISPATCHER
 // ══════════════════════════════════════════════════════════════
 
 Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
@@ -414,13 +423,6 @@ class AiCodeWidget extends StatefulWidget {
 class _AiCodeWidgetState extends State<AiCodeWidget> {
   bool _copied = false;
 
-  static const Map<String, List<String>> _keywordSets = {
-    'default': ['function','const','let','var','return','if','else','for','while','do','switch','case','break',
-      'continue','class','extends','import','export','from','async','await','new','this','try','catch','throw',
-      'true','false','null','def','lambda','yield','and','or','not','public','private','static','void','int',
-      'float','double','string','bool','interface','select','insert','update','delete','create','table','where'],
-  };
-
   List<TextSpan> _highlight(String line, String lang, AppColorScheme s) {
     final kwColor = s.isDark ? const Color(0xFFFF7B72) : const Color(0xFFB00020);
     final strColor = s.isDark ? const Color(0xFFA5D6FF) : const Color(0xFF005CC5);
@@ -528,7 +530,7 @@ class _AiCodeWidgetState extends State<AiCodeWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET (grelha estilo folha de cálculo, com scroll + expand)
+// SHEET
 // ══════════════════════════════════════════════════════════════
 
 class AiSheetWidget extends StatefulWidget {
@@ -632,7 +634,7 @@ class _SheetGridPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET (crypto/forex real via http)
+// MARKET
 // ══════════════════════════════════════════════════════════════
 
 class AiMarketWidget extends StatefulWidget {
@@ -872,8 +874,6 @@ class _MarketChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MarketChartPainter old) => old.prices != prices;
 }
-
-// Import mínimo para ui.Gradient usado acima.
 
 // ══════════════════════════════════════════════════════════════
 // CALENDAR
@@ -1140,7 +1140,7 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MIND MAP (árvore colapsável com pan/zoom, expand fullscreen)
+// MIND MAP
 // ══════════════════════════════════════════════════════════════
 
 class _MindNode {
@@ -1323,7 +1323,7 @@ class _MindMapPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MATH GRAPH (usa math_expressions, pan/zoom com gestos)
+// MATH GRAPH
 // ══════════════════════════════════════════════════════════════
 
 class AiMathGraphWidget extends StatefulWidget {
@@ -1487,7 +1487,7 @@ class _MathGraphPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MAP (flutter_map + OpenStreetMap)
+// MAP
 // ══════════════════════════════════════════════════════════════
 
 class AiMapWidget extends StatefulWidget {
@@ -1550,6 +1550,51 @@ class _AiMapWidgetState extends State<AiMapWidget> {
               ),
             ),
         ]),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOADER PEQUENO — usado no pill "A criar widget..." em vez do
+// BlinkingGridLoader inteiro (item 4/5: loader reduzido).
+// ══════════════════════════════════════════════════════════════
+
+class AiSmallDotsLoader extends StatefulWidget {
+  final Color color;
+  const AiSmallDotsLoader({super.key, required this.color});
+  @override State<AiSmallDotsLoader> createState() => _AiSmallDotsLoaderState();
+}
+
+class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+  }
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          final delay = i * 0.15;
+          var t = (_c.value - delay) % 1.0;
+          if (t < 0) t += 1.0;
+          final op = t < 0.5 ? (0.3 + t) : (1.3 - t);
+          return Padding(
+            padding: EdgeInsets.only(right: i == 2 ? 0 : 4),
+            child: Opacity(
+              opacity: op.clamp(0.3, 1.0),
+              child: Container(width: 5, height: 5, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
+            ),
+          );
+        }),
       ),
     );
   }
