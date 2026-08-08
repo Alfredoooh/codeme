@@ -70,17 +70,29 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
+          # ── Splash icon: usa splash_icon.png se existir,
+          #    caso contrário centra o ic_launcher num canvas transparente
+          #    de 288x288 (nunca copia o launcher direto como splash)
+          drawable = os.path.join(RES, "drawable")
+          os.makedirs(drawable, exist_ok=True)
+          dest = os.path.join(drawable, "splash_icon.png")
+
           if os.path.exists(SPLASH):
-              dest = os.path.join(RES, "drawable", "splash_icon.png")
-              os.makedirs(os.path.dirname(dest), exist_ok=True)
-              shutil.copy2(SPLASH, dest)
-              print(f"  -> {dest}")
+              splash_src = Image.open(SPLASH).convert("RGBA")
+              SPLASH_SIZE = 288
+              splash_src = splash_src.resize((SPLASH_SIZE, SPLASH_SIZE), Image.LANCZOS)
+              splash_src.save(dest, "PNG", optimize=True)
+              print(f"  -> {dest} (splash_icon.png dedicado)")
           else:
-              print("AVISO: splash_icon.png nao encontrado, a usar placeholder...")
-              placeholder = Image.new("RGBA", (192, 192), (0,0,0,0))
-              dest = os.path.join(RES, "drawable", "splash_icon.png")
-              os.makedirs(os.path.dirname(dest), exist_ok=True)
-              placeholder.save(dest, "PNG")
+              # centra o launcher (sem rounded corners) num canvas maior
+              CANVAS = 288
+              ICON   = 160
+              canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+              icon   = src.convert("RGBA").resize((ICON, ICON), Image.LANCZOS)
+              off    = (CANVAS - ICON) // 2
+              canvas.paste(icon, (off, off), icon)
+              canvas.save(dest, "PNG", optimize=True)
+              print(f"  -> {dest} (splash gerado a partir do launcher — adiciona splash_icon.png ao repo para controlo total)")
 
           print("Icones e splash processados com sucesso!")
           PYEOF
@@ -109,12 +121,12 @@ workflows:
       - name: Build release APK (split per ABI)
         script: |
           cd "${CM_BUILD_DIR}"
-          flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols --strip
+          flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
 
       - name: Build release AAB
         script: |
           cd "${CM_BUILD_DIR}"
-          flutter build appbundle --release --obfuscate --split-debug-info=build/symbols --strip
+          flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
 
     artifacts:
       - build/app/outputs/apk/release/*.apk
@@ -187,17 +199,25 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
+          drawable = os.path.join(RES, "drawable")
+          os.makedirs(drawable, exist_ok=True)
+          dest = os.path.join(drawable, "splash_icon.png")
+
           if os.path.exists(SPLASH):
-              dest = os.path.join(RES, "drawable", "splash_icon.png")
-              os.makedirs(os.path.dirname(dest), exist_ok=True)
-              shutil.copy2(SPLASH, dest)
-              print(f"  -> {dest}")
+              splash_src = Image.open(SPLASH).convert("RGBA")
+              SPLASH_SIZE = 288
+              splash_src = splash_src.resize((SPLASH_SIZE, SPLASH_SIZE), Image.LANCZOS)
+              splash_src.save(dest, "PNG", optimize=True)
+              print(f"  -> {dest} (splash_icon.png dedicado)")
           else:
-              print("AVISO: splash_icon.png nao encontrado, a usar placeholder...")
-              placeholder = Image.new("RGBA", (192, 192), (0,0,0,0))
-              dest = os.path.join(RES, "drawable", "splash_icon.png")
-              os.makedirs(os.path.dirname(dest), exist_ok=True)
-              placeholder.save(dest, "PNG")
+              CANVAS = 288
+              ICON   = 160
+              canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+              icon   = src.convert("RGBA").resize((ICON, ICON), Image.LANCZOS)
+              off    = (CANVAS - ICON) // 2
+              canvas.paste(icon, (off, off), icon)
+              canvas.save(dest, "PNG", optimize=True)
+              print(f"  -> {dest} (splash gerado a partir do launcher)")
 
           print("Icones e splash processados com sucesso!")
           PYEOF
