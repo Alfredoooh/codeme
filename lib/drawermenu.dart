@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -878,16 +879,17 @@ class _ProjectNodeTileState extends State<_ProjectNodeTile> {
     // partes da app (aitab.dart); aqui despoletamos o mesmo fluxo e,
     // ao obter bytes+nome, chamamos projectsController.uploadFile com
     // o conteúdo em base64 e o fileKind inferido pela extensão.
-    final result = await FilePicker.pickFiles(allowMultiple: false);
+    final result = await FilePicker.pickFiles(allowMultiple: false, withData: true);
     if (result == null || result.files.isEmpty) return;
 final picked = result.files.first;
+    if (picked.bytes == null) return;
     final kind = _inferFileKind(picked.name);
     projectsController.uploadFile(
       widget.node.id,
       name: picked.name,
       fileKind: kind,
-      fileDataBase64: picked.base64Data,
-      mimeType: picked.mimeType,
+      fileDataBase64: base64Encode(picked.bytes!),
+      mimeType: lookupMimeType(picked.name) ?? 'application/octet-stream',
     );
     setState(() => _open = true);
   }
