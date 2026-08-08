@@ -1,7 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/authscreens.dart
 // ══════════════════════════════════════════════════════════════
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'widgets.dart';
@@ -55,6 +54,10 @@ class _AuthGateState extends State<AuthGate> {
 // SHARED — logo, campo de texto, botão principal
 // ══════════════════════════════════════════════════════════════
 
+// Logo real do app (assets/logo.png, raiz de assets/ — fora de
+// icons/), substituindo o antigo placeholder "N" desenhado à mão
+// num Container azul. clipBehavior garante cantos limpos mesmo que
+// o PNG de origem não venha já com transparência nos cantos.
 class _AuthLogo extends StatelessWidget {
   final AppColorScheme s;
   final bool pulsing;
@@ -62,19 +65,31 @@ class _AuthLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logo = Container(
-      width: 64, height: 64,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: s.primary,
-        borderRadius: BorderRadius.circular(20),
+    final logo = ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Image.asset(
+        'assets/logo.png',
+        width: 64,
+        height: 64,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+        // Fallback visível caso o asset falhe — nunca deixa a tela
+        // de login em branco silenciosamente.
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: 64, height: 64,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.primary,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text('N',
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+                color: s.onPrimary,
+              )),
+        ),
       ),
-      child: Text('N',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            color: s.onPrimary,
-          )),
     );
     if (!pulsing) return logo;
     return TweenAnimationBuilder<double>(
@@ -90,6 +105,12 @@ class _AuthLogo extends StatelessWidget {
   }
 }
 
+// Campo de texto com borda totalmente arredondada (pill). A altura
+// real do campo (padding vertical 15 × 2 + ~20 de linha de texto)
+// fica por volta de 54–56px, então um raio de 28 já fecha a forma
+// em pill completo nas duas extremidades — deixei uma unidade de
+// folga (28, não 27) para nunca sobrar um pixel de canto reto
+// perceptível em nenhuma densidade de tela.
 class _AuthField extends StatefulWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
@@ -123,6 +144,8 @@ class _AuthField extends StatefulWidget {
 class _AuthFieldState extends State<_AuthField> {
   bool _focused = false;
 
+  static const double _radius = 28;
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -131,16 +154,17 @@ class _AuthFieldState extends State<_AuthField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          padding: const EdgeInsets.only(left: 18, bottom: 6),
           child: Text(widget.label,
               style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurfaceVariant)),
         ),
         AnimatedContainer(
           duration: const Duration(milliseconds: 140),
+          curve: kCupertinoOut,
           decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(_radius),
             border: Border.all(
               color: hasError
                   ? s.error
@@ -162,17 +186,22 @@ class _AuthFieldState extends State<_AuthField> {
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                // Padding horizontal maior (22) para o texto nunca
+                // ficar visualmente colado à curva pronunciada da
+                // borda pill — num raio de 28 o canto "come" mais
+                // espaço horizontal do que num raio de 16.
+                contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
                 hintText: widget.hint,
                 hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
                 suffixIcon: widget.suffix,
+                suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 24),
               ),
             ),
           ),
         ),
         if (hasError)
           Padding(
-            padding: const EdgeInsets.only(left: 4, top: 6),
+            padding: const EdgeInsets.only(left: 18, top: 6),
             child: Text(widget.errorText!,
                 style: TextStyle(fontSize: 12, color: s.error)),
           ),
@@ -215,11 +244,20 @@ class _AuthPrimaryButtonState extends State<_AuthPrimaryButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: disabled ? s.primary.withOpacity(0.5) : s.primary,
             borderRadius: BorderRadius.circular(999),
+            boxShadow: disabled
+                ? null
+                : [
+                    BoxShadow(
+                      color: s.primary.withOpacity(s.isDark ? 0.28 : 0.22),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
           ),
           child: widget.loading
               ? SizedBox(
@@ -240,6 +278,21 @@ class _AuthPrimaryButtonState extends State<_AuthPrimaryButton> {
   }
 }
 
+// Botão de voltar reutilizável nas três telas — mesmo padrão visual
+// do AppTap usado em drawermenu.dart, com o SVG back.svg em vez do
+// CupertinoIcons.back que existia antes.
+class _AuthBackButton extends StatelessWidget {
+  final AppColorScheme s;
+  const _AuthBackButton({required this.s});
+
+  @override
+  Widget build(BuildContext context) => AppTap(
+        onTap: () => Navigator.of(context).pop(),
+        s: s,
+        child: AppIcon('back.svg', color: s.onSurface, size: 20),
+      );
+}
+
 class _AuthErrorBanner extends StatelessWidget {
   final AppColorScheme s;
   final String message;
@@ -249,15 +302,15 @@ class _AuthErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         decoration: BoxDecoration(
           color: s.error.withOpacity(s.isDark ? 0.16 : 0.10),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: s.error.withOpacity(0.4)),
         ),
         child: Row(children: [
-          Icon(CupertinoIcons.exclamationmark_circle, size: 17, color: s.error),
-          const SizedBox(width: 8),
+          AppIcon('error.svg', color: s.error, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(message,
                 style: TextStyle(fontSize: 13, color: s.error, fontWeight: FontWeight.w500)),
@@ -324,14 +377,32 @@ class _LoginScreenState extends State<LoginScreen> {
   void _goRegister() {
     authController.clearError();
     Navigator.of(context).push(
-      CupertinoPageRoute(builder: (_) => const RegisterScreen()),
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (_, __, ___) => const RegisterScreen(),
+        transitionsBuilder: (_, anim, __, child) => SlideTransition(
+          position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(CurvedAnimation(parent: anim, curve: kCupertinoOut)),
+          child: child,
+        ),
+      ),
     );
   }
 
   void _goForgot() {
     authController.clearError();
     Navigator.of(context).push(
-      CupertinoPageRoute(builder: (_) => const ForgotPasswordScreen()),
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (_, __, ___) => const ForgotPasswordScreen(),
+        transitionsBuilder: (_, anim, __, child) => SlideTransition(
+          position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(CurvedAnimation(parent: anim, curve: kCupertinoOut)),
+          child: child,
+        ),
+      ),
     );
   }
 
@@ -386,9 +457,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _submit(),
                       suffix: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => setState(() => _obscure = !_obscure),
-                        child: Icon(
-                          _obscure ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                        child: AppIcon(
+                          _obscure ? 'eye.svg' : 'eye_off.svg',
                           size: 19,
                           color: s.onSurfaceVariant,
                         ),
@@ -397,7 +469,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(top: 8, right: 6),
                         child: GestureDetector(
                           onTap: _goForgot,
                           child: Text('Esqueceste-te da password?',
@@ -606,9 +678,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textInputAction: TextInputAction.next,
                         onSubmitted: (_) => _confirmFocus.requestFocus(),
                         suffix: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () => setState(() => _obscurePass = !_obscurePass),
-                          child: Icon(
-                            _obscurePass ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                          child: AppIcon(
+                            _obscurePass ? 'eye.svg' : 'eye_off.svg',
                             size: 19,
                             color: s.onSurfaceVariant,
                           ),
@@ -626,9 +699,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => _submit(),
                         suffix: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                          child: Icon(
-                            _obscureConfirm ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                          child: AppIcon(
+                            _obscureConfirm ? 'eye.svg' : 'eye_off.svg',
                             size: 19,
                             color: s.onSurfaceVariant,
                           ),
@@ -673,11 +747,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             Positioned(
               top: 8, left: 4,
-              child: AppTap(
-                onTap: () => Navigator.of(context).pop(),
-                s: s,
-                child: Icon(CupertinoIcons.back, color: s.onSurface, size: 22),
-              ),
+              child: _AuthBackButton(s: s),
             ),
           ]),
         ),
@@ -781,8 +851,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               color: s.success.withOpacity(s.isDark ? 0.18 : 0.12),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(CupertinoIcons.checkmark_alt,
-                                color: s.success, size: 32),
+                            child: Center(
+                              child: AppIcon('check.svg', color: s.success, size: 30),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -800,11 +871,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             Positioned(
               top: 8, left: 4,
-              child: AppTap(
-                onTap: () => Navigator.of(context).pop(),
-                s: s,
-                child: Icon(CupertinoIcons.back, color: s.onSurface, size: 22),
-              ),
+              child: _AuthBackButton(s: s),
             ),
           ]),
         ),
