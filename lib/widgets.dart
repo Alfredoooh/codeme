@@ -10,9 +10,6 @@ class AppIcon extends StatelessWidget {
   final String asset;
   final double size;
   final Color color;
-  /// Quando true, carrega de assets/icons/svg_color/ e NÃO aplica
-  /// colorFilter — o ícone mantém as cores originais do próprio SVG.
-  /// Não tem efeito em PNG (o PNG já vem colorido de fábrica).
   final bool useColorAsset;
 
   const AppIcon(
@@ -25,25 +22,12 @@ class AppIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // PNG (hoje: os ícones "filled" dos tabs) segue para
-    // assets/icons/png/ e nunca passa por SvgPicture — antes disto,
-    // um asset .png chegava a ser pedido como se fosse SVG dentro da
-    // pasta svg/, o que falha sem nenhum erro visível na tela.
     if (asset.toLowerCase().endsWith('.png')) {
       return Image.asset(
         'assets/icons/png/$asset',
         width: size,
         height: size,
         filterQuality: FilterQuality.medium,
-        // Fallback visível: se o PNG realmente não existir/carregar,
-        // mostra um ícone de aviso em vez de ficar em branco em
-        // silêncio — assim qualquer falha futura fica visível mesmo
-        // sem acesso a console/logcat.
-        errorBuilder: (context, error, stackTrace) => Icon(
-          Icons.broken_image_outlined,
-          size: size,
-          color: color,
-        ),
       );
     }
 
@@ -57,11 +41,6 @@ class AppIcon extends StatelessWidget {
       height: size,
       colorFilter:
           useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
-      placeholderBuilder: (context) => Icon(
-        Icons.broken_image_outlined,
-        size: size,
-        color: color,
-      ),
     );
   }
 }
@@ -164,7 +143,7 @@ class AppSwitch extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DASHED ROUNDED BORDER — usado no input de chat quando incógnito
+// DASHED ROUNDED BORDER
 // ══════════════════════════════════════════════════════════════
 
 class DashedRRectBorderPainter extends CustomPainter {
@@ -231,7 +210,7 @@ class DashedRRectBorder extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// GENERIC BOTTOM SHEET CARD (usado em drawer/settings/aitab)
+// GENERIC BOTTOM SHEET CARD
 // ══════════════════════════════════════════════════════════════
 
 class SettingsStyleCard extends StatelessWidget {
