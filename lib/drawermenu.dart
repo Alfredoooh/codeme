@@ -879,8 +879,8 @@ class _ProjectNodeTileState extends State<_ProjectNodeTile> {
     // ao obter bytes+nome, chamamos projectsController.uploadFile com
     // o conteúdo em base64 e o fileKind inferido pela extensão.
     final result = await FilePicker.pickFiles(allowMultiple: false);
-    if (result == null || result.isEmpty) return;
-    final picked = result.first;
+    if (result == null || result.files.isEmpty) return;
+final picked = result.files.first;
     final kind = _inferFileKind(picked.name);
     projectsController.uploadFile(
       widget.node.id,
