@@ -21,8 +21,8 @@ extension AppTabX on AppTab {
   String get svg       => const {
         AppTab.ai:        'ai_tab.svg',
         AppTab.edit:      'edit_tab.svg',
-        AppTab.templates: 'templates.svg',
-        AppTab.projects:  'projects.svg',
+        AppTab.templates: 'templates_tab.svg',
+        AppTab.projects:  'projects_tab.svg',
       }[this]!;
 
   // Ícones "filled" (usados quando o tab está ativo) agora são PNG,
@@ -32,8 +32,8 @@ extension AppTabX on AppTab {
   String get svgFilled => const {
         AppTab.ai:        'ai_tab.png',
         AppTab.edit:      'edit_tab.png',
-        AppTab.templates: 'templates.png',
-        AppTab.projects:  'projects.png',
+        AppTab.templates: 'templates_tab.png',
+        AppTab.projects:  'projects_tab.png',
       }[this]!;
 
   String get label => const {
