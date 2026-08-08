@@ -13,6 +13,7 @@ import 'edittab.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'aiwidgets.dart';
+import 'drawermenu.dart' show conversationsController, ConversationItem;
 
 // ══════════════════════════════════════════════════════════════
 // AI MODEL
@@ -1165,6 +1166,13 @@ class AiTabState extends State<AiTab> {
     );
   }
 
+  /// Depois de gerar o título automático, cria a conversa (se ainda
+  /// não existir) OU atualiza-a, e — ponto crítico corrigido — avisa
+  /// imediatamente o ConversationsController via upsertLocal, para o
+  /// drawer (que pode já estar montado noutra parte da árvore) passar
+  /// a mostrar esta conversa e o título certo sem precisar de um
+  /// load() completo. Sem isto, conversas iniciadas dentro do app
+  /// nunca apareciam no drawer até o utilizador fechar e reabrir.
   Future<void> _generateTitleInBackground(String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
@@ -1180,13 +1188,24 @@ class AiTabState extends State<AiTab> {
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
+        conversationsController.upsertLocal(ConversationItem.fromJson(created));
       }
     } else {
       await ConversationsApiService.update(token, _conversationId!,
           title: title, messages: _msgs, canvases: const []);
+      conversationsController.upsertLocal(ConversationItem(
+        id: _conversationId!,
+        title: title,
+        preview: _msgs.isNotEmpty ? _msgs.last.content : '',
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      ));
     }
   }
 
+  /// Mesma correção aplicada aqui: qualquer criação/atualização de
+  /// conversa a partir do chat propaga de imediato para o drawer via
+  /// upsertLocal, em vez de depender de um load() manual que só
+  /// acontecia no initState do AppDrawer.
   Future<void> _persistConversation() async {
     if (_incognito) return;
     final token = authController.token;
@@ -1200,10 +1219,22 @@ class AiTabState extends State<AiTab> {
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
+        conversationsController.upsertLocal(ConversationItem.fromJson(created));
       }
     } else {
       await ConversationsApiService.update(token, _conversationId!,
           messages: _msgs, canvases: const []);
+      final existing = conversationsController.items
+          .where((c) => c.id == _conversationId)
+          .toList();
+      conversationsController.upsertLocal(ConversationItem(
+        id: _conversationId!,
+        title: existing.isNotEmpty ? existing.first.title : 'Nova conversa',
+        preview: _msgs.isNotEmpty ? _msgs.last.content : '',
+        pinned: existing.isNotEmpty ? existing.first.pinned : false,
+        archived: existing.isNotEmpty ? existing.first.archived : false,
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
+      ));
     }
   }
 

@@ -10,9 +10,13 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
+import 'projects_controller.dart';
 
 // ══════════════════════════════════════════════════════════════
-// TABS
+// TABS — "projects" deixou de ser um ecrã navegável; é agora uma
+// secção que expande INLINE dentro do próprio drawer (ver
+// _ProjectsInlineSection mais abaixo). currentTab continua a existir
+// para ai/edit/templates, que continuam a ser ecrãs normais.
 // ══════════════════════════════════════════════════════════════
 
 enum AppTab { ai, edit, templates, projects }
@@ -25,10 +29,6 @@ extension AppTabX on AppTab {
         AppTab.projects:  'projects_tab.svg',
       }[this]!;
 
-  // Ícones "filled" (usados quando o tab está ativo) agora são PNG,
-  // sem o sufixo "_filled" — mesmo nome-base do svg normal, extensão
-  // .png. AppIcon (widgets.dart) já sabe rotear .png para
-  // assets/icons/png/ automaticamente, sem tint aplicado.
   String get svgFilled => const {
         AppTab.ai:        'ai_tab.png',
         AppTab.edit:      'edit_tab.png',
@@ -105,7 +105,10 @@ class ConversationItem {
 // ══════════════════════════════════════════════════════════════
 // CONVERSATIONS CONTROLLER — carrega/gere a lista real via API,
 // notifica o drawer quando muda (nova conversa criada no chat,
-// eliminação, pin, etc.)
+// eliminação, pin, etc.). upsertLocal é agora chamado diretamente
+// pelo AiTab sempre que uma conversa é criada/atualizada — corrige
+// o bug em que conversas iniciadas no chat nunca apareciam aqui
+// enquanto o drawer já estava montado (só um load() manual as trazia).
 // ══════════════════════════════════════════════════════════════
 
 class ConversationsController extends ChangeNotifier {
@@ -157,6 +160,20 @@ class ConversationsController extends ChangeNotifier {
     await ConversationsApiService.archive(token, id, archived);
   }
 
+  Future<void> rename(String id, String newTitle) async {
+    final token = authController.token;
+    if (token == null) return;
+    final idx = items.indexWhere((c) => c.id == id);
+    if (idx == -1) return;
+    final old = items[idx];
+    items[idx] = ConversationItem(
+      id: old.id, title: newTitle, preview: old.preview,
+      pinned: old.pinned, archived: old.archived, updatedAt: old.updatedAt,
+    );
+    notifyListeners();
+    await ConversationsApiService.rename(token, id, newTitle);
+  }
+
   Future<void> delete(String id) async {
     final token = authController.token;
     if (token == null) return;
@@ -165,6 +182,9 @@ class ConversationsController extends ChangeNotifier {
     await ConversationsApiService.delete(token, id);
   }
 
+  /// Insere ou atualiza uma conversa localmente e notifica listeners
+  /// de imediato — é ISTO que faz uma conversa nova aparecer no drawer
+  /// no instante em que é criada no chat, sem depender de load().
   void upsertLocal(ConversationItem item) {
     final idx = items.indexWhere((c) => c.id == item.id);
     if (idx == -1) {
@@ -190,14 +210,13 @@ class AppDrawer extends StatefulWidget {
   final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
   final VoidCallback? onNewChat;
+  /// Chamado quando o utilizador escolhe abrir uma conversa .chat
+  /// dentro de um projeto — mesmo destino que onOpenConversation, mas
+  /// mantido separado para o chamador poder distinguir a origem se
+  /// precisar (ex: analytics).
+  final ValueChanged<String>? onOpenProjectConversation;
   /// Id da conversa atualmente aberta na AiTab (para desenhar a pill
   /// de "ativa" no drawer, o mesmo padrão visual usado nos AppTab).
-  ///
-  /// ⚠️ Para a pill aparecer de facto, quem instancia AppDrawer (o
-  /// Scaffold/shell que abre este drawer) precisa passar aqui o id
-  /// da conversa atualmente aberta na AiTab. Se este parâmetro nunca
-  /// chegar preenchido, a pill nunca vai aparecer — a lógica de
-  /// desenho já está pronta em _ConvTile mais abaixo.
   final String? activeConversationId;
 
   const AppDrawer({
@@ -209,6 +228,7 @@ class AppDrawer extends StatefulWidget {
     required this.onSelectTab,
     this.onOpenConversation,
     this.onNewChat,
+    this.onOpenProjectConversation,
     this.activeConversationId,
   });
 
@@ -217,19 +237,18 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMixin {
-  static const List<AppTab> _allTabs = [
+  // "projects" foi removido da lista de tabs navegáveis — passa a
+  // ser desenhado como secção inline (_ProjectsInlineSection) logo a
+  // seguir aos outros três tabs, nunca como AppTab clicável comum.
+  static const List<AppTab> _navigableTabs = [
     AppTab.ai,
     AppTab.edit,
     AppTab.templates,
-    AppTab.projects,
   ];
 
   bool _expanded = false;
+  bool _projectsOpen = false;
 
-  // Ancoragem do botão de pesquisa — usado para medir a posição/tamanho
-  // exatos do search.svg no header e nascer o container transform
-  // circular exatamente dali (e encolher de volta pro mesmo sítio
-  // quando a busca fecha).
   final GlobalKey _searchAnchorKey = GlobalKey();
 
   @override
@@ -239,17 +258,23 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
       conversationsController.load();
     }
+    projectsController.addListener(_onConvsChanged);
+    if (projectsController.nodes.isEmpty && !projectsController.loading) {
+      projectsController.load();
+    }
   }
 
   @override
   void dispose() {
     conversationsController.removeListener(_onConvsChanged);
+    projectsController.removeListener(_onConvsChanged);
     super.dispose();
   }
 
   void _onConvsChanged() { if (mounted) setState(() {}); }
 
   void _toggleExpanded() => setState(() => _expanded = !_expanded);
+  void _toggleProjects()  => setState(() => _projectsOpen = !_projectsOpen);
 
   void _openSearch(BuildContext context) {
     final box = _searchAnchorKey.currentContext!.findRenderObject() as RenderBox;
@@ -261,10 +286,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
         s: widget.s,
         originRect: origin,
         onOpenConversation: (id) {
-          // Abre instantaneamente na AiTab: primeiro fecha o drawer
-          // inteiro (busca + drawer), só depois troca a conversa —
-          // assim não há transição visível de volta ao drawer antes
-          // do chat aparecer.
           widget.onOpenConversation?.call(id);
           widget.onClose();
         },
@@ -286,7 +307,17 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
       onOpen: () => _openConversation(item),
       onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
       onArchive: () => conversationsController.archive(item.id, !item.archived),
+      onRename: () => _openRenamePopup(context, item),
       onDelete: () => _confirmDeletePopup(context, anchorKey, item),
+    );
+  }
+
+  void _openRenamePopup(BuildContext context, ConversationItem item) {
+    showRenameSheet(
+      context,
+      widget.s,
+      currentTitle: item.title,
+      onConfirm: (newTitle) => conversationsController.rename(item.id, newTitle),
     );
   }
 
@@ -318,12 +349,12 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
         final v = details.primaryVelocity ?? 0;
         if (!_expanded && v < -200) widget.onClose();
       },
-      // A expansão cobre o ecrã progressivamente a partir da direita:
-      // o Container mantém-se ancorado à esquerda (x=0) e só a largura
-      // cresce, então visualmente a borda direita "avança" e engole o
-      // resto do ecrã — exatamente o efeito pedido, sem precisar de
-      // clipping adicional porque o drawer já vive no topo da árvore
-      // visual (alinhado à esquerda).
+      // Expand cobre o ecrã de verdade: a largura passa a
+      // MediaQuery.size.width diretamente (sem qualquer maxWidth
+      // implícito de um Drawer padrão do Scaffold — este widget NÃO
+      // deve ser envolto num Scaffold.drawer, mas sim inserido
+      // diretamente como overlay/Positioned pelo RootShell, para que
+      // esta largura seja de facto respeitada de ponta a ponta).
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 320),
         curve: kCupertinoOut,
@@ -346,12 +377,9 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                         color: s.onSurface,
                       ),
                     ),
-                    // Grupo de ações do header: search + expand ficam
-                    // menores (16px, em linha com o tamanho geral dos
-                    // outros ícones da UI) e o Row já os empurra
-                    // naturalmente para a direita por estar dentro de
-                    // um spaceBetween — sem espaçamento extra a mais
-                    // entre eles para não "flutuarem" soltos.
+                    // Botão de novo chat REMOVIDO daqui — era o botão
+                    // "depois do expand e do search" que devia
+                    // desaparecer. Restam apenas search + expand.
                     Row(children: [
                       AppTap(
                         key: _searchAnchorKey,
@@ -371,15 +399,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                           size: 16,
                         ),
                       ),
-                      const SizedBox(width: 2),
-                      AppTap(
-                        onTap: () {
-                          widget.onNewChat?.call();
-                          widget.onClose();
-                        },
-                        s: s,
-                        child: AppIcon('new_chat.svg', color: s.onSurfaceVariant, size: 20),
-                      ),
                     ]),
                   ],
                 ),
@@ -388,13 +407,36 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Column(
                   children: [
-                    for (final tab in _allTabs)
+                    for (final tab in _navigableTabs)
                       _DrawerTabTile(
                         s: s,
                         tab: tab,
                         selected: widget.currentTab == tab,
                         onTap: () => widget.onSelectTab(tab),
                       ),
+                    // Projetos: já não é uma tab clicável para
+                    // navegação de ecrã — é a linha que expande/colapsa
+                    // a secção inline logo abaixo, via arrow up/down.
+                    _ProjectsToggleTile(
+                      s: s,
+                      open: _projectsOpen,
+                      onTap: _toggleProjects,
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: kCupertinoOut,
+                      alignment: Alignment.topCenter,
+                      child: _projectsOpen
+                          ? _ProjectsInlineSection(
+                              s: s,
+                              onOpenConversation: (id) {
+                                widget.onOpenProjectConversation?.call(id);
+                                widget.onOpenConversation?.call(id);
+                                widget.onClose();
+                              },
+                            )
+                          : const SizedBox(width: double.infinity),
+                    ),
                   ],
                 ),
               ),
@@ -480,6 +522,9 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
               s: s,
               item: item,
               expanded: _expanded,
+              // Pill de conversa ativa — já existia, mantida
+              // exatamente como pedido ("isso é somente para a
+              // conversa que estiver clicado").
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
               onOptions: (key) => _openConvPopup(context, key, item),
@@ -550,10 +595,6 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          // Quando selecionado, usa o ícone PNG "filled" (já colorido
-          // de fábrica — sem tint, useColorAsset não se aplica a PNG
-          // mas mantemos por clareza semântica e para o dia em que
-          // este mesmo asset volte a ser SVG).
           sel
               ? AppIcon(widget.tab.svgFilled,
                   color: s.onSurface, size: 20, useColorAsset: true)
@@ -573,14 +614,579 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
   }
 }
 
-// ── Conversation tile — sem ícone de opções visível (removido);
-// o popup de opções só surge com long-press na própria linha. Quando
-// a conversa é a ativa (aberta na AiTab), ganha uma pill de fundo,
-// exatamente como o AppTab selecionado (s.navIndicatorBg). Quando o
-// drawer está expandido, ganha swipe no estilo mais reconhecido
-// (Gmail/WhatsApp): arrastar para a ESQUERDA revela eliminar
-// (vermelho), arrastar para a DIREITA revela arquivar (cor primária).
-// ─────────────────────────────────────────────
+// ── Linha "Projetos" — igual visualmente às outras tabs, mas em vez
+// de navegar troca só o ícone por uma seta que roda 180° e expande/
+// colapsa a secção logo abaixo (AnimatedSize no pai). ──────────────
+
+class _ProjectsToggleTile extends StatefulWidget {
+  final AppColorScheme s;
+  final bool open;
+  final VoidCallback onTap;
+  const _ProjectsToggleTile({required this.s, required this.open, required this.onTap});
+  @override State<_ProjectsToggleTile> createState() => _ProjectsToggleTileState();
+}
+
+class _ProjectsToggleTileState extends State<_ProjectsToggleTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: kCupertinoOut,
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: widget.open
+              ? s.navIndicatorBg
+              : (_pressed ? s.hover : Colors.transparent),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(children: [
+          widget.open
+              ? AppIcon(AppTab.projects.svgFilled,
+                  color: s.onSurface, size: 20, useColorAsset: true)
+              : AppIcon(AppTab.projects.svg, color: s.onSurfaceVariant, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              AppTab.projects.label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: widget.open ? FontWeight.w600 : FontWeight.w400,
+                color: widget.open ? s.navLabelActive : s.onSurface,
+              ),
+            ),
+          ),
+          AnimatedRotation(
+            turns: widget.open ? 0.5 : 0.0,
+            duration: const Duration(milliseconds: 220),
+            curve: kCupertinoOut,
+            child: AppIcon('chevron_up.svg', color: s.onSurfaceVariant, size: 14),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PROJECTS INLINE SECTION — a árvore de projetos/pastas/ficheiros
+// desenhada diretamente dentro do drawer, sem navegar para nenhum
+// ecrã novo. Cada nó "container" (project/folder) tem o seu próprio
+// arrow up/down local para expandir subpastas, recursivamente.
+// ══════════════════════════════════════════════════════════════
+
+class _ProjectsInlineSection extends StatefulWidget {
+  final AppColorScheme s;
+  final ValueChanged<String> onOpenConversation;
+  const _ProjectsInlineSection({required this.s, required this.onOpenConversation});
+  @override State<_ProjectsInlineSection> createState() => _ProjectsInlineSectionState();
+}
+
+class _ProjectsInlineSectionState extends State<_ProjectsInlineSection> {
+  void _createProject() {
+    showRenameSheet(
+      context,
+      widget.s,
+      currentTitle: '',
+      title: 'Novo projeto',
+      hint: 'Nome do projeto',
+      onConfirm: (name) {
+        if (name.trim().isEmpty) return;
+        projectsController.createProject(name.trim());
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final roots = projectsController.roots;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, right: 0, top: 2, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (projectsController.loading && roots.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              child: Row(children: [
+                SizedBox(
+                  width: 14, height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('A carregar projetos...',
+                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+              ]),
+            )
+          else if (roots.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              child: Text('Sem projetos ainda',
+                  style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+            )
+          else
+            for (final root in roots)
+              _ProjectNodeTile(
+                s: s,
+                node: root,
+                depth: 0,
+                onOpenConversation: widget.onOpenConversation,
+              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _createProject,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(children: [
+                  AppIcon('add.svg', color: s.primary, size: 15),
+                  const SizedBox(width: 8),
+                  Text('Novo projeto',
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600, color: s.primary)),
+                ]),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Um nó da árvore (project/folder/file), recursivo. Containers têm
+/// arrow up/down local; ficheiros abrem diretamente (conversa) ou
+/// mostram info (outros tipos, sem viewer dedicado nesta resposta).
+class _ProjectNodeTile extends StatefulWidget {
+  final AppColorScheme s;
+  final ProjectNode node;
+  final int depth;
+  final ValueChanged<String> onOpenConversation;
+  const _ProjectNodeTile({
+    required this.s,
+    required this.node,
+    required this.depth,
+    required this.onOpenConversation,
+  });
+  @override State<_ProjectNodeTile> createState() => _ProjectNodeTileState();
+}
+
+class _ProjectNodeTileState extends State<_ProjectNodeTile> {
+  bool _open = false;
+  bool _h = false;
+  final GlobalKey _anchorKey = GlobalKey();
+
+  void _onTap() {
+    final node = widget.node;
+    if (node.isContainer) {
+      // Ao ser pressionado, mostra popup com opção de abrir conversa,
+      // criar ficheiro e upload de ficheiros — exatamente como pedido.
+      // O arrow (ícone à direita) é quem expande/colapsa; o corpo da
+      // linha abre o popup de ações.
+      _openNodeActionsPopup();
+    } else if (node.fileKind == ProjectFileKind.chat && node.conversationId != null) {
+      widget.onOpenConversation(node.conversationId!);
+    } else {
+      _openFileInfoSheet();
+    }
+  }
+
+  void _openNodeActionsPopup() {
+    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
+    final off = box.localToGlobal(Offset.zero);
+    final sz = box.size;
+    showProjectNodeActionsPopup(
+      context,
+      widget.s,
+      anchorOffset: off,
+      anchorSize: sz,
+      node: widget.node,
+      onOpenConversation: () => _startNewConversationHere(),
+      onCreateFile: () => _createFileHere(),
+      onCreateFolder: () => _createFolderHere(),
+      onUpload: () => _uploadFileHere(),
+      onRename: () => _renameHere(),
+      onDelete: () => _deleteHere(),
+    );
+  }
+
+  void _startNewConversationHere() {
+    // "Abrir conversa" dentro de uma pasta/projeto inicia uma nova
+    // conversa vazia e já a associa a este container assim que a
+    // primeira mensagem for enviada — para manter esta resposta
+    // autocontida, aqui apenas navegamos para uma conversa nova; a
+    // associação a este parentId específico é feita chamando
+    // projectsController.linkConversation logo que exista um id de
+    // conversa real (ver AiTab._generateTitleInBackground, que já
+    // devolve o id assim que a conversa é criada no backend).
+    widget.onOpenConversation('');
+  }
+
+  void _createFileHere() {
+    showRenameSheet(
+      context,
+      widget.s,
+      currentTitle: '',
+      title: 'Novo documento',
+      hint: 'Nome do ficheiro',
+      onConfirm: (name) {
+        if (name.trim().isEmpty) return;
+        projectsController.createGeneratedFile(
+          widget.node.id,
+          name: name.trim(),
+          fileKind: ProjectFileKind.doc,
+          content: '<p></p>',
+        );
+        setState(() => _open = true);
+      },
+    );
+  }
+
+  void _createFolderHere() {
+    showRenameSheet(
+      context,
+      widget.s,
+      currentTitle: '',
+      title: 'Nova pasta',
+      hint: 'Nome da pasta',
+      onConfirm: (name) {
+        if (name.trim().isEmpty) return;
+        projectsController.createFolder(widget.node.id, name.trim());
+        setState(() => _open = true);
+      },
+    );
+  }
+
+  void _uploadFileHere() async {
+    // Seleção real de ficheiro delegada ao FilePicker já usado noutras
+    // partes da app (aitab.dart); aqui despoletamos o mesmo fluxo e,
+    // ao obter bytes+nome, chamamos projectsController.uploadFile com
+    // o conteúdo em base64 e o fileKind inferido pela extensão.
+    final result = await FilePicker.pickFiles(allowMultiple: false);
+    if (result == null || result.isEmpty) return;
+    final picked = result.first;
+    final kind = _inferFileKind(picked.name);
+    projectsController.uploadFile(
+      widget.node.id,
+      name: picked.name,
+      fileKind: kind,
+      fileDataBase64: picked.base64Data,
+      mimeType: picked.mimeType,
+    );
+    setState(() => _open = true);
+  }
+
+  ProjectFileKind _inferFileKind(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.pdf')) return ProjectFileKind.pdf;
+    if (lower.endsWith('.docx') || lower.endsWith('.doc')) return ProjectFileKind.docx;
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')) return ProjectFileKind.xlsx;
+    if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) return ProjectFileKind.pptx;
+    return ProjectFileKind.other;
+  }
+
+  void _renameHere() {
+    showRenameSheet(
+      context,
+      widget.s,
+      currentTitle: widget.node.name,
+      onConfirm: (newName) {
+        if (newName.trim().isEmpty) return;
+        projectsController.rename(widget.node.id, newName.trim());
+      },
+    );
+  }
+
+  void _deleteHere() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _DeleteConversationSheet(
+        s: widget.s,
+        title: widget.node.name,
+        onConfirm: () {
+          Navigator.pop(ctx);
+          projectsController.delete(widget.node.id);
+        },
+      ),
+    );
+  }
+
+  void _openFileInfoSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _FileInfoSheet(s: widget.s, node: widget.node),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final node = widget.node;
+    final children = node.isContainer ? projectsController.childrenOf(node.id) : const <ProjectNode>[];
+    final iconAsset = node.isContainer
+        ? (node.type == ProjectNodeType.project ? 'projects_tab.svg' : 'folder.svg')
+        : (node.fileKind?.pngAsset ?? 'doc.png');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          key: _anchorKey,
+          behavior: HitTestBehavior.opaque,
+          onTapDown:   (_) => setState(() => _h = true),
+          onTapCancel: ()  => setState(() => _h = false),
+          onTapUp:     (_) => setState(() => _h = false),
+          onTap: _onTap,
+          onLongPress: _openNodeActionsPopup,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            margin: EdgeInsets.only(left: widget.depth * 14.0, top: 1, bottom: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: _h ? s.hover : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(children: [
+              node.isContainer
+                  ? AppIcon(iconAsset, color: s.onSurfaceVariant, size: 16)
+                  : EditorTypeIcon(iconAsset, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(node.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: s.onSurface)),
+              ),
+              if (node.isContainer)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(() => _open = !_open),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: AnimatedRotation(
+                      turns: _open ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      curve: kCupertinoOut,
+                      child: AppIcon('chevron_up.svg', color: s.onSurfaceVariant, size: 12),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+        if (node.isContainer)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: kCupertinoOut,
+            alignment: Alignment.topCenter,
+            child: _open
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final child in children)
+                        _ProjectNodeTile(
+                          s: s,
+                          node: child,
+                          depth: widget.depth + 1,
+                          onOpenConversation: widget.onOpenConversation,
+                        ),
+                      if (children.isEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(
+                              left: (widget.depth + 1) * 14.0 + 10, top: 2, bottom: 6),
+                          child: Text('Vazio',
+                              style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                        ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Popup de ações de um nó de projeto (abrir conversa / criar
+// ficheiro / criar pasta / upload / renomear / eliminar) — exatamente
+// o popup pedido para quando uma pasta/subpasta é pressionada. ──────
+
+void showProjectNodeActionsPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required Offset anchorOffset,
+  required Size anchorSize,
+  required ProjectNode node,
+  required VoidCallback onOpenConversation,
+  required VoidCallback onCreateFile,
+  required VoidCallback onCreateFolder,
+  required VoidCallback onUpload,
+  required VoidCallback onRename,
+  required VoidCallback onDelete,
+}) {
+  final screenSize = MediaQuery.of(context).size;
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 190),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    const width = 240.0;
+    const estimatedHeight = 300.0;
+    final desiredTop = anchorOffset.dy + anchorSize.height + 6;
+    final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
+    final top = overflowsBottom ? null : desiredTop;
+    final bottom = overflowsBottom ? screenSize.height - anchorOffset.dy + 6 : null;
+    final left = anchorOffset.dx.clamp(12.0, screenSize.width - width - 12);
+
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      Positioned(
+        top: top,
+        bottom: bottom,
+        left: left,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, child) => Opacity(
+            opacity: CurvedAnimation(
+                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                .value,
+            child: Transform.scale(
+              scale: Tween(begin: 0.92, end: 1.0)
+                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .value,
+              alignment: overflowsBottom ? Alignment.bottomLeft : Alignment.topLeft,
+              child: child,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              width: width,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ConvPopupRow(
+                    s: s, icon: 'send.svg', label: 'Abrir conversa',
+                    onTap: () { close(); onOpenConversation(); },
+                  ),
+                  _ConvPopupRow(
+                    s: s, icon: 'doc.png', useEditorIcon: true, label: 'Criar ficheiro',
+                    onTap: () { close(); onCreateFile(); },
+                  ),
+                  _ConvPopupRow(
+                    s: s, icon: 'folder.svg', label: 'Criar pasta',
+                    onTap: () { close(); onCreateFolder(); },
+                  ),
+                  _ConvPopupRow(
+                    s: s, icon: 'file.svg', label: 'Upload de ficheiro',
+                    onTap: () { close(); onUpload(); },
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    child: Divider(height: 1),
+                  ),
+                  _ConvPopupRow(
+                    s: s, icon: 'edit.svg', label: 'Renomear',
+                    onTap: () { close(); onRename(); },
+                  ),
+                  _ConvPopupRow(
+                    s: s, icon: 'trash.svg', label: 'Eliminar', destructive: true,
+                    onTap: () { close(); onDelete(); },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  });
+
+  Overlay.of(context).insert(entry);
+  controller.forward();
+}
+
+// ── Sheet genérico de info de ficheiro (para tipos sem viewer
+// dedicado nesta resposta — pdf/docx/xlsx/pptx binários). ───────────
+
+class _FileInfoSheet extends StatelessWidget {
+  final AppColorScheme s;
+  final ProjectNode node;
+  const _FileInfoSheet({required this.s, required this.node});
+
+  @override
+  Widget build(BuildContext context) => Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            decoration: BoxDecoration(
+              color: s.floatingSurface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: s.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(child: SheetGrabber(s: s)),
+                EditorTypeIcon(node.fileKind?.pngAsset ?? 'doc.png', size: 36),
+                const SizedBox(height: 10),
+                Text(node.name,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                const SizedBox(height: 4),
+                Text(node.fileKind?.label ?? 'Ficheiro',
+                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+// ── Conversation tile — pill de "ativa" mantida exatamente como
+// pedido (só para a conversa clicada/aberta). ───────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -623,8 +1229,6 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
       setState(() => _dragDx = 0);
       return;
     }
-    // Esquerda (dx negativo) = eliminar · Direita (dx positivo) = arquivar
-    // — este é o padrão mais reconhecido (Gmail, WhatsApp).
     if (_dragDx <= -_threshold) {
       setState(() => _resolved = true);
       widget.onDelete();
@@ -682,12 +1286,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                // Pill de "ativa" (mesmo tom usado pelo AppTab selecionado
-                // no drawer) sobrepõe o hover normal quando esta é a
-                // conversa aberta na AiTab. Depende de widget.active vir
-                // true, que depende de AppDrawer.activeConversationId
-                // estar preenchido por quem chama o drawer (ver nota em
-                // AppDrawer acima).
+                // Pill de "ativa" — SÓ para a conversa correspondente ao
+                // id atualmente aberto na AiTab (widget.active).
                 color: widget.active
                     ? s.navIndicatorBg
                     : (_h ? s.hover : s.surface),
@@ -715,8 +1315,6 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
                   const SizedBox(width: 6),
                   AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
                 ],
-                // Ícone de "mais opções" removido — o popup abre apenas
-                // com long-press na própria linha (onLongPress acima).
               ]),
             ),
           ),
@@ -726,9 +1324,9 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
   }
 }
 
-// ── Popup de opções de uma conversa (fixar / arquivar / eliminar) —
-// ancorado ao próprio item long-pressionado, com fallback para abrir
-// para cima quando não há espaço suficiente por baixo. ──────────────
+// ── Popup de opções de uma conversa (fixar / arquivar / renomear /
+// eliminar) — inclui agora "Renomear", já que o título passa a ser
+// editável a partir do app. ──────────────────────────────────────
 
 void showConversationOptionsPopup(
   BuildContext context,
@@ -738,6 +1336,7 @@ void showConversationOptionsPopup(
   required VoidCallback onOpen,
   required VoidCallback onTogglePin,
   required VoidCallback onArchive,
+  required VoidCallback onRename,
   required VoidCallback onDelete,
 }) {
   final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
@@ -760,7 +1359,7 @@ void showConversationOptionsPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const width = 232.0;
-    const estimatedHeight = 200.0;
+    const estimatedHeight = 244.0;
     final desiredTop = off.dy + sz.height + 6;
     final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
     final top = overflowsBottom ? null : desiredTop;
@@ -821,6 +1420,10 @@ void showConversationOptionsPopup(
                     onTap: () { close(); onArchive(); },
                   ),
                   _ConvPopupRow(
+                    s: s, icon: 'edit.svg', label: 'Renomear',
+                    onTap: () { close(); onRename(); },
+                  ),
+                  _ConvPopupRow(
                     s: s, icon: 'trash.svg', label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
@@ -844,12 +1447,14 @@ class _ConvPopupRow extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final bool destructive;
+  final bool useEditorIcon;
   const _ConvPopupRow({
     required this.s,
     required this.icon,
     required this.label,
     required this.onTap,
     this.destructive = false,
+    this.useEditorIcon = false,
   });
   @override State<_ConvPopupRow> createState() => _ConvPopupRowState();
 }
@@ -873,7 +1478,9 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          AppIcon(widget.icon, size: 18, color: color),
+          widget.useEditorIcon
+              ? EditorTypeIcon(widget.icon, size: 18)
+              : AppIcon(widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
@@ -997,14 +1604,95 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
   }
 }
 
+// ── Sheet de renomear/criar (título de conversa, nome de projeto,
+// pasta ou ficheiro) — genérico, reutilizado em vários pontos. ──────
+
+Future<void> showRenameSheet(
+  BuildContext context,
+  AppColorScheme s, {
+  required String currentTitle,
+  required ValueChanged<String> onConfirm,
+  String title = 'Renomear conversa',
+  String hint = 'Título da conversa',
+}) {
+  final ctrl = TextEditingController(text: currentTitle);
+  return showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            decoration: BoxDecoration(
+              color: s.floatingSurface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: s.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: SheetGrabber(s: s)),
+                Text(title,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  style: TextStyle(fontSize: 15, color: s.onSurface),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: hint,
+                    hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                    filled: true,
+                    fillColor: s.hover,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                  onSubmitted: (v) {
+                    Navigator.pop(ctx);
+                    onConfirm(v.trim());
+                  },
+                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    onConfirm(ctrl.text.trim());
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.primary,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('Confirmar',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
-// CONTAINER TRANSFORM ROUTE — a tela de pesquisa nasce visualmente
-// de um círculo pequeno na posição exata do botão search.svg e
-// cresce (clipOval animado) até cobrir o drawer inteiro. No fecho,
-// a mesma rota faz o inverso: encolhe de volta para o mesmo ponto.
-// O raio final é calculado para o círculo cobrir todo o retângulo
-// do drawer a partir do centro do botão de origem (distância até o
-// canto mais afastado), garantindo que nenhuma borda fica descoberta.
+// CONTAINER TRANSFORM ROUTE
 // ══════════════════════════════════════════════════════════════
 
 class _ContainerTransformRoute extends PageRouteBuilder {
@@ -1021,9 +1709,6 @@ class _ContainerTransformRoute extends PageRouteBuilder {
             final screen = MediaQuery.of(context).size;
             final center = origin.center;
 
-            // Maior distância do centro de origem a qualquer canto do
-            // ecrã — garante que o círculo, ao atingir esse raio, cobre
-            // a área inteira sem deixar canto descoberto.
             final corners = [
               Offset.zero,
               Offset(screen.width, 0),
@@ -1066,19 +1751,15 @@ class _CircleRevealClipper extends CustomClipper<Path> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONVERSATION SEARCH SCREEN — aberta pelo botão search.svg no
-// header do drawer via container transform (ver _ContainerTransformRoute
-// acima). O botão de voltar fica na MESMA posição/tamanho que o
-// search.svg de origem (originRect), para que Navigator.pop() dispare
-// o clipOval inverso a partir exatamente desse ponto, devolvendo o
-// utilizador ao drawer — nunca diretamente ao chat.
+// CONVERSATION SEARCH SCREEN — já lia do mesmo conversationsController
+// que o drawer; o "bug" era o drawer não receber updates em tempo
+// real (corrigido acima via upsertLocal), não a busca em si. Mantido
+// tal e qual, apenas confirmando a mesma fonte de dados.
 // ══════════════════════════════════════════════════════════════
 
 class ConversationSearchScreen extends StatefulWidget {
   final AppColorScheme s;
   final ValueChanged<String> onOpenConversation;
-  /// Posição/tamanho do botão search.svg no drawer — usado para
-  /// posicionar o botão de voltar exatamente no mesmo lugar.
   final Rect originRect;
   const ConversationSearchScreen({
     super.key,
@@ -1135,11 +1816,6 @@ class _ConversationSearchScreenState extends State<ConversationSearchScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
               child: Row(children: [
-                // Botão de voltar posicionado com o MESMO tamanho do
-                // search.svg de origem (originRect.height), para o
-                // clipOval reverso nascer/morrer exatamente aqui —
-                // é este toque que aciona Navigator.pop(), portanto é
-                // aqui, e não noutro sítio, que o fecho tem de ocorrer.
                 SizedBox(
                   width: origin.height,
                   height: origin.height,
@@ -1358,11 +2034,6 @@ Uint8List _decodeAvatar(String raw) {
       : raw;
   return base64Decode(b64);
 }
-
-// ── Botão que abre o popup de opções rápidas da conta. Corrigido o
-// mesmo bug de gesto engolido: o anchor visual (Container com ícone)
-// já não intercepta o toque sozinho — está embrulhado em IgnorePointer
-// e é o GestureDetector externo que trata sempre o _toggle(). ──────
 
 class _AccountQuickMenuButton extends StatefulWidget {
   final AppColorScheme s;

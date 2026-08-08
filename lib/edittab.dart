@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/edittab.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -5,6 +8,7 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'sheets.dart';
 import 'api_service.dart';
+import 'auth_service.dart';
 import 'aitab.dart' show LocalCanvasItem, LocalCanvasKind, LocalCanvasKindX;
 
 // ══════════════════════════════════════════════════════════════
@@ -35,6 +39,15 @@ extension EditorTypeX on EditorType {
         EditorType.whiteboard: 'assets/editor/whiteboard.html',
       }[this]!;
 
+  /// docType enviado ao worker em /ai/edit-document — mantém-se
+  /// estável mesmo que o wire tag de CanvasKind mude.
+  String get aiDocType => const {
+        EditorType.docs:       'doc',
+        EditorType.sheets:     'sheet',
+        EditorType.slides:     'slide',
+        EditorType.whiteboard: 'whiteboard',
+      }[this]!;
+
   static EditorType fromCanvasKind(CanvasKind k) {
     switch (k) {
       case CanvasKind.sheet: return EditorType.sheets;
@@ -46,11 +59,11 @@ extension EditorTypeX on EditorType {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TAB CONTROLLER — agora suporta dois tipos de pedido de carga:
-// o antigo CanvasItem (vindo de api_service.dart, usado noutros
-// pontos da app se existirem) e o novo LocalCanvasItem (vindo da
-// AiTab, que inclui também blocos de código genéricos tratados como
-// "documento" — ponto 6/7 do pedido).
+// EDIT TAB CONTROLLER — agora também guarda, por EditorType, um
+// "getter" do conteúdo atual do editor (fornecido pelo próprio
+// _EditTabState via callback JS) e o último conteúdo lido, para o
+// FAB de IA conseguir mandar o documento atual ao worker sem ter de
+// re-arquitetar o fluxo de CanvasItem/LocalCanvasItem existente.
 // ══════════════════════════════════════════════════════════════
 
 class EditTabController extends ChangeNotifier {
@@ -98,6 +111,8 @@ class _EditTabState extends State<EditTab> {
     for (final t in EditorType.values) t: null,
   };
 
+  bool _aiEditing = false;
+
   @override
   void initState() {
     super.initState();
@@ -141,10 +156,6 @@ class _EditTabState extends State<EditTab> {
     ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
   }
 
-  /// Injeta um LocalCanvasItem no editor certo. Blocos de código
-  /// (LocalCanvasKind.code) são envolvidos num <pre><code> simples
-  /// antes de irem para o editor de documentos, para ficarem
-  /// legíveis/monoespaçados dentro do docs.html — ponto 6/7.
   void _injectLocalCanvas(InAppWebViewController ctrl, LocalCanvasItem item) {
     String htmlContent;
     switch (item.kind) {
@@ -161,10 +172,6 @@ class _EditTabState extends State<EditTab> {
       case LocalCanvasKind.sheet:
       case LocalCanvasKind.slide:
       case LocalCanvasKind.whiteboard:
-        // Conteúdo JSON cru — o próprio editor (sheets.html/slides.html/
-        // whiteboard.html) é responsável por interpretar via a mesma
-        // editorApi.setContent, exatamente como já fazia para
-        // CanvasItem.content antes desta alteração.
         htmlContent = item.content;
         break;
     }
@@ -179,53 +186,304 @@ class _EditTabState extends State<EditTab> {
     if (hex != null) _runJs("$cb('$hex')");
   }
 
+  /// Pede ao editor (via JS) o conteúdo atual e a seleção atual (se
+  /// houver). O editorApi já expõe getContent()/getSelection() para as
+  /// funcionalidades de cor/link existentes — reutilizamos o mesmo
+  /// canal de comunicação (evaluateJavascript + callAsyncJavaScript)
+  /// para não introduzir um novo handler nativo por editor.
+  Future<String> _getCurrentContent() async {
+    final ctrl = _controllers[widget.editorType];
+    if (ctrl == null) return '';
+    try {
+      final result = await ctrl.callAsyncJavaScript(functionBody: 'return editorApi.getContent();');
+      return result?.value?.toString() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<String?> _getCurrentSelection() async {
+    final ctrl = _controllers[widget.editorType];
+    if (ctrl == null) return null;
+    try {
+      final result = await ctrl.callAsyncJavaScript(
+        functionBody:
+            'return (typeof editorApi.getSelection === "function") ? editorApi.getSelection() : "";',
+      );
+      final val = result?.value?.toString();
+      return (val == null || val.isEmpty) ? null : val;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _setCurrentContent(String content) => _injectCanvas(_controllers[widget.editorType]!, content);
+
+  /// Abre o modal do FAB de sparkles — item novo pedido: um simples
+  /// widget flutuante (não navega para o AiTab nem toca no drawer),
+  /// com um input onde o utilizador escreve a instrução; a IA recebe
+  /// SÓ o conteúdo atual + instrução (poupando tokens vs mandar a
+  /// conversa toda) e devolve o documento já atualizado.
+  Future<void> _openAiEditModal({String? preselectedText}) async {
+    final s = AppTheme.of(context);
+    final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
+    if (instruction == null || instruction.trim().isEmpty) return;
+    await _runAiEdit(instruction.trim(), selection: preselectedText);
+  }
+
+  Future<void> _runAiEdit(String instruction, {String? selection}) async {
+    final token = authController.token;
+    if (token == null || _aiEditing) return;
+    setState(() => _aiEditing = true);
+    try {
+      final current = await _getCurrentContent();
+      final updated = await AiApiService.editDocument(
+        token: token,
+        currentContent: current,
+        instruction: instruction,
+        docType: widget.editorType.aiDocType,
+        selection: selection,
+      );
+      if (mounted && updated.trim().isNotEmpty) {
+        _setCurrentContent(updated);
+      }
+    } catch (_) {
+      // Falha silenciosa controlada — o editor mantém o conteúdo
+      // anterior; um SnackBar simples informa sem travar o fluxo.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível aplicar a edição.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _aiEditing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s   = AppTheme.of(context);
     final idx = EditorType.values.indexOf(widget.editorType);
 
-    return IndexedStack(
-      index: idx,
-      children: EditorType.values.map((t) {
-        if (kIsWeb) return const SizedBox.shrink();
-        return InAppWebView(
-          initialFile: t.htmlAsset,
-          initialSettings: InAppWebViewSettings(
-            transparentBackground: true,
-            javaScriptEnabled: true,
-            allowFileAccessFromFileURLs: true,
-            allowUniversalAccessFromFileURLs: true,
+    return Stack(children: [
+      IndexedStack(
+        index: idx,
+        children: EditorType.values.map((t) {
+          if (kIsWeb) return const SizedBox.shrink();
+          return InAppWebView(
+            initialFile: t.htmlAsset,
+            initialSettings: InAppWebViewSettings(
+              transparentBackground: true,
+              javaScriptEnabled: true,
+              allowFileAccessFromFileURLs: true,
+              allowUniversalAccessFromFileURLs: true,
+            ),
+            onWebViewCreated: (c) {
+              _controllers[t] = c;
+              c.addJavaScriptHandler(
+                handlerName: 'openColorPicker',
+                callback: (args) {
+                  final cb =
+                      args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
+                  _openColorPicker(context, s, cb);
+                },
+              );
+              c.addJavaScriptHandler(
+                handlerName: 'openImagePicker',
+                callback: (_) {
+                  showImagePickerSheet(context, s);
+                },
+              );
+              c.addJavaScriptHandler(
+                handlerName: 'openLinkSheet',
+                callback: (_) {
+                  showLinkSheet(context, s, (url, text) {
+                    _runJs("editorApi.insertLink('$url','$text')");
+                  });
+                },
+              );
+              // Handler novo: o editorApi.html chama isto quando o
+              // utilizador escolhe "Editar" no menu de seleção de
+              // texto (primeira opção, antes de copiar/selecionar
+              // tudo/etc — ver nota no docs.html/sheets.html/etc).
+              // Passa o texto selecionado para o modal, que depois
+              // envia esse trecho como `selection` no pedido à IA.
+              c.addJavaScriptHandler(
+                handlerName: 'openAiEditForSelection',
+                callback: (args) {
+                  final selected = args.isNotEmpty ? args[0]?.toString() : null;
+                  if (t == widget.editorType) {
+                    _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
+                  }
+                },
+              );
+            },
+            onLoadStop: (c, _) => _onPendingLoad(),
+          );
+        }).toList(),
+      ),
+      // FAB circular de sparkles — canto inferior direito, acima da
+      // barra de navegação da app. Único modal necessário para editar
+      // por IA sem sair do EditTab nem passar pelo AiTab/drawer.
+      Positioned(
+        right: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 84,
+        child: _AiEditFab(
+          s: s,
+          busy: _aiEditing,
+          onTap: () => _openAiEditModal(),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ── FAB circular de sparkles ─────────────────────────────────────
+
+class _AiEditFab extends StatefulWidget {
+  final AppColorScheme s;
+  final bool busy;
+  final VoidCallback onTap;
+  const _AiEditFab({required this.s, required this.busy, required this.onTap});
+  @override State<_AiEditFab> createState() => _AiEditFabState();
+}
+
+class _AiEditFabState extends State<_AiEditFab> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   widget.busy ? null : (_) => setState(() => _p = true),
+      onTapCancel: widget.busy ? null : ()  => setState(() => _p = false),
+      onTapUp:     widget.busy ? null : (_) => setState(() => _p = false),
+      onTap:       widget.busy ? null : widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.90 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          width: 52, height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.primary,
+            shape: BoxShape.circle,
+            boxShadow: s.floatingShadow,
           ),
-          onWebViewCreated: (c) {
-            _controllers[t] = c;
-            c.addJavaScriptHandler(
-              handlerName: 'openColorPicker',
-              callback: (args) {
-                final cb =
-                    args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
-                _openColorPicker(context, s, cb);
-              },
-            );
-            c.addJavaScriptHandler(
-              handlerName: 'openImagePicker',
-              callback: (_) {
-                showImagePickerSheet(context, s);
-              },
-            );
-            c.addJavaScriptHandler(
-              handlerName: 'openLinkSheet',
-              callback: (_) {
-                showLinkSheet(context, s, (url, text) {
-                  _runJs("editorApi.insertLink('$url','$text')");
-                });
-              },
-            );
-          },
-          onLoadStop: (c, _) => _onPendingLoad(),
-        );
-      }).toList(),
+          child: widget.busy
+              ? SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor: AlwaysStoppedAnimation(s.onPrimary),
+                  ),
+                )
+              : AppIcon('sparkles.svg', color: s.onPrimary, size: 22),
+        ),
+      ),
     );
   }
+}
+
+// ── Modal de input do FAB de sparkles — widget simples e leve
+// (bottom sheet), nunca navega para outro ecrã. Devolve a instrução
+// escrita pelo utilizador via Navigator.pop, ou null se cancelado. ──
+
+Future<String?> showAiEditModal(
+  BuildContext context,
+  AppColorScheme s, {
+  bool hasSelection = false,
+}) {
+  final ctrl = TextEditingController();
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            decoration: BoxDecoration(
+              color: s.floatingSurface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: s.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: SheetGrabber(s: s)),
+                Row(children: [
+                  AppIcon('sparkles.svg', color: s.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    hasSelection ? 'Editar seleção com IA' : 'Editar documento com IA',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Text(
+                  hasSelection
+                      ? 'Diz o que queres mudar no trecho selecionado.'
+                      : 'Diz o que queres alterar — a IA aplica direto no documento.',
+                  style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  minLines: 1, maxLines: 4,
+                  style: TextStyle(fontSize: 15, color: s.onSurface),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Ex: torna este parágrafo mais formal',
+                    hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                    filled: true,
+                    fillColor: s.hover,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                  onSubmitted: (v) => Navigator.pop(ctx, v),
+                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () => Navigator.pop(ctx, ctrl.text),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.primary,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AppIcon('sparkles.svg', color: s.onPrimary, size: 16),
+                        const SizedBox(width: 8),
+                        Text('Aplicar',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 // ══════════════════════════════════════════════════════════════

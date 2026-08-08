@@ -200,6 +200,163 @@ class CanvasParser {
 }
 
 // ══════════════════════════════════════════════════════════════
+// PROJECTS — espelha exatamente o modelo do worker (proj:<userId>:<id>
+// + projidx:<userId>). Um ProjectNode pode ser project (raiz),
+// folder (subpasta) ou file (documento dentro de uma pasta/projeto).
+// A árvore inteira do utilizador vem "achatada" numa única chamada e
+// é reconstruída localmente via parentId — exatamente como o backend
+// já a guarda.
+// ══════════════════════════════════════════════════════════════
+
+enum ProjectNodeType { project, folder, file }
+
+extension ProjectNodeTypeX on ProjectNodeType {
+  String get wire => const {
+        ProjectNodeType.project: 'project',
+        ProjectNodeType.folder:  'folder',
+        ProjectNodeType.file:    'file',
+      }[this]!;
+
+  static ProjectNodeType fromWire(String tag) {
+    switch (tag) {
+      case 'folder': return ProjectNodeType.folder;
+      case 'file':   return ProjectNodeType.file;
+      default:       return ProjectNodeType.project;
+    }
+  }
+}
+
+enum ProjectFileKind {
+  chat, pdf, docx, xlsx, pptx, doc, sheet, slide, whiteboard, code, other,
+}
+
+extension ProjectFileKindX on ProjectFileKind {
+  String get wire => const {
+        ProjectFileKind.chat:       'chat',
+        ProjectFileKind.pdf:        'pdf',
+        ProjectFileKind.docx:       'docx',
+        ProjectFileKind.xlsx:       'xlsx',
+        ProjectFileKind.pptx:       'pptx',
+        ProjectFileKind.doc:        'doc',
+        ProjectFileKind.sheet:      'sheet',
+        ProjectFileKind.slide:      'slide',
+        ProjectFileKind.whiteboard: 'whiteboard',
+        ProjectFileKind.code:       'code',
+        ProjectFileKind.other:      'other',
+      }[this]!;
+
+  static ProjectFileKind fromWire(String? tag) {
+    switch (tag) {
+      case 'chat':       return ProjectFileKind.chat;
+      case 'pdf':        return ProjectFileKind.pdf;
+      case 'docx':       return ProjectFileKind.docx;
+      case 'xlsx':       return ProjectFileKind.xlsx;
+      case 'pptx':       return ProjectFileKind.pptx;
+      case 'doc':        return ProjectFileKind.doc;
+      case 'sheet':      return ProjectFileKind.sheet;
+      case 'slide':      return ProjectFileKind.slide;
+      case 'whiteboard': return ProjectFileKind.whiteboard;
+      case 'code':       return ProjectFileKind.code;
+      default:           return ProjectFileKind.other;
+    }
+  }
+
+  /// Ícone PNG associado (vive em assets/icons/png/, mesmo padrão dos
+  /// outros ícones de tipo já usados na app).
+  String get pngAsset => const {
+        ProjectFileKind.chat:       'ai_tab.png',
+        ProjectFileKind.pdf:        'doc.png',
+        ProjectFileKind.docx:       'doc.png',
+        ProjectFileKind.xlsx:       'sheet.png',
+        ProjectFileKind.pptx:       'slide.png',
+        ProjectFileKind.doc:        'doc.png',
+        ProjectFileKind.sheet:      'sheet.png',
+        ProjectFileKind.slide:      'slide.png',
+        ProjectFileKind.whiteboard: 'whiteboard.png',
+        ProjectFileKind.code:       'doc.png',
+        ProjectFileKind.other:      'doc.png',
+      }[this]!;
+
+  String get label => const {
+        ProjectFileKind.chat:       'Conversa',
+        ProjectFileKind.pdf:        'PDF',
+        ProjectFileKind.docx:       'Word',
+        ProjectFileKind.xlsx:       'Excel',
+        ProjectFileKind.pptx:       'PowerPoint',
+        ProjectFileKind.doc:        'Documento',
+        ProjectFileKind.sheet:      'Folha de cálculo',
+        ProjectFileKind.slide:      'Apresentação',
+        ProjectFileKind.whiteboard: 'Quadro branco',
+        ProjectFileKind.code:       'Código',
+        ProjectFileKind.other:      'Ficheiro',
+      }[this]!;
+}
+
+class ProjectNode {
+  final String id;
+  final String? parentId;
+  final ProjectNodeType type;
+  final String name;
+  final ProjectFileKind? fileKind; // só relevante quando type == file
+  final String? conversationId;   // quando fileKind == chat
+  final String? content;          // ficheiros pequenos gerados pela IA (html/json)
+  final String? fileData;         // base64, uploads reais (pdf/docx/etc)
+  final String? mimeType;
+  final int createdAt;
+  final int updatedAt;
+
+  const ProjectNode({
+    required this.id,
+    required this.parentId,
+    required this.type,
+    required this.name,
+    this.fileKind,
+    this.conversationId,
+    this.content,
+    this.fileData,
+    this.mimeType,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  bool get isContainer => type == ProjectNodeType.project || type == ProjectNodeType.folder;
+
+  ProjectNode copyWith({
+    String? name,
+    String? parentId,
+    String? content,
+    String? fileData,
+    String? conversationId,
+  }) => ProjectNode(
+        id: id,
+        parentId: parentId ?? this.parentId,
+        type: type,
+        name: name ?? this.name,
+        fileKind: fileKind,
+        conversationId: conversationId ?? this.conversationId,
+        content: content ?? this.content,
+        fileData: fileData ?? this.fileData,
+        mimeType: mimeType,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
+  factory ProjectNode.fromJson(Map<String, dynamic> j) => ProjectNode(
+        id: j['id']?.toString() ?? '',
+        parentId: j['parentId']?.toString(),
+        type: ProjectNodeTypeX.fromWire(j['type']?.toString() ?? 'project'),
+        name: j['name']?.toString() ?? 'Sem nome',
+        fileKind: j['fileKind'] != null ? ProjectFileKindX.fromWire(j['fileKind']?.toString()) : null,
+        conversationId: j['conversationId']?.toString(),
+        content: j['content']?.toString(),
+        fileData: j['fileData']?.toString(),
+        mimeType: j['mimeType']?.toString(),
+        createdAt: (j['createdAt'] is num) ? (j['createdAt'] as num).toInt() : 0,
+        updatedAt: (j['updatedAt'] is num) ? (j['updatedAt'] as num).toInt() : 0,
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
 // AUTH API
 // ══════════════════════════════════════════════════════════════
 
@@ -477,6 +634,22 @@ class ConversationsApiService {
     } catch (_) {}
   }
 
+  /// Renomeia o título de uma conversa a partir do app — usado tanto
+  /// pela geração automática (primeira mensagem) como pela edição
+  /// manual do utilizador. Devolve true em caso de sucesso.
+  static Future<bool> rename(String token, String id, String title) async {
+    try {
+      final res = await http.put(
+        Uri.parse('$kApiBase/conversations/$id'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'title': title}),
+      );
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> delete(String token, String id) async {
     try {
       await http.delete(
@@ -528,6 +701,103 @@ class ConversationsApiService {
       return list.whereType<Map<String, dynamic>>().toList();
     } catch (_) {
       return [];
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PROJECTS API — CRUD de nós (project/folder/file), sempre isolado
+// por utilizador no backend via token. list() devolve a árvore
+// achatada inteira; o cliente reconstrói localmente via parentId.
+// ══════════════════════════════════════════════════════════════
+
+class ProjectsApiService {
+  static Future<List<ProjectNode>> list(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$kApiBase/projects'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) return [];
+      final data = _decode(res.body);
+      final nodes = data['nodes'];
+      if (nodes is! List) return [];
+      return nodes.whereType<Map<String, dynamic>>().map(ProjectNode.fromJson).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<ProjectNode?> create(
+    String token, {
+    required ProjectNodeType type,
+    required String name,
+    String? parentId,
+    ProjectFileKind? fileKind,
+    String? conversationId,
+    String? content,
+    String? fileData,
+    String? mimeType,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$kApiBase/projects'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({
+          'type': type.wire,
+          'name': name,
+          if (parentId != null) 'parentId': parentId,
+          if (fileKind != null) 'fileKind': fileKind.wire,
+          if (conversationId != null) 'conversationId': conversationId,
+          if (content != null) 'content': content,
+          if (fileData != null) 'fileData': fileData,
+          if (mimeType != null) 'mimeType': mimeType,
+        }),
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      return ProjectNode.fromJson(_decode(res.body));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<ProjectNode?> update(
+    String token,
+    String id, {
+    String? name,
+    String? parentId,
+    String? content,
+    String? fileData,
+    String? conversationId,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (name != null) body['name'] = name;
+      if (parentId != null) body['parentId'] = parentId;
+      if (content != null) body['content'] = content;
+      if (fileData != null) body['fileData'] = fileData;
+      if (conversationId != null) body['conversationId'] = conversationId;
+      final res = await http.put(
+        Uri.parse('$kApiBase/projects/$id'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode(body),
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      return ProjectNode.fromJson(_decode(res.body));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> delete(String token, String id) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$kApiBase/projects/$id'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
     }
   }
 }
@@ -721,6 +991,35 @@ class AiApiService {
       throw ApiException(data['error']?.toString() ?? 'Erro ao resumir', statusCode: res.statusCode);
     }
     return data['summary']?.toString() ?? '';
+  }
+
+  /// Edição de documento assistida por IA — usado pelo FAB de sparkles
+  /// no EditTab. Devolve APENAS o conteúdo atualizado do documento
+  /// (mesmo formato do original), sem texto explicativo à volta, para
+  /// poupar tokens e permitir substituição direta no editor.
+  static Future<String> editDocument({
+    required String token,
+    required String currentContent,
+    required String instruction,
+    required String docType, // "doc" | "sheet" | "slide" | "whiteboard"
+    String? selection,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$kApiBase/ai/edit-document'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({
+        'currentContent': currentContent,
+        'instruction': instruction,
+        'docType': docType,
+        if (selection != null) 'selection': selection,
+      }),
+    );
+    final data = _decode(res.body);
+    if (res.statusCode == 402) throw CreditsExhaustedException();
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw ApiException(data['error']?.toString() ?? 'Erro ao editar documento', statusCode: res.statusCode);
+    }
+    return data['content']?.toString() ?? currentContent;
   }
 }
 
