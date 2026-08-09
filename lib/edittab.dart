@@ -615,3 +615,4 @@ class _TypeOptionState extends State<_TypeOption> {
           ]),
         ),
       );
+}
