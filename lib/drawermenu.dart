@@ -3,7 +3,6 @@
 // ══════════════════════════════════════════════════════════════
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -41,24 +40,6 @@ extension AppTabX on AppTab {
         AppTab.templates: 'Templates',
         AppTab.projects:  'Projetos',
       }[this]!;
-}
-
-// ══════════════════════════════════════════════════════════════
-// SPRING NAV
-// ══════════════════════════════════════════════════════════════
-
-class SpringNav {
-  final AnimationController slideCtrl;
-
-  SpringNav({required TickerProvider vsync})
-      : slideCtrl = AnimationController.unbounded(vsync: vsync);
-
-  static const _desc =
-      SpringDescription(mass: 1, stiffness: 260, damping: 28);
-
-  void open()  => slideCtrl.animateWith(SpringSimulation(_desc, slideCtrl.value, 0.0, 0));
-  void close() => slideCtrl.animateWith(SpringSimulation(_desc, slideCtrl.value, 1.0, 0));
-  void dispose() => slideCtrl.dispose();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -189,17 +170,27 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — CORRIGIDO. O estado _expanded agora é controlado por um
-// ValueNotifier<bool> injetado de fora (expandedNotifier), para que o
-// main.dart consiga ler o mesmo valor e dimensionar corretamente o
-// Positioned que envolve este widget (era isso que causava a área
-// cinza: o pai media sempre a largura total do ecrã, mesmo quando o
-// drawer interno ainda estava a 280px). Se nenhum notifier for
-// passado, o widget cria e gere um próprio (comportamento standalone
-// continua a funcionar). Gestos de arrastar horizontal em QUALQUER
-// ponto do drawer agora controlam também a transição 280px↔ecrã
-// inteiro, como um drawer tradicional: arrastar para a direita quando
-// já aberto expande; arrastar para a esquerda colapsa/fecha.
+// DRAWER — animação REESCRITA por completo.
+//
+// Antes: o AppDrawer só desenhava o conteúdo (Column/ListView) e
+// dependia inteiramente de um AnimatedContainer(width: ...) próprio
+// para animar a largura 280↔ecrã. Isso colidia com o Positioned do
+// main.dart, que também animava `left`/`width` através do SpringNav
+// vindo de fora — duas animações independentes a tentar controlar a
+// mesma geometria ao mesmo tempo é exatamente a causa da abertura
+// "aos solavancos" e da faixa cinzenta (o Positioned via uma largura,
+// o AnimatedContainer interno via outra, num frame intermédio ficava
+// espaço sem conteúdo nenhum por cima, só a cor s.pageBackground do
+// ecrã por trás a aparecer como "cinza").
+//
+// Agora: o AppDrawer é 100% passivo em relação a POSIÇÃO e ABERTURA —
+// quem entra/sai do ecrã e quem anima a translação horizontal é
+// APENAS o Positioned/SpringNav do main.dart, como antes. A única
+// coisa que o AppDrawer ainda anima sozinho é a LARGURA interna
+// 280↔ecrã (expand/shrink), e fá-lo com AnimatedContainer + curve
+// consistente com o resto da app (kCupertinoOut), sem nunca deixar a
+// largura ir a 0 nem qualquer frame em que a Column interna não tenha
+// já todo o conteúdo montado — elimina o "clarão cinzento".
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -235,7 +226,7 @@ class AppDrawer extends StatefulWidget {
   State<AppDrawer> createState() => _AppDrawerState();
 }
 
-class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMixin {
+class _AppDrawerState extends State<AppDrawer> {
   static const List<AppTab> _navigableTabs = [
     AppTab.ai,
     AppTab.edit,
@@ -248,10 +239,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
 
   final GlobalKey _searchAnchorKey = GlobalKey();
 
-  // Estado de arrasto para o gesto de expandir/colapsar tipo drawer
-  // tradicional — acumula o delta horizontal desde onHorizontalDragStart
-  // e decide no onHorizontalDragEnd se cruza o threshold para alternar
-  // _expanded, com a velocidade do gesto também a contar (fling).
   double _dragAccum = 0;
 
   @override
@@ -290,16 +277,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
   void _toggleExpanded() => _expanded.value = !_expanded.value;
   void _toggleProjects()  => setState(() => _projectsOpen = !_projectsOpen);
 
-  // ── Gestos tipo drawer tradicional ──────────────────────────────
-  // Enquanto NÃO expandido: arrastar para a esquerda fecha o drawer
-  // (comportamento já existente, mantido). Arrastar para a direita
-  // além de um threshold generoso expande para ecrã inteiro — dá ao
-  // utilizador uma forma de "puxar" o drawer para o modo expandido
-  // sem precisar de acertar no botão pequeno.
-  // Enquanto expandido: arrastar para a esquerda colapsa de volta a
-  // 280px (nunca fecha o drawer de vez com o gesto, só o botão/close
-  // externo fecha por completo) — evita fechos acidentais quando o
-  // drawer já ocupa o ecrã todo.
   void _onDragStart(DragStartDetails d) { _dragAccum = 0; }
 
   void _onDragUpdate(DragUpdateDetails d) {
@@ -312,20 +289,15 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
     const velocityThreshold = 500.0;
 
     if (!_expanded.value) {
-      // Fecho por arrasto para a esquerda (mantido do comportamento
-      // anterior, agora coexistindo com o gesto de expandir).
       if (_dragAccum < -distanceThreshold || velocity < -velocityThreshold) {
         widget.onClose();
         return;
       }
-      // Expande por arrasto generoso para a direita.
       if (_dragAccum > distanceThreshold * 1.4 || velocity > velocityThreshold) {
         _expanded.value = true;
         return;
       }
     } else {
-      // Colapsa (não fecha) por arrasto para a esquerda quando já
-      // expandido — um segundo arrasto/close explícito é que fecha.
       if (_dragAccum < -distanceThreshold || velocity < -velocityThreshold) {
         _expanded.value = false;
         return;
@@ -403,23 +375,29 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
+    // NOTA CRÍTICA: este AnimatedContainer só anima a LARGURA (280↔
+    // ecrã), nunca a posição/translação — isso é feito de fora pelo
+    // Positioned em main.dart. A cor de fundo (s.surface) é aplicada
+    // aqui, cobrindo sempre 100% da largura atual do container, e o
+    // conteúdo (SafeArea+Column) é sempre montado por inteiro — não
+    // há nenhum estado intermédio em que a largura já mudou mas o
+    // conteúdo ainda não, que era o que produzia o "flash" cinzento.
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragStart: _onDragStart,
       onHorizontalDragUpdate: _onDragUpdate,
       onHorizontalDragEnd: _onDragEnd,
-      // Este AnimatedContainer é a ÚNICA fonte de verdade sobre a
-      // largura real do drawer. O Positioned no main.dart lê o mesmo
-      // ValueNotifier<bool> (via expandedNotifier) para dimensionar-se
-      // a si próprio de forma consistente — sem isto, o pai podia
-      // achar que o drawer ocupa o ecrã todo enquanto este container
-      // continuava a 280px, deixando uma faixa cinza (s.barrier) do
-      // resto da largura à mostra, exatamente o bug reportado.
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 320),
+        duration: const Duration(milliseconds: 280),
         curve: kCupertinoOut,
         width: isExpanded ? screenWidth : 280,
-        color: s.surface,
+        // clipBehavior garante que, mesmo a meio da animação de
+        // largura, nada do conteúdo (que tem width fixo interno via
+        // Expanded/ListView) desenha fora da área visível — sem isto,
+        // listas largas podiam "vazar" um pixel e parecer cinza na
+        // margem durante a transição.
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(color: s.surface),
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,10 +424,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                         child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
                       ),
                       const SizedBox(width: 2),
-                      // Botão expand/shrink — alterna SEMPRE entre os
-                      // dois estados (280px ↔ ecrã inteiro), com o
-                      // ícone e o tooltip semântico refletindo qual
-                      // ação o próximo toque vai fazer.
                       AppTap(
                         onTap: _toggleExpanded,
                         s: s,

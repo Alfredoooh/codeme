@@ -50,20 +50,19 @@ extension AiModelX on AiModel {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SYSTEM PROMPT — reforça agora explicitamente que blocos de código
-// (incluindo html/css/js) NUNCA vão para canvas, mesmo que sejam
-// documentos web completos: só ficam em canvas os quatro tipos
-// explícitos [[canvas:doc/sheet/slide/whiteboard:...]]. Widgets
-// continuam a aparecer diretamente na conversa, nunca em canvas.
+// SYSTEM PROMPT
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
 Respondes sempre em português europeu, de forma clara e bem estruturada.
 Usa formatação markdown completa sempre que ajudar a organizar a informação:
 negrito para destacar termos-chave, listas com marcadores ou numeradas para
-sequências e opções, tabelas para comparações ou dados tabulares, e títulos
-curtos quando a resposta tiver várias secções. Evita parágrafos longos e
-densos quando a informação pode ser organizada visualmente.
+sequências e opções, tabelas para comparações ou dados tabulares, linhas
+horizontais (---) para separar secções distintas, e títulos curtos quando a
+resposta tiver várias secções. Dentro de células de tabela podes usar
+negrito (**texto**) normalmente — a aplicação processa a formatação em
+qualquer parte do texto, incluindo dentro de tabelas. Evita parágrafos
+longos e densos quando a informação pode ser organizada visualmente.
 
 Quando o utilizador pedir para criares, escreveres ou editares um documento
 de texto, uma folha de cálculo ou uma apresentação, gera o conteúdo e
@@ -141,12 +140,7 @@ String cleanAiText(String raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOCAL CANVAS — CORRIGIDO: agora só reconhece os quatro blocos
-// [[canvas:doc/sheet/slide/whiteboard:...]] explícitos. Blocos de
-// código genéricos (incluindo html/css/js) DEIXARAM de ser tratados
-// como canvas — ficam sempre visíveis como código normal na bolha,
-// tratados por RichAiText mais abaixo. Isto corrige o bug em que
-// HTML era "roubado" da conversa e escondido dentro de um canvas.
+// LOCAL CANVAS
 // ══════════════════════════════════════════════════════════════
 
 enum LocalCanvasKind { doc, sheet, slide, whiteboard }
@@ -867,6 +861,11 @@ class AiTab extends StatefulWidget {
   final VoidCallback? onExternalActionConsumed;
   final ValueChanged<bool>? onHasMessagesChanged;
   final VoidCallback? onHeaderStateChanged;
+  /// Chamado sempre que um documento (canvas) novo é criado pela IA
+  /// nesta conversa — o RootShell usa isto para abrir automaticamente
+  /// o EditTab já a mostrar esse documento, sem o utilizador ter de
+  /// clicar em mais nada.
+  final ValueChanged<LocalCanvasItem>? onCanvasCreated;
   const AiTab({
     super.key,
     required this.onFirstMessage,
@@ -875,6 +874,7 @@ class AiTab extends StatefulWidget {
     this.onExternalActionConsumed,
     this.onHasMessagesChanged,
     this.onHeaderStateChanged,
+    this.onCanvasCreated,
   });
   @override State<AiTab> createState() => AiTabState();
 }
@@ -897,10 +897,6 @@ class AiTabState extends State<AiTab> {
   int      _canvasIdSeq  = 0;
 
   /// Não-nulo enquanto a IA está a "desenhar" um canvas OU um widget.
-  /// Enquanto for != null, a bolha de streaming mostra SÓ o pill
-  /// tools.svg + texto com shimmer, nunca o JSON/HTML cru — e, ao
-  /// contrário de antes, o texto ANTES e DEPOIS deste bloco continua a
-  /// ser escrito normalmente (o pill não bloqueia o resto do streaming).
   String? _creatingLabel;
 
   int get canvasCount => _canvases.length;
@@ -988,12 +984,6 @@ class AiTabState extends State<AiTab> {
     return prompt;
   }
 
-  /// Deteta, durante o streaming, se há um bloco de canvas ou widget
-  /// aberto mas ainda não fechado — usado para a label do pill
-  /// "A criar...". Blocos de código genéricos (não widget_*, não
-  /// canvas) já NÃO acionam este pill — ficam sempre visíveis como
-  /// texto normal em streaming, exatamente como qualquer resposta
-  /// técnica normal.
   String? _detectOpeningLabel(String text) {
     final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
     if (canvasOpenMatch.isNotEmpty) {
@@ -1012,6 +1002,16 @@ class AiTabState extends State<AiTab> {
       return 'A criar widget...';
     }
     return null;
+  }
+
+  /// Reenvia uma mensagem exatamente como se o utilizador a tivesse
+  /// escrito e tocado em enviar — usado pela pill de sugestão que
+  /// aparece no fim de uma resposta da IA (item pedido: ao tocar na
+  /// sugestão, essa mesma mensagem é enviada, não apenas copiada).
+  void sendSuggestedMessage(String text) {
+    if (text.trim().isEmpty || _sending) return;
+    _ctrl.text = text;
+    _send();
   }
 
   Future<void> _send() async {
@@ -1084,6 +1084,11 @@ class AiTabState extends State<AiTab> {
             _scrollToEnd();
             _persistConversation();
             if (isFirst) _generateTitleInBackground(t);
+            // Documento criado nesta resposta: abre-o automaticamente
+            // no EditTab, sem o utilizador ter de tocar em nada.
+            if (scan.items.isNotEmpty) {
+              widget.onCanvasCreated?.call(scan.items.last);
+            }
             break;
           case ChatErrorEvent(message: final message):
             setState(() {
@@ -1257,9 +1262,7 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  /// Abre o EditTab já carregado com o documento clicado — é isto que
-  /// acontece tanto ao clicar num link de canvas dentro de uma bolha
-  /// como ao clicar num item da lista do popup Canvas.
+  /// Abre o EditTab já carregado com o documento clicado.
   void _onOpenCanvas(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
     AiTabHostNavigation.of(context)?.goToEditTab(item.kind.editorType);
@@ -1429,6 +1432,7 @@ class AiTabState extends State<AiTab> {
                               creatingLabel: _creatingLabel,
                               widgetsEnabled: _widgetsEnabled,
                               onEnableWidgets: () => setWidgetsEnabled(true),
+                              onSuggestionTap: sendSuggestedMessage,
                             );
                           }
                           final msg = _msgs[i];
@@ -1455,6 +1459,7 @@ class AiTabState extends State<AiTab> {
                             onRefresh: () => _onAssistantRefresh(i),
                             widgetsEnabled: _widgetsEnabled,
                             onEnableWidgets: () => setWidgetsEnabled(true),
+                            onSuggestionTap: sendSuggestedMessage,
                           );
                         },
                       ),
@@ -1652,6 +1657,7 @@ class _AssistantBubble extends StatelessWidget {
   final VoidCallback onRefresh;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
+  final ValueChanged<String> onSuggestionTap;
   const _AssistantBubble({
     required this.s,
     required this.text,
@@ -1663,6 +1669,7 @@ class _AssistantBubble extends StatelessWidget {
     required this.onRefresh,
     required this.widgetsEnabled,
     required this.onEnableWidgets,
+    required this.onSuggestionTap,
   });
 
   @override
@@ -1680,6 +1687,7 @@ class _AssistantBubble extends StatelessWidget {
                   s: s,
                   widgetsEnabled: widgetsEnabled,
                   onEnableWidgets: onEnableWidgets,
+                  onSuggestionTap: onSuggestionTap,
                 ),
               for (final item in canvases) ...[
                 const SizedBox(height: 8),
@@ -1813,6 +1821,7 @@ class _StreamingBubble extends StatelessWidget {
   final String? creatingLabel;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
+  final ValueChanged<String> onSuggestionTap;
   const _StreamingBubble({
     required this.s,
     required this.text,
@@ -1820,6 +1829,7 @@ class _StreamingBubble extends StatelessWidget {
     this.creatingLabel,
     required this.widgetsEnabled,
     required this.onEnableWidgets,
+    required this.onSuggestionTap,
   });
 
   @override
@@ -1847,6 +1857,7 @@ class _StreamingBubble extends StatelessWidget {
                   s: s,
                   widgetsEnabled: widgetsEnabled,
                   onEnableWidgets: onEnableWidgets,
+                  onSuggestionTap: onSuggestionTap,
                 ),
               if (creatingLabel != null) ...[
                 if (text.isNotEmpty) const SizedBox(height: 10),
@@ -1859,9 +1870,7 @@ class _StreamingBubble extends StatelessWidget {
       );
 }
 
-/// Pill "A criar..." — ícone tools.svg + texto com shimmer contínuo
-/// (item pedido explicitamente: esconder qualquer JSON/HTML cru atrás
-/// deste indicador enquanto a IA gera canvas ou widget).
+/// Pill "A criar..." — ícone tools.svg + texto com shimmer contínuo.
 class _CanvasCreatingPill extends StatelessWidget {
   final AppColorScheme s;
   final String label;
@@ -1882,9 +1891,7 @@ class _CanvasCreatingPill extends StatelessWidget {
       );
 }
 
-/// Texto com efeito shimmer (faixa de brilho a percorrer o texto em
-/// loop), implementado com ShaderMask + gradiente animado — sem
-/// dependências externas.
+/// Texto com efeito shimmer.
 class _ShimmerText extends StatefulWidget {
   final String text;
   final Color baseColor;
@@ -1936,8 +1943,7 @@ class _ShimmerTextState extends State<_ShimmerText> with SingleTickerProviderSta
 }
 
 // ══════════════════════════════════════════════════════════════
-// BLINKING GRID LOADER — mantido apenas por compatibilidade (não é
-// mais usado no pill; AiSmallDotsLoader é usado no arranque vazio).
+// BLINKING GRID LOADER
 // ══════════════════════════════════════════════════════════════
 
 class BlinkingGridLoader extends StatefulWidget {
@@ -2025,20 +2031,19 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
 }
 
 // ══════════════════════════════════════════════════════════════
-// RICH AI TEXT — CORRIGIDO: agora trata blocos ```lang``` genéricos
-// (incluindo html/css/js) como blocos de código normais e SEMPRE
-// visíveis, usando o mesmo AiCodeWidget do sistema de widgets — não
-// dependem do switch de Widgets estar ativo. widget_* continuam a ser
-// extraídos primeiro (parseAiWidgetBlocks) e a virar cartões
-// interativos reais quando o switch está ativo.
-//
-// NOVO: quando o switch está desativado, um bloco ```widget_x``` NÃO
-// aparece mais como JSON despejado num bloco de código genérico. Em
-// vez disso é extraído silenciosamente do texto e, no fim da
-// resposta, aparece UMA sugestão (estilo ChatGPT: seta ↳, texto a
-// bold sublinhado a pontilhado, ícone resend.svg) que ativa os
-// widgets ao ser tocada e volta a renderizar o(s) widget(s) reais
-// inline, no lugar exato onde a IA os colocou.
+// RICH AI TEXT — parser Markdown completo:
+// - Cabeçalhos (# a ####)
+// - Bold (**txt**), itálico (*txt*/_txt_), inline code (`code`)
+// - Listas com marcador e numeradas
+// - Linha horizontal (--- ou *** ou ___) → Divider real, não texto
+// - Tabelas com formatação inline (bold/itálico/code) DENTRO das
+//   células — antes as células eram Text() cru, ignorando **bold**
+// - Blocos de código ```lang``` → sempre cartão de código visível
+// - widget_* → cartão interativo quando widgets ativo; quando
+//   desativado, é extraído silenciosamente e substituído por UMA
+//   pill de sugestão no fim (ícone repaste.svg, texto bold com
+//   underline pontilhado); tocar reenvia essa mesma sugestão como
+//   nova mensagem do utilizador.
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
@@ -2046,38 +2051,45 @@ class RichAiText extends StatelessWidget {
   final AppColorScheme s;
   final bool widgetsEnabled;
   final VoidCallback? onEnableWidgets;
+  final ValueChanged<String>? onSuggestionTap;
   const RichAiText({
     super.key,
     required this.text,
     required this.s,
     this.widgetsEnabled = true,
     this.onEnableWidgets,
+    this.onSuggestionTap,
   });
 
   @override
   Widget build(BuildContext context) {
     if (!widgetsEnabled) {
-      // Widgets desligados: os blocos ```widget_x``` são detetados e
-      // removidos do texto (sem mostrar o JSON cru como código) — em
-      // vez disso, mostramos uma única sugestão no fim da resposta,
-      // que o utilizador pode tocar para ativar os widgets.
       final widgetParse = parseAiWidgetBlocks(text);
       final strippedText = widgetParse.blocks.isEmpty
           ? text
           : widgetParse.textWithMarkers.replaceAll(
               RegExp(r'\u0000WB(\d+)\u0000'), '');
 
+      // A sugestão, quando tocada, reenvia a frase que descreve a
+      // ação — a própria linha de sugestão gerada, sem a seta/ícone.
+      final suggestionMessage = widgetParse.blocks.length == 1
+          ? 'Mostra o widget desta resposta'
+          : 'Mostra os ${widgetParse.blocks.length} widgets desta resposta';
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ..._parseBlocks(strippedText),
+          ..._parseBlocks(strippedText, s),
           if (widgetParse.blocks.isNotEmpty) ...[
             const SizedBox(height: 6),
             _WidgetSuggestionPill(
               s: s,
               count: widgetParse.blocks.length,
-              onTap: onEnableWidgets,
+              onTap: () {
+                onEnableWidgets?.call();
+                onSuggestionTap?.call(suggestionMessage);
+              },
             ),
           ],
         ],
@@ -2089,7 +2101,7 @@ class RichAiText extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
-        children: _parseBlocks(text),
+        children: _parseBlocks(text, s),
       );
     }
 
@@ -2099,7 +2111,7 @@ class RichAiText extends StatelessWidget {
     for (final m in markerRe.allMatches(widgetParse.textWithMarkers)) {
       if (m.start > last) {
         final segment = widgetParse.textWithMarkers.substring(last, m.start);
-        if (segment.trim().isNotEmpty) children.addAll(_parseBlocks(segment));
+        if (segment.trim().isNotEmpty) children.addAll(_parseBlocks(segment, s));
       }
       final idx = int.parse(m.group(1)!);
       if (idx < widgetParse.blocks.length) {
@@ -2112,7 +2124,7 @@ class RichAiText extends StatelessWidget {
     }
     if (last < widgetParse.textWithMarkers.length) {
       final segment = widgetParse.textWithMarkers.substring(last);
-      if (segment.trim().isNotEmpty) children.addAll(_parseBlocks(segment));
+      if (segment.trim().isNotEmpty) children.addAll(_parseBlocks(segment, s));
     }
 
     return Column(
@@ -2122,7 +2134,7 @@ class RichAiText extends StatelessWidget {
     );
   }
 
-  List<Widget> _parseBlocks(String raw) {
+  static List<Widget> _parseBlocks(String raw, AppColorScheme s) {
     final lines = raw.split('\n');
     final widgets = <Widget>[];
     int i = 0;
@@ -2141,6 +2153,19 @@ class RichAiText extends StatelessWidget {
     while (i < lines.length) {
       final line = lines[i];
       final trimmed = line.trim();
+
+      // Linha horizontal: ---, ***, ___ (3 ou mais, isolada na
+      // linha) — antes ficava como texto literal "---"; agora vira
+      // um Divider real, como qualquer app de chat com IA.
+      if (RegExp(r'^(-{3,}|\*{3,}|_{3,})$').hasMatch(trimmed)) {
+        flushTable();
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.5)),
+        ));
+        i++;
+        continue;
+      }
 
       if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.contains('|', 1)) {
         final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(trimmed);
@@ -2225,13 +2250,6 @@ class RichAiText extends StatelessWidget {
         continue;
       }
 
-      // Bloco de código genérico (```lang ... ```), de QUALQUER
-      // linguagem incluindo html/css/js — SEMPRE renderizado como
-      // cartão de código com syntax highlight, nunca escondido, nunca
-      // movido para canvas. Quando widgets estão desativados, blocos
-      // ```widget_x``` já foram removidos do texto antes de chegar
-      // aqui (ver build() acima), por isso este caminho já só vê
-      // código "a sério" — nunca JSON de widget despejado como código.
       if (trimmed.startsWith('```')) {
         final lang = trimmed.substring(3).trim();
         final codeLines = <String>[];
@@ -2265,7 +2283,10 @@ class RichAiText extends StatelessWidget {
     return widgets;
   }
 
-  Widget _formattedText(String raw, AppColorScheme s, {double fontSize = 14.5, FontWeight? fontWeight}) {
+  /// Converte **bold**, *itálico*/_itálico_ e `code` em spans — usado
+  /// tanto pelo texto normal como pelas células de tabela, para que a
+  /// formatação nunca mais apareça crua (**assim**) dentro de tabelas.
+  static List<TextSpan> _inlineSpans(String raw, AppColorScheme s, {double fontSize = 14.5}) {
     final spans = <TextSpan>[];
     final pattern = RegExp(r'(\*\*.+?\*\*|__.+?__|\*[^\*]+?\*|_[^_]+?_|`[^`]+?`)');
     int last = 0;
@@ -2297,7 +2318,10 @@ class RichAiText extends StatelessWidget {
       last = m.end;
     }
     if (last < raw.length) spans.add(TextSpan(text: raw.substring(last)));
+    return spans;
+  }
 
+  static Widget _formattedText(String raw, AppColorScheme s, {double fontSize = 14.5, FontWeight? fontWeight}) {
     return SelectableText.rich(
       TextSpan(
         style: TextStyle(
@@ -2306,7 +2330,72 @@ class RichAiText extends StatelessWidget {
           fontWeight: fontWeight ?? FontWeight.normal,
           height: 1.45,
         ),
-        children: spans,
+        children: _inlineSpans(raw, s, fontSize: fontSize),
+      ),
+    );
+  }
+}
+
+class _AiTable extends StatelessWidget {
+  final List<List<String>> rows;
+  final AppColorScheme s;
+  const _AiTable({required this.rows, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final header = rows.first;
+    final body = rows.length > 1 ? rows.sublist(1) : <List<String>>[];
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Table(
+        border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
+        columnWidths: {
+          for (int i = 0; i < header.length; i++) i: const FlexColumnWidth(),
+        },
+        children: [
+          TableRow(
+            decoration: BoxDecoration(color: s.hover),
+            children: header
+                .map((c) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      // CORRIGIDO: célula do cabeçalho agora processa
+                      // **bold**/*itálico*/`code` em vez de mostrar o
+                      // texto cru (o cabeçalho já é bold por defeito,
+                      // mas markup extra dentro dele continua a ser
+                      // respeitado).
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: s.onSurface),
+                          children: RichAiText._inlineSpans(c, s, fontSize: 12.5),
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+          for (final row in body)
+            TableRow(
+              children: row
+                  .map((c) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        // CORRIGIDO: idem para as células normais —
+                        // **texto** dentro de uma célula de tabela
+                        // agora renderiza a bold de verdade, tal como
+                        // fora da tabela, em vez dos asteriscos crus.
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(fontSize: 12.5, color: s.onSurface),
+                            children: RichAiText._inlineSpans(c, s, fontSize: 12.5),
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+        ],
       ),
     );
   }
@@ -2315,10 +2404,10 @@ class RichAiText extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // WIDGET SUGGESTION PILL — sugestão que aparece no fim da resposta
 // quando a IA gerou um ou mais widget_* mas o switch de Widgets está
-// desativado. Visual: seta ↳, texto a bold sublinhado a pontilhado,
-// ícone resend.svg à esquerda (mesmo padrão da referência ChatGPT
-// enviada). Ao tocar, chama onTap (que ativa o switch de Widgets e
-// deixa a bolha re-renderizar com o widget real no lugar certo).
+// desativado. Ícone repaste.svg, texto a bold sublinhado a
+// pontilhado. Ao tocar, ativa o switch de Widgets E reenvia a
+// sugestão como nova mensagem — exatamente o pedido: "ao clicar
+// simplesmente será enviado essa mesma mensagem".
 // ══════════════════════════════════════════════════════════════
 
 class _WidgetSuggestionPill extends StatefulWidget {
@@ -2353,7 +2442,7 @@ class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              AppIcon('resend.svg', color: s.onSurfaceVariant, size: 14),
+              AppIcon('repaste.svg', color: s.onSurfaceVariant, size: 14),
               const SizedBox(width: 6),
               Text('↳', style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
               const SizedBox(width: 4),
@@ -2362,65 +2451,18 @@ class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
                   _label,
                   style: TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     color: s.onSurfaceVariant,
                     decoration: TextDecoration.underline,
                     decorationStyle: TextDecorationStyle.dotted,
                     decorationColor: s.onSurfaceVariant,
+                    decorationThickness: 1.4,
                   ),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AiTable extends StatelessWidget {
-  final List<List<String>> rows;
-  final AppColorScheme s;
-  const _AiTable({required this.rows, required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    if (rows.isEmpty) return const SizedBox.shrink();
-    final header = rows.first;
-    final body = rows.length > 1 ? rows.sublist(1) : <List<String>>[];
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Table(
-        border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
-        columnWidths: {
-          for (int i = 0; i < header.length; i++) i: const FlexColumnWidth(),
-        },
-        children: [
-          TableRow(
-            decoration: BoxDecoration(color: s.hover),
-            children: header
-                .map((c) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      child: Text(c,
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: s.onSurface)),
-                    ))
-                .toList(),
-          ),
-          for (final row in body)
-            TableRow(
-              children: row
-                  .map((c) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        child: Text(c,
-                            style: TextStyle(fontSize: 12.5, color: s.onSurface)),
-                      ))
-                  .toList(),
-            ),
-        ],
       ),
     );
   }

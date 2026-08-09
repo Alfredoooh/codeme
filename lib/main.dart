@@ -103,9 +103,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   /// Fonte única de verdade sobre o drawer estar em modo 280px ou
   /// ecrã inteiro. Passado diretamente ao AppDrawer (que o controla
   /// via toque/gesto) e lido aqui no Positioned para dimensionar-se
-  /// de forma sempre coerente com o que o drawer realmente desenha —
-  /// é isto que elimina o bug da faixa cinza (Positioned largo demais
-  /// para um drawer interno ainda estreito, ou vice-versa).
+  /// de forma sempre coerente com o que o drawer realmente desenha.
   final ValueNotifier<bool> _drawerExpanded = ValueNotifier<bool>(false);
 
   @override
@@ -130,9 +128,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   void _closeDrawer() {
     setState(() => _drawerOpen = false);
     _springNav.close();
-    // Ao fechar por completo, o drawer volta sempre ao estado
-    // colapsado (280px) para a próxima abertura — evita reabrir já
-    // expandido inesperadamente por um estado esquecido do gesto.
     _drawerExpanded.value = false;
   }
 
@@ -177,6 +172,21 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     setState(() => _pendingConversationLoad = null);
   }
 
+  /// Chamado pelo AiTab sempre que a IA acaba de criar um documento
+  /// (canvas) nesta conversa. Troca automaticamente para o EditTab,
+  /// já no tipo de editor certo (doc/sheet/slide/whiteboard), e injeta
+  /// o conteúdo — exatamente o pedido: "ao clicar num doc criado que
+  /// o app abre automaticamente o edit tab e exibir o documento",
+  /// levado ao extremo de nem precisar de clique nenhum: assim que o
+  /// documento é criado, já abre sozinho.
+  void _onCanvasCreated(LocalCanvasItem item) {
+    editTabController.requestLoadLocal(item);
+    setState(() {
+      _editorType = item.kind.editorType;
+      _tab = AppTab.edit;
+    });
+  }
+
   String get _tabTitle {
     switch (_tab) {
       case AppTab.ai:        return '';
@@ -198,6 +208,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           initialConversationId: _pendingConversationLoad,
           onConversationLoadConsumed: _onConversationLoadConsumed,
           onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
+          onCanvasCreated: _onCanvasCreated,
         );
       case AppTab.edit:
         return EditTab(editorType: _editorType);
@@ -213,8 +224,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
     final s = AppTheme.of(context);
     final isAiTab = _tab == AppTab.ai;
     final screenWidth = MediaQuery.of(context).size.width;
-    // Largura EXATA do próprio Positioned, lida do mesmo notifier que
-    // o AppDrawer usa internamente — nunca mais divergem.
     final drawerWidth = _drawerExpanded.value ? screenWidth : 280.0;
 
     return Material(
@@ -295,12 +304,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 320),
                 curve: kCupertinoOut,
-                // O barrier (fundo escurecido) só é visível na fatia da
-                // tela NÃO coberta pelo drawer — evita qualquer resíduo
-                // cinza sobre a área onde o drawer já desenha o próprio
-                // fundo (s.surface). Quando drawerWidth == screenWidth
-                // (expandido), o barrier fica com largura zero — nunca
-                // mais aparece cinza por cima do drawer expandido.
                 margin: EdgeInsets.only(left: drawerWidth),
                 color: s.barrier,
               ),
@@ -357,6 +360,7 @@ class AiTabHost extends StatefulWidget {
   final String? initialConversationId;
   final VoidCallback? onConversationLoadConsumed;
   final ValueChanged<bool>? onHasMessagesChanged;
+  final ValueChanged<LocalCanvasItem>? onCanvasCreated;
   const AiTabHost({
     super.key,
     required this.aiTabKey,
@@ -366,6 +370,7 @@ class AiTabHost extends StatefulWidget {
     this.initialConversationId,
     this.onConversationLoadConsumed,
     this.onHasMessagesChanged,
+    this.onCanvasCreated,
   });
   @override State<AiTabHost> createState() => _AiTabHostState();
 }
@@ -390,6 +395,7 @@ class _AiTabHostState extends State<AiTabHost> {
       initialConversationId: widget.initialConversationId,
       onHasMessagesChanged: widget.onHasMessagesChanged,
       onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
+      onCanvasCreated: widget.onCanvasCreated,
     );
   }
 }
