@@ -23,6 +23,7 @@
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'aiwidgets.dart';
+import 'widgets.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SÍMBOLOS MATEMÁTICOS — tabelas de tradução LaTeX → unicode
