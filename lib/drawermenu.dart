@@ -15,10 +15,7 @@ import 'api_service.dart';
 import 'projects_controller.dart';
 
 // ══════════════════════════════════════════════════════════════
-// TABS — "projects" deixou de ser um ecrã navegável; é agora uma
-// secção que expande INLINE dentro do próprio drawer (ver
-// _ProjectsInlineSection mais abaixo). currentTab continua a existir
-// para ai/edit/templates, que continuam a ser ecrãs normais.
+// TABS
 // ══════════════════════════════════════════════════════════════
 
 enum AppTab { ai, edit, templates, projects }
@@ -65,8 +62,7 @@ class SpringNav {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONVERSATION ITEM — espelha o payload real do worker
-// (id, title, messages, pinned, archived, updatedAt).
+// CONVERSATION ITEM
 // ══════════════════════════════════════════════════════════════
 
 class ConversationItem {
@@ -105,12 +101,7 @@ class ConversationItem {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONVERSATIONS CONTROLLER — carrega/gere a lista real via API,
-// notifica o drawer quando muda (nova conversa criada no chat,
-// eliminação, pin, etc.). upsertLocal é agora chamado diretamente
-// pelo AiTab sempre que uma conversa é criada/atualizada — corrige
-// o bug em que conversas iniciadas no chat nunca apareciam aqui
-// enquanto o drawer já estava montado (só um load() manual as trazia).
+// CONVERSATIONS CONTROLLER
 // ══════════════════════════════════════════════════════════════
 
 class ConversationsController extends ChangeNotifier {
@@ -184,9 +175,6 @@ class ConversationsController extends ChangeNotifier {
     await ConversationsApiService.delete(token, id);
   }
 
-  /// Insere ou atualiza uma conversa localmente e notifica listeners
-  /// de imediato — é ISTO que faz uma conversa nova aparecer no drawer
-  /// no instante em que é criada no chat, sem depender de load().
   void upsertLocal(ConversationItem item) {
     final idx = items.indexWhere((c) => c.id == item.id);
     if (idx == -1) {
@@ -201,7 +189,17 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER
+// DRAWER — CORRIGIDO. O estado _expanded agora é controlado por um
+// ValueNotifier<bool> injetado de fora (expandedNotifier), para que o
+// main.dart consiga ler o mesmo valor e dimensionar corretamente o
+// Positioned que envolve este widget (era isso que causava a área
+// cinza: o pai media sempre a largura total do ecrã, mesmo quando o
+// drawer interno ainda estava a 280px). Se nenhum notifier for
+// passado, o widget cria e gere um próprio (comportamento standalone
+// continua a funcionar). Gestos de arrastar horizontal em QUALQUER
+// ponto do drawer agora controlam também a transição 280px↔ecrã
+// inteiro, como um drawer tradicional: arrastar para a direita quando
+// já aberto expande; arrastar para a esquerda colapsa/fecha.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -212,14 +210,12 @@ class AppDrawer extends StatefulWidget {
   final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
   final VoidCallback? onNewChat;
-  /// Chamado quando o utilizador escolhe abrir uma conversa .chat
-  /// dentro de um projeto — mesmo destino que onOpenConversation, mas
-  /// mantido separado para o chamador poder distinguir a origem se
-  /// precisar (ex: analytics).
   final ValueChanged<String>? onOpenProjectConversation;
-  /// Id da conversa atualmente aberta na AiTab (para desenhar a pill
-  /// de "ativa" no drawer, o mesmo padrão visual usado nos AppTab).
   final String? activeConversationId;
+  /// Notifier partilhado com o pai (RootShell) para o estado expandido
+  /// ser lido de fora, permitindo ao Positioned que envolve este
+  /// widget ajustar corretamente a sua própria largura/posição.
+  final ValueNotifier<bool>? expandedNotifier;
 
   const AppDrawer({
     super.key,
@@ -232,6 +228,7 @@ class AppDrawer extends StatefulWidget {
     this.onNewChat,
     this.onOpenProjectConversation,
     this.activeConversationId,
+    this.expandedNotifier,
   });
 
   @override
@@ -239,23 +236,35 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMixin {
-  // "projects" foi removido da lista de tabs navegáveis — passa a
-  // ser desenhado como secção inline (_ProjectsInlineSection) logo a
-  // seguir aos outros três tabs, nunca como AppTab clicável comum.
   static const List<AppTab> _navigableTabs = [
     AppTab.ai,
     AppTab.edit,
     AppTab.templates,
   ];
 
-  bool _expanded = false;
+  late final ValueNotifier<bool> _expanded;
+  bool _ownsNotifier = false;
   bool _projectsOpen = false;
 
   final GlobalKey _searchAnchorKey = GlobalKey();
 
+  // Estado de arrasto para o gesto de expandir/colapsar tipo drawer
+  // tradicional — acumula o delta horizontal desde onHorizontalDragStart
+  // e decide no onHorizontalDragEnd se cruza o threshold para alternar
+  // _expanded, com a velocidade do gesto também a contar (fling).
+  double _dragAccum = 0;
+
   @override
   void initState() {
     super.initState();
+    if (widget.expandedNotifier != null) {
+      _expanded = widget.expandedNotifier!;
+    } else {
+      _expanded = ValueNotifier<bool>(false);
+      _ownsNotifier = true;
+    }
+    _expanded.addListener(_onExpandedChanged);
+
     conversationsController.addListener(_onConvsChanged);
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
       conversationsController.load();
@@ -268,15 +277,62 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
+    _expanded.removeListener(_onExpandedChanged);
+    if (_ownsNotifier) _expanded.dispose();
     conversationsController.removeListener(_onConvsChanged);
     projectsController.removeListener(_onConvsChanged);
     super.dispose();
   }
 
+  void _onExpandedChanged() { if (mounted) setState(() {}); }
   void _onConvsChanged() { if (mounted) setState(() {}); }
 
-  void _toggleExpanded() => setState(() => _expanded = !_expanded);
+  void _toggleExpanded() => _expanded.value = !_expanded.value;
   void _toggleProjects()  => setState(() => _projectsOpen = !_projectsOpen);
+
+  // ── Gestos tipo drawer tradicional ──────────────────────────────
+  // Enquanto NÃO expandido: arrastar para a esquerda fecha o drawer
+  // (comportamento já existente, mantido). Arrastar para a direita
+  // além de um threshold generoso expande para ecrã inteiro — dá ao
+  // utilizador uma forma de "puxar" o drawer para o modo expandido
+  // sem precisar de acertar no botão pequeno.
+  // Enquanto expandido: arrastar para a esquerda colapsa de volta a
+  // 280px (nunca fecha o drawer de vez com o gesto, só o botão/close
+  // externo fecha por completo) — evita fechos acidentais quando o
+  // drawer já ocupa o ecrã todo.
+  void _onDragStart(DragStartDetails d) { _dragAccum = 0; }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    _dragAccum += d.delta.dx;
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final velocity = d.primaryVelocity ?? 0;
+    const distanceThreshold = 90.0;
+    const velocityThreshold = 500.0;
+
+    if (!_expanded.value) {
+      // Fecho por arrasto para a esquerda (mantido do comportamento
+      // anterior, agora coexistindo com o gesto de expandir).
+      if (_dragAccum < -distanceThreshold || velocity < -velocityThreshold) {
+        widget.onClose();
+        return;
+      }
+      // Expande por arrasto generoso para a direita.
+      if (_dragAccum > distanceThreshold * 1.4 || velocity > velocityThreshold) {
+        _expanded.value = true;
+        return;
+      }
+    } else {
+      // Colapsa (não fecha) por arrasto para a esquerda quando já
+      // expandido — um segundo arrasto/close explícito é que fecha.
+      if (_dragAccum < -distanceThreshold || velocity < -velocityThreshold) {
+        _expanded.value = false;
+        return;
+      }
+    }
+    _dragAccum = 0;
+  }
 
   void _openSearch(BuildContext context) {
     final box = _searchAnchorKey.currentContext!.findRenderObject() as RenderBox;
@@ -343,24 +399,26 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final s = widget.s;
     final screenWidth = MediaQuery.of(context).size.width;
+    final isExpanded = _expanded.value;
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
     return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        final v = details.primaryVelocity ?? 0;
-        if (!_expanded && v < -200) widget.onClose();
-      },
-      // Expand cobre o ecrã de verdade: a largura passa a
-      // MediaQuery.size.width diretamente (sem qualquer maxWidth
-      // implícito de um Drawer padrão do Scaffold — este widget NÃO
-      // deve ser envolto num Scaffold.drawer, mas sim inserido
-      // diretamente como overlay/Positioned pelo RootShell, para que
-      // esta largura seja de facto respeitada de ponta a ponta).
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      // Este AnimatedContainer é a ÚNICA fonte de verdade sobre a
+      // largura real do drawer. O Positioned no main.dart lê o mesmo
+      // ValueNotifier<bool> (via expandedNotifier) para dimensionar-se
+      // a si próprio de forma consistente — sem isto, o pai podia
+      // achar que o drawer ocupa o ecrã todo enquanto este container
+      // continuava a 280px, deixando uma faixa cinza (s.barrier) do
+      // resto da largura à mostra, exatamente o bug reportado.
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 320),
         curve: kCupertinoOut,
-        width: _expanded ? screenWidth : 280,
+        width: isExpanded ? screenWidth : 280,
         color: s.surface,
         child: SafeArea(
           child: Column(
@@ -379,9 +437,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                         color: s.onSurface,
                       ),
                     ),
-                    // Botão de novo chat REMOVIDO daqui — era o botão
-                    // "depois do expand e do search" que devia
-                    // desaparecer. Restam apenas search + expand.
                     Row(children: [
                       AppTap(
                         key: _searchAnchorKey,
@@ -391,12 +446,16 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                         child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
                       ),
                       const SizedBox(width: 2),
+                      // Botão expand/shrink — alterna SEMPRE entre os
+                      // dois estados (280px ↔ ecrã inteiro), com o
+                      // ícone e o tooltip semântico refletindo qual
+                      // ação o próximo toque vai fazer.
                       AppTap(
                         onTap: _toggleExpanded,
                         s: s,
                         size: 32,
                         child: AppIcon(
-                          _expanded ? 'shrink.svg' : 'expand.svg',
+                          isExpanded ? 'shrink.svg' : 'expand.svg',
                           color: s.onSurfaceVariant,
                           size: 16,
                         ),
@@ -416,9 +475,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                         selected: widget.currentTab == tab,
                         onTap: () => widget.onSelectTab(tab),
                       ),
-                    // Projetos: já não é uma tab clicável para
-                    // navegação de ecrã — é a linha que expande/colapsa
-                    // a secção inline logo abaixo, via arrow up/down.
                     _ProjectsToggleTile(
                       s: s,
                       open: _projectsOpen,
@@ -454,7 +510,7 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                 ),
               ),
               Expanded(
-                child: _buildConvBody(s, pinned, others),
+                child: _buildConvBody(s, pinned, others, isExpanded),
               ),
               Padding(
                 padding: const EdgeInsets.all(10),
@@ -471,6 +527,7 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
     AppColorScheme s,
     List<ConversationItem> pinned,
     List<ConversationItem> others,
+    bool isExpanded,
   ) {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
@@ -523,10 +580,7 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
             _ConvTile(
               s: s,
               item: item,
-              expanded: _expanded,
-              // Pill de conversa ativa — já existia, mantida
-              // exatamente como pedido ("isso é somente para a
-              // conversa que estiver clicado").
+              expanded: isExpanded,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
               onOptions: (key) => _openConvPopup(context, key, item),
@@ -539,7 +593,7 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
           _ConvTile(
             s: s,
             item: item,
-            expanded: _expanded,
+            expanded: isExpanded,
             active: item.id == widget.activeConversationId,
             onTap: () => _openConversation(item),
             onOptions: (key) => _openConvPopup(context, key, item),
@@ -616,10 +670,6 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
   }
 }
 
-// ── Linha "Projetos" — igual visualmente às outras tabs, mas em vez
-// de navegar troca só o ícone por uma seta que roda 180° e expande/
-// colapsa a secção logo abaixo (AnimatedSize no pai). ──────────────
-
 class _ProjectsToggleTile extends StatefulWidget {
   final AppColorScheme s;
   final bool open;
@@ -680,10 +730,7 @@ class _ProjectsToggleTileState extends State<_ProjectsToggleTile> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROJECTS INLINE SECTION — a árvore de projetos/pastas/ficheiros
-// desenhada diretamente dentro do drawer, sem navegar para nenhum
-// ecrã novo. Cada nó "container" (project/folder) tem o seu próprio
-// arrow up/down local para expandir subpastas, recursivamente.
+// PROJECTS INLINE SECTION
 // ══════════════════════════════════════════════════════════════
 
 class _ProjectsInlineSection extends StatefulWidget {
@@ -771,9 +818,6 @@ class _ProjectsInlineSectionState extends State<_ProjectsInlineSection> {
   }
 }
 
-/// Um nó da árvore (project/folder/file), recursivo. Containers têm
-/// arrow up/down local; ficheiros abrem diretamente (conversa) ou
-/// mostram info (outros tipos, sem viewer dedicado nesta resposta).
 class _ProjectNodeTile extends StatefulWidget {
   final AppColorScheme s;
   final ProjectNode node;
@@ -796,10 +840,6 @@ class _ProjectNodeTileState extends State<_ProjectNodeTile> {
   void _onTap() {
     final node = widget.node;
     if (node.isContainer) {
-      // Ao ser pressionado, mostra popup com opção de abrir conversa,
-      // criar ficheiro e upload de ficheiros — exatamente como pedido.
-      // O arrow (ícone à direita) é quem expande/colapsa; o corpo da
-      // linha abre o popup de ações.
       _openNodeActionsPopup();
     } else if (node.fileKind == ProjectFileKind.chat && node.conversationId != null) {
       widget.onOpenConversation(node.conversationId!);
@@ -828,14 +868,6 @@ class _ProjectNodeTileState extends State<_ProjectNodeTile> {
   }
 
   void _startNewConversationHere() {
-    // "Abrir conversa" dentro de uma pasta/projeto inicia uma nova
-    // conversa vazia e já a associa a este container assim que a
-    // primeira mensagem for enviada — para manter esta resposta
-    // autocontida, aqui apenas navegamos para uma conversa nova; a
-    // associação a este parentId específico é feita chamando
-    // projectsController.linkConversation logo que exista um id de
-    // conversa real (ver AiTab._generateTitleInBackground, que já
-    // devolve o id assim que a conversa é criada no backend).
     widget.onOpenConversation('');
   }
 
@@ -875,10 +907,6 @@ class _ProjectNodeTileState extends State<_ProjectNodeTile> {
   }
 
   void _uploadFileHere() async {
-    // Seleção real de ficheiro delegada ao FilePicker já usado noutras
-    // partes da app (aitab.dart); aqui despoletamos o mesmo fluxo e,
-    // ao obter bytes+nome, chamamos projectsController.uploadFile com
-    // o conteúdo em base64 e o fileKind inferido pela extensão.
     final result = await FilePicker.pickFiles(allowMultiple: false, withData: true);
     if (result == null || result.files.isEmpty) return;
 final picked = result.files.first;
@@ -1028,10 +1056,6 @@ final picked = result.files.first;
   }
 }
 
-// ── Popup de ações de um nó de projeto (abrir conversa / criar
-// ficheiro / criar pasta / upload / renomear / eliminar) — exatamente
-// o popup pedido para quando uma pasta/subpasta é pressionada. ──────
-
 void showProjectNodeActionsPopup(
   BuildContext context,
   AppColorScheme s, {
@@ -1148,9 +1172,6 @@ void showProjectNodeActionsPopup(
   controller.forward();
 }
 
-// ── Sheet genérico de info de ficheiro (para tipos sem viewer
-// dedicado nesta resposta — pdf/docx/xlsx/pptx binários). ───────────
-
 class _FileInfoSheet extends StatelessWidget {
   final AppColorScheme s;
   final ProjectNode node;
@@ -1187,9 +1208,6 @@ class _FileInfoSheet extends StatelessWidget {
         ),
       );
 }
-
-// ── Conversation tile — pill de "ativa" mantida exatamente como
-// pedido (só para a conversa clicada/aberta). ───────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -1289,8 +1307,6 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                // Pill de "ativa" — SÓ para a conversa correspondente ao
-                // id atualmente aberto na AiTab (widget.active).
                 color: widget.active
                     ? s.navIndicatorBg
                     : (_h ? s.hover : s.surface),
@@ -1326,10 +1342,6 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
     );
   }
 }
-
-// ── Popup de opções de uma conversa (fixar / arquivar / renomear /
-// eliminar) — inclui agora "Renomear", já que o título passa a ser
-// editável a partir do app. ──────────────────────────────────────
 
 void showConversationOptionsPopup(
   BuildContext context,
@@ -1493,8 +1505,6 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
   }
 }
 
-// ── Confirmação de eliminação ───────────────────────────────
-
 class _DeleteConversationSheet extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -1606,9 +1616,6 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
     );
   }
 }
-
-// ── Sheet de renomear/criar (título de conversa, nome de projeto,
-// pasta ou ficheiro) — genérico, reutilizado em vários pontos. ──────
 
 Future<void> showRenameSheet(
   BuildContext context,
@@ -1754,10 +1761,7 @@ class _CircleRevealClipper extends CustomClipper<Path> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONVERSATION SEARCH SCREEN — já lia do mesmo conversationsController
-// que o drawer; o "bug" era o drawer não receber updates em tempo
-// real (corrigido acima via upsertLocal), não a busca em si. Mantido
-// tal e qual, apenas confirmando a mesma fonte de dados.
+// CONVERSATION SEARCH SCREEN
 // ══════════════════════════════════════════════════════════════
 
 class ConversationSearchScreen extends StatefulWidget {
@@ -1946,8 +1950,6 @@ class _SearchResultTileState extends State<_SearchResultTile> {
     );
   }
 }
-
-// ── Account pill — dados reais do authController ─────
 
 class _AccountPill extends StatefulWidget {
   final AppColorScheme s;

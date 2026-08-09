@@ -25,20 +25,12 @@ void main() async {
       DeviceOrientation.portraitDown,
     ]);
   }
-  // Torna a status bar (e a navigation bar) verdadeiramente
-  // transparentes ao nível do sistema, uma única vez, antes de
-  // qualquer build. O brilho dos ícones (claro/escuro) é decidido
-  // depois, a cada frame, dentro de CraftLabApp.build() conforme o
-  // tema atual — aqui só se garante que a cor de fundo nativa nunca
-  // é opaca, mesmo antes do primeiro frame renderizar.
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     systemNavigationBarColor: Colors.transparent,
     systemNavigationBarDividerColor: Colors.transparent,
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  // Carrega o tema persistido ANTES de runApp(), para a app já nascer
-  // com o tema certo em vez de "piscar" claro e só depois escurecer.
   await appTheme.load();
   runApp(const CraftLabApp());
 }
@@ -55,11 +47,6 @@ class CraftLabApp extends StatelessWidget {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
-        // Status bar e nav bar SEMPRE transparentes (Colors.transparent),
-        // nunca a cor da superfície — só o brilho dos ícones muda com o
-        // tema. É isto que corrige o "cinza opaco" reportado: antes o
-        // statusBarColor era s.surface (uma cor sólida), agora é sempre
-        // transparente e o conteúdo da app é que se vê por trás.
         SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
@@ -111,24 +98,43 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   EditorType _editorType = EditorType.docs;
   bool       _hasMessages = false;
 
-  // Key real para o estado vivo da AiTab, para o header conseguir ler
-  // canvasCount / widgetsEnabled / webSearchEnabled diretamente do
-  // estado interno em vez de valores fixos falsos — isto é o que
-  // fazia o popup do appbar nunca refletir o estado real dos switches.
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
+
+  /// Fonte única de verdade sobre o drawer estar em modo 280px ou
+  /// ecrã inteiro. Passado diretamente ao AppDrawer (que o controla
+  /// via toque/gesto) e lido aqui no Positioned para dimensionar-se
+  /// de forma sempre coerente com o que o drawer realmente desenha —
+  /// é isto que elimina o bug da faixa cinza (Positioned largo demais
+  /// para um drawer interno ainda estreito, ou vice-versa).
+  final ValueNotifier<bool> _drawerExpanded = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
     _springNav = SpringNav(vsync: this);
     _springNav.slideCtrl.value = 1.0;
+    _drawerExpanded.addListener(_onDrawerExpandedChanged);
   }
 
   @override
-  void dispose() { _springNav.dispose(); super.dispose(); }
+  void dispose() {
+    _drawerExpanded.removeListener(_onDrawerExpandedChanged);
+    _drawerExpanded.dispose();
+    _springNav.dispose();
+    super.dispose();
+  }
+
+  void _onDrawerExpandedChanged() { if (mounted) setState(() {}); }
 
   void _openDrawer()  { setState(() => _drawerOpen = true);  _springNav.open(); }
-  void _closeDrawer() { setState(() => _drawerOpen = false); _springNav.close(); }
+  void _closeDrawer() {
+    setState(() => _drawerOpen = false);
+    _springNav.close();
+    // Ao fechar por completo, o drawer volta sempre ao estado
+    // colapsado (280px) para a próxima abertura — evita reabrir já
+    // expandido inesperadamente por um estado esquecido do gesto.
+    _drawerExpanded.value = false;
+  }
 
   void _openSettings() {
     _closeDrawer();
@@ -206,13 +212,10 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final isAiTab = _tab == AppTab.ai;
-    // Largura real do ecrã, lida uma vez por build — é isto que
-    // faltava chegar ao Positioned do drawer. Antes o Positioned
-    // tinha "width: 280" fixo no PAI, cortando o espaço disponível
-    // antes do AppDrawer sequer decidir o que fazer com _expanded
-    // (que já calculava screenWidth internamente, mas sem efeito
-    // nenhum porque já estava confinado a 280px por fora).
     final screenWidth = MediaQuery.of(context).size.width;
+    // Largura EXATA do próprio Positioned, lida do mesmo notifier que
+    // o AppDrawer usa internamente — nunca mais divergem.
+    final drawerWidth = _drawerExpanded.value ? screenWidth : 280.0;
 
     return Material(
       type: MaterialType.transparency,
@@ -234,12 +237,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
                   ),
                   Positioned(
                     top: 0, left: 0, right: 0,
-                    // AnimatedBuilder ouve o próprio AiTabState (via
-                    // Listenable exposto abaixo) para o trailing
-                    // re-renderizar sempre que canvasCount / widgetsEnabled
-                    // / webSearchEnabled mudarem — sem isto, o popup do
-                    // appbar mostrava sempre valores presos no primeiro
-                    // build (bug do ponto 2/4 do pedido).
                     child: AnimatedBuilder(
                       animation: _AiTabHeaderRefresh.of(context),
                       builder: (_, __) {
@@ -295,7 +292,18 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           Positioned.fill(
             child: GestureDetector(
               onTap: _closeDrawer,
-              child: Container(color: s.barrier),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: kCupertinoOut,
+                // O barrier (fundo escurecido) só é visível na fatia da
+                // tela NÃO coberta pelo drawer — evita qualquer resíduo
+                // cinza sobre a área onde o drawer já desenha o próprio
+                // fundo (s.surface). Quando drawerWidth == screenWidth
+                // (expandido), o barrier fica com largura zero — nunca
+                // mais aparece cinza por cima do drawer expandido.
+                margin: EdgeInsets.only(left: drawerWidth),
+                color: s.barrier,
+              ),
             ),
           ),
 
@@ -303,15 +311,10 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           animation: _springNav.slideCtrl,
           builder: (_, child) {
             final v = _springNav.slideCtrl.value.clamp(0.0, 1.0);
-            // width e left agora seguem screenWidth em vez de 280
-            // fixo — o drawer ocupa a tela inteira desde já (o próprio
-            // AppDrawer decide internamente quanto de si mesmo mostrar
-            // via seu AnimatedContainer width: _expanded ? screenWidth
-            // : 280, mas agora tem espaço de verdade para o fazer em
-            // vez de ser cortado por este Positioned do pai).
             return Positioned(
-              top: 0, bottom: 0, width: screenWidth,
-              left: -screenWidth + screenWidth * (1.0 - v),
+              top: 0, bottom: 0,
+              width: drawerWidth,
+              left: -drawerWidth + drawerWidth * (1.0 - v),
               child: child!,
             );
           },
@@ -323,6 +326,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
             onSelectTab: _selectTab,
             onOpenConversation: _onOpenConversation,
             onNewChat: () => _onConversationAction(ConversationAction.newChat),
+            expandedNotifier: _drawerExpanded,
           ),
         ),
       ]),
@@ -331,12 +335,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI TAB HEADER REFRESH — Listenable minúsculo e global-ao-widget-tree
-// que a AiTabState "pinga" sempre que canvasCount/widgetsEnabled/
-// webSearchEnabled mudam, para o _AppHeader no RootShell (que vive
-// FORA da árvore da AiTab) saber que precisa de reconstruir o popup.
-// Sem isto não há forma limpa do header ler estado interno da AiTab
-// sem prop-drilling constante já que o header é irmão, não pai.
+// AI TAB HEADER REFRESH
 // ══════════════════════════════════════════════════════════════
 
 class _AiTabHeaderRefresh extends ChangeNotifier {
@@ -345,8 +344,6 @@ class _AiTabHeaderRefresh extends ChangeNotifier {
   static _AiTabHeaderRefresh of(BuildContext context) => _instance;
   void ping() => notifyListeners();
 }
-
-final _aiTabHeaderRefresh = _AiTabHeaderRefresh.of as _AiTabHeaderRefresh Function(BuildContext);
 
 // ══════════════════════════════════════════════════════════════
 // AI TAB HOST

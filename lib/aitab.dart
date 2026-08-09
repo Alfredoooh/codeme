@@ -50,7 +50,11 @@ extension AiModelX on AiModel {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SYSTEM PROMPT
+// SYSTEM PROMPT — reforça agora explicitamente que blocos de código
+// (incluindo html/css/js) NUNCA vão para canvas, mesmo que sejam
+// documentos web completos: só ficam em canvas os quatro tipos
+// explícitos [[canvas:doc/sheet/slide/whiteboard:...]]. Widgets
+// continuam a aparecer diretamente na conversa, nunca em canvas.
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
@@ -61,9 +65,9 @@ sequências e opções, tabelas para comparações ou dados tabulares, e título
 curtos quando a resposta tiver várias secções. Evita parágrafos longos e
 densos quando a informação pode ser organizada visualmente.
 
-Quando o utilizador pedir para criares, escreveres ou editares um documento,
-uma folha de cálculo ou uma apresentação, gera o conteúdo e embrulha-o EXATAMENTE
-neste formato, no fim da tua resposta:
+Quando o utilizador pedir para criares, escreveres ou editares um documento
+de texto, uma folha de cálculo ou uma apresentação, gera o conteúdo e
+embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
 
 [[canvas:doc:Título do documento||<p>conteúdo em html aqui</p>]]
 
@@ -81,18 +85,21 @@ apresentações (conteúdo em JSON de slides). Nunca mostres este bloco ao
 utilizador como texto explicado — ele é processado automaticamente pela
 aplicação e transformado num cartão de documento navegável.
 
-Blocos de código normais (```dart, ```python, ```js, etc.) são sempre bem-vindos
-sempre que ajudarem a explicar algo técnico, independentemente de qualquer outra
-funcionalidade estar ativa. Estes blocos também são transformados automaticamente
-num cartão navegável, exatamente como os documentos — não precisas de os embrulhar
-em canvas separadamente, um bloco de código normal já basta.
+IMPORTANTE: blocos de código normais (```dart, ```python, ```js, ```html,
+```css, etc.) NUNCA devem ser embrulhados em [[canvas:...]] — mesmo que sejam
+uma página HTML completa, um componente, ou um ficheiro inteiro. Blocos de
+código ficam sempre como blocos de código markdown normais, visíveis
+diretamente na conversa, exatamente como qualquer outra resposta técnica.
+Só documentos de texto corrido, folhas de cálculo e apresentações usam o
+formato [[canvas:...]] — nunca código.
 ''';
 
 const String kAiWidgetsInstructions = '''
 
-Tens também acesso a widgets visuais interativos. Quando fizer sentido para a
-resposta, gera um bloco de código com uma das seguintes linguagens especiais,
-contendo APENAS um objeto JSON válido no corpo do bloco:
+Tens também acesso a widgets visuais interativos, que aparecem diretamente
+dentro da conversa (nunca em canvas). Quando fizer sentido para a resposta,
+gera um bloco de código com uma das seguintes linguagens especiais, contendo
+APENAS um objeto JSON válido no corpo do bloco:
 
 - ```widget_table``` — { "headers": ["Col1","Col2"], "rows": [["a","b"]] }
 - ```widget_bar``` — { "data": [{"label":"Jan","value":10,"unit":"","color":"#6F5AF6"}] }
@@ -105,11 +112,12 @@ contendo APENAS um objeto JSON válido no corpo do bloco:
 - ```widget_graph``` — { "expression": "sin(x)", "xMin": -10, "xMax": 10 }
 - ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
 
-Não uses widget_code — blocos de código normais já viram cartões automaticamente.
-Usa estes widgets apenas quando acrescentam valor real à resposta (dados
-quantitativos, comparações visuais, localização, tempo), nunca como enfeite.
-Nunca expliques ao utilizador que estás a gerar um bloco widget — ele é
-processado automaticamente e transformado num cartão interativo.
+Não uses widget_code — blocos de código normais já aparecem automaticamente
+formatados. Usa estes widgets apenas quando acrescentam valor real à resposta
+(dados quantitativos, comparações visuais, localização, tempo), nunca como
+enfeite. Nunca expliques ao utilizador que estás a gerar um bloco widget —
+ele é processado automaticamente e transformado num cartão interativo, sem
+nunca mostrar o JSON cru.
 ''';
 
 const String kAiWebSearchInstructions = '''
@@ -133,16 +141,15 @@ String cleanAiText(String raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOCAL CANVAS — item 6/7 do pedido. Guarda QUALQUER conteúdo que
-// deva abrir no EditTab: tanto os blocos [[canvas:...]] explícitos
-// (doc/sheet/slide/whiteboard) como blocos de código genéricos
-// (```dart, ```python, etc — exceto widget_*), que também passam a
-// ser tratados como "documentos" navegáveis a partir do popup Canvas.
-// Isto é local ao aitab.dart, não depende de CanvasKind vindo de
-// api_service.dart, para não precisar de alterar esse ficheiro.
+// LOCAL CANVAS — CORRIGIDO: agora só reconhece os quatro blocos
+// [[canvas:doc/sheet/slide/whiteboard:...]] explícitos. Blocos de
+// código genéricos (incluindo html/css/js) DEIXARAM de ser tratados
+// como canvas — ficam sempre visíveis como código normal na bolha,
+// tratados por RichAiText mais abaixo. Isto corrige o bug em que
+// HTML era "roubado" da conversa e escondido dentro de um canvas.
 // ══════════════════════════════════════════════════════════════
 
-enum LocalCanvasKind { doc, sheet, slide, whiteboard, code }
+enum LocalCanvasKind { doc, sheet, slide, whiteboard }
 
 extension LocalCanvasKindX on LocalCanvasKind {
   EditorType get editorType {
@@ -151,7 +158,6 @@ extension LocalCanvasKindX on LocalCanvasKind {
       case LocalCanvasKind.slide:      return EditorType.slides;
       case LocalCanvasKind.whiteboard: return EditorType.whiteboard;
       case LocalCanvasKind.doc:        return EditorType.docs;
-      case LocalCanvasKind.code:       return EditorType.docs;
     }
   }
 }
@@ -160,7 +166,7 @@ class LocalCanvasItem {
   final String id;
   final LocalCanvasKind kind;
   final String title;
-  final String content; // HTML para doc/code; JSON cru para sheet/slide
+  final String content; // HTML para doc; JSON cru para sheet/slide/whiteboard
   const LocalCanvasItem({
     required this.id,
     required this.kind,
@@ -169,9 +175,6 @@ class LocalCanvasItem {
   });
 }
 
-/// Resultado de um parse de streaming: texto limpo (sem os blocos de
-/// canvas/código consumidos) + lista de itens de canvas encontrados,
-/// na ordem em que apareceram.
 class _CanvasScanResult {
   final String cleanText;
   final List<LocalCanvasItem> items;
@@ -182,17 +185,13 @@ final RegExp _kExplicitCanvasRe = RegExp(
   r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
 );
 
-// Bloco de código genérico ```lang\n...\n``` — exclui explicitamente
-// qualquer linguagem widget_* (essas são widgets, não canvas).
-final RegExp _kGenericCodeRe = RegExp(
-  r'```(?!widget_)([a-zA-Z0-9_+-]*)\s*\n([\s\S]*?)```',
-);
-
+/// Extrai APENAS blocos [[canvas:...]] explícitos. Blocos de código
+/// (``` de qualquer linguagem, incluindo widget_*) nunca são tocados
+/// aqui — ficam no texto para RichAiText tratar (código normal ou
+/// widget interativo).
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
-
-  // 1) blocos [[canvas:...]] explícitos
-  var text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
+  final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
     final kindStr = m.group(1)!;
     final title = m.group(2)!.trim();
     final content = m.group(3)!;
@@ -210,21 +209,6 @@ _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
     ));
     return '';
   });
-
-  // 2) blocos de código genéricos (não widget_*) — também viram canvas
-  text = text.replaceAllMapped(_kGenericCodeRe, (m) {
-    final lang = m.group(1)!.trim();
-    final code = m.group(2)!;
-    final label = lang.isEmpty ? 'Código' : lang;
-    items.add(LocalCanvasItem(
-      id: idGen(),
-      kind: LocalCanvasKind.code,
-      title: 'Código ($label)',
-      content: code,
-    ));
-    return '';
-  });
-
   return _CanvasScanResult(cleanText: text.trim(), items: items);
 }
 
@@ -250,12 +234,6 @@ extension ConversationActionX on ConversationAction {
       }[this]!;
 }
 
-/// Popup unificado. O anchor é sempre envolto em IgnorePointer, e é o
-/// GestureDetector externo que trata o toque — isto evita o bug de
-/// popups que nunca abriam. A posição é sempre calculada com uma
-/// altura estimada real do conteúdo e um fallback simétrico topo/baixo
-/// (nunca mais salta para o centro do ecrã nem foge do ponto tocado —
-/// item 2 do pedido).
 class PopupMenu<T> extends StatefulWidget {
   final AppColorScheme s;
   final Widget anchor;
@@ -488,7 +466,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON — header do appbar (ponto 2/4/6).
+// AI CONVERSATION MENU BUTTON
 // ══════════════════════════════════════════════════════════════
 
 class AiConversationMenuButton extends StatelessWidget {
@@ -578,9 +556,6 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   @override
   void didUpdateWidget(covariant _HeaderMenuButton old) {
     super.didUpdateWidget(old);
-    // Mantém os notifiers do popup sincronizados se o estado externo
-    // mudar enquanto o popup NÃO está aberto (ex: outra fonte alterou
-    // o switch). Enquanto está aberto, _open() já sincroniza no início.
     if (_ov == null) {
       _webNotifier.value = widget.webSearchEnabled;
       _widgetsNotifier.value = widget.widgetsEnabled;
@@ -891,9 +866,6 @@ class AiTab extends StatefulWidget {
   final ConversationAction? externalAction;
   final VoidCallback? onExternalActionConsumed;
   final ValueChanged<bool>? onHasMessagesChanged;
-  /// Chamado sempre que estado que afeta o header (canvasCount,
-  /// widgetsEnabled, webSearchEnabled) muda, para o RootShell saber
-  /// que precisa de reconstruir o popup do appbar (ponto 2/4).
   final VoidCallback? onHeaderStateChanged;
   const AiTab({
     super.key,
@@ -924,12 +896,13 @@ class AiTabState extends State<AiTab> {
   EditorType? _attachedTool;
   int      _canvasIdSeq  = 0;
 
-  /// Não-nulo enquanto a IA está a "desenhar" um canvas OU um widget —
-  /// ponto 5: enquanto isto for != null, a bolha de streaming mostra
-  /// SÓ o pill tools.svg + texto, nunca o JSON/HTML cru.
+  /// Não-nulo enquanto a IA está a "desenhar" um canvas OU um widget.
+  /// Enquanto for != null, a bolha de streaming mostra SÓ o pill
+  /// tools.svg + texto com shimmer, nunca o JSON/HTML cru — e, ao
+  /// contrário de antes, o texto ANTES e DEPOIS deste bloco continua a
+  /// ser escrito normalmente (o pill não bloqueia o resto do streaming).
   String? _creatingLabel;
 
-  // ── Getters públicos lidos pelo header no RootShell (ponto 2/4) ──
   int get canvasCount => _canvases.length;
   bool get widgetsEnabled => _widgetsEnabled;
   bool get webSearchEnabled => _webSearchEnabled;
@@ -964,8 +937,6 @@ class AiTabState extends State<AiTab> {
 
   void _notifyHeader() => widget.onHeaderStateChanged?.call();
 
-  // ── Chamados pelo RootShell a partir do header (ponto 2/4) ──────
-
   void setWidgetsEnabled(bool v) {
     setState(() => _widgetsEnabled = v);
     _notifyHeader();
@@ -990,9 +961,6 @@ class AiTabState extends State<AiTab> {
         _msgs.addAll(rawMsgs.whereType<Map<String, dynamic>>().map(ChatMessage.fromJson));
       }
       _canvases.clear();
-      // Reconstrói canvases locais a partir do histórico de mensagens,
-      // já que persistimos apenas texto — qualquer bloco [[canvas:...]]
-      // ou de código ainda presente no conteúdo salvo é re-detetado aqui.
       for (final m in _msgs) {
         if (m.role == 'assistant') {
           final scan = _scanForCanvasItems(m.content, _nextCanvasId);
@@ -1020,11 +988,13 @@ class AiTabState extends State<AiTab> {
     return prompt;
   }
 
-  /// Detecta, durante o streaming, se há um bloco de canvas ou widget
-  /// aberto mas ainda não fechado — usado para decidir a label do pill
-  /// "A criar..." (ponto 5).
+  /// Deteta, durante o streaming, se há um bloco de canvas ou widget
+  /// aberto mas ainda não fechado — usado para a label do pill
+  /// "A criar...". Blocos de código genéricos (não widget_*, não
+  /// canvas) já NÃO acionam este pill — ficam sempre visíveis como
+  /// texto normal em streaming, exatamente como qualquer resposta
+  /// técnica normal.
   String? _detectOpeningLabel(String text) {
-    // Canvas explícito aberto: "[[canvas:doc:" sem "]]" a fechar depois.
     final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
     if (canvasOpenMatch.isNotEmpty) {
       final closesAfter = text.substring(canvasOpenMatch.last.start).contains(']]');
@@ -1038,13 +1008,6 @@ class AiTabState extends State<AiTab> {
         };
       }
     }
-    // Bloco de código genérico aberto (não widget_*).
-    final codeOpens = RegExp(r'```(?!widget_)[a-zA-Z0-9_+-]*\s*\n').allMatches(text).length;
-    final allFences = '```'.allMatches(text).length;
-    if (codeOpens > 0 && allFences % 2 == 1) {
-      return 'A criar bloco de código...';
-    }
-    // Widget aberto.
     if (hasOpenWidgetBlock(text)) {
       return 'A criar widget...';
     }
@@ -1109,11 +1072,6 @@ class AiTabState extends State<AiTab> {
             final scan = _scanForCanvasItems(finalText, _nextCanvasId);
             setState(() {
               if (scan.cleanText.trim().isNotEmpty || scan.items.isNotEmpty) {
-                // Guarda o texto ORIGINAL (com os blocos de canvas/código
-                // ainda presentes) na mensagem persistida, para que ao
-                // recarregar a conversa consigamos re-detetar os canvases
-                // via _scanForCanvasItems em _loadConversation. Só a
-                // exibição na bolha usa scan.cleanText.
                 _msgs.add(ChatMessage(role: 'assistant', content: finalText));
               }
               _canvases.addAll(scan.items);
@@ -1166,13 +1124,6 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  /// Depois de gerar o título automático, cria a conversa (se ainda
-  /// não existir) OU atualiza-a, e — ponto crítico corrigido — avisa
-  /// imediatamente o ConversationsController via upsertLocal, para o
-  /// drawer (que pode já estar montado noutra parte da árvore) passar
-  /// a mostrar esta conversa e o título certo sem precisar de um
-  /// load() completo. Sem isto, conversas iniciadas dentro do app
-  /// nunca apareciam no drawer até o utilizador fechar e reabrir.
   Future<void> _generateTitleInBackground(String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
@@ -1202,10 +1153,6 @@ class AiTabState extends State<AiTab> {
     }
   }
 
-  /// Mesma correção aplicada aqui: qualquer criação/atualização de
-  /// conversa a partir do chat propaga de imediato para o drawer via
-  /// upsertLocal, em vez de depender de um load() manual que só
-  /// acontecia no initState do AppDrawer.
   Future<void> _persistConversation() async {
     if (_incognito) return;
     final token = authController.token;
@@ -1310,6 +1257,9 @@ class AiTabState extends State<AiTab> {
     );
   }
 
+  /// Abre o EditTab já carregado com o documento clicado — é isto que
+  /// acontece tanto ao clicar num link de canvas dentro de uma bolha
+  /// como ao clicar num item da lista do popup Canvas.
   void _onOpenCanvas(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
     AiTabHostNavigation.of(context)?.goToEditTab(item.kind.editorType);
@@ -1431,19 +1381,9 @@ class AiTabState extends State<AiTab> {
     super.dispose();
   }
 
-  /// Retorna, para uma mensagem já finalizada, os canvases que essa
-  /// mensagem específica gerou (pelo texto bruto ainda conter os
-  /// marcadores originais). Usado para desenhar o link azul (ponto 7)
-  /// logo abaixo da bolha correta, e não misturado com outras.
   List<LocalCanvasItem> _canvasesForMessage(String rawContent) {
-    // Re-scan local, sem consumir _canvases global: apenas para saber
-    // QUANTOS e QUAIS itens esta mensagem específica originou, casando
-    // por título/conteúdo com o que já está em _canvases (mesma ordem
-    // de criação, já que _scanForCanvasItems é determinístico).
     final scan = _scanForCanvasItems(rawContent, () => '');
     if (scan.items.isEmpty) return const [];
-    // Localiza na lista global os itens cujo (kind,title,content) bate
-    // com os detetados agora — evita duplicar ids.
     final matched = <LocalCanvasItem>[];
     for (final local in scan.items) {
       final found = _canvases.firstWhere(
@@ -1459,17 +1399,10 @@ class AiTabState extends State<AiTab> {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final topInset = MediaQuery.of(context).padding.top;
-    // Altura real ocupada pelo _AppHeader transparente no RootShell:
-    // padding.top + 6 (top) + ~34 de conteúdo (ícone 20 + paddings
-    // verticais 10+10) + folga. Isto substitui o valor fixo antigo
-    // que fazia o conteúdo aparecer sempre por baixo do appbar — item 1.
     final headerHeight = topInset + 6 + 40 + 12;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
     return GestureDetector(
-      // Item 3: toca em qualquer parte da tela fora dos controlos de
-      // texto → esconde teclado e remove o foco (o cursor piscando
-      // desaparece junto, porque o TextField deixa de estar focado).
       behavior: HitTestBehavior.opaque,
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
@@ -1486,13 +1419,16 @@ class AiTabState extends State<AiTab> {
                         itemCount: _msgs.length + (_sending ? 1 : 0),
                         itemBuilder: (_, i) {
                           if (i >= _msgs.length) {
+                            final scan = _scanForCanvasItems(_streamingText, () => '');
                             return _StreamingBubble(
                               s: s,
-                              text: cleanAiText(_scanForCanvasItems(_streamingText, () => '').cleanText),
+                              text: cleanAiText(scan.cleanText),
                               thinking: _streamingThink != null
                                   ? cleanAiText(_streamingThink!)
                                   : null,
                               creatingLabel: _creatingLabel,
+                              widgetsEnabled: _widgetsEnabled,
+                              onEnableWidgets: () => setWidgetsEnabled(true),
                             );
                           }
                           final msg = _msgs[i];
@@ -1517,6 +1453,8 @@ class AiTabState extends State<AiTab> {
                             onThumbDown: () => _onAssistantThumbDown(i),
                             onCopy: () => _onAssistantCopy(i),
                             onRefresh: () => _onAssistantRefresh(i),
+                            widgetsEnabled: _widgetsEnabled,
+                            onEnableWidgets: () => setWidgetsEnabled(true),
                           );
                         },
                       ),
@@ -1537,9 +1475,6 @@ class AiTabState extends State<AiTab> {
             onModel: () => _openModelPopup(_modelAnchorKey),
             onClearTool: _onClearTool,
           ),
-          // Item 3: cresce/encolhe junto com o teclado de verdade —
-          // AnimatedContainer reage a viewInsets.bottom a cada frame de
-          // teclado (o antigo valor fixo de 132 não subia com o teclado).
           AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: kCupertinoOut,
@@ -1551,7 +1486,6 @@ class AiTabState extends State<AiTab> {
   }
 }
 
-/// InheritedWidget leve para navegação AiTab → EditTab.
 class AiTabHostNavigation extends InheritedWidget {
   final void Function(EditorType type) goToEditTab;
   const AiTabHostNavigation({
@@ -1566,8 +1500,6 @@ class AiTabHostNavigation extends InheritedWidget {
   @override
   bool updateShouldNotify(AiTabHostNavigation oldWidget) => true;
 }
-
-// ── Estado incógnito ─────────────────────────────────────────
 
 class _IncognitoState extends StatelessWidget {
   const _IncognitoState();
@@ -1586,9 +1518,6 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Empty state — recebe topPadding para nunca ficar atrás do
-// appbar transparente (item 1). ──
-
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
   final double topPadding;
@@ -1606,11 +1535,11 @@ class _EmptyState extends StatelessWidget {
                 AppIcon('ai_tab_filled.svg', color: s.onSurfaceVariant, size: 40, useColorAsset: true),
                 const SizedBox(height: 14),
                 Text(
-                  'Como posso ajudar?',
+                  'Olá, o que vamos criar hoje?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w400,
                     color: s.onSurface,
                   ),
                 ),
@@ -1620,10 +1549,6 @@ class _EmptyState extends StatelessWidget {
         ),
       );
 }
-
-// ── Bolha de mensagem do utilizador — mantém-se como pill (faz
-// sentido visualmente distinguir utilizador de IA), mas as respostas
-// da IA (abaixo) deixam de ter container — item 1. ──
 
 class _Bubble extends StatefulWidget {
   final AppColorScheme s;
@@ -1716,10 +1641,6 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   }
 }
 
-// ── Resposta da IA — item 1: SEM container/fundo, texto solto na
-// tela. Item 7: link azul sublinhado bold para cada canvas gerado
-// por esta mensagem específica. ──
-
 class _AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
@@ -1729,6 +1650,8 @@ class _AssistantBubble extends StatelessWidget {
   final VoidCallback onThumbDown;
   final VoidCallback onCopy;
   final VoidCallback onRefresh;
+  final bool widgetsEnabled;
+  final VoidCallback onEnableWidgets;
   const _AssistantBubble({
     required this.s,
     required this.text,
@@ -1738,6 +1661,8 @@ class _AssistantBubble extends StatelessWidget {
     required this.onThumbDown,
     required this.onCopy,
     required this.onRefresh,
+    required this.widgetsEnabled,
+    required this.onEnableWidgets,
   });
 
   @override
@@ -1749,7 +1674,13 @@ class _AssistantBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (text.isNotEmpty) RichAiText(text: text, s: s),
+              if (text.isNotEmpty)
+                RichAiText(
+                  text: text,
+                  s: s,
+                  widgetsEnabled: widgetsEnabled,
+                  onEnableWidgets: onEnableWidgets,
+                ),
               for (final item in canvases) ...[
                 const SizedBox(height: 8),
                 _CanvasLink(s: s, item: item, onTap: () => onOpenCanvas(item)),
@@ -1768,8 +1699,6 @@ class _AssistantBubble extends StatelessWidget {
       );
 }
 
-/// Link azul, sublinhado, bold — ponto 7 do pedido. Abre o EditTab já
-/// carregado com o conteúdo do canvas correspondente.
 class _CanvasLink extends StatefulWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
@@ -1780,13 +1709,6 @@ class _CanvasLink extends StatefulWidget {
 
 class _CanvasLinkState extends State<_CanvasLink> {
   bool _h = false;
-
-  IconData get _leadingIcon {
-    switch (widget.item.kind) {
-      case LocalCanvasKind.code: return Icons.code;
-      default: return Icons.description_outlined;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1800,7 +1722,7 @@ class _CanvasLinkState extends State<_CanvasLink> {
       child: Opacity(
         opacity: _h ? 0.7 : 1.0,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(_leadingIcon, size: 16, color: linkColor),
+          Icon(Icons.description_outlined, size: 16, color: linkColor),
           const SizedBox(width: 6),
           Text(
             widget.item.title,
@@ -1817,8 +1739,6 @@ class _CanvasLinkState extends State<_CanvasLink> {
     );
   }
 }
-
-// ── Barra de ações sob cada resposta da IA ──────────────────────
 
 class _AssistantActionBar extends StatelessWidget {
   final AppColorScheme s;
@@ -1886,21 +1806,20 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
   }
 }
 
-// ── Bolha de streaming — item 5: enquanto _creatingLabel != null,
-// mostra SÓ o pill tools.svg + texto, nunca conteúdo bruto de
-// canvas/widget. O texto normal antes/depois do bloco continua
-// visível fora do processo de criação. ──
-
 class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
   final String? thinking;
   final String? creatingLabel;
+  final bool widgetsEnabled;
+  final VoidCallback onEnableWidgets;
   const _StreamingBubble({
     required this.s,
     required this.text,
     this.thinking,
     this.creatingLabel,
+    required this.widgetsEnabled,
+    required this.onEnableWidgets,
   });
 
   @override
@@ -1922,7 +1841,13 @@ class _StreamingBubble extends StatelessWidget {
                           fontStyle: FontStyle.italic,
                           height: 1.4)),
                 ),
-              if (text.isNotEmpty) RichAiText(text: text, s: s),
+              if (text.isNotEmpty)
+                RichAiText(
+                  text: text,
+                  s: s,
+                  widgetsEnabled: widgetsEnabled,
+                  onEnableWidgets: onEnableWidgets,
+                ),
               if (creatingLabel != null) ...[
                 if (text.isNotEmpty) const SizedBox(height: 10),
                 _CanvasCreatingPill(s: s, label: creatingLabel!),
@@ -1934,6 +1859,9 @@ class _StreamingBubble extends StatelessWidget {
       );
 }
 
+/// Pill "A criar..." — ícone tools.svg + texto com shimmer contínuo
+/// (item pedido explicitamente: esconder qualquer JSON/HTML cru atrás
+/// deste indicador enquanto a IA gera canvas ou widget).
 class _CanvasCreatingPill extends StatelessWidget {
   final AppColorScheme s;
   final String label;
@@ -1945,26 +1873,217 @@ class _CanvasCreatingPill extends StatelessWidget {
         children: [
           AppIcon('tools.svg', color: s.primary, size: 15),
           const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: s.primary)),
+          _ShimmerText(
+            text: label,
+            baseColor: s.primary,
+            highlightColor: s.isDark ? Colors.white : Colors.white,
+          ),
         ],
       );
 }
 
+/// Texto com efeito shimmer (faixa de brilho a percorrer o texto em
+/// loop), implementado com ShaderMask + gradiente animado — sem
+/// dependências externas.
+class _ShimmerText extends StatefulWidget {
+  final String text;
+  final Color baseColor;
+  final Color highlightColor;
+  const _ShimmerText({required this.text, required this.baseColor, required this.highlightColor});
+  @override State<_ShimmerText> createState() => _ShimmerTextState();
+}
+
+class _ShimmerTextState extends State<_ShimmerText> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+  }
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) {
+        final t = _c.value;
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              colors: [widget.baseColor, widget.highlightColor, widget.baseColor],
+              stops: const [0.35, 0.5, 0.65],
+              begin: Alignment(-1.0 - 2 * (1 - t), 0),
+              end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
+              tileMode: TileMode.clamp,
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: Text(
+        widget.text,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: widget.baseColor,
+        ),
+      ),
+    );
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
-// RICH AI TEXT — markdown leve + widgets interativos intercalados.
+// BLINKING GRID LOADER — mantido apenas por compatibilidade (não é
+// mais usado no pill; AiSmallDotsLoader é usado no arranque vazio).
+// ══════════════════════════════════════════════════════════════
+
+class BlinkingGridLoader extends StatefulWidget {
+  final Color color;
+  final double dotSize;
+  final double gap;
+  const BlinkingGridLoader({
+    super.key,
+    required this.color,
+    this.dotSize = 7,
+    this.gap = 5,
+  });
+
+  @override
+  State<BlinkingGridLoader> createState() => _BlinkingGridLoaderState();
+}
+
+class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  static const int _cols = 3;
+  static const int _rows = 3;
+  static const double _cycleMs = 1200;
+  static const double _stepDelayMs = 100;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: _cycleMs.round()),
+    )..repeat();
+  }
+
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  double _opacityFor(int index, double t) {
+    final delay = (index * _stepDelayMs) / _cycleMs;
+    var local = (t - delay) % 1.0;
+    if (local < 0) local += 1.0;
+    final phase = (local * 2).clamp(0.0, 2.0);
+    final eased = phase <= 1.0 ? phase : (2.0 - phase);
+    return 0.15 + (0.85 * eased);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = _cols * widget.dotSize + (_cols - 1) * widget.gap;
+    return SizedBox(
+      width: size,
+      height: _rows * widget.dotSize + (_rows - 1) * widget.gap,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(_rows, (r) => Padding(
+            padding: EdgeInsets.only(bottom: r == _rows - 1 ? 0 : widget.gap),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(_cols, (c) {
+                final index = r * _cols + c;
+                return Padding(
+                  padding: EdgeInsets.only(right: c == _cols - 1 ? 0 : widget.gap),
+                  child: Opacity(
+                    opacity: _opacityFor(index, _c.value),
+                    child: Container(
+                      width: widget.dotSize,
+                      height: widget.dotSize,
+                      decoration: BoxDecoration(
+                        color: widget.color,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          )),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RICH AI TEXT — CORRIGIDO: agora trata blocos ```lang``` genéricos
+// (incluindo html/css/js) como blocos de código normais e SEMPRE
+// visíveis, usando o mesmo AiCodeWidget do sistema de widgets — não
+// dependem do switch de Widgets estar ativo. widget_* continuam a ser
+// extraídos primeiro (parseAiWidgetBlocks) e a virar cartões
+// interativos reais quando o switch está ativo.
+//
+// NOVO: quando o switch está desativado, um bloco ```widget_x``` NÃO
+// aparece mais como JSON despejado num bloco de código genérico. Em
+// vez disso é extraído silenciosamente do texto e, no fim da
+// resposta, aparece UMA sugestão (estilo ChatGPT: seta ↳, texto a
+// bold sublinhado a pontilhado, ícone resend.svg) que ativa os
+// widgets ao ser tocada e volta a renderizar o(s) widget(s) reais
+// inline, no lugar exato onde a IA os colocou.
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
   final String text;
   final AppColorScheme s;
-  const RichAiText({super.key, required this.text, required this.s});
+  final bool widgetsEnabled;
+  final VoidCallback? onEnableWidgets;
+  const RichAiText({
+    super.key,
+    required this.text,
+    required this.s,
+    this.widgetsEnabled = true,
+    this.onEnableWidgets,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (!widgetsEnabled) {
+      // Widgets desligados: os blocos ```widget_x``` são detetados e
+      // removidos do texto (sem mostrar o JSON cru como código) — em
+      // vez disso, mostramos uma única sugestão no fim da resposta,
+      // que o utilizador pode tocar para ativar os widgets.
+      final widgetParse = parseAiWidgetBlocks(text);
+      final strippedText = widgetParse.blocks.isEmpty
+          ? text
+          : widgetParse.textWithMarkers.replaceAll(
+              RegExp(r'\u0000WB(\d+)\u0000'), '');
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ..._parseBlocks(strippedText),
+          if (widgetParse.blocks.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _WidgetSuggestionPill(
+              s: s,
+              count: widgetParse.blocks.length,
+              onTap: onEnableWidgets,
+            ),
+          ],
+        ],
+      );
+    }
+
     final widgetParse = parseAiWidgetBlocks(text);
     if (widgetParse.blocks.isEmpty) {
       return Column(
@@ -2106,12 +2225,35 @@ class RichAiText extends StatelessWidget {
         continue;
       }
 
-      // NOTA: blocos ``` genéricos já foram removidos do texto antes de
-      // chegar aqui (consumidos por _scanForCanvasItems em AiTabState,
-      // que os transforma em LocalCanvasItem + link azul). Se por
-      // alguma razão um ``` sobreviver até aqui, tratamo-lo como texto
-      // normal em vez de tentar renderizar código inline — mantém o
-      // comportamento previsível do ponto 6.
+      // Bloco de código genérico (```lang ... ```), de QUALQUER
+      // linguagem incluindo html/css/js — SEMPRE renderizado como
+      // cartão de código com syntax highlight, nunca escondido, nunca
+      // movido para canvas. Quando widgets estão desativados, blocos
+      // ```widget_x``` já foram removidos do texto antes de chegar
+      // aqui (ver build() acima), por isso este caminho já só vê
+      // código "a sério" — nunca JSON de widget despejado como código.
+      if (trimmed.startsWith('```')) {
+        final lang = trimmed.substring(3).trim();
+        final codeLines = <String>[];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.add(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // consome a fence de fecho
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: buildAiWidget(
+            AiWidgetBlock(id: 'widget_code', json: {
+              'language': lang.isEmpty ? 'text' : lang,
+              'code': codeLines.join('\n'),
+            }),
+            s,
+          ),
+        ));
+        continue;
+      }
+
       widgets.add(Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: _formattedText(trimmed, s),
@@ -2170,6 +2312,72 @@ class RichAiText extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// WIDGET SUGGESTION PILL — sugestão que aparece no fim da resposta
+// quando a IA gerou um ou mais widget_* mas o switch de Widgets está
+// desativado. Visual: seta ↳, texto a bold sublinhado a pontilhado,
+// ícone resend.svg à esquerda (mesmo padrão da referência ChatGPT
+// enviada). Ao tocar, chama onTap (que ativa o switch de Widgets e
+// deixa a bolha re-renderizar com o widget real no lugar certo).
+// ══════════════════════════════════════════════════════════════
+
+class _WidgetSuggestionPill extends StatefulWidget {
+  final AppColorScheme s;
+  final int count;
+  final VoidCallback? onTap;
+  const _WidgetSuggestionPill({required this.s, required this.count, this.onTap});
+  @override State<_WidgetSuggestionPill> createState() => _WidgetSuggestionPillState();
+}
+
+class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
+  bool _h = false;
+
+  String get _label => widget.count == 1
+      ? 'mostrar também o widget desta resposta'
+      : 'mostrar também os ${widget.count} widgets desta resposta';
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap:       widget.onTap,
+      child: Opacity(
+        opacity: _h ? 0.65 : 1.0,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon('resend.svg', color: s.onSurfaceVariant, size: 14),
+              const SizedBox(width: 6),
+              Text('↳', style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  _label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurfaceVariant,
+                    decoration: TextDecoration.underline,
+                    decorationStyle: TextDecorationStyle.dotted,
+                    decorationColor: s.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AiTable extends StatelessWidget {
   final List<List<String>> rows;
   final AppColorScheme s;
@@ -2219,7 +2427,7 @@ class _AiTable extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MESSAGE ACTIONS POPUP — posição corrigida (ponto 2).
+// MESSAGE ACTIONS POPUP
 // ══════════════════════════════════════════════════════════════
 
 void showMessageActionsPopup(
@@ -2428,9 +2636,7 @@ Future<void> showSelectTextSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT — item 3: sobe com o teclado de verdade via
-// viewInsets.bottom (não apenas SafeArea), e passa focusNode para
-// que o unfocus global no GestureDetector pai remova o cursor.
+// CHAT INPUT
 // ══════════════════════════════════════════════════════════════
 
 class _ChatInput extends StatelessWidget {
@@ -2628,8 +2834,6 @@ class _SpinningIconState extends State<_SpinningIcon>
       );
 }
 
-// ── Pill que mostra a ferramenta ligada ─────────────────────────
-
 class _AttachedToolPill extends StatelessWidget {
   final AppColorScheme s;
   final EditorType type;
@@ -2669,8 +2873,7 @@ class _AttachedToolPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP — posição corrigida (ponto 2). Só Arquivos/Fotos/
-// Câmera; Canvas e Widgets vivem no popup do appbar.
+// ATTACH POPUP
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera }
@@ -2781,8 +2984,7 @@ void showAttachPopup(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CANVAS SHEET — modal com todos os documentos/código desta
-// conversa. Ao clicar, abre em EditTab já carregado (ponto 6).
+// CANVAS SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showCanvasSheet(
@@ -2894,9 +3096,7 @@ class _CanvasCardState extends State<_CanvasCard> {
               color: s.primaryContainer.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: widget.item.kind == LocalCanvasKind.code
-                ? Icon(Icons.code, size: 20, color: s.primary)
-                : EditorTypeIcon(_editorType.pngAsset, size: 20),
+            child: EditorTypeIcon(_editorType.pngAsset, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -3073,7 +3273,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP — posição corrigida (ponto 2).
+// MODEL SELECT POPUP
 // ══════════════════════════════════════════════════════════════
 
 void showModelSelectPopup(

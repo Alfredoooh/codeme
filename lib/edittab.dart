@@ -39,8 +39,6 @@ extension EditorTypeX on EditorType {
         EditorType.whiteboard: 'assets/editor/whiteboard.html',
       }[this]!;
 
-  /// docType enviado ao worker em /ai/edit-document — mantém-se
-  /// estável mesmo que o wire tag de CanvasKind mude.
   String get aiDocType => const {
         EditorType.docs:       'doc',
         EditorType.sheets:     'sheet',
@@ -122,6 +120,13 @@ class _EditTabState extends State<EditTab> {
     super.dispose();
   }
 
+  /// Consome QUALQUER pedido pendente de carga — seja um CanvasItem
+  /// legado (fluxo antigo) ou um LocalCanvasItem (fluxo atual da
+  /// AiTab). Isto é o que faz o EditTab abrir sempre o documento
+  /// certo assim que se clica num link de canvas na conversa ou num
+  /// item do popup Canvas — a navegação já troca de tab por si (via
+  /// AiTabHostNavigation.goToEditTab), e este listener injeta o
+  /// conteúdo assim que o WebView do tipo certo estiver pronto.
   void _onPendingLoad() {
     final pending = editTabController.pendingLoad;
     if (pending != null) {
@@ -153,25 +158,11 @@ class _EditTabState extends State<EditTab> {
   }
 
   void _injectLocalCanvas(InAppWebViewController ctrl, LocalCanvasItem item) {
-    String htmlContent;
-    switch (item.kind) {
-      case LocalCanvasKind.code:
-        final escapedCode = item.content
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;');
-        htmlContent = '<pre style="font-family:monospace;white-space:pre-wrap;background:#f4f4f4;padding:12px;border-radius:8px;">$escapedCode</pre>';
-        break;
-      case LocalCanvasKind.doc:
-        htmlContent = item.content;
-        break;
-      case LocalCanvasKind.sheet:
-      case LocalCanvasKind.slide:
-      case LocalCanvasKind.whiteboard:
-        htmlContent = item.content;
-        break;
-    }
-    _injectCanvas(ctrl, htmlContent);
+    // Já não existe LocalCanvasKind.code (código nunca vira canvas) —
+    // os três tipos restantes (doc/sheet/slide/whiteboard) injetam o
+    // conteúdo tal como veio, exatamente como o fluxo antigo de
+    // CanvasItem já fazia.
+    _injectCanvas(ctrl, item.content);
   }
 
   void _runJs(String script) =>
@@ -261,16 +252,6 @@ class _EditTabState extends State<EditTab> {
               javaScriptEnabled: true,
               allowFileAccessFromFileURLs: true,
               allowUniversalAccessFromFileURLs: true,
-              // Força compositing via Hybrid Composition no Android em
-              // vez de Virtual Display — mitigação padrão para o
-              // WebView "furar" e renderizar como retângulo sólido por
-              // cima de overlays Flutter (drawer, popups, sheets) que
-              // deveriam estar visualmente acima dele. Sem isto, a
-              // superfície nativa do WebView vive numa camada de
-              // composição separada do Skia/Impeller e pode não
-              // sincronizar corretamente com Positioned/Overlay do
-              // Flutter — exatamente o bug do retângulo cinza cobrindo
-              // o drawer reportado.
               useHybridComposition: true,
             ),
             onWebViewCreated: (c) {
@@ -324,8 +305,6 @@ class _EditTabState extends State<EditTab> {
   }
 }
 
-// ── FAB circular de sparkles ─────────────────────────────────────
-
 class _AiEditFab extends StatefulWidget {
   final AppColorScheme s;
   final bool busy;
@@ -371,8 +350,6 @@ class _AiEditFabState extends State<_AiEditFab> {
     );
   }
 }
-
-// ── Modal de input do FAB de sparkles ─────────────────────────────
 
 Future<String?> showAiEditModal(
   BuildContext context,
@@ -469,11 +446,6 @@ Future<String?> showAiEditModal(
     ),
   );
 }
-
-// ══════════════════════════════════════════════════════════════
-// EDIT TYPE BUTTON (dropdown no header) — posição corrigida
-// (ponto 2, mesma lógica de fallback simétrico usada em aitab.dart).
-// ══════════════════════════════════════════════════════════════
 
 class EditTypeButton extends StatefulWidget {
   final AppColorScheme s;
@@ -643,4 +615,3 @@ class _TypeOptionState extends State<_TypeOption> {
           ]),
         ),
       );
-}
