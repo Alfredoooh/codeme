@@ -206,6 +206,13 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final isAiTab = _tab == AppTab.ai;
+    // Largura real do ecrã, lida uma vez por build — é isto que
+    // faltava chegar ao Positioned do drawer. Antes o Positioned
+    // tinha "width: 280" fixo no PAI, cortando o espaço disponível
+    // antes do AppDrawer sequer decidir o que fazer com _expanded
+    // (que já calculava screenWidth internamente, mas sem efeito
+    // nenhum porque já estava confinado a 280px por fora).
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Material(
       type: MaterialType.transparency,
@@ -296,9 +303,15 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
           animation: _springNav.slideCtrl,
           builder: (_, child) {
             final v = _springNav.slideCtrl.value.clamp(0.0, 1.0);
+            // width e left agora seguem screenWidth em vez de 280
+            // fixo — o drawer ocupa a tela inteira desde já (o próprio
+            // AppDrawer decide internamente quanto de si mesmo mostrar
+            // via seu AnimatedContainer width: _expanded ? screenWidth
+            // : 280, mas agora tem espaço de verdade para o fazer em
+            // vez de ser cortado por este Positioned do pai).
             return Positioned(
-              top: 0, bottom: 0, width: 280,
-              left: -280 + 280 * (1.0 - v),
+              top: 0, bottom: 0, width: screenWidth,
+              left: -screenWidth + screenWidth * (1.0 - v),
               child: child!,
             );
           },

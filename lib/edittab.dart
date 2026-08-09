@@ -59,11 +59,7 @@ extension EditorTypeX on EditorType {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TAB CONTROLLER — agora também guarda, por EditorType, um
-// "getter" do conteúdo atual do editor (fornecido pelo próprio
-// _EditTabState via callback JS) e o último conteúdo lido, para o
-// FAB de IA conseguir mandar o documento atual ao worker sem ter de
-// re-arquitetar o fluxo de CanvasItem/LocalCanvasItem existente.
+// EDIT TAB CONTROLLER
 // ══════════════════════════════════════════════════════════════
 
 class EditTabController extends ChangeNotifier {
@@ -186,11 +182,6 @@ class _EditTabState extends State<EditTab> {
     if (hex != null) _runJs("$cb('$hex')");
   }
 
-  /// Pede ao editor (via JS) o conteúdo atual e a seleção atual (se
-  /// houver). O editorApi já expõe getContent()/getSelection() para as
-  /// funcionalidades de cor/link existentes — reutilizamos o mesmo
-  /// canal de comunicação (evaluateJavascript + callAsyncJavaScript)
-  /// para não introduzir um novo handler nativo por editor.
   Future<String> _getCurrentContent() async {
     final ctrl = _controllers[widget.editorType];
     if (ctrl == null) return '';
@@ -219,11 +210,6 @@ class _EditTabState extends State<EditTab> {
 
   void _setCurrentContent(String content) => _injectCanvas(_controllers[widget.editorType]!, content);
 
-  /// Abre o modal do FAB de sparkles — item novo pedido: um simples
-  /// widget flutuante (não navega para o AiTab nem toca no drawer),
-  /// com um input onde o utilizador escreve a instrução; a IA recebe
-  /// SÓ o conteúdo atual + instrução (poupando tokens vs mandar a
-  /// conversa toda) e devolve o documento já atualizado.
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
     final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
@@ -248,8 +234,6 @@ class _EditTabState extends State<EditTab> {
         _setCurrentContent(updated);
       }
     } catch (_) {
-      // Falha silenciosa controlada — o editor mantém o conteúdo
-      // anterior; um SnackBar simples informa sem travar o fluxo.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Não foi possível aplicar a edição.')),
@@ -277,6 +261,17 @@ class _EditTabState extends State<EditTab> {
               javaScriptEnabled: true,
               allowFileAccessFromFileURLs: true,
               allowUniversalAccessFromFileURLs: true,
+              // Força compositing via Hybrid Composition no Android em
+              // vez de Virtual Display — mitigação padrão para o
+              // WebView "furar" e renderizar como retângulo sólido por
+              // cima de overlays Flutter (drawer, popups, sheets) que
+              // deveriam estar visualmente acima dele. Sem isto, a
+              // superfície nativa do WebView vive numa camada de
+              // composição separada do Skia/Impeller e pode não
+              // sincronizar corretamente com Positioned/Overlay do
+              // Flutter — exatamente o bug do retângulo cinza cobrindo
+              // o drawer reportado.
+              useHybridComposition: true,
             ),
             onWebViewCreated: (c) {
               _controllers[t] = c;
@@ -302,12 +297,6 @@ class _EditTabState extends State<EditTab> {
                   });
                 },
               );
-              // Handler novo: o editorApi.html chama isto quando o
-              // utilizador escolhe "Editar" no menu de seleção de
-              // texto (primeira opção, antes de copiar/selecionar
-              // tudo/etc — ver nota no docs.html/sheets.html/etc).
-              // Passa o texto selecionado para o modal, que depois
-              // envia esse trecho como `selection` no pedido à IA.
               c.addJavaScriptHandler(
                 handlerName: 'openAiEditForSelection',
                 callback: (args) {
@@ -322,9 +311,6 @@ class _EditTabState extends State<EditTab> {
           );
         }).toList(),
       ),
-      // FAB circular de sparkles — canto inferior direito, acima da
-      // barra de navegação da app. Único modal necessário para editar
-      // por IA sem sair do EditTab nem passar pelo AiTab/drawer.
       Positioned(
         right: 16,
         bottom: MediaQuery.of(context).padding.bottom + 84,
@@ -386,9 +372,7 @@ class _AiEditFabState extends State<_AiEditFab> {
   }
 }
 
-// ── Modal de input do FAB de sparkles — widget simples e leve
-// (bottom sheet), nunca navega para outro ecrã. Devolve a instrução
-// escrita pelo utilizador via Navigator.pop, ou null se cancelado. ──
+// ── Modal de input do FAB de sparkles ─────────────────────────────
 
 Future<String?> showAiEditModal(
   BuildContext context,

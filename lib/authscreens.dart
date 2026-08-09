@@ -38,7 +38,7 @@ class _AuthGateState extends State<AuthGate> {
     switch (authController.status) {
       case AuthStatus.unknown:
         return ColoredBox(
-          color: s.pageBackground,
+          color: s.surface,
           child: Center(
             child: _AuthLogo(s: s, pulsing: true),
           ),
@@ -55,9 +55,8 @@ class _AuthGateState extends State<AuthGate> {
 // SHARED — logo (fallback), campo de texto, botão principal
 // ══════════════════════════════════════════════════════════════
 
-// Mantido apenas como fallback do AuthGate (estado "unknown", antes
-// de sabermos se há sessão) e para o pulsing inicial — a tela de
-// LOGIN em si já não usa isto, usa background1.png no topo.
+// Mantido apenas como fallback do AuthGate (estado "unknown") — a
+// tela de LOGIN em si não usa isto, usa background1.png no topo.
 class _AuthLogo extends StatelessWidget {
   final AppColorScheme s;
   final bool pulsing;
@@ -103,35 +102,66 @@ class _AuthLogo extends StatelessWidget {
   }
 }
 
-// ── Ilustração de topo (background1.png) — usada só no Login. Altura
-// própria (não full-bleed até ao fim), com o título/tagline sobrepostos
-// na base da imagem, exatamente como o padrão de referência (Kimi):
-// imagem → título → formulário como blocos empilhados, não como
-// overlay semi-transparente por cima de tudo.
+// ── Ilustração de topo (background1.png), agora com fade real na
+// base fundindo para s.surface (ShaderMask com gradiente alpha), e
+// esticada até y=0 — atrás da status bar, sem SafeArea a cortá-la.
+// O fade cobre ~55% inferior da imagem para o efeito "desvanece no
+// fundo" ficar suave, não um corte abrupto de opacidade.
 class _AuthHeroImage extends StatelessWidget {
   final double height;
-  const _AuthHeroImage({required this.height});
+  final Color fadeToColor;
+  const _AuthHeroImage({required this.height, required this.fadeToColor});
 
   @override
   Widget build(BuildContext context) => SizedBox(
         width: double.infinity,
         height: height,
-        child: Image.asset(
-          'assets/images/background1.jpg',
-          fit: BoxFit.cover,
-          // Fallback silencioso: se o asset faltar, não quebra o
-          // layout — some e o título sobe naturalmente para o topo.
-          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ShaderMask(
+              shaderCallback: (rect) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.black, Colors.black, Colors.transparent],
+                stops: [0.0, 0.45, 1.0],
+              ).createShader(rect),
+              blendMode: BlendMode.dstIn,
+              child: Image.asset(
+                'assets/images/background1.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+              ),
+            ),
+            // Camada de reforço do fade — garante que a transição
+            // final para a cor sólida do fundo não deixa nenhum resto
+            // de imagem visível na costura com o formulário.
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              height: height * 0.5,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [fadeToColor.withOpacity(0.0), fadeToColor],
+                      stops: const [0.0, 0.92],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
 }
 
-// Campo de texto com borda totalmente arredondada (pill). Ícones de
-// suffix reduzidos (19 → 16) para não dominarem visualmente o campo.
+// Campo de texto com borda totalmente arredondada (pill). Sem label
+// acima — o hint dentro do campo já basta, cortando ruído de texto.
 class _AuthField extends StatefulWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
-  final String label;
   final String hint;
   final bool obscure;
   final TextInputType keyboardType;
@@ -144,7 +174,6 @@ class _AuthField extends StatefulWidget {
   const _AuthField({
     required this.s,
     required this.ctrl,
-    required this.label,
     required this.hint,
     this.obscure = false,
     this.keyboardType = TextInputType.text,
@@ -170,12 +199,6 @@ class _AuthFieldState extends State<_AuthField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 18, bottom: 6),
-          child: Text(widget.label,
-              style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurfaceVariant)),
-        ),
         AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: kCupertinoOut,
@@ -223,8 +246,7 @@ class _AuthFieldState extends State<_AuthField> {
   }
 }
 
-// Botão primário — cor sólida sem boxShadow (item pedido: botões com
-// cor não podem ter sombra). Mantém apenas o AnimatedScale de toque.
+// Botão primário — cor sólida sem boxShadow.
 class _AuthPrimaryButton extends StatefulWidget {
   final AppColorScheme s;
   final String label;
@@ -264,7 +286,6 @@ class _AuthPrimaryButtonState extends State<_AuthPrimaryButton> {
           decoration: BoxDecoration(
             color: disabled ? s.primary.withOpacity(0.5) : s.primary,
             borderRadius: BorderRadius.circular(999),
-            // boxShadow removido — botões com cor não levam sombra.
           ),
           child: widget.loading
               ? SizedBox(
@@ -285,17 +306,16 @@ class _AuthPrimaryButtonState extends State<_AuthPrimaryButton> {
   }
 }
 
-// Botão de voltar — ícone reduzido (20 → 17), alinhado com a redução
-// geral pedida.
 class _AuthBackButton extends StatelessWidget {
   final AppColorScheme s;
-  const _AuthBackButton({required this.s});
+  final Color? iconColor;
+  const _AuthBackButton({required this.s, this.iconColor});
 
   @override
   Widget build(BuildContext context) => AppTap(
         onTap: () => Navigator.of(context).pop(),
         s: s,
-        child: AppIcon('back.svg', color: s.onSurface, size: 17),
+        child: AppIcon('back.svg', color: iconColor ?? s.onSurface, size: 17),
       );
 }
 
@@ -326,9 +346,9 @@ class _AuthErrorBanner extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOGIN SCREEN — imagem background1.png no topo (ilustração pura,
-// sem logo.png), título/tagline logo abaixo dela, formulário desce
-// mais para dar respiro (padrão "app premium" pedido).
+// LOGIN SCREEN — imagem atrás da status bar, fade real na base
+// fundindo para s.surface (branco/preto puro), sem SafeArea a
+// cortar o topo, texto reduzido ao mínimo.
 // ══════════════════════════════════════════════════════════════
 
 class LoginScreen extends StatefulWidget {
@@ -382,9 +402,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!ok && mounted) setState(() {});
   }
 
-  // Navegação com transição nativa iOS (slide + parallax + edge swipe
-  // to back), via CupertinoPageRoute — substitui o antigo
-  // PageRouteBuilder com SlideTransition manual.
   void _goRegister() {
     authController.clearError();
     Navigator.of(context).push(
@@ -403,16 +420,15 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final screenHeight = MediaQuery.of(context).size.height;
-    // Altura da ilustração: proporcional ao ecrã (≈34%), mantendo
-    // espaço suficiente para o formulário respirar por baixo — mesmo
-    // princípio do padrão de referência, sem fixar um valor absoluto
-    // que quebraria em ecrãs pequenos.
     final heroHeight = (screenHeight * 0.34).clamp(220.0, 340.0);
 
     return Material(
       type: MaterialType.transparency,
+      // s.surface (branco/preto puro) em vez de s.pageBackground —
+      // corta o "cinza feio" e dá continuidade real com o fade da
+      // imagem, que funde exatamente para esta mesma cor.
       child: ColoredBox(
-        color: s.pageBackground,
+        color: s.surface,
         child: AnimatedBuilder(
           animation: authController,
           builder: (context, _) {
@@ -421,12 +437,11 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _AuthHeroImage(height: heroHeight),
+                  // Sem SafeArea aqui — a imagem estica-se até y=0,
+                  // ficando visível por trás da status bar.
+                  _AuthHeroImage(height: heroHeight, fadeToColor: s.surface),
                   Padding(
-                    // Formulário desce mais (padding top maior) para
-                    // criar respiro visual entre a ilustração e os
-                    // campos — o "ajuste premium" pedido.
-                    padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -434,29 +449,24 @@ class _LoginScreenState extends State<LoginScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 fontSize: 24, fontWeight: FontWeight.w800, color: s.onSurface)),
-                        const SizedBox(height: 6),
-                        Text('Inicia sessão para continuar na Nexa',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)),
-                        const SizedBox(height: 36),
+                        // Subtítulo removido — menos texto na tela.
+                        const SizedBox(height: 32),
                         if (authController.lastError != null)
                           _AuthErrorBanner(s: s, message: authController.lastError!),
                         _AuthField(
                           s: s,
                           ctrl: _emailCtrl,
-                          label: 'Email',
-                          hint: 'nome@exemplo.com',
+                          hint: 'Email',
                           keyboardType: TextInputType.emailAddress,
                           errorText: _emailError,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _passFocus.requestFocus(),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         _AuthField(
                           s: s,
                           ctrl: _passCtrl,
-                          label: 'Password',
-                          hint: '••••••••',
+                          hint: 'Password',
                           obscure: _obscure,
                           errorText: _passError,
                           focusNode: _passFocus,
@@ -494,16 +504,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           onTap: _submit,
                         ),
                         const SizedBox(height: 24),
-                        Row(children: [
-                          Expanded(child: Divider(color: s.outline, height: 1)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text('ou',
-                                style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
-                          ),
-                          Expanded(child: Divider(color: s.outline, height: 1)),
-                        ]),
-                        const SizedBox(height: 24),
                         Center(
                           child: GestureDetector(
                             onTap: _goRegister,
@@ -536,8 +536,7 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// REGISTER SCREEN — sem PNG (pedido explícito), formulário também
-// desce mais para manter a mesma respiração vertical do login.
+// REGISTER SCREEN — sem PNG, fundo s.surface, texto reduzido.
 // ══════════════════════════════════════════════════════════════
 
 class RegisterScreen extends StatefulWidget {
@@ -634,7 +633,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
-        color: s.pageBackground,
+        color: s.surface,
         child: SafeArea(
           child: Stack(children: [
             AnimatedBuilder(
@@ -648,39 +647,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Text('Cria a tua conta',
                           style: TextStyle(
                               fontSize: 24, fontWeight: FontWeight.w800, color: s.onSurface)),
-                      const SizedBox(height: 6),
-                      Text('Junta-te à Nexa e começa a criar',
-                          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)),
+                      // Subtítulo removido — menos texto na tela.
                       const SizedBox(height: 32),
                       if (authController.lastError != null)
                         _AuthErrorBanner(s: s, message: authController.lastError!),
                       _AuthField(
                         s: s,
                         ctrl: _nameCtrl,
-                        label: 'Nome',
-                        hint: 'O teu nome completo',
+                        hint: 'Nome',
                         errorText: _nameError,
                         textInputAction: TextInputAction.next,
                         onSubmitted: (_) => _emailFocus.requestFocus(),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       _AuthField(
                         s: s,
                         ctrl: _emailCtrl,
-                        label: 'Email',
-                        hint: 'nome@exemplo.com',
+                        hint: 'Email',
                         keyboardType: TextInputType.emailAddress,
                         errorText: _emailError,
                         focusNode: _emailFocus,
                         textInputAction: TextInputAction.next,
                         onSubmitted: (_) => _passFocus.requestFocus(),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       _AuthField(
                         s: s,
                         ctrl: _passCtrl,
-                        label: 'Password',
-                        hint: 'Mínimo 6 caracteres',
+                        hint: 'Password',
                         obscure: _obscurePass,
                         errorText: _passError,
                         focusNode: _passFocus,
@@ -696,12 +690,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       _AuthField(
                         s: s,
                         ctrl: _confirmCtrl,
-                        label: 'Confirmar password',
-                        hint: 'Repete a password',
+                        hint: 'Confirmar password',
                         obscure: _obscureConfirm,
                         errorText: _confirmError,
                         focusNode: _confirmFocus,
@@ -724,13 +717,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         loading: authController.busy,
                         onTap: _submit,
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Ao criar conta concordas com os nossos Termos de Serviço e Política de Privacidade.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: s.onSurfaceVariant.withOpacity(0.8)),
-                      ),
-                      const SizedBox(height: 20),
+                      // Texto de termos removido — menos texto na tela.
+                      const SizedBox(height: 24),
                       Center(
                         child: GestureDetector(
                           onTap: () => Navigator.of(context).pop(),
@@ -809,7 +797,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
-        color: s.pageBackground,
+        color: s.surface,
         child: SafeArea(
           child: Stack(children: [
             AnimatedBuilder(
@@ -826,8 +814,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       const SizedBox(height: 6),
                       Text(
                         _sent
-                            ? 'Se existir uma conta com esse email, vais receber instruções para repor a password.'
-                            : 'Introduz o teu email e enviamos-te instruções para criares uma nova password.',
+                            ? 'Se existir uma conta com esse email, vais receber instruções.'
+                            : 'Introduz o teu email para receberes instruções.',
                         style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
                       ),
                       const SizedBox(height: 32),
@@ -837,8 +825,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         _AuthField(
                           s: s,
                           ctrl: _emailCtrl,
-                          label: 'Email',
-                          hint: 'nome@exemplo.com',
+                          hint: 'Email',
                           keyboardType: TextInputType.emailAddress,
                           errorText: _emailError,
                           textInputAction: TextInputAction.done,
