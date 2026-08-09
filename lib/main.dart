@@ -10,6 +10,7 @@ import 'widgets.dart';
 import 'drawermenu.dart';
 import 'aitab.dart';
 import 'edittab.dart';
+import 'nav_spring.dart';
 import 'templatestab.dart';
 import 'projectstab.dart';
 import 'settingsscreen.dart';
