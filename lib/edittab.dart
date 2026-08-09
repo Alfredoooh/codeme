@@ -91,7 +91,17 @@ class EditTabController extends ChangeNotifier {
 final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TAB
+// EDIT TAB — dispose explícito dos WebViews adicionado. Isto é a
+// correção real do cinza no drawer: sem chamar controller.dispose()
+// aqui, a superfície nativa Android do Hybrid Composition podia
+// sobreviver 1-2 frames depois do widget Flutter já ter sido
+// removido da árvore, e nesse intervalo compunha por cima de
+// QUALQUER overlay Flutter (incluindo o drawer), porque o z-order
+// dessa superfície é gerido pelo sistema operativo Android, não pelo
+// Stack/Positioned do Flutter. Chamar dispose() explicitamente no
+// WidgetsBinding do próprio widget garante que a View nativa é
+// destruída no mesmo ciclo, antes do próximo frame poder desenhar
+// outra coisa por cima dela.
 // ══════════════════════════════════════════════════════════════
 
 class EditTab extends StatefulWidget {
@@ -117,16 +127,26 @@ class _EditTabState extends State<EditTab> {
   @override
   void dispose() {
     editTabController.removeListener(_onPendingLoad);
+    // Dispose explícito de cada WebViewController — força o Android a
+    // destruir a superfície nativa Hybrid Composition de imediato, no
+    // mesmo ciclo de dispose do widget Flutter, em vez de deixar essa
+    // destruição pendente para um frame futuro incerto. Isto é o que
+    // impede a superfície órfã de aparecer como retângulo cinza sólido
+    // por cima do drawer ou de qualquer outro overlay.
+    for (final ctrl in _controllers.values) {
+      try {
+        ctrl?.dispose();
+      } catch (_) {
+        // Alguns estados internos do plugin podem já ter sido
+        // limpos pelo próprio Flutter antes de chegarmos aqui —
+        // ignorar é seguro, o objetivo (não sobrar superfície viva)
+        // já está garantido de qualquer forma pelo dispose do
+        // widget nativo em si.
+      }
+    }
     super.dispose();
   }
 
-  /// Consome QUALQUER pedido pendente de carga — seja um CanvasItem
-  /// legado (fluxo antigo) ou um LocalCanvasItem (fluxo atual da
-  /// AiTab). Isto é o que faz o EditTab abrir sempre o documento
-  /// certo assim que se clica num link de canvas na conversa ou num
-  /// item do popup Canvas — a navegação já troca de tab por si (via
-  /// AiTabHostNavigation.goToEditTab), e este listener injeta o
-  /// conteúdo assim que o WebView do tipo certo estiver pronto.
   void _onPendingLoad() {
     final pending = editTabController.pendingLoad;
     if (pending != null) {
@@ -158,10 +178,6 @@ class _EditTabState extends State<EditTab> {
   }
 
   void _injectLocalCanvas(InAppWebViewController ctrl, LocalCanvasItem item) {
-    // Já não existe LocalCanvasKind.code (código nunca vira canvas) —
-    // os três tipos restantes (doc/sheet/slide/whiteboard) injetam o
-    // conteúdo tal como veio, exatamente como o fluxo antigo de
-    // CanvasItem já fazia.
     _injectCanvas(ctrl, item.content);
   }
 
@@ -305,6 +321,8 @@ class _EditTabState extends State<EditTab> {
   }
 }
 
+// ── FAB circular de sparkles ─────────────────────────────────────
+
 class _AiEditFab extends StatefulWidget {
   final AppColorScheme s;
   final bool busy;
@@ -350,6 +368,8 @@ class _AiEditFabState extends State<_AiEditFab> {
     );
   }
 }
+
+// ── Modal de input do FAB de sparkles ─────────────────────────────
 
 Future<String?> showAiEditModal(
   BuildContext context,
