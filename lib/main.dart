@@ -81,13 +81,13 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — agora usa o Scaffold + Drawer NATIVOS do Flutter.
-// O slide horizontal, o escurecimento do fundo (barrier/scrim) e
-// toda a mecânica de abertura/fecho por gesto passam a ser geridos
-// pelo próprio Flutter através de Scaffold(drawer: AppDrawer(...)),
-// acionado por _scaffoldKey.currentState!.openDrawer(). Este widget
-// deixou de ter QUALQUER controlo manual de posição/animação do
-// drawer — só estilo (dentro do AppDrawer) e comportamento de tabs.
+// ROOT SHELL — drawer controlado manualmente via Stack + AnimationController,
+// sem depender do Scaffold.drawer nativo. O AppDrawer fica sempre montado
+// na árvore (nunca é destruído/recriado ao reabrir), só desliza para fora
+// de vista quando fechado — elimina o problema de o context não estar
+// ligado ao AppTheme a tempo no primeiro build de uma reabertura.
+// O body é empurrado para a direita (Transform.translate) em vez de ficar
+// coberto — navegação nativa tipo push, como pedido.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -95,8 +95,11 @@ class RootShell extends StatefulWidget {
   @override State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+class _RootShellState extends State<RootShell> with SingleTickerProviderStateMixin {
+  late final AnimationController _drawerCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
 
   // A tab inicial ao abrir o app é sempre aitab.
   AppTab     _tab        = AppTab.ai;
@@ -105,8 +108,8 @@ class _RootShellState extends State<RootShell> {
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => _scaffoldKey.currentState?.openDrawer();
-  void _closeDrawer() => _scaffoldKey.currentState?.closeDrawer();
+  void _openDrawer()  => _drawerCtrl.animateTo(1.0, curve: kCupertinoOut);
+  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: kCupertinoOut);
 
   void _openSettings() {
     _closeDrawer();
@@ -193,87 +196,136 @@ class _RootShellState extends State<RootShell> {
   }
 
   @override
+  void dispose() {
+    _drawerCtrl.dispose();
+    super.dispose();
+  }
+
+  static const double _drawerWidth = 300;
+
+  @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final isAiTab = _tab == AppTab.ai;
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: isAiTab ? s.pageBackground : s.surface,
-      drawer: AppDrawer(
-        s: s,
-        onClose: _closeDrawer,
-        onSettings: _openSettings,
-        onGoHome: _goHome,
-        currentTab: _tab,
-        onSelectTab: _selectTab,
-        onOpenConversation: _onOpenConversation,
-        onNewChat: () => _onConversationAction(ConversationAction.newChat),
-      ),
-      body: isAiTab
-          ? Stack(children: [
-              Positioned.fill(
-                top: 0,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  switchInCurve: kCupertinoOut,
-                  switchOutCurve: kCupertinoIn,
-                  transitionBuilder: (child, anim) =>
-                      FadeTransition(opacity: anim, child: child),
-                  child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
-                ),
+    final bodyContent = isAiTab
+        ? Stack(children: [
+            Positioned.fill(
+              top: 0,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: kCupertinoOut,
+                switchOutCurve: kCupertinoIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
               ),
-              Positioned(
-                top: 0, left: 0, right: 0,
-                child: AnimatedBuilder(
-                  animation: _AiTabHeaderRefresh.of(context),
-                  builder: (_, __) {
-                    final st = _aiTabKey.currentState;
-                    return _AppHeader(
+            ),
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: AnimatedBuilder(
+                animation: _AiTabHeaderRefresh.of(context),
+                builder: (_, __) {
+                  final st = _aiTabKey.currentState;
+                  return _AppHeader(
+                    s: s,
+                    title: _tabTitle,
+                    onMenu: _openDrawer,
+                    transparent: true,
+                    headerBackground: s.pageBackground,
+                    trailing: AiConversationMenuButton(
                       s: s,
-                      title: _tabTitle,
-                      onMenu: _openDrawer,
-                      transparent: true,
-                      headerBackground: s.pageBackground,
-                      trailing: AiConversationMenuButton(
-                        s: s,
-                        hasMessages: _hasMessages,
-                        onSelect: _onConversationAction,
-                        canvasCount: st?.canvasCount ?? 0,
-                        onOpenCanvas: () => st?.openCanvasPopupExternally(),
-                        webSearchEnabled: st?.webSearchEnabled ?? false,
-                        onToggleWebSearch: (v) => st?.setWebSearchEnabled(v),
-                        widgetsEnabled: st?.widgetsEnabled ?? false,
-                        onToggleWidgets: (v) => st?.setWidgetsEnabled(v),
-                      ),
-                    );
-                  },
+                      hasMessages: _hasMessages,
+                      onSelect: _onConversationAction,
+                      canvasCount: st?.canvasCount ?? 0,
+                      onOpenCanvas: () => st?.openCanvasPopupExternally(),
+                      webSearchEnabled: st?.webSearchEnabled ?? false,
+                      onToggleWebSearch: (v) => st?.setWebSearchEnabled(v),
+                      widgetsEnabled: st?.widgetsEnabled ?? false,
+                      onToggleWidgets: (v) => st?.setWidgetsEnabled(v),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ])
+        : Column(children: [
+            _AppHeader(
+              s: s,
+              title: _tabTitle,
+              onMenu: _openDrawer,
+              transparent: false,
+              headerBackground: s.surface,
+              trailing: _tab == AppTab.edit
+                  ? EditTypeButton(
+                      s: s, current: _editorType, onSelect: _setEditorType)
+                  : null,
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve:  kCupertinoOut,
+                switchOutCurve: kCupertinoIn,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+              ),
+            ),
+          ]);
+
+    return Scaffold(
+      backgroundColor: isAiTab ? s.pageBackground : s.surface,
+      body: AnimatedBuilder(
+        animation: _drawerCtrl,
+        builder: (_, __) {
+          final t = _drawerCtrl.value;
+          return Stack(children: [
+            // Body — empurrado para a direita conforme o drawer abre.
+            Transform.translate(
+              offset: Offset(_drawerWidth * t, 0),
+              child: IgnorePointer(
+                ignoring: t > 0.01,
+                child: bodyContent,
+              ),
+            ),
+            // Barrier — escurece o body enquanto o drawer está aberto,
+            // fecha ao toque.
+            if (t > 0.01)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _closeDrawer,
+                  child: Container(color: s.barrier.withOpacity(0.35 * t)),
                 ),
               ),
-            ])
-          : Column(children: [
-              _AppHeader(
-                s: s,
-                title: _tabTitle,
-                onMenu: _openDrawer,
-                transparent: false,
-                headerBackground: s.surface,
-                trailing: _tab == AppTab.edit
-                    ? EditTypeButton(
-                        s: s, current: _editorType, onSelect: _setEditorType)
-                    : null,
-              ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  switchInCurve:  kCupertinoOut,
-                  switchOutCurve: kCupertinoIn,
-                  transitionBuilder: (child, anim) =>
-                      FadeTransition(opacity: anim, child: child),
-                  child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+            // Drawer — desliza a partir da esquerda, por cima do body já
+            // deslocado. Construído sempre (mesmo fechado) para nunca ser
+            // recriado do zero a meio de uma animação.
+            Transform.translate(
+              offset: Offset(_drawerWidth * (t - 1), 0),
+              child: SizedBox(
+                width: _drawerWidth,
+                height: double.infinity,
+                child: IgnorePointer(
+                  ignoring: t < 0.99,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
+                    child: AppDrawer(
+                      s: s,
+                      onClose: _closeDrawer,
+                      onSettings: _openSettings,
+                      onGoHome: _goHome,
+                      currentTab: _tab,
+                      onSelectTab: _selectTab,
+                      onOpenConversation: _onOpenConversation,
+                      onNewChat: () => _onConversationAction(ConversationAction.newChat),
+                    ),
+                  ),
                 ),
               ),
-            ]),
+            ),
+          ]);
+        },
+      ),
     );
   }
 }
