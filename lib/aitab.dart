@@ -14,6 +14,7 @@ import 'edittab.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'aiwidgets.dart';
+import 'widgets.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem;
 
 // ══════════════════════════════════════════════════════════════
@@ -65,8 +66,8 @@ negrito (**texto**) normalmente — a aplicação processa a formatação em
 qualquer parte do texto, incluindo dentro de tabelas. Evita parágrafos
 longos e densos quando a informação pode ser organizada visualmente.
 
-Para expressões matemáticas, usa $expressão$ para matemática dentro do
-texto corrido e $$expressão$$ numa linha própria para fórmulas em destaque.
+Para expressões matemáticas, usa \$expressão\$ para matemática dentro do
+texto corrido e \$\$expressão\$\$ numa linha própria para fórmulas em destaque.
 Podes usar notação LaTeX-like: frações com \\frac{a}{b}, raízes com
 \\sqrt{x} ou \\sqrt[n]{x}, potências com x^2 ou x^{10}, índices com x_1 ou
 x_{ij}, letras gregas com \\alpha, \\beta, \\pi, \\Delta, etc., e operadores
