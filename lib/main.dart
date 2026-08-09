@@ -10,13 +10,11 @@ import 'widgets.dart';
 import 'drawermenu.dart';
 import 'aitab.dart';
 import 'edittab.dart';
-import 'nav_spring.dart';
-import 'templatestab.dart';
-import 'projectstab.dart';
 import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
+import 'home/home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,7 +81,13 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL
+// ROOT SHELL — agora usa o Scaffold + Drawer NATIVOS do Flutter.
+// O slide horizontal, o escurecimento do fundo (barrier/scrim) e
+// toda a mecânica de abertura/fecho por gesto passam a ser geridos
+// pelo próprio Flutter através de Scaffold(drawer: AppDrawer(...)),
+// acionado por _scaffoldKey.currentState!.openDrawer(). Este widget
+// deixou de ter QUALQUER controlo manual de posição/animação do
+// drawer — só estilo (dentro do AppDrawer) e comportamento de tabs.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -91,51 +95,28 @@ class RootShell extends StatefulWidget {
   @override State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
-  late final SpringNav _springNav;
-  bool _drawerOpen = false;
+class _RootShellState extends State<RootShell> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // A tab inicial ao abrir o app é sempre aitab.
   AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
   bool       _hasMessages = false;
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  /// Fonte única de verdade sobre o drawer estar em modo 280px ou
-  /// ecrã inteiro. Passado diretamente ao AppDrawer (que o controla
-  /// via toque/gesto) e lido aqui no Positioned para dimensionar-se
-  /// de forma sempre coerente com o que o drawer realmente desenha.
-  final ValueNotifier<bool> _drawerExpanded = ValueNotifier<bool>(false);
-
-  @override
-  void initState() {
-    super.initState();
-    _springNav = SpringNav(vsync: this);
-    _springNav.slideCtrl.value = 1.0;
-    _drawerExpanded.addListener(_onDrawerExpandedChanged);
-  }
-
-  @override
-  void dispose() {
-    _drawerExpanded.removeListener(_onDrawerExpandedChanged);
-    _drawerExpanded.dispose();
-    _springNav.dispose();
-    super.dispose();
-  }
-
-  void _onDrawerExpandedChanged() { if (mounted) setState(() {}); }
-
-  void _openDrawer()  { setState(() => _drawerOpen = true);  _springNav.open(); }
-  void _closeDrawer() {
-    setState(() => _drawerOpen = false);
-    _springNav.close();
-    _drawerExpanded.value = false;
-  }
+  void _openDrawer()  => _scaffoldKey.currentState?.openDrawer();
+  void _closeDrawer() => _scaffoldKey.currentState?.closeDrawer();
 
   void _openSettings() {
     _closeDrawer();
     Navigator.of(context)
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
+  }
+
+  void _goHome() {
+    Navigator.of(context)
+        .push(CupertinoPageRoute(builder: (_) => const HomeScreen()));
   }
 
   void _selectTab(AppTab t) {
@@ -176,10 +157,7 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   /// Chamado pelo AiTab sempre que a IA acaba de criar um documento
   /// (canvas) nesta conversa. Troca automaticamente para o EditTab,
   /// já no tipo de editor certo (doc/sheet/slide/whiteboard), e injeta
-  /// o conteúdo — exatamente o pedido: "ao clicar num doc criado que
-  /// o app abre automaticamente o edit tab e exibir o documento",
-  /// levado ao extremo de nem precisar de clique nenhum: assim que o
-  /// documento é criado, já abre sozinho.
+  /// o conteúdo.
   void _onCanvasCreated(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
     setState(() {
@@ -190,10 +168,8 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
 
   String get _tabTitle {
     switch (_tab) {
-      case AppTab.ai:        return '';
-      case AppTab.edit:      return _editorType.label;
-      case AppTab.templates: return 'Modelos';
-      case AppTab.projects:  return 'Projectos';
+      case AppTab.ai:   return '';
+      case AppTab.edit: return _editorType.label;
     }
   }
 
@@ -213,10 +189,6 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
         );
       case AppTab.edit:
         return EditTab(editorType: _editorType);
-      case AppTab.templates:
-        return const TemplatesTab();
-      case AppTab.projects:
-        return const ProjectsTab();
     }
   }
 
@@ -224,116 +196,84 @@ class _RootShellState extends State<RootShell> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final isAiTab = _tab == AppTab.ai;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final drawerWidth = _drawerExpanded.value ? screenWidth : 280.0;
 
-    return Material(
-      type: MaterialType.transparency,
-      child: Stack(children: [
-        ColoredBox(
-          color: isAiTab ? s.pageBackground : s.surface,
-          child: isAiTab
-              ? Stack(children: [
-                  Positioned.fill(
-                    top: 0,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      switchInCurve: kCupertinoOut,
-                      switchOutCurve: kCupertinoIn,
-                      transitionBuilder: (child, anim) =>
-                          FadeTransition(opacity: anim, child: child),
-                      child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
-                    ),
-                  ),
-                  Positioned(
-                    top: 0, left: 0, right: 0,
-                    child: AnimatedBuilder(
-                      animation: _AiTabHeaderRefresh.of(context),
-                      builder: (_, __) {
-                        final st = _aiTabKey.currentState;
-                        return _AppHeader(
-                          s: s,
-                          title: _tabTitle,
-                          onMenu: _openDrawer,
-                          transparent: true,
-                          headerBackground: s.pageBackground,
-                          trailing: AiConversationMenuButton(
-                            s: s,
-                            hasMessages: _hasMessages,
-                            onSelect: _onConversationAction,
-                            canvasCount: st?.canvasCount ?? 0,
-                            onOpenCanvas: () => st?.openCanvasPopupExternally(),
-                            webSearchEnabled: st?.webSearchEnabled ?? false,
-                            onToggleWebSearch: (v) => st?.setWebSearchEnabled(v),
-                            widgetsEnabled: st?.widgetsEnabled ?? false,
-                            onToggleWidgets: (v) => st?.setWidgetsEnabled(v),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ])
-              : Column(children: [
-                  _AppHeader(
-                    s: s,
-                    title: _tabTitle,
-                    onMenu: _openDrawer,
-                    transparent: false,
-                    headerBackground: s.surface,
-                    trailing: _tab == AppTab.edit
-                        ? EditTypeButton(
-                            s: s, current: _editorType, onSelect: _setEditorType)
-                        : null,
-                  ),
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      switchInCurve:  kCupertinoOut,
-                      switchOutCurve: kCupertinoIn,
-                      transitionBuilder: (child, anim) =>
-                          FadeTransition(opacity: anim, child: child),
-                      child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
-                    ),
-                  ),
-                ]),
-        ),
-
-        if (_drawerOpen)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _closeDrawer,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 320),
-                curve: kCupertinoOut,
-                margin: EdgeInsets.only(left: drawerWidth),
-                color: s.barrier,
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: isAiTab ? s.pageBackground : s.surface,
+      drawer: AppDrawer(
+        s: s,
+        onClose: _closeDrawer,
+        onSettings: _openSettings,
+        onGoHome: _goHome,
+        currentTab: _tab,
+        onSelectTab: _selectTab,
+        onOpenConversation: _onOpenConversation,
+        onNewChat: () => _onConversationAction(ConversationAction.newChat),
+      ),
+      body: isAiTab
+          ? Stack(children: [
+              Positioned.fill(
+                top: 0,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: kCupertinoOut,
+                  switchOutCurve: kCupertinoIn,
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
+                  child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+                ),
               ),
-            ),
-          ),
-
-        AnimatedBuilder(
-          animation: _springNav.slideCtrl,
-          builder: (_, child) {
-            final v = _springNav.slideCtrl.value.clamp(0.0, 1.0);
-            return Positioned(
-              top: 0, bottom: 0,
-              width: drawerWidth,
-              left: -drawerWidth + drawerWidth * (1.0 - v),
-              child: child!,
-            );
-          },
-          child: AppDrawer(
-            s: s,
-            onClose: _closeDrawer,
-            onSettings: _openSettings,
-            currentTab: _tab,
-            onSelectTab: _selectTab,
-            onOpenConversation: _onOpenConversation,
-            onNewChat: () => _onConversationAction(ConversationAction.newChat),
-            expandedNotifier: _drawerExpanded,
-          ),
-        ),
-      ]),
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: AnimatedBuilder(
+                  animation: _AiTabHeaderRefresh.of(context),
+                  builder: (_, __) {
+                    final st = _aiTabKey.currentState;
+                    return _AppHeader(
+                      s: s,
+                      title: _tabTitle,
+                      onMenu: _openDrawer,
+                      transparent: true,
+                      headerBackground: s.pageBackground,
+                      trailing: AiConversationMenuButton(
+                        s: s,
+                        hasMessages: _hasMessages,
+                        onSelect: _onConversationAction,
+                        canvasCount: st?.canvasCount ?? 0,
+                        onOpenCanvas: () => st?.openCanvasPopupExternally(),
+                        webSearchEnabled: st?.webSearchEnabled ?? false,
+                        onToggleWebSearch: (v) => st?.setWebSearchEnabled(v),
+                        widgetsEnabled: st?.widgetsEnabled ?? false,
+                        onToggleWidgets: (v) => st?.setWidgetsEnabled(v),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ])
+          : Column(children: [
+              _AppHeader(
+                s: s,
+                title: _tabTitle,
+                onMenu: _openDrawer,
+                transparent: false,
+                headerBackground: s.surface,
+                trailing: _tab == AppTab.edit
+                    ? EditTypeButton(
+                        s: s, current: _editorType, onSelect: _setEditorType)
+                    : null,
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve:  kCupertinoOut,
+                  switchOutCurve: kCupertinoIn,
+                  transitionBuilder: (child, anim) =>
+                      FadeTransition(opacity: anim, child: child),
+                  child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+                ),
+              ),
+            ]),
     );
   }
 }

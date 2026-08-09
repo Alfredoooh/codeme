@@ -1,7 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,34 +10,28 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
-import 'projects_controller.dart';
+import 'chat_search.dart';
 
 // ══════════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════════
 
-enum AppTab { ai, edit, templates, projects }
+enum AppTab { ai, edit }
 
 extension AppTabX on AppTab {
   String get svg       => const {
-        AppTab.ai:        'ai_tab.svg',
-        AppTab.edit:      'edit_tab.svg',
-        AppTab.templates: 'templates_tab.svg',
-        AppTab.projects:  'projects_tab.svg',
+        AppTab.ai:   'ai_tab.svg',
+        AppTab.edit: 'edit_tab.svg',
       }[this]!;
 
   String get svgFilled => const {
-        AppTab.ai:        'ai_tab.png',
-        AppTab.edit:      'edit_tab.png',
-        AppTab.templates: 'templates_tab.png',
-        AppTab.projects:  'projects_tab.png',
+        AppTab.ai:   'ai_tab_filled.svg',
+        AppTab.edit: 'edit_tab_filled.svg',
       }[this]!;
 
   String get label => const {
-        AppTab.ai:        'IA',
-        AppTab.edit:      'Editor',
-        AppTab.templates: 'Templates',
-        AppTab.projects:  'Projetos',
+        AppTab.ai:   'IA',
+        AppTab.edit: 'Editor',
       }[this]!;
 }
 
@@ -170,56 +163,51 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — animação REESCRITA por completo.
+// DRAWER — agora é o Drawer REAL do Flutter (Scaffold.drawer).
 //
-// Antes: o AppDrawer só desenhava o conteúdo (Column/ListView) e
-// dependia inteiramente de um AnimatedContainer(width: ...) próprio
-// para animar a largura 280↔ecrã. Isso colidia com o Positioned do
-// main.dart, que também animava `left`/`width` através do SpringNav
-// vindo de fora — duas animações independentes a tentar controlar a
-// mesma geometria ao mesmo tempo é exatamente a causa da abertura
-// "aos solavancos" e da faixa cinzenta (o Positioned via uma largura,
-// o AnimatedContainer interno via outra, num frame intermédio ficava
-// espaço sem conteúdo nenhum por cima, só a cor s.pageBackground do
-// ecrã por trás a aparecer como "cinza").
+// Todo o comportamento de abertura/fecho, slide horizontal e
+// escurecimento do fundo (barrier) passam a ser geridos nativamente
+// pelo Scaffold/Drawer do Flutter — isto elimina de vez qualquer
+// dessincronia entre animações concorrentes. Este widget concentra-se
+// unicamente no ESTILO: cores, formas, tipografia, ícones — mas quem
+// desenha a "folha" deslizante, a sombra Material e o barrier por
+// trás é o Flutter, através do widget Drawer nativo envolvido por um
+// ClipRRect+shape para o cantos arredondados customizados.
 //
-// Agora: o AppDrawer é 100% passivo em relação a POSIÇÃO e ABERTURA —
-// quem entra/sai do ecrã e quem anima a translação horizontal é
-// APENAS o Positioned/SpringNav do main.dart, como antes. A única
-// coisa que o AppDrawer ainda anima sozinho é a LARGURA interna
-// 280↔ecrã (expand/shrink), e fá-lo com AnimatedContainer + curve
-// consistente com o resto da app (kCupertinoOut), sem nunca deixar a
-// largura ir a 0 nem qualquer frame em que a Column interna não tenha
-// já todo o conteúdo montado — elimina o "clarão cinzento".
+// Removido nesta revisão, por pedido explícito:
+// - Toda a lógica de expand/shrink (280px ↔ ecrã inteiro) e o botão
+//   correspondente — substituído por um botão de HOME que navega
+//   para a HomeScreen (home.dart).
+// - Tabs "Templates" e "Projetos" do drawer — só existem agora em
+//   HomeScreen (bottom tab bar), o AppTab do drawer ficou reduzido a
+//   {ai, edit}.
+// - O ecrã de pesquisa deixou de estar embutido neste ficheiro — o
+//   botão de pesquisa agora empurra ChatSearchScreen (chat_search.dart)
+//   com uma CupertinoPageRoute.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onClose;
   final VoidCallback onSettings;
+  final VoidCallback onGoHome;
   final AppTab currentTab;
   final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
   final VoidCallback? onNewChat;
-  final ValueChanged<String>? onOpenProjectConversation;
   final String? activeConversationId;
-  /// Notifier partilhado com o pai (RootShell) para o estado expandido
-  /// ser lido de fora, permitindo ao Positioned que envolve este
-  /// widget ajustar corretamente a sua própria largura/posição.
-  final ValueNotifier<bool>? expandedNotifier;
 
   const AppDrawer({
     super.key,
     required this.s,
     required this.onClose,
     required this.onSettings,
+    required this.onGoHome,
     required this.currentTab,
     required this.onSelectTab,
     this.onOpenConversation,
     this.onNewChat,
-    this.onOpenProjectConversation,
     this.activeConversationId,
-    this.expandedNotifier,
   });
 
   @override
@@ -230,97 +218,40 @@ class _AppDrawerState extends State<AppDrawer> {
   static const List<AppTab> _navigableTabs = [
     AppTab.ai,
     AppTab.edit,
-    AppTab.templates,
   ];
-
-  late final ValueNotifier<bool> _expanded;
-  bool _ownsNotifier = false;
-  bool _projectsOpen = false;
-
-  final GlobalKey _searchAnchorKey = GlobalKey();
-
-  double _dragAccum = 0;
 
   @override
   void initState() {
     super.initState();
-    if (widget.expandedNotifier != null) {
-      _expanded = widget.expandedNotifier!;
-    } else {
-      _expanded = ValueNotifier<bool>(false);
-      _ownsNotifier = true;
-    }
-    _expanded.addListener(_onExpandedChanged);
-
     conversationsController.addListener(_onConvsChanged);
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
       conversationsController.load();
-    }
-    projectsController.addListener(_onConvsChanged);
-    if (projectsController.nodes.isEmpty && !projectsController.loading) {
-      projectsController.load();
     }
   }
 
   @override
   void dispose() {
-    _expanded.removeListener(_onExpandedChanged);
-    if (_ownsNotifier) _expanded.dispose();
     conversationsController.removeListener(_onConvsChanged);
-    projectsController.removeListener(_onConvsChanged);
     super.dispose();
   }
 
-  void _onExpandedChanged() { if (mounted) setState(() {}); }
   void _onConvsChanged() { if (mounted) setState(() {}); }
 
-  void _toggleExpanded() => _expanded.value = !_expanded.value;
-  void _toggleProjects()  => setState(() => _projectsOpen = !_projectsOpen);
-
-  void _onDragStart(DragStartDetails d) { _dragAccum = 0; }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    _dragAccum += d.delta.dx;
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    final velocity = d.primaryVelocity ?? 0;
-    const distanceThreshold = 90.0;
-    const velocityThreshold = 500.0;
-
-    if (!_expanded.value) {
-      if (_dragAccum < -distanceThreshold || velocity < -velocityThreshold) {
-        widget.onClose();
-        return;
-      }
-      if (_dragAccum > distanceThreshold * 1.4 || velocity > velocityThreshold) {
-        _expanded.value = true;
-        return;
-      }
-    } else {
-      if (_dragAccum < -distanceThreshold || velocity < -velocityThreshold) {
-        _expanded.value = false;
-        return;
-      }
-    }
-    _dragAccum = 0;
-  }
-
   void _openSearch(BuildContext context) {
-    final box = _searchAnchorKey.currentContext!.findRenderObject() as RenderBox;
-    final origin = box.localToGlobal(Offset.zero) & box.size;
-
-    Navigator.of(context).push(_ContainerTransformRoute(
-      origin: origin,
-      builder: (_) => ConversationSearchScreen(
+    widget.onClose();
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => ChatSearchScreen(
         s: widget.s,
-        originRect: origin,
         onOpenConversation: (id) {
           widget.onOpenConversation?.call(id);
-          widget.onClose();
         },
       ),
     ));
+  }
+
+  void _goHome() {
+    widget.onClose();
+    widget.onGoHome();
   }
 
   void _openConversation(ConversationItem item) {
@@ -370,128 +301,89 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isExpanded = _expanded.value;
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
-    // NOTA CRÍTICA: este AnimatedContainer só anima a LARGURA (280↔
-    // ecrã), nunca a posição/translação — isso é feito de fora pelo
-    // Positioned em main.dart. A cor de fundo (s.surface) é aplicada
-    // aqui, cobrindo sempre 100% da largura atual do container, e o
-    // conteúdo (SafeArea+Column) é sempre montado por inteiro — não
-    // há nenhum estado intermédio em que a largura já mudou mas o
-    // conteúdo ainda não, que era o que produzia o "flash" cinzento.
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: _onDragStart,
-      onHorizontalDragUpdate: _onDragUpdate,
-      onHorizontalDragEnd: _onDragEnd,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 280),
-        curve: kCupertinoOut,
-        width: isExpanded ? screenWidth : 280,
-        // clipBehavior garante que, mesmo a meio da animação de
-        // largura, nada do conteúdo (que tem width fixo interno via
-        // Expanded/ListView) desenha fora da área visível — sem isto,
-        // listas largas podiam "vazar" um pixel e parecer cinza na
-        // margem durante a transição.
-        clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(color: s.surface),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Menu',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: s.onSurface,
-                      ),
+    // Drawer nativo do Flutter — largura, slide e barrier são geridos
+    // pelo Scaffold que envolve este widget lá fora (main.dart). Aqui
+    // só definimos a "folha" visual: largura fixa de 300, cantos
+    // arredondados só do lado direito, sem elevação Material default
+    // (a sombra do Flutter já trata disso).
+    return Drawer(
+      width: 300,
+      backgroundColor: s.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Menu',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: s.onSurface,
                     ),
-                    Row(children: [
-                      AppTap(
-                        key: _searchAnchorKey,
-                        onTap: () => _openSearch(context),
-                        s: s,
-                        size: 32,
-                        child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
-                      ),
-                      const SizedBox(width: 2),
-                      AppTap(
-                        onTap: _toggleExpanded,
-                        s: s,
-                        size: 32,
-                        child: AppIcon(
-                          isExpanded ? 'shrink.svg' : 'expand.svg',
-                          color: s.onSurfaceVariant,
-                          size: 16,
-                        ),
-                      ),
-                    ]),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Column(
-                  children: [
-                    for (final tab in _navigableTabs)
-                      _DrawerTabTile(
-                        s: s,
-                        tab: tab,
-                        selected: widget.currentTab == tab,
-                        onTap: () => widget.onSelectTab(tab),
-                      ),
-                    _ProjectsToggleTile(
-                      s: s,
-                      open: _projectsOpen,
-                      onTap: _toggleProjects,
-                    ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 220),
-                      curve: kCupertinoOut,
-                      alignment: Alignment.topCenter,
-                      child: _projectsOpen
-                          ? _ProjectsInlineSection(
-                              s: s,
-                              onOpenConversation: (id) {
-                                widget.onOpenProjectConversation?.call(id);
-                                widget.onOpenConversation?.call(id);
-                                widget.onClose();
-                              },
-                            )
-                          : const SizedBox(width: double.infinity),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
-                child: Text(
-                  'Conversas',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: s.onSurfaceVariant,
                   ),
+                  Row(children: [
+                    AppTap(
+                      onTap: () => _openSearch(context),
+                      s: s,
+                      size: 32,
+                      child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
+                    ),
+                    const SizedBox(width: 2),
+                    AppTap(
+                      onTap: _goHome,
+                      s: s,
+                      size: 32,
+                      child: AppIcon('home.svg', color: s.onSurfaceVariant, size: 17),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                children: [
+                  for (final tab in _navigableTabs)
+                    _DrawerTabTile(
+                      s: s,
+                      tab: tab,
+                      selected: widget.currentTab == tab,
+                      onTap: () => widget.onSelectTab(tab),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+              child: Text(
+                'Conversas',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurfaceVariant,
                 ),
               ),
-              Expanded(
-                child: _buildConvBody(s, pinned, others, isExpanded),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: _AccountPill(s: s, onOpenSettings: widget.onSettings),
-              ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: _buildConvBody(s, pinned, others),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: _AccountPill(s: s, onOpenSettings: widget.onSettings),
+            ),
+          ],
         ),
       ),
     );
@@ -501,7 +393,6 @@ class _AppDrawerState extends State<AppDrawer> {
     AppColorScheme s,
     List<ConversationItem> pinned,
     List<ConversationItem> others,
-    bool isExpanded,
   ) {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
@@ -554,7 +445,6 @@ class _AppDrawerState extends State<AppDrawer> {
             _ConvTile(
               s: s,
               item: item,
-              expanded: isExpanded,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
               onOptions: (key) => _openConvPopup(context, key, item),
@@ -567,7 +457,6 @@ class _AppDrawerState extends State<AppDrawer> {
           _ConvTile(
             s: s,
             item: item,
-            expanded: isExpanded,
             active: item.id == widget.activeConversationId,
             onTap: () => _openConversation(item),
             onOptions: (key) => _openConvPopup(context, key, item),
@@ -625,10 +514,11 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          sel
-              ? AppIcon(widget.tab.svgFilled,
-                  color: s.onSurface, size: 20, useColorAsset: true)
-              : AppIcon(widget.tab.svg, color: s.onSurfaceVariant, size: 20),
+          AppIcon(
+            sel ? widget.tab.svgFilled : widget.tab.svg,
+            color: sel ? s.navLabelActive : s.onSurfaceVariant,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Text(
             widget.tab.label,
@@ -644,549 +534,9 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
   }
 }
 
-class _ProjectsToggleTile extends StatefulWidget {
-  final AppColorScheme s;
-  final bool open;
-  final VoidCallback onTap;
-  const _ProjectsToggleTile({required this.s, required this.open, required this.onTap});
-  @override State<_ProjectsToggleTile> createState() => _ProjectsToggleTileState();
-}
-
-class _ProjectsToggleTileState extends State<_ProjectsToggleTile> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: kCupertinoOut,
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: widget.open
-              ? s.navIndicatorBg
-              : (_pressed ? s.hover : Colors.transparent),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(children: [
-          widget.open
-              ? AppIcon(AppTab.projects.svgFilled,
-                  color: s.onSurface, size: 20, useColorAsset: true)
-              : AppIcon(AppTab.projects.svg, color: s.onSurfaceVariant, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              AppTab.projects.label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: widget.open ? FontWeight.w600 : FontWeight.w400,
-                color: widget.open ? s.navLabelActive : s.onSurface,
-              ),
-            ),
-          ),
-          AnimatedRotation(
-            turns: widget.open ? 0.5 : 0.0,
-            duration: const Duration(milliseconds: 220),
-            curve: kCupertinoOut,
-            child: AppIcon('chevron_up.svg', color: s.onSurfaceVariant, size: 14),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// PROJECTS INLINE SECTION
-// ══════════════════════════════════════════════════════════════
-
-class _ProjectsInlineSection extends StatefulWidget {
-  final AppColorScheme s;
-  final ValueChanged<String> onOpenConversation;
-  const _ProjectsInlineSection({required this.s, required this.onOpenConversation});
-  @override State<_ProjectsInlineSection> createState() => _ProjectsInlineSectionState();
-}
-
-class _ProjectsInlineSectionState extends State<_ProjectsInlineSection> {
-  void _createProject() {
-    showRenameSheet(
-      context,
-      widget.s,
-      currentTitle: '',
-      title: 'Novo projeto',
-      hint: 'Nome do projeto',
-      onConfirm: (name) {
-        if (name.trim().isEmpty) return;
-        projectsController.createProject(name.trim());
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final roots = projectsController.roots;
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 8, right: 0, top: 2, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (projectsController.loading && roots.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-              child: Row(children: [
-                SizedBox(
-                  width: 14, height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text('A carregar projetos...',
-                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
-              ]),
-            )
-          else if (roots.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-              child: Text('Sem projetos ainda',
-                  style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
-            )
-          else
-            for (final root in roots)
-              _ProjectNodeTile(
-                s: s,
-                node: root,
-                depth: 0,
-                onOpenConversation: widget.onOpenConversation,
-              ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _createProject,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Row(children: [
-                  AppIcon('add.svg', color: s.primary, size: 15),
-                  const SizedBox(width: 8),
-                  Text('Novo projeto',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600, color: s.primary)),
-                ]),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProjectNodeTile extends StatefulWidget {
-  final AppColorScheme s;
-  final ProjectNode node;
-  final int depth;
-  final ValueChanged<String> onOpenConversation;
-  const _ProjectNodeTile({
-    required this.s,
-    required this.node,
-    required this.depth,
-    required this.onOpenConversation,
-  });
-  @override State<_ProjectNodeTile> createState() => _ProjectNodeTileState();
-}
-
-class _ProjectNodeTileState extends State<_ProjectNodeTile> {
-  bool _open = false;
-  bool _h = false;
-  final GlobalKey _anchorKey = GlobalKey();
-
-  void _onTap() {
-    final node = widget.node;
-    if (node.isContainer) {
-      _openNodeActionsPopup();
-    } else if (node.fileKind == ProjectFileKind.chat && node.conversationId != null) {
-      widget.onOpenConversation(node.conversationId!);
-    } else {
-      _openFileInfoSheet();
-    }
-  }
-
-  void _openNodeActionsPopup() {
-    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz = box.size;
-    showProjectNodeActionsPopup(
-      context,
-      widget.s,
-      anchorOffset: off,
-      anchorSize: sz,
-      node: widget.node,
-      onOpenConversation: () => _startNewConversationHere(),
-      onCreateFile: () => _createFileHere(),
-      onCreateFolder: () => _createFolderHere(),
-      onUpload: () => _uploadFileHere(),
-      onRename: () => _renameHere(),
-      onDelete: () => _deleteHere(),
-    );
-  }
-
-  void _startNewConversationHere() {
-    widget.onOpenConversation('');
-  }
-
-  void _createFileHere() {
-    showRenameSheet(
-      context,
-      widget.s,
-      currentTitle: '',
-      title: 'Novo documento',
-      hint: 'Nome do ficheiro',
-      onConfirm: (name) {
-        if (name.trim().isEmpty) return;
-        projectsController.createGeneratedFile(
-          widget.node.id,
-          name: name.trim(),
-          fileKind: ProjectFileKind.doc,
-          content: '<p></p>',
-        );
-        setState(() => _open = true);
-      },
-    );
-  }
-
-  void _createFolderHere() {
-    showRenameSheet(
-      context,
-      widget.s,
-      currentTitle: '',
-      title: 'Nova pasta',
-      hint: 'Nome da pasta',
-      onConfirm: (name) {
-        if (name.trim().isEmpty) return;
-        projectsController.createFolder(widget.node.id, name.trim());
-        setState(() => _open = true);
-      },
-    );
-  }
-
-  void _uploadFileHere() async {
-    final result = await FilePicker.pickFiles(allowMultiple: false, withData: true);
-    if (result == null || result.files.isEmpty) return;
-final picked = result.files.first;
-    if (picked.bytes == null) return;
-    final kind = _inferFileKind(picked.name);
-    projectsController.uploadFile(
-      widget.node.id,
-      name: picked.name,
-      fileKind: kind,
-      fileDataBase64: base64Encode(picked.bytes!),
-      mimeType: lookupMimeType(picked.name) ?? 'application/octet-stream',
-    );
-    setState(() => _open = true);
-  }
-
-  ProjectFileKind _inferFileKind(String filename) {
-    final lower = filename.toLowerCase();
-    if (lower.endsWith('.pdf')) return ProjectFileKind.pdf;
-    if (lower.endsWith('.docx') || lower.endsWith('.doc')) return ProjectFileKind.docx;
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')) return ProjectFileKind.xlsx;
-    if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) return ProjectFileKind.pptx;
-    return ProjectFileKind.other;
-  }
-
-  void _renameHere() {
-    showRenameSheet(
-      context,
-      widget.s,
-      currentTitle: widget.node.name,
-      onConfirm: (newName) {
-        if (newName.trim().isEmpty) return;
-        projectsController.rename(widget.node.id, newName.trim());
-      },
-    );
-  }
-
-  void _deleteHere() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => _DeleteConversationSheet(
-        s: widget.s,
-        title: widget.node.name,
-        onConfirm: () {
-          Navigator.pop(ctx);
-          projectsController.delete(widget.node.id);
-        },
-      ),
-    );
-  }
-
-  void _openFileInfoSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => _FileInfoSheet(s: widget.s, node: widget.node),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final node = widget.node;
-    final children = node.isContainer ? projectsController.childrenOf(node.id) : const <ProjectNode>[];
-    final iconAsset = node.isContainer
-        ? (node.type == ProjectNodeType.project ? 'projects_tab.svg' : 'folder.svg')
-        : (node.fileKind?.pngAsset ?? 'doc.png');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          key: _anchorKey,
-          behavior: HitTestBehavior.opaque,
-          onTapDown:   (_) => setState(() => _h = true),
-          onTapCancel: ()  => setState(() => _h = false),
-          onTapUp:     (_) => setState(() => _h = false),
-          onTap: _onTap,
-          onLongPress: _openNodeActionsPopup,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
-            margin: EdgeInsets.only(left: widget.depth * 14.0, top: 1, bottom: 1),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: _h ? s.hover : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(children: [
-              node.isContainer
-                  ? AppIcon(iconAsset, color: s.onSurfaceVariant, size: 16)
-                  : EditorTypeIcon(iconAsset, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(node.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: s.onSurface)),
-              ),
-              if (node.isContainer)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _open = !_open),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: AnimatedRotation(
-                      turns: _open ? 0.5 : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      curve: kCupertinoOut,
-                      child: AppIcon('chevron_up.svg', color: s.onSurfaceVariant, size: 12),
-                    ),
-                  ),
-                ),
-            ]),
-          ),
-        ),
-        if (node.isContainer)
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: kCupertinoOut,
-            alignment: Alignment.topCenter,
-            child: _open
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final child in children)
-                        _ProjectNodeTile(
-                          s: s,
-                          node: child,
-                          depth: widget.depth + 1,
-                          onOpenConversation: widget.onOpenConversation,
-                        ),
-                      if (children.isEmpty)
-                        Padding(
-                          padding: EdgeInsets.only(
-                              left: (widget.depth + 1) * 14.0 + 10, top: 2, bottom: 6),
-                          child: Text('Vazio',
-                              style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
-                        ),
-                    ],
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
-      ],
-    );
-  }
-}
-
-void showProjectNodeActionsPopup(
-  BuildContext context,
-  AppColorScheme s, {
-  required Offset anchorOffset,
-  required Size anchorSize,
-  required ProjectNode node,
-  required VoidCallback onOpenConversation,
-  required VoidCallback onCreateFile,
-  required VoidCallback onCreateFolder,
-  required VoidCallback onUpload,
-  required VoidCallback onRename,
-  required VoidCallback onDelete,
-}) {
-  final screenSize = MediaQuery.of(context).size;
-  late OverlayEntry entry;
-  final controller = AnimationController(
-    vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 190),
-  );
-
-  void close() {
-    controller.reverse().then((_) {
-      entry.remove();
-      controller.dispose();
-    });
-  }
-
-  entry = OverlayEntry(builder: (ctx) {
-    const width = 240.0;
-    const estimatedHeight = 300.0;
-    final desiredTop = anchorOffset.dy + anchorSize.height + 6;
-    final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
-    final top = overflowsBottom ? null : desiredTop;
-    final bottom = overflowsBottom ? screenSize.height - anchorOffset.dy + 6 : null;
-    final left = anchorOffset.dx.clamp(12.0, screenSize.width - width - 12);
-
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      Positioned(
-        top: top,
-        bottom: bottom,
-        left: left,
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: overflowsBottom ? Alignment.bottomLeft : Alignment.topLeft,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ConvPopupRow(
-                    s: s, icon: 'send.svg', label: 'Abrir conversa',
-                    onTap: () { close(); onOpenConversation(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'doc.png', useEditorIcon: true, label: 'Criar ficheiro',
-                    onTap: () { close(); onCreateFile(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'folder.svg', label: 'Criar pasta',
-                    onTap: () { close(); onCreateFolder(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'file.svg', label: 'Upload de ficheiro',
-                    onTap: () { close(); onUpload(); },
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                    child: Divider(height: 1),
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'edit.svg', label: 'Renomear',
-                    onTap: () { close(); onRename(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'trash.svg', label: 'Eliminar', destructive: true,
-                    onTap: () { close(); onDelete(); },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  });
-
-  Overlay.of(context).insert(entry);
-  controller.forward();
-}
-
-class _FileInfoSheet extends StatelessWidget {
-  final AppColorScheme s;
-  final ProjectNode node;
-  const _FileInfoSheet({required this.s, required this.node});
-
-  @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                EditorTypeIcon(node.fileKind?.pngAsset ?? 'doc.png', size: 36),
-                const SizedBox(height: 10),
-                Text(node.name,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-                const SizedBox(height: 4),
-                Text(node.fileKind?.label ?? 'Ficheiro',
-                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
-  final bool expanded;
   final bool active;
   final VoidCallback onTap;
   final ValueChanged<GlobalKey> onOptions;
@@ -1195,7 +545,6 @@ class _ConvTile extends StatefulWidget {
   const _ConvTile({
     required this.s,
     required this.item,
-    required this.expanded,
     required this.active,
     required this.onTap,
     required this.onOptions,
@@ -1215,12 +564,12 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
   static const double _threshold = 96;
 
   void _onDragUpdate(DragUpdateDetails d) {
-    if (!widget.expanded || _resolved) return;
+    if (_resolved) return;
     setState(() => _dragDx += d.delta.dx);
   }
 
   void _onDragEnd(DragEndDetails d) {
-    if (!widget.expanded || _resolved) {
+    if (_resolved) {
       setState(() => _dragDx = 0);
       return;
     }
@@ -1250,7 +599,7 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
       opacity: _resolved ? 0.0 : 1.0,
       duration: const Duration(milliseconds: 180),
       child: Stack(children: [
-        if (widget.expanded && _dragDx != 0)
+        if (_dragDx != 0)
           Positioned.fill(
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 2),
@@ -1273,8 +622,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
             onTapUp:     (_) => setState(() => _h = false),
             onTap: widget.onTap,
             onLongPress: () => widget.onOptions(_anchorKey),
-            onHorizontalDragUpdate: widget.expanded ? _onDragUpdate : null,
-            onHorizontalDragEnd: widget.expanded ? _onDragEnd : null,
+            onHorizontalDragUpdate: _onDragUpdate,
+            onHorizontalDragEnd: _onDragEnd,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               margin: const EdgeInsets.symmetric(vertical: 2),
@@ -1673,256 +1022,6 @@ Future<void> showRenameSheet(
       ),
     ),
   );
-}
-
-// ══════════════════════════════════════════════════════════════
-// CONTAINER TRANSFORM ROUTE
-// ══════════════════════════════════════════════════════════════
-
-class _ContainerTransformRoute extends PageRouteBuilder {
-  final Rect origin;
-  final WidgetBuilder builder;
-
-  _ContainerTransformRoute({required this.origin, required this.builder})
-      : super(
-          opaque: false,
-          barrierColor: Colors.transparent,
-          transitionDuration: const Duration(milliseconds: 380),
-          reverseTransitionDuration: const Duration(milliseconds: 300),
-          pageBuilder: (context, animation, secondaryAnimation) {
-            final screen = MediaQuery.of(context).size;
-            final center = origin.center;
-
-            final corners = [
-              Offset.zero,
-              Offset(screen.width, 0),
-              Offset(0, screen.height),
-              Offset(screen.width, screen.height),
-            ];
-            final maxRadius = corners
-                .map((c) => (c - center).distance)
-                .reduce(math.max);
-            final minRadius = origin.shortestSide / 2;
-
-            final curved = CurvedAnimation(parent: animation, curve: kCupertinoOut);
-            final radius = Tween<double>(begin: minRadius, end: maxRadius)
-                .animate(curved);
-
-            return AnimatedBuilder(
-              animation: radius,
-              builder: (context, child) => ClipPath(
-                clipper: _CircleRevealClipper(center: center, radius: radius.value),
-                child: child,
-              ),
-              child: builder(context),
-            );
-          },
-        );
-}
-
-class _CircleRevealClipper extends CustomClipper<Path> {
-  final Offset center;
-  final double radius;
-  _CircleRevealClipper({required this.center, required this.radius});
-
-  @override
-  Path getClip(Size size) => Path()
-    ..addOval(Rect.fromCircle(center: center, radius: radius));
-
-  @override
-  bool shouldReclip(covariant _CircleRevealClipper oldClipper) =>
-      oldClipper.center != center || oldClipper.radius != radius;
-}
-
-// ══════════════════════════════════════════════════════════════
-// CONVERSATION SEARCH SCREEN
-// ══════════════════════════════════════════════════════════════
-
-class ConversationSearchScreen extends StatefulWidget {
-  final AppColorScheme s;
-  final ValueChanged<String> onOpenConversation;
-  final Rect originRect;
-  const ConversationSearchScreen({
-    super.key,
-    required this.s,
-    required this.onOpenConversation,
-    required this.originRect,
-  });
-
-  @override
-  State<ConversationSearchScreen> createState() => _ConversationSearchScreenState();
-}
-
-class _ConversationSearchScreenState extends State<ConversationSearchScreen> {
-  final TextEditingController _ctrl = TextEditingController();
-  final FocusNode _focus = FocusNode();
-  String _query = '';
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  List<ConversationItem> get _results {
-    final q = _query.trim().toLowerCase();
-    final all = conversationsController.items.where((c) => !c.archived);
-    if (q.isEmpty) return all.toList();
-    return all
-        .where((c) =>
-            c.title.toLowerCase().contains(q) ||
-            c.preview.toLowerCase().contains(q))
-        .toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final results = _results;
-    final origin = widget.originRect;
-
-    return Material(
-      color: s.surface,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
-              child: Row(children: [
-                SizedBox(
-                  width: origin.height,
-                  height: origin.height,
-                  child: AppTap(
-                    onTap: () => Navigator.of(context).maybePop(),
-                    s: s,
-                    size: origin.height,
-                    child: AppIcon('back.svg', color: s.onSurface, size: 20),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: s.hover,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(children: [
-                      AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _ctrl,
-                          focusNode: _focus,
-                          onChanged: (v) => setState(() => _query = v),
-                          style: TextStyle(fontSize: 14.5, color: s.onSurface),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            hintText: 'Pesquisar conversas...',
-                            hintStyle: TextStyle(fontSize: 14.5, color: s.onSurfaceVariant),
-                          ),
-                        ),
-                      ),
-                      if (_query.isNotEmpty)
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            _ctrl.clear();
-                            _query = '';
-                          }),
-                          child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
-                        ),
-                    ]),
-                  ),
-                ),
-              ]),
-            ),
-            Expanded(
-              child: results.isEmpty
-                  ? Center(
-                      child: Text(
-                        _query.isEmpty ? 'Sem conversas ainda' : 'Sem resultados para "$_query"',
-                        style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
-                      itemCount: results.length,
-                      itemBuilder: (_, i) {
-                        final item = results[i];
-                        return _SearchResultTile(
-                          s: s,
-                          item: item,
-                          onTap: () => widget.onOpenConversation(item.id),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchResultTile extends StatefulWidget {
-  final AppColorScheme s;
-  final ConversationItem item;
-  final VoidCallback onTap;
-  const _SearchResultTile({required this.s, required this.item, required this.onTap});
-  @override State<_SearchResultTile> createState() => _SearchResultTileState();
-}
-
-class _SearchResultTileState extends State<_SearchResultTile> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.item.title,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              if (widget.item.preview.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(widget.item.preview,
-                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ]),
-          ),
-          if (widget.item.pinned) ...[
-            const SizedBox(width: 8),
-            AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
-          ],
-        ]),
-      ),
-    );
-  }
 }
 
 class _AccountPill extends StatefulWidget {
