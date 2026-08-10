@@ -29,10 +29,10 @@ flutter:
     - assets/icons/svg/
     - assets/icons/svg_color/
     - assets/icons/png/
-    - assets/icons/png/ai_tab.png
-    - assets/icons/png/edit_tab.png
-    - assets/icons/png/projects_tab.png
-    - assets/icons/png/templates_tab.png
+    #- assets/icons/png/ai_tab.png
+    #- assets/icons/png/edit_tab.png
+    #- assets/icons/png/projects_tab.png
+    #- assets/icons/png/templates_tab.png
     - assets/editor/docs.html
     - assets/editor/sheets.html
     - assets/editor/slides.html
