@@ -36,16 +36,33 @@ const Map<ApiProvider, ProviderConfig> kProviderMap = {
   ApiProvider.deepseekReasoning:  ProviderConfig('deepseek', deepseekModel: 'deepseek-reasoning'),
 };
 
+// ⚠️ FORMATO NÃO CONFIRMADO CONTRA worker.js (ver Bloco D, item
+// "anexos com conteúdo real"): cada entrada de `attachments` segue a
+// estrutura {name, mimeType, base64}, escolhida em aitab.dart quando
+// o ficheiro é anexado. Este campo só é incluído no JSON da mensagem
+// quando não está vazio — mensagens sem anexos ficam com o payload
+// exatamente igual ao de antes. Quando o worker.js for partilhado,
+// pode ser preciso mudar esta chave (ex: para "files", ou para um
+// formato de content blocks tipo Anthropic) — o ponto de mudança é
+// só este toJson()/fromJson(), não é preciso tocar em aitab.dart.
 class ChatMessage {
   final String role; // "user" | "assistant"
   final String content;
-  const ChatMessage({required this.role, required this.content});
+  final List<Map<String, dynamic>>? attachments;
+  const ChatMessage({required this.role, required this.content, this.attachments});
 
-  Map<String, dynamic> toJson() => {'role': role, 'content': content};
+  Map<String, dynamic> toJson() => {
+        'role': role,
+        'content': content,
+        if (attachments != null && attachments!.isNotEmpty) 'attachments': attachments,
+      };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
         role: j['role']?.toString() ?? 'user',
         content: j['content']?.toString() ?? '',
+        attachments: (j['attachments'] is List)
+            ? (j['attachments'] as List).whereType<Map<String, dynamic>>().toList()
+            : null,
       );
 }
 
