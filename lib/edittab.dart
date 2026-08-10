@@ -26,10 +26,10 @@ extension EditorTypeX on EditorType {
       }[this]!;
 
   String get svgAsset => const {
-        EditorType.docs:       'doc.svg',
-        EditorType.sheets:     'sheet.svg',
-        EditorType.slides:     'slide.svg',
-        EditorType.whiteboard: 'whiteboard.svg',
+        EditorType.docs:       'doc.png',
+        EditorType.sheets:     'sheet.png',
+        EditorType.slides:     'slide.png',
+        EditorType.whiteboard: 'whiteboard.png',
       }[this]!;
 
   String get htmlAsset => const {

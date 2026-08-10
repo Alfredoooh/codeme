@@ -264,16 +264,16 @@ extension ProjectFileKindX on ProjectFileKind {
   /// Ícone SVG associado (vive em assets/icons/svg/).
   String get svgAsset => const {
         ProjectFileKind.chat:       'ai_tab.svg',
-        ProjectFileKind.pdf:        'doc.svg',
-        ProjectFileKind.docx:       'doc.svg',
-        ProjectFileKind.xlsx:       'sheet.svg',
-        ProjectFileKind.pptx:       'slide.svg',
-        ProjectFileKind.doc:        'doc.svg',
-        ProjectFileKind.sheet:      'sheet.svg',
-        ProjectFileKind.slide:      'slide.svg',
-        ProjectFileKind.whiteboard: 'whiteboard.svg',
-        ProjectFileKind.code:       'doc.svg',
-        ProjectFileKind.other:      'doc.svg',
+        ProjectFileKind.pdf:        'doc.png',
+        ProjectFileKind.docx:       'doc.png',
+        ProjectFileKind.xlsx:       'sheet.png',
+        ProjectFileKind.pptx:       'slide.png',
+        ProjectFileKind.doc:        'doc.png',
+        ProjectFileKind.sheet:      'sheet.png',
+        ProjectFileKind.slide:      'slide.png',
+        ProjectFileKind.whiteboard: 'whiteboard.png',
+        ProjectFileKind.code:       'doc.png',
+        ProjectFileKind.other:      'doc.png',
       }[this]!;
 
   String get label => const {

@@ -25,13 +25,32 @@ class AppIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = asset.replaceAll(RegExp(r'\.(png|svg)$', caseSensitive: false), '.svg');
-    return SvgPicture.asset(
-      'assets/icons/svg/$normalized',
-      width: size,
-      height: size,
-      colorFilter: useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
-    );
+    final lower = asset.toLowerCase();
+    final isPng = lower.endsWith('.png');
+    final isSvg = lower.endsWith('.svg') || !isPng;
+    final fileName = asset.contains('.') ? asset : (isPng ? asset : '$asset.svg');
+
+    if (isPng) {
+      return Image.asset(
+        'assets/icons/png/$fileName',
+        width: size,
+        height: size,
+        color: useColorAsset ? null : color,
+        colorBlendMode: useColorAsset ? null : BlendMode.srcIn,
+      );
+    }
+
+    if (isSvg) {
+      final normalized = fileName.replaceAll(RegExp(r'\.(png|svg)$', caseSensitive: false), '.svg');
+      return SvgPicture.asset(
+        'assets/icons/svg/$normalized',
+        width: size,
+        height: size,
+        colorFilter: useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }
 
