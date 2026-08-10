@@ -2397,7 +2397,7 @@ class _ChatInput extends StatelessWidget {
                         color: sending ? s.primary.withOpacity(0.5) : s.primary,
                         shape: BoxShape.circle),
                     child: sending
-                        ? _SpinningIcon(asset: 'progress.svg', color: s.onPrimary)
+                        ? _SpinningIcon(asset: 'stop_button.svg', color: s.onPrimary)
                         : AppIcon('send.svg', color: s.onPrimary, size: 20),
                   ),
                 ),
