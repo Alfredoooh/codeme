@@ -164,13 +164,10 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — deixou de ser o Drawer nativo do Flutter (Scaffold.drawer).
-// Passa a ser um Material puro: largura, slide horizontal, clip dos
-// cantos arredondados e o barrier por trás do drawer são geridos pelo
-// Stack manual em main.dart (RootShell), com um AnimationController
-// próprio. Este widget fica sempre montado na árvore, mesmo fechado —
-// só desliza para fora da tela via Transform.translate — nunca é
-// destruído/recriado ao reabrir.
+// DRAWER — Material puro. Slide, largura, clip dos cantos e barrier
+// são geridos pelo Stack manual em main.dart (RootShell). Este
+// widget fica sempre montado na árvore, mesmo fechado — só desliza
+// para fora da tela — nunca é destruído/recriado ao reabrir.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {

@@ -1,17 +1,22 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/colors.dart
+//
+// AppTheme deixou de ser InheritedNotifier consultado via
+// context.dependOnInheritedWidgetOfExactType(). Isso exigia que o
+// widget que chama AppTheme.of(context) estivesse sempre ligado à
+// árvore no momento exato do build — frágil dentro de Stacks com
+// Transform.translate e animações concorrentes.
+//
+// Agora AppTheme.of(context) lê diretamente o ChangeNotifier global
+// (appTheme), sem lookup na árvore. Não há mais "contexto desligado"
+// possível, porque não há mais contexto a consultar.
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-// ══════════════════════════════════════════════════════════════
-// CURVAS GLOBAIS
-// ══════════════════════════════════════════════════════════════
 
 const Curve kCupertino    = Cubic(0.25, 0.1,  0.25, 1.0);
 const Curve kCupertinoIn  = Cubic(0.42, 0.0,  1.0,  1.0);
 const Curve kCupertinoOut = Cubic(0.0,  0.0,  0.58, 1.0);
-
-// ══════════════════════════════════════════════════════════════
-// APP COLOR SCHEME — fonte única de verdade para todas as cores
-// ══════════════════════════════════════════════════════════════
 
 class AppColorScheme {
   final bool isDark;
@@ -56,21 +61,15 @@ class AppColorScheme {
 
   List<BoxShadow> get cardShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]
-      : [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 1)),
-        ];
+      : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 1))];
 
   List<BoxShadow> get floatingShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 6))]
-      : [
-          BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 3)),
-        ];
+      : [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 3))];
 
   List<BoxShadow> get navBarShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
-      : [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 3)),
-        ];
+      : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 3))];
 
   Color get incognitoBackground => const Color(0xFF0D0D0F);
   Color get incognitoSurface    => const Color(0xFF17171A);
@@ -78,7 +77,7 @@ class AppColorScheme {
 }
 
 // ══════════════════════════════════════════════════════════════
-// THEME NOTIFIER — persiste em SharedPreferences.
+// THEME NOTIFIER — fonte única de verdade, global, sem árvore.
 // ══════════════════════════════════════════════════════════════
 
 class AppThemeNotifier extends ChangeNotifier {
@@ -92,10 +91,7 @@ class AppThemeNotifier extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       isDark = prefs.getBool(_kDarkKey) ?? false;
       notifyListeners();
-    } catch (_) {
-      // Se as preferências falharem por qualquer razão, mantém o
-      // default e não bloqueia o arranque da app.
-    }
+    } catch (_) {}
   }
 
   void toggleDark() {
@@ -123,16 +119,31 @@ class AppThemeNotifier extends ChangeNotifier {
 
 final AppThemeNotifier appTheme = AppThemeNotifier();
 
-class AppTheme extends InheritedNotifier<AppThemeNotifier> {
-  AppTheme({super.key, required super.child}) : super(notifier: appTheme);
+// ══════════════════════════════════════════════════════════════
+// AppTheme — já NÃO é InheritedNotifier. É só um wrapper estático
+// fino sobre o appTheme global. AppTheme.of(context) devolve sempre
+// o estado atual, direto do ChangeNotifier, sem depender em que
+// ponto da árvore o context se encontra. O parâmetro context fica
+// só por compatibilidade de assinatura com todo o código existente
+// que já chama AppTheme.of(context) — não é usado para lookup.
+// ══════════════════════════════════════════════════════════════
 
-  static AppColorScheme of(BuildContext context) {
-    final n = context.dependOnInheritedWidgetOfExactType<AppTheme>()?.notifier;
-    return AppColorScheme(n?.isDark ?? false);
-  }
+class AppTheme extends StatelessWidget {
+  final Widget child;
+  const AppTheme({super.key, required this.child});
 
-  static bool isIncognito(BuildContext context) {
-    final n = context.dependOnInheritedWidgetOfExactType<AppTheme>()?.notifier;
-    return n?.isIncognito ?? false;
+  static AppColorScheme of(BuildContext context) => AppColorScheme(appTheme.isDark);
+  static bool isIncognito(BuildContext context) => appTheme.isIncognito;
+
+  @override
+  Widget build(BuildContext context) {
+    // AnimatedBuilder escuta o appTheme global e reconstrói este
+    // subtree sempre que toggleDark()/setDark() disparam notify —
+    // é isto que substitui o antigo InheritedNotifier: continua
+    // reativo, mas sem depender de lookup de contexto.
+    return AnimatedBuilder(
+      animation: appTheme,
+      builder: (_, __) => child,
+    );
   }
 }

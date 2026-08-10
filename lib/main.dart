@@ -34,10 +34,6 @@ void main() async {
   runApp(const CraftLabApp());
 }
 
-// ══════════════════════════════════════════════════════════════
-// APP ROOT
-// ══════════════════════════════════════════════════════════════
-
 class CraftLabApp extends StatelessWidget {
   const CraftLabApp({super.key});
 
@@ -81,13 +77,10 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer controlado manualmente via Stack + AnimationController,
-// sem depender do Scaffold.drawer nativo. O AppDrawer fica sempre montado
-// na árvore (nunca é destruído/recriado ao reabrir), só desliza para fora
-// de vista quando fechado — elimina o problema de o context não estar
-// ligado ao AppTheme a tempo no primeiro build de uma reabertura.
-// O body é empurrado para a direita (Transform.translate) em vez de ficar
-// coberto — navegação nativa tipo push, como pedido.
+// ROOT SHELL — drawer manual via Stack + AnimationController.
+// AppDrawer fica sempre montado, só desliza para fora de vista —
+// nunca é destruído/recriado ao reabrir. Body é empurrado
+// (Transform.translate) em vez de coberto — push nativo.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -101,7 +94,6 @@ class _RootShellState extends State<RootShell> with SingleTickerProviderStateMix
     duration: const Duration(milliseconds: 260),
   );
 
-  // A tab inicial ao abrir o app é sempre aitab.
   AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
   bool       _hasMessages = false;
@@ -157,10 +149,6 @@ class _RootShellState extends State<RootShell> with SingleTickerProviderStateMix
     setState(() => _pendingConversationLoad = null);
   }
 
-  /// Chamado pelo AiTab sempre que a IA acaba de criar um documento
-  /// (canvas) nesta conversa. Troca automaticamente para o EditTab,
-  /// já no tipo de editor certo (doc/sheet/slide/whiteboard), e injeta
-  /// o conteúdo.
   void _onCanvasCreated(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
     setState(() {
@@ -280,7 +268,6 @@ class _RootShellState extends State<RootShell> with SingleTickerProviderStateMix
         builder: (_, __) {
           final t = _drawerCtrl.value;
           return Stack(children: [
-            // Body — empurrado para a direita conforme o drawer abre.
             Transform.translate(
               offset: Offset(_drawerWidth * t, 0),
               child: IgnorePointer(
@@ -288,8 +275,6 @@ class _RootShellState extends State<RootShell> with SingleTickerProviderStateMix
                 child: bodyContent,
               ),
             ),
-            // Barrier — escurece o body enquanto o drawer está aberto,
-            // fecha ao toque.
             if (t > 0.01)
               Positioned.fill(
                 child: GestureDetector(
@@ -297,9 +282,6 @@ class _RootShellState extends State<RootShell> with SingleTickerProviderStateMix
                   child: Container(color: s.barrier.withOpacity(0.35 * t)),
                 ),
               ),
-            // Drawer — desliza a partir da esquerda, por cima do body já
-            // deslocado. Construído sempre (mesmo fechado) para nunca ser
-            // recriado do zero a meio de uma animação.
             Transform.translate(
               offset: Offset(_drawerWidth * (t - 1), 0),
               child: SizedBox(
@@ -330,20 +312,12 @@ class _RootShellState extends State<RootShell> with SingleTickerProviderStateMix
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// AI TAB HEADER REFRESH
-// ══════════════════════════════════════════════════════════════
-
 class _AiTabHeaderRefresh extends ChangeNotifier {
   static final _AiTabHeaderRefresh _instance = _AiTabHeaderRefresh._();
   _AiTabHeaderRefresh._();
   static _AiTabHeaderRefresh of(BuildContext context) => _instance;
   void ping() => notifyListeners();
 }
-
-// ══════════════════════════════════════════════════════════════
-// AI TAB HOST
-// ══════════════════════════════════════════════════════════════
 
 class AiTabHost extends StatefulWidget {
   final GlobalKey<AiTabState> aiTabKey;
@@ -392,10 +366,6 @@ class _AiTabHostState extends State<AiTabHost> {
     );
   }
 }
-
-// ══════════════════════════════════════════════════════════════
-// APP HEADER
-// ══════════════════════════════════════════════════════════════
 
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
