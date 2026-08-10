@@ -28,10 +28,13 @@ import 'widgets.dart';
 // ══════════════════════════════════════════════════════════════
 // IDS DE WIDGET SUPORTADOS
 // ══════════════════════════════════════════════════════════════
+// 'widget_sheet' removido — AiSheetWidget descontinuado (Bloco C,
+// item 5). Ver também kAiWidgetsInstructions em aitab.dart, que já
+// instruía a IA a não usar widget_sheet.
 
 const Set<String> kAiWidgetIds = {
   'widget_table', 'widget_code', 'widget_bar', 'widget_pie',
-  'widget_sheet', 'widget_market', 'widget_calendar', 'widget_timer',
+  'widget_market', 'widget_calendar', 'widget_timer',
   'widget_mindmap', 'widget_graph', 'widget_map',
 };
 
@@ -99,7 +102,6 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
     case 'widget_code':     return AiCodeWidget(json: block.json, s: s);
     case 'widget_bar':      return AiBarChartWidget(json: block.json, s: s);
     case 'widget_pie':      return AiPieChartWidget(json: block.json, s: s);
-    case 'widget_sheet':    return AiSheetWidget(json: block.json, s: s);
     case 'widget_market':   return AiMarketWidget(json: block.json, s: s);
     case 'widget_calendar': return AiCalendarWidget(json: block.json, s: s);
     case 'widget_timer':    return AiTimerWidget(json: block.json, s: s);
@@ -527,110 +529,6 @@ class _AiCodeWidgetState extends State<AiCodeWidget> {
       ]),
     );
   }
-}
-
-// ══════════════════════════════════════════════════════════════
-// SHEET
-// ══════════════════════════════════════════════════════════════
-
-class AiSheetWidget extends StatefulWidget {
-  final Map<String, dynamic> json;
-  final AppColorScheme s;
-  const AiSheetWidget({super.key, required this.json, required this.s});
-  @override State<AiSheetWidget> createState() => _AiSheetWidgetState();
-}
-
-class _AiSheetWidgetState extends State<AiSheetWidget> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final lines = (widget.json['lines'] as List?)
-            ?.map((l) => (text: (l is Map ? l['text'] : l).toString(), title: (l is Map && l['title'] == true)))
-            .toList() ??
-        const <({String text, bool title})>[];
-
-    final surface = s.isDark ? const Color(0xFF1A1A1A) : const Color(0xFFFFFEF8);
-    final border = s.isDark ? const Color(0xFF333333) : const Color(0xFFD6D6D6);
-    final textClr = s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF222222);
-
-    return GestureDetector(
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-        margin: EdgeInsets.symmetric(vertical: _expanded ? 0 : 6),
-        width: _expanded ? MediaQuery.of(context).size.width : math.min(MediaQuery.of(context).size.width * 0.92, 640),
-        height: _expanded ? MediaQuery.of(context).size.height : math.min(MediaQuery.of(context).size.height * 0.7, 320),
-        decoration: BoxDecoration(
-          color: surface,
-          border: _expanded ? null : Border.all(color: border),
-          boxShadow: _expanded ? null : [BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 22, offset: const Offset(0, 8))],
-        ),
-        child: Stack(children: [
-          CustomPaint(
-            painter: _SheetGridPainter(lines: lines, textColor: textClr),
-            child: const SizedBox.expand(),
-          ),
-          if (_expanded)
-            Positioned(
-              top: 14, right: 14,
-              child: GestureDetector(
-                onTap: () => setState(() => _expanded = false),
-                child: Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.45), shape: BoxShape.circle),
-                  child: const AppIcon('close.svg', color: Colors.white, size: 18),
-                ),
-              ),
-            ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _SheetGridPainter extends CustomPainter {
-  final List<({String text, bool title})> lines;
-  final Color textColor;
-  _SheetGridPainter({required this.lines, required this.textColor});
-
-  static const double leftPad = 72, topPad = 34, gap = 32;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()..color = const Color(0x295F91FF)..strokeWidth = 1;
-    final marginPaint = Paint()..color = const Color(0x33FF5A5A)..strokeWidth = 1;
-
-    final rowCount = math.max(lines.length + 2, (size.height / gap).ceil());
-    for (int i = 0; i <= rowCount; i++) {
-      final y = i * gap.toDouble();
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-    final marginX = leftPad - 16;
-    canvas.drawLine(Offset(marginX, 0), Offset(marginX, rowCount * gap), marginPaint);
-
-    for (int i = 0; i < lines.length; i++) {
-      final item = lines[i];
-      final y = topPad + i * gap - 10;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: item.text,
-          style: TextStyle(
-            color: textColor,
-            fontSize: item.title ? 15 : 13,
-            fontWeight: item.title ? FontWeight.w700 : FontWeight.normal,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: size.width - leftPad - 20);
-      tp.paint(canvas, Offset(leftPad, y));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SheetGridPainter old) => true;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1325,6 +1223,14 @@ class _MindMapPainter extends CustomPainter {
 // ══════════════════════════════════════════════════════════════
 // MATH GRAPH
 // ══════════════════════════════════════════════════════════════
+// Resolve equações reais (ex: x^2-5x+6=0) além de plotar y=f(x).
+// Deteção: se a expressão contém '=' e o lado esquerdo NÃO é
+// exatamente "y" (ignorando espaços), tratamos como equação a
+// resolver — busca raízes reais no intervalo [xMin, xMax] por
+// varrimento + bisseção sobre f(x) = lado_esq - lado_dir, e
+// mostramos os passos (a função reduzida e as raízes encontradas)
+// numa secção de texto acima do gráfico. Caso contrário, mantém o
+// comportamento antigo (plot puro de y=f(x)).
 
 class AiMathGraphWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -1333,11 +1239,20 @@ class AiMathGraphWidget extends StatefulWidget {
   @override State<AiMathGraphWidget> createState() => _AiMathGraphWidgetState();
 }
 
+class _EquationSolution {
+  final String reducedForm; // ex: "x^2 - 5x + 6 = 0"
+  final List<double> roots;
+  const _EquationSolution({required this.reducedForm, required this.roots});
+}
+
 class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
   late double xMin, xMax, yMin, yMax;
   me.Expression? _expr;
   final me.ContextModel _cm = me.ContextModel();
   final me.Variable _xVar = me.Variable('x');
+
+  bool _isEquation = false;
+  _EquationSolution? _solution;
 
   Offset? _panStart;
   double _panXMin = 0, _panXMax = 0, _panYMin = 0, _panYMax = 0;
@@ -1349,14 +1264,99 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     xMax = (widget.json['xMax'] as num?)?.toDouble() ?? 10;
     yMin = (widget.json['yMin'] as num?)?.toDouble() ?? -5;
     yMax = (widget.json['yMax'] as num?)?.toDouble() ?? 5;
-    final exprStr = (widget.json['expression'] ?? widget.json['expr'] ?? 'sin(x)').toString();
+    final rawExprStr = (widget.json['expression'] ?? widget.json['expr'] ?? 'sin(x)').toString();
+
+    final parsed = _parseAsFunctionOrEquation(rawExprStr);
+    _isEquation = parsed.isEquation;
+    final fnBody = parsed.functionBody;
+
     try {
-      _expr = me.Parser().parse(exprStr);
-    } catch (_) { _expr = null; }
+      _expr = me.Parser().parse(fnBody);
+    } catch (_) {
+      _expr = null;
+    }
+
+    if (_isEquation && _expr != null) {
+      _solution = _solveEquation(rawExprStr, fnBody);
+    }
+
     if (widget.json['yMin'] == null && widget.json['yMax'] == null) _autoY();
   }
 
-  double? _eval(double x) {
+  /// Interpreta a string recebida como "y = f(x)" (plot puro) ou
+  /// "f(x) = g(x)" / "expr = 0" (equação a resolver). Devolve sempre
+  /// um corpo de função avaliável (lado_esq - lado_dir, ou apenas o
+  /// lado direito se o esquerdo for "y").
+  ({bool isEquation, String functionBody}) _parseAsFunctionOrEquation(String raw) {
+    final trimmed = raw.trim();
+    final eqIdx = trimmed.indexOf('=');
+    if (eqIdx == -1) {
+      // Sem '=': é já uma expressão pura tipo "sin(x)" ou "x^2-5x+6".
+      return (isEquation: false, functionBody: trimmed);
+    }
+    final left = trimmed.substring(0, eqIdx).trim();
+    final right = trimmed.substring(eqIdx + 1).trim();
+
+    if (left == 'y' || left == 'f(x)') {
+      // "y = ..." ou "f(x) = ..." → plot puro do lado direito.
+      return (isEquation: false, functionBody: right);
+    }
+
+    // Equação real: reduz para lado_esq - (lado_dir) = 0.
+    final body = right == '0' ? left : '($left) - ($right)';
+    return (isEquation: true, functionBody: body);
+  }
+
+  /// Varre [xMin, xMax] em passos pequenos à procura de mudanças de
+  /// sinal em f(x) = lado_esq - lado_dir, refina cada uma por
+  /// bisseção, e devolve as raízes encontradas (arredondadas e sem
+  /// duplicados próximos).
+  _EquationSolution _solveEquation(String originalRaw, String fnBody) {
+    const steps = 2000;
+    final roots = <double>[];
+    double? prevX, prevY;
+
+    for (int i = 0; i <= steps; i++) {
+      final x = xMin + (i / steps) * (xMax - xMin);
+      final y = _evalRaw(x);
+      if (y == null) { prevX = null; prevY = null; continue; }
+
+      if (prevX != null && prevY != null) {
+        if (prevY == 0) {
+          roots.add(prevX);
+        } else if ((prevY < 0) != (y < 0)) {
+          final r = _bisect(prevX, x, prevY, y);
+          if (r != null) roots.add(r);
+        }
+      }
+      prevX = x; prevY = y;
+    }
+
+    // Remove raízes muito próximas entre si (mesma raiz detetada 2x).
+    roots.sort();
+    final deduped = <double>[];
+    for (final r in roots) {
+      if (deduped.isEmpty || (r - deduped.last).abs() > 1e-4) {
+        deduped.add(double.parse(r.toStringAsFixed(6)));
+      }
+    }
+
+    return _EquationSolution(reducedForm: '$fnBody = 0', roots: deduped);
+  }
+
+  double? _bisect(double a, double b, double fa, double fb) {
+    var lo = a, hi = b, flo = fa;
+    for (int i = 0; i < 60; i++) {
+      final mid = (lo + hi) / 2;
+      final fmid = _evalRaw(mid);
+      if (fmid == null) return null;
+      if (fmid == 0 || (hi - lo).abs() < 1e-9) return mid;
+      if ((flo < 0) != (fmid < 0)) { hi = mid; } else { lo = mid; flo = fmid; }
+    }
+    return (lo + hi) / 2;
+  }
+
+  double? _evalRaw(double x) {
     if (_expr == null) return null;
     try {
       _cm.bindVariable(_xVar, me.Number(x));
@@ -1365,6 +1365,8 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     } catch (_) {}
     return null;
   }
+
+  double? _eval(double x) => _evalRaw(x);
 
   void _autoY() {
     double lo = double.infinity, hi = -double.infinity;
@@ -1380,40 +1382,79 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     }
   }
 
+  String _fmtRoot(double r) {
+    if (r == r.roundToDouble()) return r.toStringAsFixed(0);
+    return r.toStringAsFixed(4).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     return Container(
       constraints: const BoxConstraints(maxWidth: 960),
       margin: const EdgeInsets.symmetric(vertical: 6),
-      child: AspectRatio(
-        aspectRatio: 960 / 540,
-        child: GestureDetector(
-          onScaleStart: (d) {
-            _panStart = d.focalPoint;
-            _panXMin = xMin; _panXMax = xMax; _panYMin = yMin; _panYMax = yMax;
-          },
-          onScaleUpdate: (d) {
-            setState(() {
-              if (d.scale != 1.0) {
-                final cx = (_panXMin + _panXMax) / 2, cy = (_panYMin + _panYMax) / 2;
-                final nxr = (_panXMax - _panXMin) / d.scale, nyr = (_panYMax - _panYMin) / d.scale;
-                xMin = cx - nxr / 2; xMax = cx + nxr / 2; yMin = cy - nyr / 2; yMax = cy + nyr / 2;
-              } else if (_panStart != null) {
-                final box = context.findRenderObject() as RenderBox;
-                final w = box.size.width, h = box.size.height;
-                final dx = d.focalPoint.dx - _panStart!.dx, dy = d.focalPoint.dy - _panStart!.dy;
-                final sx = (_panXMax - _panXMin) / w, sy = (_panYMax - _panYMin) / h;
-                xMin = _panXMin - dx * sx; xMax = _panXMax - dx * sx;
-                yMin = _panYMin + dy * sy; yMax = _panYMax + dy * sy;
-              }
-            });
-          },
-          child: CustomPaint(
-            painter: _MathGraphPainter(xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, eval: _eval, isDark: s.isDark),
-            child: const SizedBox.expand(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isEquation && _solution != null) _buildStepsSection(s),
+          AspectRatio(
+            aspectRatio: 960 / 540,
+            child: GestureDetector(
+              onScaleStart: (d) {
+                _panStart = d.focalPoint;
+                _panXMin = xMin; _panXMax = xMax; _panYMin = yMin; _panYMax = yMax;
+              },
+              onScaleUpdate: (d) {
+                setState(() {
+                  if (d.scale != 1.0) {
+                    final cx = (_panXMin + _panXMax) / 2, cy = (_panYMin + _panYMax) / 2;
+                    final nxr = (_panXMax - _panXMin) / d.scale, nyr = (_panYMax - _panYMin) / d.scale;
+                    xMin = cx - nxr / 2; xMax = cx + nxr / 2; yMin = cy - nyr / 2; yMax = cy + nyr / 2;
+                  } else if (_panStart != null) {
+                    final box = context.findRenderObject() as RenderBox;
+                    final w = box.size.width, h = box.size.height;
+                    final dx = d.focalPoint.dx - _panStart!.dx, dy = d.focalPoint.dy - _panStart!.dy;
+                    final sx = (_panXMax - _panXMin) / w, sy = (_panYMax - _panYMin) / h;
+                    xMin = _panXMin - dx * sx; xMax = _panXMax - dx * sx;
+                    yMin = _panYMin + dy * sy; yMax = _panYMax + dy * sy;
+                  }
+                });
+              },
+              child: CustomPaint(
+                painter: _MathGraphPainter(xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, eval: _eval, isDark: s.isDark, roots: _solution?.roots ?? const []),
+                child: const SizedBox.expand(),
+              ),
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepsSection(AppColorScheme s) {
+    final sol = _solution!;
+    final bg = s.isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF4F4F4);
+    final rootsText = sol.roots.isEmpty
+        ? 'Nenhuma raiz real encontrada no intervalo mostrado.'
+        : sol.roots.length == 1
+            ? 'x = ${_fmtRoot(sol.roots.first)}'
+            : sol.roots.map((r) => 'x = ${_fmtRoot(r)}').join('  ou  ');
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: const BoxDecoration(color: Color(0xFF1C1C1E), borderRadius: BorderRadius.zero),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('PASSOS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF9A9A9A), letterSpacing: 0.6)),
+          const SizedBox(height: 8),
+          Text('Forma reduzida: ${sol.reducedForm}', style: const TextStyle(fontSize: 13.5, color: Color(0xFFE0E0E0), height: 1.5)),
+          const SizedBox(height: 4),
+          Text('Raízes: $rootsText', style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFFE0E0E0), height: 1.5)),
+        ],
       ),
     );
   }
@@ -1423,7 +1464,8 @@ class _MathGraphPainter extends CustomPainter {
   final double xMin, xMax, yMin, yMax;
   final double? Function(double) eval;
   final bool isDark;
-  _MathGraphPainter({required this.xMin, required this.xMax, required this.yMin, required this.yMax, required this.eval, required this.isDark});
+  final List<double> roots;
+  _MathGraphPainter({required this.xMin, required this.xMax, required this.yMin, required this.yMax, required this.eval, required this.isDark, this.roots = const []});
 
   double _mapX(double x, Size size) => (x - xMin) / (xMax - xMin) * size.width;
   double _mapY(double y, Size size) => size.height - (y - yMin) / (yMax - yMin) * size.height;
@@ -1479,11 +1521,26 @@ class _MathGraphPainter extends CustomPainter {
         canvas.drawCircle(points[i], 3.5, Paint()..color = isDark ? const Color(0xFF121212) : const Color(0xFFF4F4F4)..style = PaintingStyle.stroke..strokeWidth = 1.5);
       }
     }
+
+    // Marca as raízes da equação (se houver) sobre o eixo X com um
+    // ponto maior e destaque — distinto dos pontos de amostragem
+    // normais da curva.
+    if (roots.isNotEmpty) {
+      final rootPaint = Paint()..color = const Color(0xFF34D399);
+      final rootStrokePaint = Paint()..color = isDark ? const Color(0xFF121212) : const Color(0xFFF4F4F4)..style = PaintingStyle.stroke..strokeWidth = 2;
+      for (final r in roots) {
+        if (r < xMin || r > xMax) continue;
+        final px = _mapX(r, size);
+        final py = _mapY(0, size);
+        canvas.drawCircle(Offset(px, py), 6, rootPaint);
+        canvas.drawCircle(Offset(px, py), 6, rootStrokePaint);
+      }
+    }
   }
 
   @override
   bool shouldRepaint(covariant _MathGraphPainter old) =>
-      old.xMin != xMin || old.xMax != xMax || old.yMin != yMin || old.yMax != yMax;
+      old.xMin != xMin || old.xMax != xMax || old.yMin != yMin || old.yMax != yMax || old.roots != roots;
 }
 
 // ══════════════════════════════════════════════════════════════

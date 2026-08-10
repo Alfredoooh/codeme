@@ -18,37 +18,40 @@ import 'widgets.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem;
 
 // ══════════════════════════════════════════════════════════════
-// AI MODEL
+// AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning), já
+// mapeados para os providers deepseekFlash/deepseekPro/deepseekReasoning
+// definidos em api_service.dart. Os labels "DeepSeek V4" antigos foram
+// substituídos pelos nomes pedidos: Flash (padrão), Pro, Raciocínio.
 // ══════════════════════════════════════════════════════════════
 
-enum AiModel { deepseekV4, deepseekV4Pro, deepseekR1 }
+enum AiModel { deepseekFlash, deepseekPro, deepseekReasoning }
 
 extension AiModelX on AiModel {
   String get label => const {
-        AiModel.deepseekV4:    'DeepSeek V4',
-        AiModel.deepseekV4Pro: 'DeepSeek V4 Pro',
-        AiModel.deepseekR1:    'DeepSeek R1',
+        AiModel.deepseekFlash:     'DeepSeek Flash',
+        AiModel.deepseekPro:       'DeepSeek Pro',
+        AiModel.deepseekReasoning: 'DeepSeek Raciocínio',
       }[this]!;
 
   String get badge => const {
-        AiModel.deepseekV4:    'Rápido',
-        AiModel.deepseekV4Pro: 'Avançado',
-        AiModel.deepseekR1:    'Raciocínio',
+        AiModel.deepseekFlash:     'Rápido',
+        AiModel.deepseekPro:       'Avançado',
+        AiModel.deepseekReasoning: 'Raciocínio',
       }[this]!;
 
   String get description => const {
-        AiModel.deepseekV4:    'Respostas rápidas para o dia a dia',
-        AiModel.deepseekV4Pro: 'Mais capacidade para tarefas complexas',
-        AiModel.deepseekR1:    'Pensa passo a passo antes de responder',
+        AiModel.deepseekFlash:     'Respostas rápidas para o dia a dia',
+        AiModel.deepseekPro:       'Mais capacidade para tarefas complexas',
+        AiModel.deepseekReasoning: 'Pensa passo a passo antes de responder',
       }[this]!;
 
   ApiProvider get provider => const {
-        AiModel.deepseekV4:    ApiProvider.gemini,
-        AiModel.deepseekV4Pro: ApiProvider.groqVersatile,
-        AiModel.deepseekR1:    ApiProvider.gemini,
+        AiModel.deepseekFlash:     ApiProvider.deepseekFlash,
+        AiModel.deepseekPro:       ApiProvider.deepseekPro,
+        AiModel.deepseekReasoning: ApiProvider.deepseekReasoning,
       }[this]!;
 
-  bool get think => this == AiModel.deepseekR1;
+  bool get think => this == AiModel.deepseekReasoning;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -76,32 +79,49 @@ A aplicação converte tudo automaticamente para uma apresentação visual
 correta — nunca precisas de explicar a notação, apenas escrevê-la.
 
 Quando o utilizador pedir para criares, escreveres ou editares um documento
-de texto, uma folha de cálculo ou uma apresentação, gera o conteúdo e
-embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
+de texto, gera o conteúdo e embrulha-o EXATAMENTE neste formato, no fim da
+tua resposta:
 
 [[canvas:doc:Título do documento||<p>conteúdo em html aqui</p>]]
 
-Para documentos (doc), podes aplicar cor ao texto e destaque (highlight/marcador)
-diretamente no HTML gerado, usando estilos inline no próprio texto, exatamente
-como o editor os interpreta:
+Podes aplicar cor ao texto e destaque (highlight/marcador) diretamente no
+HTML gerado, usando estilos inline no próprio texto, exatamente como o
+editor os interpreta:
 - Cor de texto: <span style="color:#HEXCOR">texto colorido</span>
 - Destaque/marcador: <span style="background-color:#HEXCOR">texto realçado</span>
 Podes combinar ambos no mesmo span quando fizer sentido. Usa cor com intenção —
 por exemplo vermelho para avisos, verde para conclusões positivas, amarelo para
 destacar pontos importantes — e nunca abuses, só onde realmente ajudar a leitura.
 
-Usa "sheet" para folhas de cálculo (conteúdo em JSON de células) e "slide" para
-apresentações (conteúdo em JSON de slides). Nunca mostres este bloco ao
-utilizador como texto explicado — ele é processado automaticamente pela
-aplicação e transformado num cartão de documento navegável.
+Podes também inserir gráficos dentro do documento, no mesmo bloco html,
+usando um elemento especial que a aplicação transforma automaticamente
+num gráfico real (Chart.js). Nunca escrevas um <canvas> à mão — usa em vez
+disso um marcador neste formato exato dentro do html:
+
+<div data-ai-chart='{"type":"bar","data":{"labels":["A","B"],"datasets":[{"label":"Serie","data":[1,2]}]}}'></div>
+
+O JSON dentro de data-ai-chart segue o formato de configuração nativo do
+Chart.js (type, data, options). A aplicação substitui este marcador por um
+gráfico interativo real no documento.
+
+Nunca mostres o bloco [[canvas:...]] ao utilizador como texto explicado —
+ele é processado automaticamente pela aplicação e transformado num cartão
+de documento navegável.
+
+IMPORTANTE: apenas o tipo "doc" (documento de texto corrido) pode ser criado
+ou editado através de [[canvas:...]]. Não existe suporte para criares folhas
+de cálculo ou apresentações — se o utilizador pedir uma folha de cálculo ou
+uma apresentação, explica em texto normal que ainda não consegues criar esse
+tipo de ficheiro diretamente, e oferece uma alternativa em texto ou tabela
+markdown dentro da própria conversa.
 
 IMPORTANTE: blocos de código normais (```dart, ```python, ```js, ```html,
 ```css, etc.) NUNCA devem ser embrulhados em [[canvas:...]] — mesmo que sejam
 uma página HTML completa, um componente, ou um ficheiro inteiro. Blocos de
 código ficam sempre como blocos de código markdown normais, visíveis
 diretamente na conversa, exatamente como qualquer outra resposta técnica.
-Só documentos de texto corrido, folhas de cálculo e apresentações usam o
-formato [[canvas:...]] — nunca código.
+Só documentos de texto corrido usam o formato [[canvas:...]] — nunca código,
+nunca folhas de cálculo, nunca apresentações.
 ''';
 
 const String kAiWidgetsInstructions = '''
@@ -114,7 +134,6 @@ APENAS um objeto JSON válido no corpo do bloco:
 - ```widget_table``` — { "headers": ["Col1","Col2"], "rows": [["a","b"]] }
 - ```widget_bar``` — { "data": [{"label":"Jan","value":10,"unit":"","color":"#6F5AF6"}] }
 - ```widget_pie``` — { "data": [{"label":"A","value":30,"color":"#2F80ED"}] }
-- ```widget_sheet``` — { "lines": [{"text":"Título","title":true},{"text":"linha normal"}] }
 - ```widget_market``` — { "type": "crypto", "symbol": "BTC", "name": "Bitcoin" } ou { "type": "forex", "symbol": "USDEUR" }
 - ```widget_calendar``` — { "events": [{"date":"2026-08-10","name":"Reunião","time":"14:00","color":"#6F5AF6"}] }
 - ```widget_timer``` — { "seconds": 300, "label": "Foco" }
@@ -123,11 +142,12 @@ APENAS um objeto JSON válido no corpo do bloco:
 - ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
 
 Não uses widget_code — blocos de código normais já aparecem automaticamente
-formatados. Usa estes widgets apenas quando acrescentam valor real à resposta
-(dados quantitativos, comparações visuais, localização, tempo), nunca como
-enfeite. Nunca expliques ao utilizador que estás a gerar um bloco widget —
-ele é processado automaticamente e transformado num cartão interativo, sem
-nunca mostrar o JSON cru.
+formatados. Não uses widget_sheet — foi descontinuado. Usa estes widgets
+apenas quando acrescentam valor real à resposta (dados quantitativos,
+comparações visuais, localização, tempo), nunca como enfeite. Nunca
+expliques ao utilizador que estás a gerar um bloco widget — ele é
+processado automaticamente e transformado num cartão interativo, sem nunca
+mostrar o JSON cru.
 ''';
 
 const String kAiWebSearchInstructions = '''
@@ -194,15 +214,27 @@ final RegExp _kExplicitCanvasRe = RegExp(
 /// (``` de qualquer linguagem, incluindo widget_*) nunca são tocados
 /// aqui — ficam no texto para RichAiText tratar (código normal ou
 /// widget interativo).
+///
+/// BLOQUEIO sheet/slide: a IA só é instruída (kAiSystemPrompt) a gerar
+/// "doc". Como defesa adicional caso a IA ignore essa instrução, blocos
+/// [[canvas:sheet:...]] e [[canvas:slide:...]] são descartados aqui —
+/// removidos do texto mas NUNCA transformados em LocalCanvasItem, logo
+/// nunca chegam a slides.html/sheets.html via setContent.
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
   final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
     final kindStr = m.group(1)!;
+
+    // Defesa: a IA nunca deve gerar sheet/slide (kAiSystemPrompt já
+    // não o instrui a isso), mas se o fizer mesmo assim, o bloco é
+    // removido do texto e simplesmente ignorado — nunca vira item.
+    if (kindStr == 'sheet' || kindStr == 'slide') {
+      return '';
+    }
+
     final title = m.group(2)!.trim();
     final content = m.group(3)!;
     final kind = switch (kindStr) {
-      'sheet' => LocalCanvasKind.sheet,
-      'slide' => LocalCanvasKind.slide,
       'whiteboard' => LocalCanvasKind.whiteboard,
       _ => LocalCanvasKind.doc,
     };
@@ -215,6 +247,33 @@ _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
     return '';
   });
   return _CanvasScanResult(cleanText: text.trim(), items: items);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ATTACHED FILES — anexos de uma mensagem ainda não enviada. Bloco D:
+// substitui o comportamento antigo de _onAttachFiles/_onAttachPhotos
+// (que só invocavam o picker e descartavam o resultado) por estado
+// real, guardado em AiTabState._attachedFiles, com bytes prontos para
+// seguir no payload da mensagem quando o utilizador enviar.
+// ══════════════════════════════════════════════════════════════
+
+class AttachedFile {
+  final String id;
+  final String name;
+  final String mimeType;
+  final Uint8List bytes;
+  const AttachedFile({
+    required this.id,
+    required this.name,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  /// Codificação base64 pronta a incluir num payload JSON. O formato
+  /// exato do campo em que isto entra (attachments em ChatMessage,
+  /// ver mais abaixo) é uma estrutura razoável, não confirmada contra
+  /// worker.js — ver nota no prompt.
+  String get base64Data => base64Encode(bytes);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -898,12 +957,29 @@ class AiTabState extends State<AiTab> {
   String   _streamingText = '';
   String?  _streamingThink;
   String?  _conversationId;
-  AiModel  _model        = AiModel.deepseekV4;
+  AiModel  _model        = AiModel.deepseekFlash;
   EditorType? _attachedTool;
   int      _canvasIdSeq  = 0;
 
+  /// Ficheiros/fotos anexados à mensagem que ainda não foi enviada.
+  /// Bloco D: substitui o comportamento antigo (picker chamado e
+  /// resultado descartado) por estado real que segue no payload.
+  final List<AttachedFile> _attachedFiles = [];
+  int _attachedFileIdSeq = 0;
+
+  List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
+
   /// Não-nulo enquanto a IA está a "desenhar" um canvas OU um widget.
   String? _creatingLabel;
+
+  /// Guarda o texto de streaming acumulado até ao momento em que o
+  /// pill "A criar..." apareceu — usado para reconstruir o conteúdo
+  /// já recebido quando o utilizador toca no pill para expandir.
+  String? _creatingSnapshotText;
+
+  /// Controla se o pill "A criar..." está expandido (mostra o processo
+  /// já recebido em vez de só o pill compacto).
+  bool _creatingExpanded = false;
 
   int get canvasCount => _canvases.length;
   bool get widgetsEnabled => _widgetsEnabled;
@@ -974,6 +1050,10 @@ class AiTabState extends State<AiTab> {
       _sending = false;
       _streamingText = '';
       _streamingThink = null;
+      _creatingLabel = null;
+      _creatingSnapshotText = null;
+      _creatingExpanded = false;
+      _attachedFiles.clear();
     });
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
@@ -982,6 +1062,7 @@ class AiTabState extends State<AiTab> {
   }
 
   String _nextCanvasId() => 'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
+  String _nextAttachedFileId() => 'af_${DateTime.now().millisecondsSinceEpoch}_${_attachedFileIdSeq++}';
 
   String get _effectiveSystemPrompt {
     var prompt = kAiSystemPrompt;
@@ -1020,20 +1101,51 @@ class AiTabState extends State<AiTab> {
     _send();
   }
 
+  /// Alterna a expansão do pill "A criar..." — mostra/esconde o texto
+  /// já recebido durante o streaming até ao ponto em que a criação
+  /// começou a ser detetada.
+  void _toggleCreatingExpanded() {
+    setState(() => _creatingExpanded = !_creatingExpanded);
+  }
+
   Future<void> _send() async {
     final t = _ctrl.text.trim();
-    if (t.isEmpty || _sending) return;
+    if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
     final isFirst = _msgs.isEmpty;
-    final userMsg = ChatMessage(role: 'user', content: t);
+
+    // NOTA (Bloco D, item 4 — payload de anexos): o formato exato que
+    // worker.js espera para receber conteúdo de ficheiro dentro de uma
+    // mensagem não foi confirmado (worker.js não foi partilhado nesta
+    // linha de trabalho). A estrutura abaixo (attachments como lista
+    // de {name, mimeType, base64}) é uma suposição razoável, não uma
+    // confirmação — ChatMessage/streamChat têm de ser revistos assim
+    // que o formato real do backend for conhecido.
+    final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
+    final userMsg = ChatMessage(
+      role: 'user',
+      content: t,
+      attachments: pendingAttachments.isEmpty
+          ? null
+          : pendingAttachments
+              .map((f) => {
+                    'name': f.name,
+                    'mimeType': f.mimeType,
+                    'base64': f.base64Data,
+                  })
+              .toList(),
+    );
 
     setState(() {
       _msgs.add(userMsg);
       _ctrl.clear();
       _attachedTool = null;
+      _attachedFiles.clear();
       _sending = true;
       _streamingText = '';
       _streamingThink = null;
       _creatingLabel = null;
+      _creatingSnapshotText = null;
+      _creatingExpanded = false;
     });
     if (isFirst) {
       widget.onFirstMessage();
@@ -1063,10 +1175,24 @@ class AiTabState extends State<AiTab> {
       (event) {
         if (!mounted) return;
         switch (event) {
+          case ChatTitleEvent(title: final title):
+            // Título já vem pronto do worker embutido na stream — usa-o
+            // de imediato para nomear a conversa, sem chamada HTTP extra.
+            if (!_incognito) {
+              _applyGeneratedTitle(title);
+            }
+            break;
           case ChatTokenEvent(text: final text):
             setState(() {
               _streamingText += text;
-              _creatingLabel = _detectOpeningLabel(_streamingText);
+              final newLabel = _detectOpeningLabel(_streamingText);
+              // Ao transitar de "sem label" para "com label", guarda o
+              // snapshot do texto recebido até esse ponto — é isto que
+              // o pill expandido mostra ao ser tocado.
+              if (newLabel != null && _creatingLabel == null) {
+                _creatingSnapshotText = _streamingText;
+              }
+              _creatingLabel = newLabel;
             });
             _scrollToEnd();
             break;
@@ -1085,11 +1211,17 @@ class AiTabState extends State<AiTab> {
               _streamingText = '';
               _streamingThink = null;
               _creatingLabel = null;
+              _creatingSnapshotText = null;
+              _creatingExpanded = false;
             });
             _notifyHeader();
             _scrollToEnd();
             _persistConversation();
-            if (isFirst) _generateTitleInBackground(t);
+            // Fallback: se por algum motivo o worker não injetou
+            // generatedTitle nesta resposta, gera título à moda antiga.
+            if (isFirst && _conversationId == null) {
+              _generateTitleInBackground(t);
+            }
             // Documento criado nesta resposta: abre-o automaticamente
             // no EditTab, sem o utilizador ter de tocar em nada.
             if (scan.items.isNotEmpty) {
@@ -1102,6 +1234,8 @@ class AiTabState extends State<AiTab> {
               _streamingText = '';
               _streamingThink = null;
               _creatingLabel = null;
+              _creatingSnapshotText = null;
+              _creatingExpanded = false;
               _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
             });
             _scrollToEnd();
@@ -1112,6 +1246,8 @@ class AiTabState extends State<AiTab> {
               _streamingText = '';
               _streamingThink = null;
               _creatingLabel = null;
+              _creatingSnapshotText = null;
+              _creatingExpanded = false;
               _msgs.add(const ChatMessage(
                   role: 'assistant',
                   content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
@@ -1128,6 +1264,8 @@ class AiTabState extends State<AiTab> {
           _streamingText = '';
           _streamingThink = null;
           _creatingLabel = null;
+          _creatingSnapshotText = null;
+          _creatingExpanded = false;
           _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
         });
         _scrollToEnd();
@@ -1135,12 +1273,12 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  Future<void> _generateTitleInBackground(String firstMessage) async {
+  /// Aplica um título já pronto (vindo de ChatTitleEvent) à conversa
+  /// atual, criando-a no backend se ainda não existir ou atualizando-a
+  /// se já existir. Substitui o antigo fluxo de generateTitle() HTTP.
+  Future<void> _applyGeneratedTitle(String title) async {
     final token = authController.token;
     if (token == null) return;
-    final title = await AiApiService.generateTitle(token, firstMessage);
-    if (!mounted) return;
-    if (_incognito) return;
     if (_conversationId == null) {
       final created = await ConversationsApiService.create(
         token,
@@ -1153,14 +1291,41 @@ class AiTabState extends State<AiTab> {
         conversationsController.upsertLocal(ConversationItem.fromJson(created));
       }
     } else {
-      await ConversationsApiService.update(token, _conversationId!,
-          title: title, messages: _msgs, canvases: const []);
+      await ConversationsApiService.update(token, _conversationId!, title: title);
+      final existing = conversationsController.items
+          .where((c) => c.id == _conversationId)
+          .toList();
       conversationsController.upsertLocal(ConversationItem(
         id: _conversationId!,
         title: title,
         preview: _msgs.isNotEmpty ? _msgs.last.content : '',
+        pinned: existing.isNotEmpty ? existing.first.pinned : false,
+        archived: existing.isNotEmpty ? existing.first.archived : false,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
       ));
+    }
+  }
+
+  /// Fallback: só é chamado se a stream não tiver injetado
+  /// generatedTitle nesta resposta (worker não devolveu o campo por
+  /// algum motivo). Mantém o comportamento antigo como rede de
+  /// segurança para nunca deixar "Nova conversa" por título.
+  Future<void> _generateTitleInBackground(String firstMessage) async {
+    final token = authController.token;
+    if (token == null) return;
+    final title = await AiApiService.generateTitle(token, firstMessage);
+    if (!mounted) return;
+    if (_incognito) return;
+    if (_conversationId != null) return; // já foi criada via ChatTitleEvent
+    final created = await ConversationsApiService.create(
+      token,
+      title: title,
+      messages: _msgs,
+      canvases: const [],
+    );
+    if (created != null && created['id'] != null) {
+      _conversationId = created['id'].toString();
+      conversationsController.upsertLocal(ConversationItem.fromJson(created));
     }
   }
 
@@ -1209,16 +1374,78 @@ class AiTabState extends State<AiTab> {
     setState(() => _model = model);
   }
 
+  /// Bloco D, item "anexos com conteúdo real": o picker já não
+  /// descarta o resultado — cada ficheiro escolhido vira um
+  /// AttachedFile com bytes lidos, guardado em _attachedFiles.
   void _onAttachFiles() async {
-    await FilePicker.pickFiles(allowMultiple: true);
+    final result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
+    if (result == null || result.files.isEmpty) return;
+    final newFiles = <AttachedFile>[];
+    for (final f in result.files) {
+      final bytes = f.bytes;
+      if (bytes == null) continue; // withData:true deve garantir bytes, mas defende-se de qualquer forma
+      newFiles.add(AttachedFile(
+        id: _nextAttachedFileId(),
+        name: f.name,
+        mimeType: _guessMimeType(f.name, f.extension),
+        bytes: bytes,
+      ));
+    }
+    if (newFiles.isEmpty) return;
+    setState(() => _attachedFiles.addAll(newFiles));
   }
 
   void _onAttachPhotos() async {
-    await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() => _attachedFiles.add(AttachedFile(
+          id: _nextAttachedFileId(),
+          name: picked.name,
+          mimeType: picked.mimeType ?? _guessMimeType(picked.name, null),
+          bytes: bytes,
+        )));
   }
 
   void _onOpenCamera() async {
-    await ImagePicker().pickImage(source: ImageSource.camera);
+    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    setState(() => _attachedFiles.add(AttachedFile(
+          id: _nextAttachedFileId(),
+          name: picked.name,
+          mimeType: picked.mimeType ?? _guessMimeType(picked.name, null),
+          bytes: bytes,
+        )));
+  }
+
+  String _guessMimeType(String name, String? extension) {
+    final ext = (extension ?? name.split('.').last).toLowerCase();
+    const map = {
+      'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+      'gif': 'image/gif', 'webp': 'image/webp',
+      'pdf': 'application/pdf',
+      'txt': 'text/plain', 'md': 'text/markdown',
+      'csv': 'text/csv', 'json': 'application/json',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+    return map[ext] ?? 'application/octet-stream';
+  }
+
+  void _onRemoveAttachedFile(String id) {
+    setState(() => _attachedFiles.removeWhere((f) => f.id == id));
+  }
+
+  void _openAttachedFilesSheet() {
+    showAttachedFilesSheet(
+      context,
+      AppTheme.of(context),
+      files: _attachedFiles,
+      onRemove: _onRemoveAttachedFile,
+    );
   }
 
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
@@ -1286,7 +1513,10 @@ class AiTabState extends State<AiTab> {
           _streamingText = '';
           _streamingThink = null;
           _creatingLabel = null;
+          _creatingSnapshotText = null;
+          _creatingExpanded = false;
           _conversationId = null;
+          _attachedFiles.clear();
         });
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
@@ -1302,7 +1532,10 @@ class AiTabState extends State<AiTab> {
           _streamingText = '';
           _streamingThink = null;
           _creatingLabel = null;
+          _creatingSnapshotText = null;
+          _creatingExpanded = false;
           _conversationId = null;
+          _attachedFiles.clear();
         });
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
@@ -1323,7 +1556,10 @@ class AiTabState extends State<AiTab> {
           _streamingText = '';
           _streamingThink = null;
           _creatingLabel = null;
+          _creatingSnapshotText = null;
+          _creatingExpanded = false;
           _conversationId = null;
+          _attachedFiles.clear();
         });
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
@@ -1436,6 +1672,13 @@ class AiTabState extends State<AiTab> {
                                   ? cleanAiText(_streamingThink!)
                                   : null,
                               creatingLabel: _creatingLabel,
+                              creatingExpanded: _creatingExpanded,
+                              creatingSnapshotText: _creatingSnapshotText != null
+                                  ? cleanAiText(
+                                      _scanForCanvasItems(_creatingSnapshotText!, () => '').cleanText,
+                                    )
+                                  : null,
+                              onToggleCreatingExpanded: _toggleCreatingExpanded,
                               widgetsEnabled: _widgetsEnabled,
                               onEnableWidgets: () => setWidgetsEnabled(true),
                               onSuggestionTap: sendSuggestedMessage,
@@ -1476,6 +1719,7 @@ class AiTabState extends State<AiTab> {
             focusNode: _inputFocus,
             model: _model,
             attachedTool: _attachedTool,
+            attachedFilesCount: _attachedFiles.length,
             incognito: _incognito,
             sending: _sending,
             attachAnchorKey: _attachAnchorKey,
@@ -1485,6 +1729,7 @@ class AiTabState extends State<AiTab> {
             onVoice: _openVoiceSheet,
             onModel: () => _openModelPopup(_modelAnchorKey),
             onClearTool: _onClearTool,
+            onOpenAttachedFiles: _openAttachedFilesSheet,
           ),
           AnimatedContainer(
             duration: const Duration(milliseconds: 180),
@@ -1543,7 +1788,11 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppIcon('ai_tab_filled.svg', color: s.onSurfaceVariant, size: 40, useColorAsset: true),
+                // Bloco D: troca do ícone svg pelo logo da app, mantendo
+                // a saudação de texto por baixo. Caminho do asset assumido
+                // como 'assets/logo.png' — confirmar/ajustar se diferente
+                // no pubspec.yaml do projeto.
+                Image.asset('assets/logo.png', width: 40, height: 40),
                 const SizedBox(height: 14),
                 Text(
                   'Olá, o que vamos criar hoje?',
@@ -1825,6 +2074,9 @@ class _StreamingBubble extends StatelessWidget {
   final String text;
   final String? thinking;
   final String? creatingLabel;
+  final bool creatingExpanded;
+  final String? creatingSnapshotText;
+  final VoidCallback onToggleCreatingExpanded;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
@@ -1833,6 +2085,9 @@ class _StreamingBubble extends StatelessWidget {
     required this.text,
     this.thinking,
     this.creatingLabel,
+    this.creatingExpanded = false,
+    this.creatingSnapshotText,
+    required this.onToggleCreatingExpanded,
     required this.widgetsEnabled,
     required this.onEnableWidgets,
     required this.onSuggestionTap,
@@ -1857,7 +2112,10 @@ class _StreamingBubble extends StatelessWidget {
                           fontStyle: FontStyle.italic,
                           height: 1.4)),
                 ),
-              if (text.isNotEmpty)
+              // Enquanto o pill "A criar..." está ativo, o texto principal
+              // fica escondido por trás do pill — só reaparece (via o
+              // conteúdo já recebido) se o utilizador tocar para expandir.
+              if (creatingLabel == null && text.isNotEmpty)
                 RichAiText(
                   text: text,
                   s: s,
@@ -1866,8 +2124,24 @@ class _StreamingBubble extends StatelessWidget {
                   onSuggestionTap: onSuggestionTap,
                 ),
               if (creatingLabel != null) ...[
-                if (text.isNotEmpty) const SizedBox(height: 10),
-                _CanvasCreatingPill(s: s, label: creatingLabel!),
+                if (creatingExpanded &&
+                    creatingSnapshotText != null &&
+                    creatingSnapshotText!.isNotEmpty) ...[
+                  RichAiText(
+                    text: creatingSnapshotText!,
+                    s: s,
+                    widgetsEnabled: widgetsEnabled,
+                    onEnableWidgets: onEnableWidgets,
+                    onSuggestionTap: onSuggestionTap,
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                _CanvasCreatingPill(
+                  s: s,
+                  label: creatingLabel!,
+                  expanded: creatingExpanded,
+                  onTap: onToggleCreatingExpanded,
+                ),
               ] else if (text.isEmpty)
                 AiSmallDotsLoader(color: s.onSurfaceVariant),
             ],
@@ -1877,23 +2151,42 @@ class _StreamingBubble extends StatelessWidget {
 }
 
 /// Pill "A criar..." — ícone tools.svg + texto com shimmer contínuo.
+/// Tocável: expande/contrai para mostrar o processo já recebido até
+/// ao momento em que a criação do bloco especial começou.
 class _CanvasCreatingPill extends StatelessWidget {
   final AppColorScheme s;
   final String label;
-  const _CanvasCreatingPill({required this.s, required this.label});
+  final bool expanded;
+  final VoidCallback onTap;
+  const _CanvasCreatingPill({
+    required this.s,
+    required this.label,
+    required this.expanded,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppIcon('tools.svg', color: s.primary, size: 15),
-          const SizedBox(width: 8),
-          _ShimmerText(
-            text: label,
-            baseColor: s.primary,
-            highlightColor: s.isDark ? Colors.white : Colors.white,
-          ),
-        ],
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon('tools.svg', color: s.primary, size: 15),
+            const SizedBox(width: 8),
+            _ShimmerText(
+              text: label,
+              baseColor: s.primary,
+              highlightColor: s.isDark ? Colors.white : Colors.white,
+            ),
+            const SizedBox(width: 6),
+            AnimatedRotation(
+              turns: expanded ? 0.5 : 0.0,
+              duration: const Duration(milliseconds: 180),
+              child: AppIcon('chevron_down.svg', color: s.primary, size: 13),
+            ),
+          ],
+        ),
       );
 }
 
@@ -2193,7 +2486,9 @@ class _MessageActionRowState extends State<_MessageActionRow> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SELECT TEXT SHEET
+// SELECT TEXT SHEET — colado às bordas (Bloco D): margin 10→0,
+// borderRadius 28→14 no topo apenas, mesmo padrão dos outros bottom
+// sheets full-width corrigidos neste bloco.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showSelectTextSheet(
@@ -2210,14 +2505,13 @@ Future<void> showSelectTextSheet(
       child: SafeArea(
         top: false,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(ctx).size.height * 0.7,
           ),
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
           decoration: BoxDecoration(
             color: s.floatingSurface,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             boxShadow: s.floatingShadow,
           ),
           child: Column(
@@ -2246,6 +2540,148 @@ Future<void> showSelectTextSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
+// ATTACHED FILES SHEET — novo (Bloco D, item "anexos com conteúdo
+// real"): lista os ficheiros/fotos anexados à mensagem ainda não
+// enviada, com opção de remover cada um antes de enviar.
+// ══════════════════════════════════════════════════════════════
+
+Future<void> showAttachedFilesSheet(
+  BuildContext context,
+  AppColorScheme s, {
+  required List<AttachedFile> files,
+  required ValueChanged<String> onRemove,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setModalState) => Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            decoration: BoxDecoration(
+              color: s.floatingSurface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              boxShadow: s.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: SheetGrabber(s: s)),
+                Row(children: [
+                  AppIcon('file.svg', color: s.onSurface, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Anexos desta mensagem',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                if (files.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text('Sem anexos.',
+                          style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: files.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) {
+                        final f = files[i];
+                        return _AttachedFileRow(
+                          s: s,
+                          file: f,
+                          onRemove: () {
+                            onRemove(f.id);
+                            setModalState(() {});
+                            if (files.length <= 1) Navigator.pop(ctx);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _AttachedFileRow extends StatelessWidget {
+  final AppColorScheme s;
+  final AttachedFile file;
+  final VoidCallback onRemove;
+  const _AttachedFileRow({required this.s, required this.file, required this.onRemove});
+
+  String get _sizeLabel {
+    final kb = file.bytes.length / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
+    return '${(kb / 1024).toStringAsFixed(1)} MB';
+  }
+
+  bool get _isImage => file.mimeType.startsWith('image/');
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: s.hover,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          if (_isImage)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(file.bytes, width: 40, height: 40, fit: BoxFit.cover),
+            )
+          else
+            Container(
+              width: 40, height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primaryContainer.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: AppIcon('file.svg', color: s.onPrimaryContainer, size: 18),
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(file.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
+                Text(_sizeLabel, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              width: 28, height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: s.error.withOpacity(0.12), shape: BoxShape.circle),
+              child: AppIcon('close.svg', color: s.error, size: 14),
+            ),
+          ),
+        ]),
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
 // CHAT INPUT
 // ══════════════════════════════════════════════════════════════
 
@@ -2255,6 +2691,7 @@ class _ChatInput extends StatelessWidget {
   final FocusNode focusNode;
   final AiModel model;
   final EditorType? attachedTool;
+  final int attachedFilesCount;
   final bool incognito;
   final bool sending;
   final GlobalKey attachAnchorKey;
@@ -2264,6 +2701,7 @@ class _ChatInput extends StatelessWidget {
   final VoidCallback onVoice;
   final VoidCallback onModel;
   final VoidCallback onClearTool;
+  final VoidCallback onOpenAttachedFiles;
 
   const _ChatInput({
     required this.s,
@@ -2271,6 +2709,7 @@ class _ChatInput extends StatelessWidget {
     required this.focusNode,
     required this.model,
     required this.attachedTool,
+    required this.attachedFilesCount,
     required this.incognito,
     required this.sending,
     required this.attachAnchorKey,
@@ -2280,6 +2719,7 @@ class _ChatInput extends StatelessWidget {
     required this.onVoice,
     required this.onModel,
     required this.onClearTool,
+    required this.onOpenAttachedFiles,
   });
 
   @override
@@ -2292,21 +2732,42 @@ class _ChatInput extends StatelessWidget {
       ),
     ];
 
+    // Gradiente transparente igual ao _AppHeader do main.dart, mas
+    // invertido: o input vive no fundo do ecrã, por isso a cor "nasce"
+    // em baixo (sólida) e desvanece para cima (transparente) — o
+    // oposto do header, que é sólido em cima e transparente em baixo.
     final inner = Container(
       decoration: BoxDecoration(
-        color: s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
         boxShadow: reducedShadow,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            s.floatingSurface.withOpacity(0.0),
+            s.floatingSurface,
+          ],
+          stops: const [0.0, 0.4],
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (attachedTool != null)
+          if (attachedTool != null || attachedFilesCount > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: _AttachedToolPill(
-                  s: s, type: attachedTool!, onClear: onClearTool),
+              child: Wrap(
+                spacing: 8, runSpacing: 8,
+                children: [
+                  if (attachedTool != null)
+                    _AttachedToolPill(
+                        s: s, type: attachedTool!, onClear: onClearTool),
+                  if (attachedFilesCount > 0)
+                    _AttachedFilesPill(
+                        s: s, count: attachedFilesCount, onTap: onOpenAttachedFiles),
+                ],
+              ),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -2314,13 +2775,13 @@ class _ChatInput extends StatelessWidget {
               controller: ctrl,
               focusNode: focusNode,
               minLines: 1, maxLines: 6,
-              style: TextStyle(fontSize: 15, color: s.onSurface),
+              style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15).copyWith(color: s.onSurface),
               cursorColor: s.primary,
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
                 hintText: incognito ? 'Mensagem incógnita...' : 'Conversar com Claude...',
-                hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                hintStyle: TextStyle(fontSize: 16.5, letterSpacing: 0.15, color: s.onSurfaceVariant),
                 contentPadding: EdgeInsets.zero,
               ),
               onSubmitted: (_) => onSend(),
@@ -2337,7 +2798,9 @@ class _ChatInput extends StatelessWidget {
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: s.hover,
+                      // Tom azul leve, consistente com send.svg — antes
+                      // era s.hover (neutro).
+                      color: s.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
                     child: AppIcon('add.svg', color: s.onSurface, size: 22),
@@ -2378,9 +2841,9 @@ class _ChatInput extends StatelessWidget {
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: s.isDark
-                          ? const Color(0xFF3A3A3C)
-                          : const Color(0xFFE5E5EA),
+                      // Tom azul leve, substitui as cores neutras fixas
+                      // anteriores (0xFF3A3A3C dark / 0xFFE5E5EA light).
+                      color: s.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
                     child: AppIcon('record.svg',
@@ -2476,6 +2939,41 @@ class _AttachedToolPill extends StatelessWidget {
                 child: AppIcon('close.svg',
                     color: s.onPrimaryContainer, size: 9),
               ),
+            ],
+          ),
+        ),
+      );
+}
+
+/// Pill que aparece no bottom bar quando há ficheiros/fotos anexados
+/// à mensagem ainda não enviada. Ao tocar, abre o modal que lista os
+/// anexos (showAttachedFilesSheet). Só aparece quando o conjunto de
+/// anexos não está vazio (item pedido no Bloco D).
+class _AttachedFilesPill extends StatelessWidget {
+  final AppColorScheme s;
+  final int count;
+  final VoidCallback onTap;
+  const _AttachedFilesPill({required this.s, required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: s.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon('file.svg', color: s.primary, size: 13),
+              const SizedBox(width: 4),
+              Text('$count anexo${count == 1 ? '' : 's'}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: s.primary)),
             ],
           ),
         ),
@@ -2594,7 +3092,8 @@ void showAttachPopup(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CANVAS SHEET
+// CANVAS SHEET — colado às bordas (Bloco D): margin 10→0,
+// borderRadius 28→14 no topo apenas.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showCanvasSheet(
@@ -2612,12 +3111,11 @@ Future<void> showCanvasSheet(
       child: SafeArea(
         top: false,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           decoration: BoxDecoration(
             color: s.floatingSurface,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             boxShadow: s.floatingShadow,
           ),
           child: Column(
@@ -2731,7 +3229,12 @@ class _CanvasCardState extends State<_CanvasCard> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// VOICE RECORD SHEET
+// VOICE RECORD SHEET — colado às bordas (Bloco D): margin 10→0,
+// borderRadius 28→14 no topo apenas. Não estava explicitamente
+// nomeado na lista de modais a corrigir, mas é o mesmo tipo de
+// bottom sheet full-width que os outros três (showAiEditModal,
+// showSelectTextSheet, showCanvasSheet) — corrigido para manter
+// consistência visual entre todos os modais deste tipo.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -2807,11 +3310,10 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
       child: SafeArea(
         top: false,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
           decoration: BoxDecoration(
             color: s.floatingSurface,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             boxShadow: s.floatingShadow,
           ),
           child: Column(

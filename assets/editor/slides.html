@@ -634,6 +634,16 @@
     }
   }
 
+  function setContentFromAi() {
+    // A apresentação nunca é escrita pela IA — só pelo utilizador
+    // (edição direta na toolbar/slide) ou por setContent() vindo do
+    // toolbar nativo ao trocar de documento guardado. Este ponto de
+    // entrada existe como segunda camada de defesa a par do bloqueio
+    // já feito do lado Dart (edittab.dart não invoca setContent para
+    // LocalCanvasKind.slide vindo da IA); não faz nada mesmo se chamado.
+    return false;
+  }
+
   function getSlideCount() {
     return slides.length;
   }
@@ -652,6 +662,7 @@
     setSelectedFontSize: setSelectedFontSize,
     getContent: getContent,
     setContent: setContent,
+    setContentFromAi: setContentFromAi,
     getSlideCount: getSlideCount
   };
 

@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
 <title>Documento</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   * {
     box-sizing: border-box;
@@ -143,7 +144,8 @@
     display: none;
   }
   .doc-shape-wrap.shape-selected .resize-handle,
-  .doc-img-wrap.img-selected .resize-handle {
+  .doc-img-wrap.img-selected .resize-handle,
+  .doc-chart-wrap.chart-selected .resize-handle {
     display: block;
   }
   .doc-img-wrap {
@@ -159,6 +161,25 @@
     border-radius: 2px;
   }
   .doc-img-wrap.img-selected img {
+    outline: 2px solid #2F7BF6;
+    outline-offset: 2px;
+  }
+
+  /* ── Gráficos inseridos (Chart.js) ── */
+  .doc-chart-wrap {
+    position: relative;
+    display: block;
+    margin: 10px 0;
+    width: 480px;
+    height: 300px;
+    max-width: 100%;
+  }
+  .doc-chart-wrap canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .doc-chart-wrap.chart-selected {
     outline: 2px solid #2F7BF6;
     outline-offset: 2px;
   }
@@ -186,8 +207,11 @@
   var saveTimeout = null;
   var isRebalancing = false;
   var nextShapeId = 0;
+  var nextChartId = 0;
   var selectedShapeEl = null;
   var selectedImgEl = null;
+  var selectedChartEl = null;
+  var chartInstances = {}; // chartId -> instância Chart.js viva
 
   function ajustarZoom() {
     var margem = 24;
@@ -443,12 +467,21 @@
       .join('<div class="page-break-marker"></div>');
   }
 
+  function destruirTodosOsCharts() {
+    Object.keys(chartInstances).forEach(function (id) {
+      try { chartInstances[id].destroy(); } catch (e) {}
+    });
+    chartInstances = {};
+  }
+
   function setContent(html) {
+    destruirTodosOsCharts();
     folhas.forEach(function (f) { f.pageEl.remove(); });
     folhas = [];
     nextFolhaId = 0;
     selectedShapeEl = null;
     selectedImgEl = null;
+    selectedChartEl = null;
 
     var parts = (html || '').split('<div class="page-break-marker"></div>');
     var htmls = parts.length ? parts : ['<p><br></p>'];
@@ -459,6 +492,7 @@
     });
 
     reativarHandlersDeFormasEImagens();
+    reidratarGraficos();
     reequilibrarDocumento();
   }
 
@@ -664,6 +698,97 @@
     handleInput();
   }
 
+  // ── Gráficos (Chart.js) ───────────────────────────────────────
+  // A IA (ou o utilizador via toolbar) insere um gráfico passando um
+  // objeto de configuração no formato nativo do Chart.js:
+  //   { type: 'bar', data: {...}, options: {...} }
+  // A config fica gravada no atributo data-chart-config do wrapper
+  // (JSON escapado em HTML) para que setContent() consiga reidratar
+  // o Chart.js depois de um reload — sem isto o canvas ficaria em
+  // branco ao reabrir o documento, porque um <canvas> por si só não
+  // guarda o desenho no innerHTML.
+
+  function escaparParaAtributo(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function desescaparDeAtributo(str) {
+    var textarea = document.createElement('textarea');
+    textarea.innerHTML = str;
+    return textarea.value;
+  }
+
+  function insertChart(chartConfigJson) {
+    focarSePreciso();
+    var id = 'chart_' + (nextChartId++);
+    var configStr = typeof chartConfigJson === 'string' ? chartConfigJson : JSON.stringify(chartConfigJson);
+
+    var html = '<div class="doc-chart-wrap" data-chart-id="' + id + '" data-chart-config="' +
+      escaparParaAtributo(configStr) + '" contenteditable="false">' +
+      '<canvas></canvas>' +
+      '<span class="resize-handle"></span>' +
+      '</div><p><br></p>';
+
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+
+    setTimeout(function () {
+      var wrap = document.querySelector('.doc-chart-wrap[data-chart-id="' + id + '"]');
+      if (wrap) inicializarChartNoWrapper(wrap, id, configStr);
+      reativarHandlersDeFormasEImagens();
+    }, 30);
+  }
+
+  function inicializarChartNoWrapper(wrapEl, id, configStr) {
+    var canvas = wrapEl.querySelector('canvas');
+    if (!canvas || typeof Chart === 'undefined') return;
+    var config;
+    try {
+      config = JSON.parse(configStr);
+    } catch (e) {
+      return;
+    }
+    if (chartInstances[id]) {
+      try { chartInstances[id].destroy(); } catch (e) {}
+    }
+    try {
+      chartInstances[id] = new Chart(canvas.getContext('2d'), config);
+    } catch (e) {
+      // config inválida vinda da IA — não bloqueia o resto do documento
+    }
+  }
+
+  function reidratarGraficos() {
+    var wraps = document.querySelectorAll('.doc-chart-wrap[data-chart-id]');
+    wraps.forEach(function (wrap) {
+      var id = wrap.getAttribute('data-chart-id');
+      var configAttr = wrap.getAttribute('data-chart-config');
+      if (!configAttr) return;
+      var configStr = desescaparDeAtributo(configAttr);
+      var numericPart = id.replace('chart_', '');
+      var numeric = parseInt(numericPart, 10);
+      if (!isNaN(numeric) && numeric >= nextChartId) nextChartId = numeric + 1;
+      inicializarChartNoWrapper(wrap, id, configStr);
+    });
+  }
+
+  function deleteSelectedChart() {
+    if (!selectedChartEl) return;
+    var id = selectedChartEl.getAttribute('data-chart-id');
+    if (id && chartInstances[id]) {
+      try { chartInstances[id].destroy(); } catch (e) {}
+      delete chartInstances[id];
+    }
+    selectedChartEl.remove();
+    selectedChartEl = null;
+    handleInput();
+  }
+
   function deselecionarTudo() {
     if (selectedShapeEl) {
       selectedShapeEl.classList.remove('shape-selected');
@@ -673,12 +798,17 @@
       selectedImgEl.classList.remove('img-selected');
       selectedImgEl = null;
     }
+    if (selectedChartEl) {
+      selectedChartEl.classList.remove('chart-selected');
+      selectedChartEl = null;
+    }
   }
 
   function aoClicarNoConteudo(evento) {
     var alvo = evento.target;
     var shapeWrap = alvo.closest ? alvo.closest('.doc-shape-wrap') : null;
     var imgWrap = alvo.closest ? alvo.closest('.doc-img-wrap') : null;
+    var chartWrap = alvo.closest ? alvo.closest('.doc-chart-wrap') : null;
 
     if (shapeWrap) {
       evento.preventDefault();
@@ -700,6 +830,16 @@
       }
       return;
     }
+    if (chartWrap) {
+      evento.preventDefault();
+      deselecionarTudo();
+      selectedChartEl = chartWrap;
+      chartWrap.classList.add('chart-selected');
+      if (window.AndroidBridge && window.AndroidBridge.onChartSelected) {
+        window.AndroidBridge.onChartSelected(chartWrap.getAttribute('data-chart-id'));
+      }
+      return;
+    }
     deselecionarTudo();
   }
 
@@ -715,9 +855,11 @@
       var startX = 0, startY = 0, startW = 0, startH = 0;
       var wrapEl = null;
       var bodyEl = null;
+      var isChart = false;
+      var chartIdParaRedimensionar = null;
 
       function pegarWrap() {
-        return handle.closest('.doc-shape-wrap') || handle.closest('.doc-img-wrap');
+        return handle.closest('.doc-shape-wrap') || handle.closest('.doc-img-wrap') || handle.closest('.doc-chart-wrap');
       }
 
       function posClient(evento) {
@@ -732,7 +874,13 @@
         evento.stopPropagation();
         wrapEl = pegarWrap();
         if (!wrapEl) return;
-        bodyEl = wrapEl.querySelector('[data-shape-body]') || wrapEl.querySelector('img');
+        isChart = wrapEl.classList.contains('doc-chart-wrap');
+        if (isChart) {
+          bodyEl = wrapEl;
+          chartIdParaRedimensionar = wrapEl.getAttribute('data-chart-id');
+        } else {
+          bodyEl = wrapEl.querySelector('[data-shape-body]') || wrapEl.querySelector('img');
+        }
         if (!bodyEl) return;
         arrastando = true;
         var pos = posClient(evento);
@@ -754,11 +902,17 @@
         if (bodyEl.tagName !== 'IMG' || true) {
           bodyEl.style.height = novaAltura + 'px';
         }
+        if (isChart && chartIdParaRedimensionar && chartInstances[chartIdParaRedimensionar]) {
+          try { chartInstances[chartIdParaRedimensionar].resize(); } catch (e) {}
+        }
       }
 
       function aoTerminar() {
         if (!arrastando) return;
         arrastando = false;
+        if (isChart && chartIdParaRedimensionar && chartInstances[chartIdParaRedimensionar]) {
+          try { chartInstances[chartIdParaRedimensionar].resize(); } catch (e) {}
+        }
         agendarGravacao();
       }
 
@@ -801,9 +955,11 @@
     insertImageAtCursor: insertImageAtCursor,
     insertLink: insertLink,
     insertShape: insertShape,
+    insertChart: insertChart,
     setSelectedShapeColor: setSelectedShapeColor,
     deleteSelectedShape: deleteSelectedShape,
     deleteSelectedImage: deleteSelectedImage,
+    deleteSelectedChart: deleteSelectedChart,
     setPageOrientation: setPageOrientation,
     getContent: getContent,
     setContent: setContent

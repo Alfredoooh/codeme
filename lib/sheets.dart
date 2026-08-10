@@ -6,6 +6,9 @@ import 'widgets.dart';
 // ══════════════════════════════════════════════════════════════
 // BASE BOTTOM SHEET
 // ══════════════════════════════════════════════════════════════
+// CONFIRMADO (Bloco D): já está colado às bordas — sem margin,
+// borderRadius só no topo (12), consistente com o padrão pedido.
+// Nada alterado aqui.
 
 Future<T?> showCraftBottomSheet<T>({
   required BuildContext context,

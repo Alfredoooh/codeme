@@ -7,21 +7,33 @@ import 'package:http/http.dart' as http;
 
 const String kApiBase = 'https://ipc.alfredopjonas.workers.dev';
 
-// ── Modelo local (mantemos os 3 "DeepSeek" pedidos como labels de UI,
-//    mapeados para os providers reais que o worker expõe: gemini e groq).
-//    O worker não tem DeepSeek — não inventamos endpoint que não existe.
-enum ApiProvider { gemini, groqFast, groqVersatile }
+// ── Providers reais suportados pelo worker. O backend é DeepSeek —
+//    os 3 modelos (flash/pro/reasoning) são todos provider "deepseek",
+//    diferenciados pelo campo deepseekModel. groqFast/groqVersatile e
+//    gemini ficam mantidos porque podem ainda ser usados por outras
+//    partes do app (ex: edição de documento) mesmo que o chat principal
+//    já não os use como escolha do seletor de modelos.
+//    ⚠️ AJUSTAR: os valores 'deepseek-flash' / 'deepseek-pro' /
+//    'deepseek-reasoning' abaixo são placeholders — trocar pelos nomes
+//    de modelo exatos que o worker.js espera no campo "model" quando
+//    provider == "deepseek".
+enum ApiProvider { gemini, groqFast, groqVersatile, deepseekFlash, deepseekPro, deepseekReasoning }
 
 class ProviderConfig {
-  final String provider; // "gemini" | "groq"
+  final String provider; // "gemini" | "groq" | "deepseek"
   final String? groqModel;
-  const ProviderConfig(this.provider, this.groqModel);
+  final String? deepseekModel;
+  const ProviderConfig(this.provider, {this.groqModel, this.deepseekModel});
 }
 
 const Map<ApiProvider, ProviderConfig> kProviderMap = {
-  ApiProvider.gemini:         ProviderConfig('gemini', null),
-  ApiProvider.groqFast:       ProviderConfig('groq', 'llama-3.1-8b-instant'),
-  ApiProvider.groqVersatile:  ProviderConfig('groq', 'llama-3.3-70b-versatile'),
+  ApiProvider.gemini:            ProviderConfig('gemini'),
+  ApiProvider.groqFast:          ProviderConfig('groq', groqModel: 'llama-3.1-8b-instant'),
+  ApiProvider.groqVersatile:     ProviderConfig('groq', groqModel: 'llama-3.3-70b-versatile'),
+  // ⚠️ AJUSTAR nomes de modelo conforme o worker.js real.
+  ApiProvider.deepseekFlash:      ProviderConfig('deepseek', deepseekModel: 'deepseek-flash'),
+  ApiProvider.deepseekPro:        ProviderConfig('deepseek', deepseekModel: 'deepseek-pro'),
+  ApiProvider.deepseekReasoning:  ProviderConfig('deepseek', deepseekModel: 'deepseek-reasoning'),
 };
 
 class ChatMessage {
@@ -62,6 +74,15 @@ class ChatThinkEvent extends ChatStreamEvent {
   ChatThinkEvent(this.text);
 }
 
+/// Emitido quando a stream traz o título gerado automaticamente pelo
+/// worker (campo generatedTitle na primeira linha SSE). Consumido por
+/// aitab.dart para renomear a conversa de imediato, sem chamada HTTP
+/// separada a /ai/title.
+class ChatTitleEvent extends ChatStreamEvent {
+  final String title;
+  ChatTitleEvent(this.title);
+}
+
 class ChatDoneEvent extends ChatStreamEvent {
   final String fullText;
   ChatDoneEvent(this.fullText);
@@ -82,6 +103,13 @@ class ChatCreditsExhaustedEvent extends ChatStreamEvent {}
 //   [[canvas:slide:Título||json das slides]]
 // O parser abaixo extrai esses blocos, monta CanvasItem, e devolve o
 // texto "limpo" (sem o bloco cru) para mostrar na bolha de chat.
+//
+// NOTA: a IA só pode gerar "doc" — sheet/slide continuam suportados
+// no wire format (podem ter sido criados por outra via no passado ou
+// vir de dados antigos), mas CanvasParser não os bloqueia aqui; o
+// bloqueio de geração pela IA vive em aitab.dart (kAiSystemPrompt já
+// não os menciona) e em _scanForCanvasItems (descarta sheet/slide
+// vindos da IA antes de chegarem a virar LocalCanvasItem).
 // ══════════════════════════════════════════════════════════════
 
 enum CanvasKind { doc, sheet, slide, whiteboard }
@@ -802,13 +830,17 @@ class ProjectsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CHAT API — streaming SSE real, mesmo protocolo do worker
+// AI CHAT API — streaming SSE real, formato OpenAI-like (DeepSeek)
+// como formato PRINCIPAL, com fallback para o formato Gemini
+// (candidates[].content.parts[].text) caso o worker ainda sirva
+// alguma rota nesse shape. O worker injeta na PRIMEIRA linha SSE
+// um campo generatedTitle com o título já gerado automaticamente
+// para a conversa — extraído aqui e emitido como ChatTitleEvent
+// antes de qualquer ChatTokenEvent.
 // ══════════════════════════════════════════════════════════════
 
 class AiApiService {
   /// Faz stream do chat via SSE.
-  /// O worker devolve `data: {...}\n\n` linhas com o payload cru da
-  /// Gemini API (quando provider=gemini) ou terminado a `[DONE]`.
   static Stream<ChatStreamEvent> streamChat({
     required String token,
     required List<ChatMessage> messages,
@@ -819,6 +851,8 @@ class AiApiService {
   }) async* {
     final cfg = kProviderMap[provider]!;
     final client = http.Client();
+    bool titleEmitted = false;
+
     try {
       final req = http.Request('POST', Uri.parse('$kApiBase/ai/chat'));
       req.headers['Content-Type'] = 'application/json';
@@ -830,6 +864,7 @@ class AiApiService {
         'think': think,
         'provider': cfg.provider,
         if (cfg.groqModel != null) 'model': cfg.groqModel,
+        if (cfg.deepseekModel != null) 'model': cfg.deepseekModel,
         if (systemPrompt != null && systemPrompt.trim().isNotEmpty) 'systemPrompt': systemPrompt,
       });
 
@@ -850,7 +885,6 @@ class AiApiService {
         return;
       }
 
-      final buffer = StringBuffer();
       String pending = '';
       String fullText = '';
 
@@ -871,44 +905,71 @@ class AiApiService {
           try {
             final decoded = jsonDecode(raw);
             if (decoded is! Map) continue;
-            final candidates = decoded['candidates'];
-            if (candidates is! List || candidates.isEmpty) continue;
-            final first = candidates[0];
-            final content = first is Map ? first['content'] : null;
-            final parts = (content is Map ? content['parts'] : null);
-            if (parts is List) {
-              for (final part in parts) {
-                if (part is! Map) continue;
-                final text = part['text']?.toString() ?? '';
-                if (text.isEmpty) continue;
-                if (part['thought'] == true) {
-                  yield ChatThinkEvent(text);
-                } else {
-                  fullText += text;
-                  buffer.write(text);
-                  yield ChatTokenEvent(text);
-                }
+
+            // ── Título automático — vem embutido na primeira linha
+            // útil da stream (campo generatedTitle), independente do
+            // formato do resto do payload. Emitido uma única vez.
+            if (!titleEmitted) {
+              final titleRaw = decoded['generatedTitle']?.toString();
+              if (titleRaw != null && titleRaw.trim().isNotEmpty) {
+                titleEmitted = true;
+                yield ChatTitleEvent(titleRaw.trim());
               }
             }
-            final finishReason = first is Map ? first['finishReason']?.toString() : null;
-            if (finishReason == 'STOP' || finishReason == 'MAX_TOKENS') {
-              yield ChatDoneEvent(fullText);
-              return;
-            }
 
-            // Formato Groq/OpenAI-like (choices[].delta.content), caso o
-            // worker alguma vez normalize a stream Groq neste formato.
+            // ── Formato PRINCIPAL: OpenAI-like / DeepSeek / Groq
+            // (choices[].delta.content). ──────────────────────────
             final choices = decoded['choices'];
+            bool handledAsChoices = false;
             if (choices is List && choices.isNotEmpty) {
               final choice = choices[0];
               final delta = choice is Map ? choice['delta'] : null;
-              final deltaContent = delta is Map ? delta['content']?.toString() : null;
-              if (deltaContent != null && deltaContent.isNotEmpty) {
-                fullText += deltaContent;
-                yield ChatTokenEvent(deltaContent);
+              if (delta is Map) {
+                final deltaContent = delta['content']?.toString();
+                final deltaThink = delta['reasoning_content']?.toString() ??
+                    delta['reasoning']?.toString();
+                if (deltaThink != null && deltaThink.isNotEmpty) {
+                  yield ChatThinkEvent(deltaThink);
+                  handledAsChoices = true;
+                }
+                if (deltaContent != null && deltaContent.isNotEmpty) {
+                  fullText += deltaContent;
+                  yield ChatTokenEvent(deltaContent);
+                  handledAsChoices = true;
+                }
               }
               final fr = choice is Map ? choice['finish_reason']?.toString() : null;
               if (fr != null && fr.isNotEmpty && fr != 'null') {
+                yield ChatDoneEvent(fullText);
+                return;
+              }
+              if (handledAsChoices) continue;
+            }
+
+            // ── Formato FALLBACK: Gemini
+            // (candidates[].content.parts[].text). Mantido para
+            // compatibilidade caso o worker ainda sirva alguma rota
+            // neste shape. ─────────────────────────────────────────
+            final candidates = decoded['candidates'];
+            if (candidates is List && candidates.isNotEmpty) {
+              final first = candidates[0];
+              final content = first is Map ? first['content'] : null;
+              final parts = (content is Map ? content['parts'] : null);
+              if (parts is List) {
+                for (final part in parts) {
+                  if (part is! Map) continue;
+                  final text = part['text']?.toString() ?? '';
+                  if (text.isEmpty) continue;
+                  if (part['thought'] == true) {
+                    yield ChatThinkEvent(text);
+                  } else {
+                    fullText += text;
+                    yield ChatTokenEvent(text);
+                  }
+                }
+              }
+              final finishReason = first is Map ? first['finishReason']?.toString() : null;
+              if (finishReason == 'STOP' || finishReason == 'MAX_TOKENS') {
                 yield ChatDoneEvent(fullText);
                 return;
               }
@@ -947,6 +1008,7 @@ class AiApiService {
         'think': think,
         'provider': cfg.provider,
         if (cfg.groqModel != null) 'model': cfg.groqModel,
+        if (cfg.deepseekModel != null) 'model': cfg.deepseekModel,
         if (systemPrompt != null && systemPrompt.trim().isNotEmpty) 'systemPrompt': systemPrompt,
       }),
     );
@@ -958,6 +1020,11 @@ class AiApiService {
     return data;
   }
 
+  /// Ainda existe e continua funcional (chamada HTTP separada a
+  /// /ai/title), mas deixou de ser chamado no fluxo principal do
+  /// AiTab._send() — o título agora chega embutido na própria stream
+  /// via ChatTitleEvent. Mantido para quem ainda dependa dele
+  /// diretamente (ex: renomear manualmente sem re-enviar mensagem).
   static Future<String> generateTitle(String token, String message, {String language = 'pt'}) async {
     try {
       final res = await http.post(

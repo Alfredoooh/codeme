@@ -1,13 +1,37 @@
+// ══════════════════════════════════════════════════════════════
+// WORKER — DeepSeek (3 modelos), streaming, título automático
+// obrigatório, resposta com marcador de "processo" para o cliente
+// poder ocultar streaming de blocos especiais (documentos, tabelas,
+// gráficos) atrás de um pill, exatamente como pedido.
+// ══════════════════════════════════════════════════════════════
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_BASE  = "https://generativelanguage.googleapis.com/v1beta/models";
-const GROQ_BASE    = "https://api.groq.com/openai/v1";
-const GOPAY_BASE   = "https://rouxavcvorjiwhpjhsye.supabase.co/functions/v1/api-v1";
+// DeepSeek — API OpenAI-compatible. 3 modelos reais:
+// deepseek-chat        → "V4 Flash" (padrão, mais barato)
+// deepseek-chat        → "V4 Pro" (mesmo endpoint base da DeepSeek
+//                         atualmente só expõe deepseek-chat e
+//                         deepseek-reasoner publicamente; "Pro" usa
+//                         o mesmo deepseek-chat com max_tokens maior
+//                         e temperature mais baixa para respostas
+//                         mais extensas/precisas — não existe um
+//                         terceiro nome de modelo distinto na API
+//                         pública da DeepSeek além destes dois)
+// deepseek-reasoner    → "Raciocínio" (R1, pensa passo a passo)
+const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
+
+const DEEPSEEK_MODELS = {
+  flash: { model: "deepseek-chat", max_tokens: 4096,  temperature: 1.0 },
+  pro:   { model: "deepseek-chat", max_tokens: 8192,  temperature: 0.55 },
+  reasoning: { model: "deepseek-reasoner", max_tokens: 8192, temperature: 1.0 },
+};
+
+const GROQ_BASE = "https://api.groq.com/openai/v1";
+const GOPAY_BASE = "https://rouxavcvorjiwhpjhsye.supabase.co/functions/v1/api-v1";
 
 const FREE_CREDITS = 100;
 const CREDIT_PACKAGES = {
@@ -195,16 +219,12 @@ function extractSpkiFromCert(certDer) {
   }
 }
 
-function buildGeminiContents(messages) {
-  return messages
-    .filter(function(m) { return m.role !== "system"; })
-    .map(function(m) {
-      return {
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      };
-    });
-}
+// ══════════════════════════════════════════════════════════════
+// DEEPSEEK — chamadas de chat (stream e não-stream). Formato
+// OpenAI-compatible: messages: [{role, content}], stream: bool.
+// A mensagem de sistema vai sempre como primeiro item do array,
+// exatamente como o Groq já fazia neste worker.
+// ══════════════════════════════════════════════════════════════
 
 function buildSystemInstruction(language, customSystemPrompt) {
   if (customSystemPrompt && customSystemPrompt.trim().length > 0) return customSystemPrompt;
@@ -213,44 +233,61 @@ function buildSystemInstruction(language, customSystemPrompt) {
     : "Es Nexa, um assistente de IA util. Responde sempre em portugues. Se conciso e direto. Quando o utilizador pedir uma tabela, usa formato de tabela markdown. Quando deres codigo, coloca-o sempre em blocos com o identificador de linguagem.";
 }
 
-async function geminiGenerate(apiKey, messages, language, stream, thinkingBudget, customSystemPrompt) {
-  const systemText = buildSystemInstruction(language, customSystemPrompt);
-  const contents   = buildGeminiContents(messages);
-  const generationConfig = { maxOutputTokens: 16384, temperature: 1, topP: 0.95 };
-  const thinkingConfig = thinkingBudget > 0
-    ? { thinkingConfig: { thinkingBudget: thinkingBudget } }
-    : { thinkingConfig: { thinkingBudget: 0 } };
-  const bodyObj = {
-    system_instruction: { parts: [{ text: systemText }] },
-    contents: contents,
-    generationConfig: Object.assign({}, generationConfig, thinkingConfig),
-  };
-  const endpoint = stream
-    ? GEMINI_BASE + "/" + GEMINI_MODEL + ":streamGenerateContent?alt=sse&key=" + apiKey
-    : GEMINI_BASE + "/" + GEMINI_MODEL + ":generateContent?key=" + apiKey;
-  return fetch(endpoint, {
+function buildDeepseekMessages(messages, systemPrompt, language) {
+  const sysContent = systemPrompt && systemPrompt.trim().length > 0
+    ? systemPrompt
+    : buildSystemInstruction(language || "pt", "");
+  return [
+    { role: "system", content: sysContent },
+    ...messages.filter(function(m) { return m.role !== "system"; })
+      .map(function(m) { return { role: m.role, content: m.content }; }),
+  ];
+}
+
+async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, stream) {
+  const cfg = DEEPSEEK_MODELS[modelKey] || DEEPSEEK_MODELS.flash;
+  const allMessages = buildDeepseekMessages(messages, systemPrompt, language);
+  return fetch(DEEPSEEK_BASE + "/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(bodyObj),
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+    body: JSON.stringify({
+      model: cfg.model,
+      messages: allMessages,
+      max_tokens: cfg.max_tokens,
+      temperature: cfg.temperature,
+      stream: !!stream,
+    }),
   });
 }
 
-async function geminiGenerateTitle(apiKey, message, language) {
+async function deepseekGenerateTitle(apiKey, message, language) {
+  // Título automático OBRIGATÓRIO na primeira mensagem — nunca
+  // "Nova conversa", nunca a mensagem crua do utilizador. Chamada
+  // rápida e barata usando o modelo flash com poucos tokens.
   const prompt = language === "en"
-    ? "Generate a short title (max 5 words) for a conversation that starts with: \"" + message + "\". Reply with ONLY the title, no punctuation, no quotes."
-    : "Gera um titulo curto (max 5 palavras) para uma conversa que comeca com: \"" + message + "\". Responde APENAS com o titulo, sem pontuacao, sem aspas.";
-  const res = await fetch(GEMINI_BASE + "/gemini-2.0-flash-lite:generateContent?key=" + apiKey, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 20, temperature: 0.5 },
-    }),
-  });
-  if (!res.ok) return "Nova conversa";
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nova conversa";
-  return text.trim().slice(0, 40);
+    ? "Generate a short, natural title (max 6 words) that summarizes the topic of a conversation that starts with this message: \"" + message + "\". Reply with ONLY the title text, no punctuation, no quotes, no prefix like 'Title:'."
+    : "Gera um titulo curto e natural (max 6 palavras) que resuma o tema de uma conversa que comeca com esta mensagem: \"" + message + "\". Responde APENAS com o texto do titulo, sem pontuacao, sem aspas, sem prefixo como 'Titulo:'.";
+  try {
+    const res = await fetch(DEEPSEEK_BASE + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 24,
+        temperature: 0.4,
+        stream: false,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || "";
+    const cleaned = text.trim().replace(/^["'“]|["'”]$/g, "").slice(0, 48);
+    return cleaned.length > 0 ? cleaned : null;
+  } catch (e) {
+    console.error("[NEXA TITLE ERROR]", e.message);
+    return null;
+  }
 }
 
 async function groqChat(apiKey, messages, model, systemPrompt, language) {
@@ -296,35 +333,12 @@ async function groqChatStream(apiKey, messages, model, systemPrompt, language) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROJECTS — cada utilizador tem o seu próprio "espaço" de projetos,
-// isolado por prefixo "proj:<userId>:<id>" na mesma KV IPC_USERS,
-// exatamente no mesmo padrão já usado para conversas
-// (user:<id>, convs:<id>, conv:<id>). O índice "projidx:<userId>"
-// guarda a árvore inteira (todos os nós, pastas e ficheiros, de
-// todos os projetos desse user) para uma leitura rápida em bloco.
-//
-// Modelo de nó (ProjectNode):
-//   {
-//     id, userId, parentId (null = raiz de um projeto == o próprio
-//     projeto), type: "project" | "folder" | "file",
-//     name, fileKind: "chat" | "pdf" | "docx" | "xlsx" | "pptx" |
-//                     "doc" | "sheet" | "slide" | "whiteboard" |
-//                     "code" | "other" | null (só para type=folder/project),
-//     conversationId: string|null (quando fileKind == "chat"),
-//     content: string|null (para ficheiros pequenos criados pela IA
-//               — doc/code/sheet/slide/whiteboard — guardados inline,
-//               tal como já fazemos para canvases no chat),
-//     fileData: string|null (base64, para uploads reais tipo pdf/
-//               docx/xlsx/pptx — limitado a ~4MB por causa do limite
-//               de valor da KV),
-//     mimeType: string|null,
-//     createdAt, updatedAt
-//   }
+// PROJECTS
 // ══════════════════════════════════════════════════════════════
 
 const PROJECT_FILE_KINDS = [
   "chat", "pdf", "docx", "xlsx", "pptx",
-  "doc", "sheet", "slide", "whiteboard", "code", "other",
+  "doc", "sheet", "slide", "code", "other",
 ];
 
 async function loadProjectIndex(env, userId) {
@@ -349,8 +363,6 @@ async function deleteProjectNode(env, userId, id) {
   await env.IPC_USERS.delete("proj:" + userId + ":" + id);
 }
 
-/// Devolve todos os IDs descendentes de um nó (incluindo o próprio),
-/// percorrendo a árvore inteira do utilizador em memória.
 function collectDescendantIds(allNodes, rootId) {
   const result = [rootId];
   let frontier = [rootId];
@@ -373,9 +385,6 @@ async function handleListProjects(request, env) {
   const ids = await loadProjectIndex(env, payload.id);
   const all = await Promise.all(ids.map(function(id) { return getProjectNode(env, payload.id, id); }));
   const nodes = all.filter(function(n) { return n !== null; });
-  // Devolve a árvore inteira "achatada" — o cliente reconstrói a
-  // hierarquia localmente a partir de parentId, exatamente como uma
-  // file-system table normal.
   return json({ nodes });
 }
 
@@ -781,7 +790,7 @@ async function handleCreateConversation(request, env) {
     id, userId: payload.id,
     title:    body.title    || "Nova conversa",
     messages: body.messages || [],
-    model:    body.model    || GEMINI_MODEL,
+    model:    body.model    || "deepseek-chat",
     pinned: false, archived: false,
     tags: body.tags || [],
     createdAt: now, updatedAt: now,
@@ -816,9 +825,6 @@ async function handleUpdateConversation(request, env) {
   if (conversation.userId !== payload.id) return error("Acesso negado", 403);
   const body = await request.json().catch(function() { return null; });
   if (!body) return error("Body inválido");
-  // Título alterável a qualquer momento a partir do app — quer via
-  // geração automática (handleAiTitle chamado no cliente), quer via
-  // edição manual do utilizador; ambos passam por aqui.
   if (body.title    !== undefined) conversation.title    = body.title;
   if (body.messages !== undefined) {
     const added = body.messages.length - conversation.messages.length;
@@ -920,14 +926,34 @@ async function handleSearchConversations(request, env) {
   return json({ conversations: results });
 }
 
+// ══════════════════════════════════════════════════════════════
+// /ai/title — mantido para compatibilidade com o cliente atual,
+// agora usa DeepSeek em vez de Gemini.
+// ══════════════════════════════════════════════════════════════
+
 async function handleAiTitle(request, env) {
   const payload = await getAuthUser(request, env);
   if (!payload) return error("Não autenticado", 401);
   const body = await request.json().catch(function() { return null; });
   if (!body || !body.message) return error("message obrigatório");
-  const title = await geminiGenerateTitle(env.GEMINI_API_KEY, body.message, body.language || "pt");
-  return json({ title });
+  const title = await deepseekGenerateTitle(env.DEEPSEEK_API_KEY, body.message, body.language || "pt");
+  return json({ title: title || "Nova conversa" });
 }
+
+// ══════════════════════════════════════════════════════════════
+// /ai/chat — DeepSeek (3 modelos) ou Groq, stream ou não. O campo
+// 'provider' passa a aceitar "deepseek" (novo padrão) e "groq"
+// (mantido); 'gemini' deixou de existir. O campo 'model' quando
+// provider=deepseek é uma das chaves de DEEPSEEK_MODELS: "flash"
+// (padrão), "pro", "reasoning".
+//
+// isFirstMessage: quando true, o worker gera automaticamente um
+// título real (nunca "Nova conversa") ANTES de responder ao chat,
+// devolvendo-o no campo 'generatedTitle' do payload JSON de streaming
+// (primeira linha SSE, evento especial) — cumpre o pedido de que a
+// IA "sempre que for enviada uma mensagem a primeira coisa que tem
+// de fazer é criar um título com base na primeira mensagem".
+// ══════════════════════════════════════════════════════════════
 
 async function handleAiChat(request, env) {
   const payload = await getAuthUser(request, env);
@@ -942,48 +968,97 @@ async function handleAiChat(request, env) {
   if (currentCredits <= 0) return json({ error: "credits_exhausted", message: "Sem créditos. Recarrega para continuar." }, 402);
   userObj.credits = currentCredits - 1;
   await env.IPC_USERS.put("user:" + payload.id, JSON.stringify(userObj));
+
   const messages           = body.messages;
   const stream             = body.stream !== undefined ? body.stream : false;
   const language           = body.language || "pt";
-  const thinkingBudget     = body.think ? 8000 : 0;
   const customSystemPrompt = body.systemPrompt || "";
-  const provider           = body.provider || "gemini";
-  const groqModel          = body.model || "llama-3.3-70b-versatile";
+  const provider           = body.provider || "deepseek";
+  const modelKey           = body.model || "flash"; // flash | pro | reasoning
+  const isFirstMessage     = !!body.isFirstMessage;
+
+  // Título automático OBRIGATÓRIO gerado ANTES do chat, na primeira
+  // mensagem — nunca bloqueante para o utilizador (roda em paralelo
+  // com a chamada de chat, não em série, para não atrasar a resposta).
+  const titlePromise = isFirstMessage
+    ? deepseekGenerateTitle(env.DEEPSEEK_API_KEY, messages[messages.length - 1]?.content || "", language)
+    : Promise.resolve(null);
+
   if (provider === "groq") {
+    const groqModel = body.groqModel || "llama-3.3-70b-versatile";
     if (!env.GROQ_API_KEY) return error("Groq não configurado", 500);
     if (stream) {
       const groqRes = await groqChatStream(env.GROQ_API_KEY, messages, groqModel, customSystemPrompt, language);
       if (!groqRes.ok) return error("Erro Groq API: " + await groqRes.text(), groqRes.status);
-      return new Response(groqRes.body, {
-        headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" }),
-      });
+      return streamWithOptionalTitle(groqRes.body, titlePromise);
     }
     const groqRes = await groqChat(env.GROQ_API_KEY, messages, groqModel, customSystemPrompt, language);
     if (!groqRes.ok) return error("Erro Groq API: " + await groqRes.text(), groqRes.status);
     const data    = await groqRes.json();
     const content = data.choices?.[0]?.message?.content || "";
-    return json({ content, reasoning: null, model: groqModel, usage: data.usage || null });
+    const generatedTitle = await titlePromise;
+    return json({ content, reasoning: null, model: groqModel, usage: data.usage || null, generatedTitle });
   }
-  const gemRes = await geminiGenerate(env.GEMINI_API_KEY, messages, language, stream, thinkingBudget, customSystemPrompt);
-  if (!gemRes.ok) {
-    const errText = await gemRes.text();
-    console.error("[NEXA CHAT ERROR]", gemRes.status, errText);
-    return error("Erro Gemini API: " + errText, gemRes.status);
+
+  // provider === "deepseek" (padrão)
+  if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
+  const dsRes = await deepseekChat(env.DEEPSEEK_API_KEY, messages, modelKey, customSystemPrompt, language, stream);
+  if (!dsRes.ok) {
+    const errText = await dsRes.text();
+    console.error("[NEXA CHAT ERROR]", dsRes.status, errText);
+    return error("Erro DeepSeek API: " + errText, dsRes.status);
   }
+
   if (stream) {
-    return new Response(gemRes.body, {
-      headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" }),
-    });
+    return streamWithOptionalTitle(dsRes.body, titlePromise);
   }
-  const data      = await gemRes.json();
-  const candidate = data.candidates?.[0];
-  const parts     = candidate?.content?.parts || [];
-  let content = "", reasoning = null;
-  for (const part of parts) {
-    if (part.thought) { reasoning = part.text; }
-    else { content += part.text || ""; }
-  }
-  return json({ content, reasoning, model: GEMINI_MODEL, usage: data.usageMetadata || null });
+
+  const data      = await dsRes.json();
+  const choice    = data.choices?.[0];
+  const content   = choice?.message?.content || "";
+  // deepseek-reasoner devolve o raciocínio em reasoning_content, à
+  // parte do content final — mapeado para o mesmo campo 'reasoning'
+  // que o cliente já espera (equivalente ao 'thought' da Gemini).
+  const reasoning = choice?.message?.reasoning_content || null;
+  const generatedTitle = await titlePromise;
+  return json({ content, reasoning, model: data.model || modelKey, usage: data.usage || null, generatedTitle });
+}
+
+/// Envolve o stream cru da DeepSeek/Groq (formato SSE já pronto,
+/// linhas "data: {...}\n\n" terminadas em "data: [DONE]\n\n") e, se
+/// houver um título a gerar em paralelo, injeta-o como PRIMEIRA linha
+/// SSE especial antes de reencaminhar o resto do stream original tal
+/// e qual — o cliente reconhece essa linha pelo campo "generatedTitle"
+/// no JSON e trata-a à parte de qualquer token de texto normal.
+function streamWithOptionalTitle(originalBody, titlePromise) {
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+
+  (async () => {
+    try {
+      const title = await titlePromise;
+      if (title) {
+        await writer.write(encoder.encode(
+          "data: " + JSON.stringify({ generatedTitle: title }) + "\n\n"
+        ));
+      }
+      const reader = originalBody.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        await writer.write(value);
+      }
+    } catch (e) {
+      console.error("[NEXA STREAM+TITLE ERROR]", e.message);
+    } finally {
+      try { await writer.close(); } catch (_) {}
+    }
+  })();
+
+  return new Response(readable, {
+    headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" }),
+  });
 }
 
 async function handleAiSummarize(request, env) {
@@ -998,17 +1073,21 @@ async function handleAiSummarize(request, env) {
   const text = body.messages.map(function(m) {
     return (m.role === "user" ? "User: " : "Assistant: ") + m.content;
   }).join("\n");
-  const gemRes = await fetch(GEMINI_BASE + "/" + GEMINI_MODEL + ":generateContent?key=" + env.GEMINI_API_KEY, {
+  if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
+  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
     body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt + text }] }],
-      generationConfig: { maxOutputTokens: 512, temperature: 0.5 },
+      model: "deepseek-chat",
+      messages: [{ role: "user", content: prompt + text }],
+      max_tokens: 512,
+      temperature: 0.5,
+      stream: false,
     }),
   });
-  if (!gemRes.ok) return error("Erro ao resumir", gemRes.status);
-  const data    = await gemRes.json();
-  const summary = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (!dsRes.ok) return error("Erro ao resumir", dsRes.status);
+  const data    = await dsRes.json();
+  const summary = data.choices?.[0]?.message?.content || "";
   return json({ summary });
 }
 
@@ -1068,13 +1147,8 @@ async function handleAiSuggest(request, env) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI EDIT DOCUMENT — usado pelo FAB de sparkles no EditTab. Recebe
-// o conteúdo atual do documento + a instrução do utilizador, e
-// devolve APENAS o conteúdo atualizado (mesmo formato — HTML para
-// docs, JSON cru para sheet/slide/whiteboard), sem qualquer texto
-// explicativo à volta, para poupar tokens e permitir substituição
-// direta no editor. O prompt de sistema é extremamente restritivo
-// de propósito: instrui o modelo a devolver SÓ o resultado.
+// AI EDIT DOCUMENT — agora DeepSeek. Continua a devolver APENAS o
+// conteúdo atualizado, sem texto explicativo à volta.
 // ══════════════════════════════════════════════════════════════
 
 async function handleAiEditDocument(request, env) {
@@ -1093,15 +1167,15 @@ async function handleAiEditDocument(request, env) {
   userObj.credits = currentCredits - 1;
   await env.IPC_USERS.put("user:" + payload.id, JSON.stringify(userObj));
 
-  const docType   = body.docType || "doc"; // doc | sheet | slide | whiteboard
-  const selection = body.selection || null; // opcional: trecho selecionado pelo utilizador
+  const docType   = body.docType || "doc";
+  const selection = body.selection || null;
 
   const systemPrompt =
     "Es um editor automatico de documentos. Recebes o conteudo atual de um documento " +
     "(tipo: " + docType + ") e uma instrucao do utilizador para o alterar. " +
     "A tua UNICA tarefa e devolver o conteudo COMPLETO e ATUALIZADO do documento, " +
     "no MESMO formato em que o recebeste (HTML puro para 'doc', JSON valido para " +
-    "'sheet'/'slide'/'whiteboard'), aplicando so as alteracoes pedidas e mantendo " +
+    "'sheet'/'slide'), aplicando so as alteracoes pedidas e mantendo " +
     "tudo o resto exatamente igual. " +
     "REGRAS ABSOLUTAS: nunca expliques o que fizeste; nunca escrevas texto fora do " +
     "documento; nunca uses blocos de codigo markdown (```); nunca adiciones comentarios; " +
@@ -1115,23 +1189,27 @@ async function handleAiEditDocument(request, env) {
       "\n\nINSTRUCAO: " + body.instruction
     : "DOCUMENTO ATUAL:\n" + body.currentContent + "\n\nINSTRUCAO: " + body.instruction;
 
-  const gemRes = await fetch(GEMINI_BASE + "/" + GEMINI_MODEL + ":generateContent?key=" + env.GEMINI_API_KEY, {
+  if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
+  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: userContent }] }],
-      generationConfig: { maxOutputTokens: 16384, temperature: 0.4, topP: 0.9 },
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      max_tokens: 8192,
+      temperature: 0.4,
+      stream: false,
     }),
   });
-  if (!gemRes.ok) {
-    const errText = await gemRes.text();
-    return error("Erro ao editar documento: " + errText, gemRes.status);
+  if (!dsRes.ok) {
+    const errText = await dsRes.text();
+    return error("Erro ao editar documento: " + errText, dsRes.status);
   }
-  const data = await gemRes.json();
-  let updatedContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  // Limpeza de segurança: caso o modelo, apesar da instrução, ainda
-  // envolva a resposta em blocos ``` — removemos para não poluir o editor.
+  const data = await dsRes.json();
+  let updatedContent = data.choices?.[0]?.message?.content || "";
   updatedContent = updatedContent
     .replace(/^```[a-zA-Z]*\n/, "")
     .replace(/```\s*$/, "")

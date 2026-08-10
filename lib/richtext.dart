@@ -395,9 +395,9 @@ class MathInline extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
       margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: s.hover,
-        borderRadius: BorderRadius.circular(10),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.zero,
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -774,6 +774,11 @@ class _RichTextBlockParser {
   /// :emoji: shortcodes em spans — usado tanto pelo texto normal
   /// como pelas células de tabela.
   static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 14.5}) {
+    // Cor neutra para links/texto formatado, em vez de s.primary
+    // (azul) — branco levemente acinzentado no dark, cinza-escuro
+    // no light. Ver Bloco C, item 1.
+    final linkColor = s.isDark ? const Color(0xFFE0E0E0) : const Color(0xFF3A3A3A);
+
     // Substitui emoji shortcodes primeiro (não interfere com o resto).
     var processed = raw;
     kEmojiShortcodes.forEach((code, emoji) {
@@ -804,9 +809,9 @@ class _RichTextBlockParser {
         spans.add(TextSpan(
           text: m.group(10)!,
           style: TextStyle(
-            color: s.primary,
+            color: linkColor,
             decoration: TextDecoration.underline,
-            decorationColor: s.primary,
+            decorationColor: linkColor,
           ),
         ));
       } else if (token.startsWith('***')) {
@@ -876,8 +881,9 @@ class _AiTable extends StatelessWidget {
     final header = rows.first;
     final body = rows.length > 1 ? rows.sublist(1) : <List<String>>[];
 
+    // Bordas retas — sem raio (Bloco C, item 4).
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.zero,
       child: Table(
         border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
         columnWidths: {

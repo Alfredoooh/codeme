@@ -97,12 +97,45 @@
   .cell[data-bold="1"] { font-weight: 700; }
   .cell[data-italic="1"] { font-style: italic; }
   .cell[data-underline="1"] { text-decoration: underline; }
+
+  /* ── Rodapé "+ Adicionar linhas" ── */
+  #addRowsBar {
+    position: sticky;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 10px 0;
+    background: #FFFFFF;
+    border-top: 1px solid #E8EAED;
+  }
+  #addRowsBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: #F1F3F4;
+    color: #2F7BF6;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #addRowsBtn:active {
+    background: #E4E6E8;
+  }
 </style>
 </head>
 <body>
 
 <div id="gridScroll">
   <table id="gridTable"></table>
+  <div id="addRowsBar">
+    <button id="addRowsBtn" type="button">+ Adicionar 50 linhas</button>
+  </div>
 </div>
 
 <script>
@@ -110,9 +143,10 @@
   'use strict';
 
   var COLS = 26;
-  var ROWS = 1000;
+  var ROWS = 150;
 
   var gridTable = document.getElementById('gridTable');
+  var addRowsBtn = document.getElementById('addRowsBtn');
   var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align, color, fill }
   var selectedCellKey = null;
   var saveTimeout = null;
@@ -151,30 +185,33 @@
     var fragmento = document.createDocumentFragment();
 
     for (var r = 0; r < ROWS; r++) {
-      var tr = document.createElement('tr');
-      var rowHeader = document.createElement('th');
-      rowHeader.className = 'row-header';
-      rowHeader.textContent = String(r + 1);
-      tr.appendChild(rowHeader);
-
-      for (var cc = 0; cc < COLS; cc++) {
-        var td = document.createElement('td');
-        td.className = 'cell';
-        td.setAttribute('contenteditable', 'true');
-        td.setAttribute('data-key', cellKey(cc, r));
-        tr.appendChild(td);
-      }
-      fragmento.appendChild(tr);
+      fragmento.appendChild(criarLinhaEl(r));
     }
     tbody.appendChild(fragmento);
     gridTable.appendChild(tbody);
 
     // Delegação de eventos num único listener no tbody em vez de
-    // 26.000 listeners individuais — essencial para não travar o
-    // WebView com 1000 linhas × 26 colunas.
+    // um listener por célula — essencial para não travar o WebView.
     tbody.addEventListener('focusin', aoFocar);
     tbody.addEventListener('focusout', aoDesfocar);
     tbody.addEventListener('input', aoEditar);
+  }
+
+  function criarLinhaEl(r) {
+    var tr = document.createElement('tr');
+    var rowHeader = document.createElement('th');
+    rowHeader.className = 'row-header';
+    rowHeader.textContent = String(r + 1);
+    tr.appendChild(rowHeader);
+
+    for (var cc = 0; cc < COLS; cc++) {
+      var td = document.createElement('td');
+      td.className = 'cell';
+      td.setAttribute('contenteditable', 'true');
+      td.setAttribute('data-key', cellKey(cc, r));
+      tr.appendChild(td);
+    }
+    return tr;
   }
 
   function aoFocar(evento) {
@@ -324,6 +361,22 @@
     agendarGravacao();
   }
 
+  function addMoreRows(quantidade) {
+    // Adiciona N linhas de uma vez ao fim da grid — usado pelo botão
+    // "+ Adicionar linhas" e exposto também ao Dart, para não obrigar
+    // 50 chamadas individuais a insertRowBelow() (que reconstrói
+    // data-keys a cada chamada e seria lento em lote).
+    var n = Math.max(1, Math.min(500, quantidade || 50));
+    var tbody = gridTable.querySelector('tbody');
+    var fragmento = document.createDocumentFragment();
+    for (var i = 0; i < n; i++) {
+      fragmento.appendChild(criarLinhaEl(ROWS + i));
+    }
+    tbody.appendChild(fragmento);
+    ROWS += n;
+    agendarGravacao();
+  }
+
   function renumerarLinhas() {
     var tbody = gridTable.querySelector('tbody');
     var linhas = tbody.children;
@@ -388,20 +441,33 @@
     }
   }
 
+  function setContentFromAi() {
+    // A folha de cálculo nunca é escrita pela IA — só pelo utilizador
+    // (input direto na grid) ou pelo toolbar nativo via setContent().
+    // Este ponto de entrada existe apenas como segunda camada de defesa
+    // a par do bloqueio já feito do lado Dart (edittab.dart não invoca
+    // setContent para LocalCanvasKind.sheet vindo da IA); mesmo que
+    // algum caminho futuro tente chamar isto diretamente, não faz nada.
+    return false;
+  }
+
   window.editorApi = {
     applyFormat: applyFormat,
     setCellAlign: setCellAlign,
     setCellColor: setCellColor,
     setCellFill: setCellFill,
     insertRowBelow: insertRowBelow,
+    addMoreRows: addMoreRows,
     applyFormula: applyFormula,
     scrollToCell: scrollParaCelula,
     getContent: getContent,
-    setContent: setContent
+    setContent: setContent,
+    setContentFromAi: setContentFromAi
   };
 
   function iniciar() {
     construirGrid();
+    addRowsBtn.addEventListener('click', function () { addMoreRows(50); });
 
     var conteudoInicial = '';
     if (window.AndroidBridge && window.AndroidBridge.loadDocument) {

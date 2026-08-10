@@ -370,6 +370,10 @@ class _AiEditFabState extends State<_AiEditFab> {
 }
 
 // ── Modal de input do FAB de sparkles ─────────────────────────────
+// Bordas retas/coladas (Bloco D): margin 10→0, borderRadius 28→14,
+// e cantos curvos só no topo (bottom sheet colado às bordas laterais
+// e inferior da tela, como o padrão de showCraftBottomSheet em
+// sheets.dart — que já estava correto e serviu de referência aqui).
 
 Future<String?> showAiEditModal(
   BuildContext context,
@@ -388,11 +392,10 @@ Future<String?> showAiEditModal(
         child: SafeArea(
           top: false,
           child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             decoration: BoxDecoration(
               color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               boxShadow: s.floatingShadow,
             ),
             child: Column(
@@ -510,6 +513,9 @@ class _EditTypeButtonState extends State<EditTypeButton>
       final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
       final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - 220 - 12);
 
+      // NOTA (Bloco D): popup pequeno ancorado ao botão de tipo de
+      // editor no header — não é bottom sheet full-width. circular(28)
+      // mantido de propósito, conforme a distinção pedida.
       return Stack(children: [
         Positioned.fill(
           child: GestureDetector(
