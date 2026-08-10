@@ -25,25 +25,12 @@ class AppIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (asset.toLowerCase().endsWith('.png')) {
-      return Image.asset(
-        'assets/icons/png/$asset',
-        width: size,
-        height: size,
-        filterQuality: FilterQuality.medium,
-      );
-    }
-
-    final path = useColorAsset
-        ? 'assets/icons/svg_color/$asset'
-        : 'assets/icons/svg/$asset';
-
+    final normalized = asset.replaceAll(RegExp(r'\.(png|svg)$', caseSensitive: false), '.svg');
     return SvgPicture.asset(
-      path,
+      'assets/icons/svg/$normalized',
       width: size,
       height: size,
-      colorFilter:
-          useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
+      colorFilter: useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
     );
   }
 }
@@ -54,10 +41,11 @@ class EditorTypeIcon extends StatelessWidget {
   const EditorTypeIcon(this.asset, {super.key, this.size = 20});
 
   @override
-  Widget build(BuildContext context) => Image.asset(
-        'assets/icons/png/$asset',
-        width: size, height: size,
-        filterQuality: FilterQuality.medium,
+  Widget build(BuildContext context) => AppIcon(
+        asset,
+        size: size,
+        color: Colors.white,
+        useColorAsset: true,
       );
 }
 

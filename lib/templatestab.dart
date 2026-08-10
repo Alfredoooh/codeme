@@ -1,6 +1,6 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
+import 'widgets.dart';
 
 // ══════════════════════════════════════════════════════════════
 // TEMPLATES TAB
@@ -38,8 +38,7 @@ class TemplatesTab extends StatelessWidget {
       Expanded(
         child: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(CupertinoIcons.doc_text,
-                size: 48, color: s.onSurfaceVariant.withOpacity(0.35)),
+            AppIcon('doc_text.svg', size: 48, color: s.onSurfaceVariant.withOpacity(0.35)),
             const SizedBox(height: 12),
             Text('Sem templates ainda',
                 style: TextStyle(fontSize: 15, color: s.onSurfaceVariant)),

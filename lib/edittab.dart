@@ -25,11 +25,11 @@ extension EditorTypeX on EditorType {
         EditorType.whiteboard: 'Quadro branco',
       }[this]!;
 
-  String get pngAsset => const {
-        EditorType.docs:       'doc.png',
-        EditorType.sheets:     'sheet.png',
-        EditorType.slides:     'slide.png',
-        EditorType.whiteboard: 'whiteboard.png',
+  String get svgAsset => const {
+        EditorType.docs:       'doc.svg',
+        EditorType.sheets:     'sheet.svg',
+        EditorType.slides:     'slide.svg',
+        EditorType.whiteboard: 'whiteboard.svg',
       }[this]!;
 
   String get htmlAsset => const {
@@ -623,7 +623,7 @@ class _TypeOptionState extends State<_TypeOption> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            EditorTypeIcon(widget.type.pngAsset, size: 18),
+            EditorTypeIcon(widget.type.svgAsset, size: 18),
             const SizedBox(width: 10),
             Text(widget.type.label,
                 style: TextStyle(

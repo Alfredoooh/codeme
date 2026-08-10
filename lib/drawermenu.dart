@@ -208,18 +208,32 @@ class _AppDrawerState extends State<AppDrawer> {
   void initState() {
     super.initState();
     conversationsController.addListener(_onConvsChanged);
-    if (conversationsController.items.isEmpty && !conversationsController.loading) {
-      conversationsController.load();
-    }
+    authController.addListener(_onAuthChanged);
+    _syncConversations();
   }
 
   @override
   void dispose() {
     conversationsController.removeListener(_onConvsChanged);
+    authController.removeListener(_onAuthChanged);
     super.dispose();
   }
 
   void _onConvsChanged() { if (mounted) setState(() {}); }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    _syncConversations();
+    setState(() {});
+  }
+
+  void _syncConversations() {
+    if (authController.token != null &&
+        conversationsController.items.isEmpty &&
+        !conversationsController.loading) {
+      conversationsController.load();
+    }
+  }
 
   void _openSearch(BuildContext context) {
     widget.onClose();

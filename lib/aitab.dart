@@ -266,7 +266,6 @@ class PopupMenuEntry<T> {
   final String label;
   final String? subtitle;
   final String? svgIcon;
-  final String? pngIcon;
   final bool selected;
   final bool disabled;
   final bool destructive;
@@ -275,7 +274,6 @@ class PopupMenuEntry<T> {
     required this.label,
     this.subtitle,
     this.svgIcon,
-    this.pngIcon,
     this.selected = false,
     this.disabled = false,
     this.destructive = false,
@@ -438,9 +436,6 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
           child: Row(children: [
             if (e.svgIcon != null) ...[
               AppIcon(e.svgIcon!, color: color, size: 18),
-              const SizedBox(width: 10),
-            ] else if (e.pngIcon != null) ...[
-              EditorTypeIcon(e.pngIcon!, size: 18),
               const SizedBox(width: 10),
             ],
             Expanded(
@@ -1741,7 +1736,7 @@ class _CanvasLinkState extends State<_CanvasLink> {
       child: Opacity(
         opacity: _h ? 0.7 : 1.0,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.description_outlined, size: 16, color: linkColor),
+          AppIcon('description_outlined.svg', size: 16, color: linkColor),
           const SizedBox(width: 6),
           Text(
             widget.item.title,
@@ -2468,7 +2463,7 @@ class _AttachedToolPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              EditorTypeIcon(type.pngAsset, size: 13),
+              EditorTypeIcon(type.svgAsset, size: 13),
               const SizedBox(width: 4),
               Text(type.label,
                   style: TextStyle(
@@ -2711,7 +2706,7 @@ class _CanvasCardState extends State<_CanvasCard> {
               color: s.primaryContainer.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: EditorTypeIcon(_editorType.pngAsset, size: 20),
+            child: EditorTypeIcon(_editorType.svgAsset, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2852,11 +2847,9 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                     shape: BoxShape.circle,
                     border: Border.all(color: s.error, width: 1.5),
                   ),
-                  child: Icon(
-                    _recording ? Icons.mic : Icons.mic_none,
-                    color: s.error,
-                    size: 30,
-                  ),
+                  child: _recording
+                      ? AppIcon('mic.svg', size: 30, color: s.error)
+                      : AppIcon('mic_none.svg', size: 30, color: s.error),
                 ),
               ),
               const SizedBox(height: 24),

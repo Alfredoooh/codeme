@@ -521,7 +521,7 @@ class _NodeRowState extends State<_NodeRow> {
     final node = widget.node;
     final iconAsset = node.isContainer
         ? 'folder.svg'
-        : (node.fileKind?.pngAsset ?? 'doc.png');
+        : (node.fileKind?.svgAsset ?? 'doc.svg');
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -587,7 +587,7 @@ class _AddItemSheet extends StatelessWidget {
               children: [
                 Center(child: SheetGrabber(s: s)),
                 _SheetOptionRow(s: s, icon: 'folder.svg', label: 'Criar pasta', onTap: onCreateFolder),
-                _SheetOptionRow(s: s, icon: 'doc.png', useEditorIcon: true, label: 'Criar ficheiro', onTap: onCreateFile),
+                _SheetOptionRow(s: s, icon: 'doc.svg', useEditorIcon: true, label: 'Criar ficheiro', onTap: onCreateFile),
                 _SheetOptionRow(s: s, icon: 'file.svg', label: 'Upload de ficheiro', onTap: onUpload),
               ],
             ),

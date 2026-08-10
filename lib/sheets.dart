@@ -1,6 +1,6 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
+import 'widgets.dart';
 
 // ══════════════════════════════════════════════════════════════
 // BASE BOTTOM SHEET
@@ -101,13 +101,13 @@ Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(children: [
-        _SrcOption(s: s, icon: CupertinoIcons.photo_on_rectangle,
+        _SrcOption(s: s, icon: 'image.svg',
             label: 'Galeria de fotos', onTap: () => Navigator.pop(context)),
-        _SrcOption(s: s, icon: CupertinoIcons.camera,
+        _SrcOption(s: s, icon: 'camera.svg',
             label: 'Câmara', onTap: () => Navigator.pop(context)),
-        _SrcOption(s: s, icon: CupertinoIcons.doc,
+        _SrcOption(s: s, icon: 'doc_text.svg',
             label: 'Ficheiros', onTap: () => Navigator.pop(context)),
-        _SrcOption(s: s, icon: CupertinoIcons.link,
+        _SrcOption(s: s, icon: 'link.svg',
             label: 'URL de imagem',
             onTap: () { Navigator.pop(context); _urlDialog(context, s); }),
       ]),
@@ -140,7 +140,7 @@ void _urlDialog(BuildContext context, AppColorScheme s) {
 
 class _SrcOption extends StatelessWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String icon;
   final String label;
   final VoidCallback onTap;
   const _SrcOption(
@@ -153,11 +153,11 @@ class _SrcOption extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(children: [
-            Icon(icon, size: 20, color: s.primary),
+            AppIcon(icon, size: 20, color: s.primary),
             const SizedBox(width: 14),
             Text(label, style: TextStyle(fontSize: 15, color: s.onSurface)),
             const Spacer(),
-            Icon(CupertinoIcons.chevron_right, size: 14, color: s.onSurfaceVariant),
+            AppIcon('chevron_right.svg', size: 14, color: s.onSurfaceVariant),
           ]),
         ),
       );

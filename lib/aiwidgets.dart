@@ -488,7 +488,7 @@ class _AiCodeWidgetState extends State<AiCodeWidget> {
               },
               child: SizedBox(
                 width: 26, height: 26,
-                child: Icon(_copied ? Icons.check : Icons.copy, size: 14, color: s.onSurfaceVariant),
+                child: AppIcon(_copied ? 'check.svg' : 'copy.svg', size: 14, color: s.onSurfaceVariant),
               ),
             ),
           ]),
@@ -581,7 +581,7 @@ class _AiSheetWidgetState extends State<AiSheetWidget> {
                 child: Container(
                   width: 38, height: 38,
                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.45), shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  child: const AppIcon('close.svg', color: Colors.white, size: 18),
                 ),
               ),
             ),
@@ -958,9 +958,9 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       decoration: BoxDecoration(color: bg, border: Border.all(color: border, width: 1.5), borderRadius: BorderRadius.circular(24)),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          _navBtn(s, Icons.chevron_left, () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1))),
+          _navBtn(s, 'chevron_left.svg', () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1))),
           Text('${_months[m - 1]} $y', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
-          _navBtn(s, Icons.chevron_right, () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1))),
+          _navBtn(s, 'chevron_right.svg', () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1))),
         ]),
         const SizedBox(height: 10),
         Row(children: _weekdays.map((d) => Expanded(child: Center(child: Text(d, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: mutedClr)))))
@@ -998,12 +998,12 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     );
   }
 
-  Widget _navBtn(AppColorScheme s, IconData icon, VoidCallback onTap) => GestureDetector(
+  Widget _navBtn(AppColorScheme s, String icon, VoidCallback onTap) => GestureDetector(
         onTap: onTap,
         child: Container(
           width: 34, height: 34,
           decoration: BoxDecoration(color: s.hover, borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, size: 20, color: s.onSurface),
+          child: AppIcon(icon, size: 20, color: s.onSurface),
         ),
       );
 
@@ -1246,7 +1246,7 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
                 child: Container(
                   width: 38, height: 38,
                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.45), shape: BoxShape.circle),
-                  child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  child: const AppIcon('close.svg', color: Colors.white, size: 18),
                 ),
               ),
             ),
@@ -1517,7 +1517,7 @@ class _AiMapWidgetState extends State<AiMapWidget> {
         TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.craftlab.app'),
         if (showMarker)
           MarkerLayer(markers: [
-            Marker(point: center, width: 40, height: 40, child: Icon(Icons.location_on, color: s.primary, size: 36)),
+            Marker(point: center, width: 40, height: 40, child: AppIcon('location_on.svg', color: s.primary, size: 36)),
           ]),
       ],
     );
@@ -1545,7 +1545,7 @@ class _AiMapWidgetState extends State<AiMapWidget> {
                 child: Container(
                   width: 38, height: 38,
                   decoration: BoxDecoration(color: Colors.white.withOpacity(0.85), shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)]),
-                  child: const Icon(Icons.close, color: Colors.black87, size: 18),
+                  child: const AppIcon('close.svg', color: Colors.black87, size: 18),
                 ),
               ),
             ),

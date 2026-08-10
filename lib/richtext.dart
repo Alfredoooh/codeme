@@ -669,8 +669,8 @@ class _RichTextBlockParser {
             children: [
               Padding(
                 padding: const EdgeInsets.only(top: 2, right: 8),
-                child: Icon(
-                  done ? Icons.check_box : Icons.check_box_outline_blank,
+                child: AppIcon(
+                  done ? 'check_box.svg' : 'check_box_outline_blank.svg',
                   size: 16,
                   color: done ? s.primary : s.onSurfaceVariant,
                 ),
