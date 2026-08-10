@@ -164,27 +164,13 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — agora é o Drawer REAL do Flutter (Scaffold.drawer).
-//
-// Todo o comportamento de abertura/fecho, slide horizontal e
-// escurecimento do fundo (barrier) passam a ser geridos nativamente
-// pelo Scaffold/Drawer do Flutter — isto elimina de vez qualquer
-// dessincronia entre animações concorrentes. Este widget concentra-se
-// unicamente no ESTILO: cores, formas, tipografia, ícones — mas quem
-// desenha a "folha" deslizante, a sombra Material e o barrier por
-// trás é o Flutter, através do widget Drawer nativo envolvido por um
-// ClipRRect+shape para o cantos arredondados customizados.
-//
-// Removido nesta revisão, por pedido explícito:
-// - Toda a lógica de expand/shrink (280px ↔ ecrã inteiro) e o botão
-//   correspondente — substituído por um botão de HOME que navega
-//   para a HomeScreen (home.dart).
-// - Tabs "Templates" e "Projetos" do drawer — só existem agora em
-//   HomeScreen (bottom tab bar), o AppTab do drawer ficou reduzido a
-//   {ai, edit}.
-// - O ecrã de pesquisa deixou de estar embutido neste ficheiro — o
-//   botão de pesquisa agora empurra ChatSearchScreen (chat_search.dart)
-//   com uma CupertinoPageRoute.
+// DRAWER — deixou de ser o Drawer nativo do Flutter (Scaffold.drawer).
+// Passa a ser um Material puro: largura, slide horizontal, clip dos
+// cantos arredondados e o barrier por trás do drawer são geridos pelo
+// Stack manual em main.dart (RootShell), com um AnimationController
+// próprio. Este widget fica sempre montado na árvore, mesmo fechado —
+// só desliza para fora da tela via Transform.translate — nunca é
+// destruído/recriado ao reabrir.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -305,18 +291,8 @@ class _AppDrawerState extends State<AppDrawer> {
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
-    // Drawer nativo do Flutter — largura, slide e barrier são geridos
-    // pelo Scaffold que envolve este widget lá fora (main.dart). Aqui
-    // só definimos a "folha" visual: largura fixa de 300, cantos
-    // arredondados só do lado direito, sem elevação Material default
-    // (a sombra do Flutter já trata disso).
-    return Drawer(
-      width: 300,
-      backgroundColor: s.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
-      ),
+    return Material(
+      color: s.surface,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
