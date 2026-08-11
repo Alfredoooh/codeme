@@ -10,6 +10,10 @@
 // e é detetado por parseAiWidgetBlocks() a partir do texto bruto da
 // resposta da IA. Blocos de código normais (```dart, ```python, etc)
 // NÃO passam por aqui — vão para o sistema de Canvas em aitab.dart.
+//
+// widget_table foi REMOVIDO deste ficheiro — a tabela usada em toda
+// a app é agora _AiTable (richtext.dart), reaproveitada também para
+// blocos ```widget_table```. Ver buildAiWidget() abaixo.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -24,13 +28,11 @@ import 'package:latlong2/latlong.dart' as ll;
 import 'dart:ui' as ui;
 import 'colors.dart';
 import 'widgets.dart';
+import 'richtext.dart' show buildAiTableFromWidgetJson;
 
 // ══════════════════════════════════════════════════════════════
 // IDS DE WIDGET SUPORTADOS
 // ══════════════════════════════════════════════════════════════
-// 'widget_sheet' removido — AiSheetWidget descontinuado (Bloco C,
-// item 5). Ver também kAiWidgetsInstructions em aitab.dart, que já
-// instruía a IA a não usar widget_sheet.
 
 const Set<String> kAiWidgetIds = {
   'widget_table', 'widget_code', 'widget_bar', 'widget_pie',
@@ -98,7 +100,7 @@ bool hasOpenWidgetBlock(String raw) {
 
 Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
   switch (block.id) {
-    case 'widget_table':    return AiTableWidget(json: block.json, s: s);
+    case 'widget_table':    return buildAiTableFromWidgetJson(block.json, s);
     case 'widget_code':     return AiCodeWidget(json: block.json, s: s);
     case 'widget_bar':      return AiBarChartWidget(json: block.json, s: s);
     case 'widget_pie':      return AiPieChartWidget(json: block.json, s: s);
@@ -109,76 +111,6 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
     case 'widget_graph':    return AiMathGraphWidget(json: block.json, s: s);
     case 'widget_map':      return AiMapWidget(json: block.json, s: s);
     default: return const SizedBox.shrink();
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// TABLE
-// ══════════════════════════════════════════════════════════════
-
-class AiTableWidget extends StatelessWidget {
-  final Map<String, dynamic> json;
-  final AppColorScheme s;
-  const AiTableWidget({super.key, required this.json, required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    final headers = (json['headers'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
-    final rows = (json['rows'] as List?)
-            ?.map((r) => (r as List).map((c) => c.toString()).toList())
-            .toList() ??
-        const <List<String>>[];
-
-    final headerBg = s.isDark ? const Color(0xFF232323) : const Color(0xFFF4F4F4);
-    final bg = s.isDark ? const Color(0xFF1B1B1B) : Colors.white;
-    final borderColor = s.isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.10);
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 560),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: borderColor),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(s.isDark ? 0.35 : 0.08), blurRadius: 16, offset: const Offset(0, 6))],
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Table(
-          defaultColumnWidth: const IntrinsicColumnWidth(),
-          border: TableBorder(
-            horizontalInside: BorderSide(color: borderColor),
-            verticalInside: BorderSide(color: borderColor),
-          ),
-          children: [
-            if (headers.isNotEmpty)
-              TableRow(
-                decoration: BoxDecoration(color: headerBg),
-                children: headers
-                    .map((h) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Text(h,
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: s.onSurface)),
-                        ))
-                    .toList(),
-              ),
-            for (final row in rows)
-              TableRow(
-                children: row
-                    .asMap()
-                    .entries
-                    .map((e) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Text(e.value,
-                              textAlign: e.key > 0 ? TextAlign.center : TextAlign.left,
-                              style: TextStyle(fontSize: 15, color: s.onSurface)),
-                        ))
-                    .toList(),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -258,7 +190,7 @@ class _AiBarChartWidgetState extends State<AiBarChartWidget> with SingleTickerPr
                                   constraints: const BoxConstraints(maxWidth: 48),
                                   decoration: BoxDecoration(
                                     color: item.color,
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                                     boxShadow: [BoxShadow(color: item.color.withOpacity(0.25), blurRadius: 14, offset: const Offset(0, 4))],
                                   ),
                                 ),
@@ -284,7 +216,7 @@ class _AiBarChartWidgetState extends State<AiBarChartWidget> with SingleTickerPr
           spacing: 12, runSpacing: 6, alignment: WrapAlignment.center,
           children: items
               .map((item) => Row(mainAxisSize: MainAxisSize.min, children: [
-                    Container(width: 12, height: 12, decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(4))),
+                    Container(width: 12, height: 12, decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(2))),
                     const SizedBox(width: 6),
                     Text('${item.label} (${item.value.toStringAsFixed(item.value == item.value.roundToDouble() ? 0 : 1)})',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
@@ -364,7 +296,7 @@ class _AiPieChartWidgetState extends State<AiPieChartWidget> with SingleTickerPr
           spacing: 12, runSpacing: 6, alignment: WrapAlignment.center,
           children: items
               .map((item) => Row(mainAxisSize: MainAxisSize.min, children: [
-                    Container(width: 12, height: 12, decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(4))),
+                    Container(width: 12, height: 12, decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(2))),
                     const SizedBox(width: 6),
                     Text('${item.label} (${item.value.toStringAsFixed(item.value == item.value.roundToDouble() ? 0 : 1)})',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
@@ -470,7 +402,7 @@ class _AiCodeWidgetState extends State<AiCodeWidget> {
       decoration: BoxDecoration(
         color: bg,
         border: Border.all(color: border, width: 1.5),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(6),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(s.isDark ? 0.18 : 0.05), blurRadius: 24, offset: const Offset(0, 8))],
       ),
       clipBehavior: Clip.antiAlias,
@@ -649,7 +581,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> {
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(6),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 32, offset: const Offset(0, 8))],
       ),
       clipBehavior: Clip.antiAlias,
@@ -691,7 +623,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> {
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: isUp ? const Color(0xFF0D2E1A) : const Color(0xFF2E0D0D), borderRadius: BorderRadius.circular(6)),
+              decoration: BoxDecoration(color: isUp ? const Color(0xFF0D2E1A) : const Color(0xFF2E0D0D), borderRadius: BorderRadius.circular(4)),
               child: Text('${isUp ? '▲ +' : '▼ '}${d.change.abs().toStringAsFixed(2)}%',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isUp ? const Color(0xFF22C55E) : const Color(0xFFEF4444))),
             ),
@@ -717,7 +649,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> {
                 onTap: () => _load(tf),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(color: active ? const Color(0xFF1E2128) : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: active ? const Color(0xFF1E2128) : Colors.transparent, borderRadius: BorderRadius.circular(4)),
                   child: Text(tf, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: active ? Colors.white : const Color(0xFF444444))),
                 ),
               ),
@@ -853,7 +785,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: bg, border: Border.all(color: border, width: 1.5), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(color: bg, border: Border.all(color: border, width: 1.5), borderRadius: BorderRadius.circular(6)),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           _navBtn(s, 'chevron_left.svg', () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1))),
@@ -882,7 +814,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
           Column(children: dayEvents.map((e) => Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(color: evBg, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: evBg, borderRadius: BorderRadius.circular(6)),
             child: Row(children: [
               Container(width: 10, height: 10, decoration: BoxDecoration(color: e.color, shape: BoxShape.circle)),
               const SizedBox(width: 10),
@@ -900,7 +832,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         onTap: onTap,
         child: Container(
           width: 34, height: 34,
-          decoration: BoxDecoration(color: s.hover, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(color: s.hover, borderRadius: BorderRadius.circular(6)),
           child: AppIcon(icon, size: 20, color: s.onSurface),
         ),
       );
@@ -935,6 +867,10 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 // ══════════════════════════════════════════════════════════════
 // TIMER
 // ══════════════════════════════════════════════════════════════
+// Progress bar em estilo Material 3 Expressive: track mais espesso,
+// traço arredondado nas duas pontas, e um "stop indicator" (ponto)
+// fixo na extremidade — o padrão visual do LinearProgressIndicator
+// M3 Expressive. Botões com borderRadius 999 (100% arredondados).
 
 class AiTimerWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -991,24 +927,66 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
     final border = s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5EA);
     final mutedClr = s.isDark ? const Color(0xFF939393) : const Color(0xFF888888);
     final label = (widget.json['label'] ?? widget.json['title'] ?? 'Temporizador').toString();
+    final progressColor = remaining <= 10 ? const Color(0xFFEF4444) : s.primary;
+    final progress = total > 0 ? remaining / total : 0.0;
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-      decoration: BoxDecoration(color: bg, border: Border.all(color: border, width: 1.5), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(color: bg, border: Border.all(color: border, width: 1.5), borderRadius: BorderRadius.circular(6)),
       child: Column(children: [
         Text(label.toUpperCase(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: mutedClr, letterSpacing: 0.6)),
         const SizedBox(height: 16),
         Text(_fmt(remaining), style: TextStyle(fontSize: 48, fontWeight: FontWeight.w700, color: s.onSurface, letterSpacing: -1)),
         const SizedBox(height: 20),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(
-            value: total > 0 ? remaining / total : 0,
-            minHeight: 4,
-            backgroundColor: border,
-            valueColor: AlwaysStoppedAnimation(remaining <= 10 ? const Color(0xFFEF4444) : s.primary),
+        SizedBox(
+          height: 14,
+          child: LayoutBuilder(
+            builder: (ctx, constraints) {
+              final trackWidth = constraints.maxWidth;
+              final activeWidth = (trackWidth * progress.clamp(0.0, 1.0));
+              const stopDotSize = 4.0;
+              return Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  // Track de fundo (M3 Expressive: espesso, cantos totalmente
+                  // arredondados).
+                  Container(
+                    height: 8,
+                    width: trackWidth,
+                    decoration: BoxDecoration(
+                      color: border,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  // Segmento ativo — encolhe da direita para a esquerda à
+                  // medida que o tempo passa, sempre com pontas redondas.
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    height: 8,
+                    width: activeWidth.clamp(8.0, trackWidth),
+                    decoration: BoxDecoration(
+                      color: progressColor,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  // Stop indicator: ponto fixo na extremidade direita do
+                  // track, característico do M3 Expressive.
+                  Positioned(
+                    right: 0,
+                    child: Container(
+                      width: stopDotSize,
+                      height: stopDotSize,
+                      decoration: BoxDecoration(
+                        color: bg,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 24),
@@ -1017,7 +995,7 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
             onTap: _toggle,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
-              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
               child: Text(running ? 'Pausar' : (remaining < total ? 'Continuar' : 'Iniciar'),
                   style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
             ),
@@ -1027,7 +1005,7 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
             onTap: _reset,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(999)),
               child: Text('Reiniciar', style: TextStyle(color: s.onSurface, fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ),
@@ -1120,6 +1098,9 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
       ),
     );
 
+    // Ao tocar (fora do estado expandido), o widget ocupa o ecrã inteiro
+    // via MediaQuery.of(context).size — sem margens, sem cantos
+    // arredondados — tal como um modal fullscreen nativo.
     return GestureDetector(
       onTap: () { if (!_expanded) setState(() => _expanded = true); },
       child: AnimatedContainer(
@@ -1130,7 +1111,7 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
         height: _expanded ? MediaQuery.of(context).size.height : math.min(MediaQuery.of(context).size.height * 0.85, 520),
         decoration: BoxDecoration(
           color: cardBg,
-          borderRadius: BorderRadius.circular(_expanded ? 0 : 24),
+          borderRadius: BorderRadius.circular(_expanded ? 0 : 6),
           boxShadow: _expanded ? null : [BoxShadow(color: Colors.black.withOpacity(s.isDark ? 0.4 : 0.08), blurRadius: 30, offset: const Offset(0, 10))],
         ),
         clipBehavior: Clip.antiAlias,
@@ -1171,7 +1152,7 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
               }
             },
             child: Container(
-              decoration: BoxDecoration(color: n.color, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: n.color, borderRadius: BorderRadius.circular(4)),
               alignment: Alignment.center,
               child: Text(n.label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
             ),
@@ -1223,14 +1204,6 @@ class _MindMapPainter extends CustomPainter {
 // ══════════════════════════════════════════════════════════════
 // MATH GRAPH
 // ══════════════════════════════════════════════════════════════
-// Resolve equações reais (ex: x^2-5x+6=0) além de plotar y=f(x).
-// Deteção: se a expressão contém '=' e o lado esquerdo NÃO é
-// exatamente "y" (ignorando espaços), tratamos como equação a
-// resolver — busca raízes reais no intervalo [xMin, xMax] por
-// varrimento + bisseção sobre f(x) = lado_esq - lado_dir, e
-// mostramos os passos (a função reduzida e as raízes encontradas)
-// numa secção de texto acima do gráfico. Caso contrário, mantém o
-// comportamento antigo (plot puro de y=f(x)).
 
 class AiMathGraphWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -1240,7 +1213,7 @@ class AiMathGraphWidget extends StatefulWidget {
 }
 
 class _EquationSolution {
-  final String reducedForm; // ex: "x^2 - 5x + 6 = 0"
+  final String reducedForm;
   final List<double> roots;
   const _EquationSolution({required this.reducedForm, required this.roots});
 }
@@ -1283,34 +1256,23 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     if (widget.json['yMin'] == null && widget.json['yMax'] == null) _autoY();
   }
 
-  /// Interpreta a string recebida como "y = f(x)" (plot puro) ou
-  /// "f(x) = g(x)" / "expr = 0" (equação a resolver). Devolve sempre
-  /// um corpo de função avaliável (lado_esq - lado_dir, ou apenas o
-  /// lado direito se o esquerdo for "y").
   ({bool isEquation, String functionBody}) _parseAsFunctionOrEquation(String raw) {
     final trimmed = raw.trim();
     final eqIdx = trimmed.indexOf('=');
     if (eqIdx == -1) {
-      // Sem '=': é já uma expressão pura tipo "sin(x)" ou "x^2-5x+6".
       return (isEquation: false, functionBody: trimmed);
     }
     final left = trimmed.substring(0, eqIdx).trim();
     final right = trimmed.substring(eqIdx + 1).trim();
 
     if (left == 'y' || left == 'f(x)') {
-      // "y = ..." ou "f(x) = ..." → plot puro do lado direito.
       return (isEquation: false, functionBody: right);
     }
 
-    // Equação real: reduz para lado_esq - (lado_dir) = 0.
     final body = right == '0' ? left : '($left) - ($right)';
     return (isEquation: true, functionBody: body);
   }
 
-  /// Varre [xMin, xMax] em passos pequenos à procura de mudanças de
-  /// sinal em f(x) = lado_esq - lado_dir, refina cada uma por
-  /// bisseção, e devolve as raízes encontradas (arredondadas e sem
-  /// duplicados próximos).
   _EquationSolution _solveEquation(String originalRaw, String fnBody) {
     const steps = 2000;
     final roots = <double>[];
@@ -1332,7 +1294,6 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
       prevX = x; prevY = y;
     }
 
-    // Remove raízes muito próximas entre si (mesma raiz detetada 2x).
     roots.sort();
     final deduped = <double>[];
     for (final r in roots) {
@@ -1433,7 +1394,6 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
 
   Widget _buildStepsSection(AppColorScheme s) {
     final sol = _solution!;
-    final bg = s.isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF4F4F4);
     final rootsText = sol.roots.isEmpty
         ? 'Nenhuma raiz real encontrada no intervalo mostrado.'
         : sol.roots.length == 1
@@ -1522,9 +1482,6 @@ class _MathGraphPainter extends CustomPainter {
       }
     }
 
-    // Marca as raízes da equação (se houver) sobre o eixo X com um
-    // ponto maior e destaque — distinto dos pontos de amostragem
-    // normais da curva.
     if (roots.isNotEmpty) {
       final rootPaint = Paint()..color = const Color(0xFF34D399);
       final rootStrokePaint = Paint()..color = isDark ? const Color(0xFF121212) : const Color(0xFFF4F4F4)..style = PaintingStyle.stroke..strokeWidth = 2;
@@ -1588,7 +1545,7 @@ class _AiMapWidgetState extends State<AiMapWidget> {
         width: _expanded ? MediaQuery.of(context).size.width : math.min(MediaQuery.of(context).size.width * 0.9, 420),
         height: _expanded ? MediaQuery.of(context).size.height : math.min(MediaQuery.of(context).size.width * 0.9, 420),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(_expanded ? 0 : 30),
+          borderRadius: BorderRadius.circular(_expanded ? 0 : 6),
           boxShadow: _expanded ? null : [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 40, offset: const Offset(0, 20))],
         ),
         clipBehavior: Clip.antiAlias,
@@ -1613,8 +1570,7 @@ class _AiMapWidgetState extends State<AiMapWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOADER PEQUENO — usado no pill "A criar widget..." em vez do
-// BlinkingGridLoader inteiro (item 4/5: loader reduzido).
+// LOADER PEQUENO
 // ══════════════════════════════════════════════════════════════
 
 class AiSmallDotsLoader extends StatefulWidget {

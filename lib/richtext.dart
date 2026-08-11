@@ -1,23 +1,25 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/richtext.dart
 //
-// Motor de formatação para respostas da IA. Cobre:
-// - Markdown estrutural: headers, bullets/numbered (com indentação
-//   aninhada), checkboxes, blockquotes, linhas horizontais, tabelas
-//   com formatação inline dentro das células, blocos de código.
-// - Markdown inline: **bold**, ***bold itálico***, *itálico*/_itálico_,
-//   `code`, [texto](url), ~~riscado~~.
-// - Matemática: blocos $$...$$ e inline $...$, frações \frac{a}{b},
-//   raízes \sqrt{x} e \sqrt[n]{x}, potências x^2 / x^{10}, subscritos
-//   x_1 / x_{ij}, símbolos gregos (\alpha, \beta, \pi, \Delta, ...),
-//   operadores e relações (\leq, \geq, \neq, \approx, \times, \div,
-//   \pm, \cdot, ...), setas (\rightarrow, \Rightarrow, \leftrightarrow),
-//   conjuntos (\in, \notin, \subset, \cup, \cap, \emptyset, \forall,
-//   \exists), cálculo (\int, \sum, \prod, \lim, \partial, \nabla,
-//   \infty), superscript/subscript unicode direto (², ³, ₁, ₂, ...).
-// - Emoji shortcodes :smile: → 😄 (subconjunto comum).
-// - Integração com widget_* (gráficos, tabelas interativas, etc.)
-//   através de markers, mantendo compatibilidade com aitab.dart.
+// _AiTable deixou de ser privada: agora é a ÚNICA implementação de
+// tabela usada em toda a app — tanto para tabelas markdown normais
+// (| col | col |) como para blocos ```widget_table``` vindos da IA.
+// buildAiTableFromWidgetJson() é o adaptador que aiwidgets.dart usa
+// para construir _AiTable a partir do JSON {headers, rows}.
+//
+// Tabela: colunas usam IntrinsicColumnWidth() e vivem dentro de um
+// SingleChildScrollView horizontal — a tabela cresce ao tamanho real
+// do conteúdo e desliza lateralmente quando ultrapassa a largura do
+// ecrã, em vez de forçar o texto a partir/juntar-se (bug anterior
+// causado por FlexColumnWidth()).
+//
+// Admonitions (> [!NOTE] título / [!TIP] / [!IMPORTANT] / [!WARNING]
+// / [!CAUTION]): bloco de nota/aviso ao estilo GitHub, com barra
+// lateral colorida por tipo, ícone e título a negrito. Fundo depende
+// do tema (nunca fixo), bordas retas (raio pequeno, nunca 100%
+// arredondadas). A cor da barra lateral/ícone é categorização
+// estrutural do próprio bloco — não é "texto colorido"; o texto e os
+// links continuam sempre neutros (cinza), sem exceção.
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -29,7 +31,6 @@ import 'widgets.dart';
 // SÍMBOLOS MATEMÁTICOS — tabelas de tradução LaTeX → unicode
 // ══════════════════════════════════════════════════════════════
 
-/// Letras gregas minúsculas e maiúsculas.
 const Map<String, String> kGreekLetters = {
   r'\alpha': 'α', r'\beta': 'β', r'\gamma': 'γ', r'\delta': 'δ',
   r'\epsilon': 'ε', r'\varepsilon': 'ε', r'\zeta': 'ζ', r'\eta': 'η',
@@ -47,24 +48,17 @@ const Map<String, String> kGreekLetters = {
   r'\Phi': 'Φ', r'\Chi': 'Χ', r'\Psi': 'Ψ', r'\Omega': 'Ω',
 };
 
-/// Operadores, relações, setas, conjuntos, cálculo — tudo que não
-/// precisa de estrutura especial (fração, raiz, potência), apenas
-/// substituição direta de token por símbolo.
 const Map<String, String> kMathSymbols = {
-  // Operadores aritméticos
   r'\times': '×', r'\div': '÷', r'\pm': '±', r'\mp': '∓',
   r'\cdot': '·', r'\ast': '∗', r'\star': '⋆',
-  // Relações
   r'\leq': '≤', r'\le': '≤', r'\geq': '≥', r'\ge': '≥',
   r'\neq': '≠', r'\ne': '≠', r'\approx': '≈', r'\equiv': '≡',
   r'\sim': '∼', r'\simeq': '≃', r'\cong': '≅', r'\propto': '∝',
   r'\ll': '≪', r'\gg': '≫',
-  // Setas
   r'\rightarrow': '→', r'\to': '→', r'\leftarrow': '←',
   r'\leftrightarrow': '↔', r'\Rightarrow': '⇒', r'\Leftarrow': '⇐',
   r'\Leftrightarrow': '⇔', r'\mapsto': '↦', r'\uparrow': '↑',
   r'\downarrow': '↓', r'\nearrow': '↗', r'\searrow': '↘',
-  // Conjuntos e lógica
   r'\in': '∈', r'\notin': '∉', r'\ni': '∋', r'\subset': '⊂',
   r'\subseteq': '⊆', r'\supset': '⊃', r'\supseteq': '⊇',
   r'\cup': '∪', r'\cap': '∩', r'\setminus': '∖',
@@ -72,29 +66,20 @@ const Map<String, String> kMathSymbols = {
   r'\forall': '∀', r'\exists': '∃', r'\nexists': '∄',
   r'\neg': '¬', r'\lnot': '¬', r'\land': '∧', r'\wedge': '∧',
   r'\lor': '∨', r'\vee': '∨', r'\oplus': '⊕', r'\otimes': '⊗',
-  // Cálculo e análise
   r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇',
   r'\int': '∫', r'\iint': '∬', r'\iiint': '∭', r'\oint': '∮',
   r'\sum': '∑', r'\prod': '∏', r'\coprod': '∐',
   r'\lim': 'lim', r'\limsup': 'lim sup', r'\liminf': 'lim inf',
   r'\sqrt': '√',
-  // Números e conjuntos especiais
   r'\mathbb{R}': 'ℝ', r'\mathbb{N}': 'ℕ', r'\mathbb{Z}': 'ℤ',
   r'\mathbb{Q}': 'ℚ', r'\mathbb{C}': 'ℂ',
-  // Pontuação matemática
   r'\ldots': '…', r'\cdots': '⋯', r'\vdots': '⋮', r'\ddots': '⋱',
   r'\angle': '∠', r'\perp': '⊥', r'\parallel': '∥',
   r'\degree': '°', r'\prime': '′',
-  // Setas de implicação lógica usadas em provas
   r'\implies': '⟹', r'\iff': '⟺',
-  // Vários usados em física/química
   r'\hbar': 'ℏ', r'\ell': 'ℓ',
 };
 
-/// Mapas de superscript/subscript unicode para dígitos e sinais,
-/// usados na conversão de x^2, x_1, etc. quando o expoente/índice
-/// é curto (1 caractere ou dígitos simples) — produz um resultado
-/// muito mais legível do que uma caixa de Transform.translate.
 const Map<String, String> kSuperscriptDigits = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
   '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
@@ -109,11 +94,6 @@ const Map<String, String> kSubscriptDigits = {
   'a': 'ₐ', 'e': 'ₑ', 'o': 'ₒ', 'x': 'ₓ',
 };
 
-/// Converte uma sequência de caracteres simples (dígitos, sinais,
-/// e algumas letras) para o seu equivalente superscript unicode.
-/// Retorna null se algum caractere não tiver equivalente — nesse
-/// caso o chamador deve cair para o widget de fração/expoente com
-/// Transform.translate em vez de unicode puro.
 String? _toSuperscriptUnicode(String s) {
   final buf = StringBuffer();
   for (final ch in s.split('')) {
@@ -135,7 +115,7 @@ String? _toSubscriptUnicode(String s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EMOJI SHORTCODES — subconjunto comum usado em respostas de chat
+// EMOJI SHORTCODES
 // ══════════════════════════════════════════════════════════════
 
 const Map<String, String> kEmojiShortcodes = {
@@ -159,9 +139,6 @@ const Map<String, String> kEmojiShortcodes = {
 // PARSER DE EXPRESSÕES MATEMÁTICAS (LaTeX-like)
 // ══════════════════════════════════════════════════════════════
 
-/// Um "átomo" já processado de uma expressão matemática — pode ser
-/// texto simples, uma fração (numerador/denominador empilhados), ou
-/// uma raiz. Usado para construir a Row/Column final do MathInline.
 sealed class _MathAtom {}
 
 class _MathText extends _MathAtom {
@@ -178,13 +155,10 @@ class _MathFraction extends _MathAtom {
 
 class _MathSqrt extends _MathAtom {
   final String content;
-  final String? index; // raiz de índice n, null = raiz quadrada
+  final String? index;
   _MathSqrt(this.content, {this.index});
 }
 
-/// Substitui todos os tokens \comando conhecidos (gregos + símbolos)
-/// por unicode, numa única passagem, dos mais longos para os mais
-/// curtos para evitar que \leq seja parcialmente apanhado por \le.
 String _substituteKnownTokens(String expr) {
   var result = expr;
   final allTokens = <String, String>{...kGreekLetters, ...kMathSymbols};
@@ -196,17 +170,9 @@ String _substituteKnownTokens(String expr) {
   return result;
 }
 
-/// Resolve x^{...} e x_{...} (com chavetas) ou x^2 e x_1 (um único
-/// caractere, forma comum sem chavetas) para unicode superscript ou
-/// subscript quando possível. O que não tiver mapeamento unicode
-/// direto (ex: expoente com mais de um caractere não numérico,
-/// como x^{n+1}) fica marcado com um separador especial que o
-/// widget builder interpreta para desenhar um Transform.translate
-/// em vez de unicode.
 String _resolveSuperSubscripts(String expr) {
   var result = expr;
 
-  // Forma com chavetas: x^{conteudo} ou x_{conteudo}
   result = result.replaceAllMapped(
     RegExp(r'\^\{([^{}]+)\}'),
     (m) {
@@ -222,7 +188,6 @@ String _resolveSuperSubscripts(String expr) {
     },
   );
 
-  // Forma sem chavetas: x^2, x_n (um único caractere após o sinal)
   result = result.replaceAllMapped(
     RegExp(r'\^([a-zA-Z0-9+\-=()])'),
     (m) {
@@ -241,9 +206,6 @@ String _resolveSuperSubscripts(String expr) {
   return result;
 }
 
-/// Extrai \frac{a}{b} e \sqrt{x} / \sqrt[n]{x} como átomos especiais,
-/// devolvendo a lista ordenada de átomos que compõem a expressão
-/// completa (texto simples intercalado com frações/raízes).
 List<_MathAtom> _parseMathExpression(String raw) {
   var expr = _substituteKnownTokens(raw);
   expr = _resolveSuperSubscripts(expr);
@@ -259,10 +221,8 @@ List<_MathAtom> _parseMathExpression(String raw) {
       atoms.add(_MathText(expr.substring(last, m.start)));
     }
     if (m.group(1) != null) {
-      // \frac{num}{den}
       atoms.add(_MathFraction(m.group(1)!, m.group(2)!));
     } else {
-      // \sqrt ou \sqrt[n]
       atoms.add(_MathSqrt(m.group(5)!, index: m.group(4)));
     }
     last = m.end;
@@ -273,9 +233,6 @@ List<_MathAtom> _parseMathExpression(String raw) {
   return atoms;
 }
 
-/// Renderiza \u0001SUP{...}\u0001 / \u0001SUB{...}\u0001 residuais
-/// (expoentes/índices sem mapeamento unicode direto) como spans com
-/// Transform via WidgetSpan, dentro de um texto simples já resolvido.
 List<InlineSpan> _renderMathTextWithMarkers(String text, TextStyle baseStyle) {
   final spans = <InlineSpan>[];
   final markerPattern = RegExp(r'\u0001(SUP|SUB)\{([^}]*)\}\u0001');
@@ -304,9 +261,6 @@ List<InlineSpan> _renderMathTextWithMarkers(String text, TextStyle baseStyle) {
   return spans;
 }
 
-/// Widget que renderiza uma expressão matemática inline (dentro do
-/// fluxo de texto normal) ou em bloco (centrada, maior, com scroll
-/// horizontal se não couber).
 class MathInline extends StatelessWidget {
   final String expression;
   final AppColorScheme s;
@@ -395,9 +349,9 @@ class MathInline extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
       margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.zero,
+      decoration: BoxDecoration(
+        color: s.hover,
+        borderRadius: BorderRadius.circular(6),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -416,10 +370,6 @@ class MathInline extends StatelessWidget {
 // EXTRAÇÃO DE BLOCOS DE MATEMÁTICA ($$...$$) DO TEXTO CORRIDO
 // ══════════════════════════════════════════════════════════════
 
-/// Extrai blocos $$...$$ (matemática em bloco, linha própria) de um
-/// segmento de texto, devolvendo o texto com marcadores e a lista de
-/// expressões extraídas, no mesmo padrão usado por parseAiWidgetBlocks
-/// em aiwidgets.dart — mantém tudo consistente com o resto do app.
 class MathBlockParseResult {
   final String textWithMarkers;
   final List<String> blocks;
@@ -438,7 +388,98 @@ MathBlockParseResult _extractMathBlocks(String raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// RICH AI TEXT — ponto de entrada principal, usado por aitab.dart
+// ADMONITIONS — > [!NOTE] título / [!TIP] / [!IMPORTANT] /
+// [!WARNING] / [!CAUTION], estilo GitHub. Extraídas do texto corrido
+// antes do parser estrutural genérico de linhas '>', para que não
+// caiam no tratamento normal de blockquote.
+// ══════════════════════════════════════════════════════════════
+
+enum _AdmonitionKind { note, tip, important, warning, caution }
+
+class _AdmonitionData {
+  final _AdmonitionKind kind;
+  final String title;
+  final String body;
+  const _AdmonitionData({required this.kind, required this.title, required this.body});
+}
+
+_AdmonitionKind? _admonitionKindFromTag(String tag) {
+  switch (tag.toUpperCase()) {
+    case 'NOTE': return _AdmonitionKind.note;
+    case 'TIP': return _AdmonitionKind.tip;
+    case 'IMPORTANT': return _AdmonitionKind.important;
+    case 'WARNING': return _AdmonitionKind.warning;
+    case 'CAUTION': return _AdmonitionKind.caution;
+    default: return null;
+  }
+}
+
+({String icon, Color color, String defaultLabel}) _admonitionStyle(_AdmonitionKind kind) {
+  switch (kind) {
+    case _AdmonitionKind.note:
+      return (icon: 'info.svg', color: const Color(0xFF3B82F6), defaultLabel: 'Nota');
+    case _AdmonitionKind.tip:
+      return (icon: 'bulb.svg', color: const Color(0xFF22C55E), defaultLabel: 'Dica');
+    case _AdmonitionKind.important:
+      return (icon: 'priority_high.svg', color: const Color(0xFF8B5CF6), defaultLabel: 'Importante');
+    case _AdmonitionKind.warning:
+      return (icon: 'warning.svg', color: const Color(0xFFF59E0B), defaultLabel: 'Aviso');
+    case _AdmonitionKind.caution:
+      return (icon: 'error_outline.svg', color: const Color(0xFFEF4444), defaultLabel: 'Cuidado');
+  }
+}
+
+class _AdmonitionCard extends StatelessWidget {
+  final _AdmonitionData data;
+  final AppColorScheme s;
+  const _AdmonitionCard({required this.data, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = _admonitionStyle(data.kind);
+    final bg = s.isDark ? s.hover : const Color(0xFFF2F2F2);
+    final title = data.title.trim().isEmpty ? style.defaultLabel : data.title.trim();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border(left: BorderSide(color: style.color, width: 3)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              AppIcon(style.icon, size: 16, color: style.color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: s.onSurface)),
+              ),
+            ],
+          ),
+          if (data.body.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SelectableText.rich(
+              TextSpan(
+                style: TextStyle(color: s.onSurface, fontSize: 14, height: 1.45),
+                children: _RichTextBlockParser.inlineSpans(data.body.trim(), s, fontSize: 14),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RICH AI TEXT
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
@@ -533,10 +574,6 @@ class RichAiText extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 
 class _RichTextBlockParser {
-  /// Ponto de entrada: extrai primeiro blocos de matemática $$...$$
-  /// (que ocupam a própria linha/parágrafo), depois faz o parsing
-  /// estrutural normal (headers, listas, tabelas, etc.), reinserindo
-  /// os blocos de matemática nos pontos corretos.
   static List<Widget> parse(String raw, AppColorScheme s) {
     final mathExtract = _extractMathBlocks(raw);
     if (mathExtract.blocks.isEmpty) {
@@ -584,7 +621,6 @@ class _RichTextBlockParser {
       final line = lines[i];
       final trimmed = line.trim();
 
-      // Linha horizontal: ---, ***, ___ (3+, isolada) → Divider real.
       if (RegExp(r'^(-{3,}|\*{3,}|_{3,})$').hasMatch(trimmed)) {
         flushTable();
         widgets.add(Padding(
@@ -595,7 +631,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Tabelas
       if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.contains('|', 1)) {
         final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(trimmed);
         if (!isSeparator) {
@@ -619,7 +654,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Headers # a ####
       final headerMatch = RegExp(r'^(#{1,4})\s+(.*)$').firstMatch(trimmed);
       if (headerMatch != null) {
         final level = headerMatch.group(1)!.length;
@@ -636,7 +670,33 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Blockquote: > texto
+      // Admonition: "> [!TIPO] título" seguido, opcionalmente, de mais
+      // linhas começadas por ">" que formam o corpo. Verificado ANTES
+      // do blockquote genérico, para não cair no tratamento normal de
+      // ">" simples.
+      final admonitionHeaderMatch =
+          RegExp(r'^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$', caseSensitive: false)
+              .firstMatch(trimmed);
+      if (admonitionHeaderMatch != null) {
+        final kind = _admonitionKindFromTag(admonitionHeaderMatch.group(1)!)!;
+        final title = admonitionHeaderMatch.group(2)!.trim();
+        final bodyLines = <String>[];
+        i++;
+        while (i < lines.length) {
+          final nextTrimmed = lines[i].trim();
+          if (!nextTrimmed.startsWith('>')) break;
+          final content = nextTrimmed.replaceFirst(RegExp(r'^>\s?'), '');
+          bodyLines.add(content);
+          i++;
+        }
+        flushTable();
+        widgets.add(_AdmonitionCard(
+          data: _AdmonitionData(kind: kind, title: title, body: bodyLines.join('\n')),
+          s: s,
+        ));
+        continue;
+      }
+
       final quoteMatch = RegExp(r'^>\s?(.*)$').firstMatch(trimmed);
       if (quoteMatch != null) {
         flushTable();
@@ -652,13 +712,9 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Indentação (para bullets/numbered aninhados) — medida sobre
-      // a linha original, não a trimmed, cada 2 espaços = 1 nível.
       final indentMatch = RegExp(r'^(\s*)').firstMatch(line)!;
       final indentLevel = (indentMatch.group(1)!.length / 2).floor().clamp(0, 4);
 
-      // Checkbox: - [ ] tarefa  /  - [x] tarefa feita — verificado
-      // ANTES de bulletMatch, pois a sintaxe também começa por "- ".
       final checkMatch = RegExp(r'^([\-\*])\s+\[([ xX])\]\s+(.*)$').firstMatch(trimmed);
       if (checkMatch != null) {
         final done = checkMatch.group(2)!.toLowerCase() == 'x';
@@ -688,7 +744,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Bullet: - item ou * item, com indentação preservada.
       final bulletMatch = RegExp(r'^[\-\*]\s+(.*)$').firstMatch(trimmed);
       if (bulletMatch != null) {
         widgets.add(Padding(
@@ -712,7 +767,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Numerado: 1. item, com indentação preservada.
       final numberedMatch = RegExp(r'^(\d+)\.\s+(.*)$').firstMatch(trimmed);
       if (numberedMatch != null) {
         widgets.add(Padding(
@@ -734,7 +788,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Blocos de código ```lang```
       if (trimmed.startsWith('```')) {
         final lang = trimmed.substring(3).trim();
         final codeLines = <String>[];
@@ -743,7 +796,7 @@ class _RichTextBlockParser {
           codeLines.add(lines[i]);
           i++;
         }
-        if (i < lines.length) i++; // consome a fence de fecho
+        if (i < lines.length) i++;
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: buildAiWidget(
@@ -757,7 +810,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Parágrafo normal
       widgets.add(Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: _formattedText(trimmed, s),
@@ -769,17 +821,11 @@ class _RichTextBlockParser {
     return widgets;
   }
 
-  /// Converte **bold**, ***bold itálico***, *itálico*/_itálico_,
-  /// `code`, [texto](url), ~~riscado~~, $matemática$ inline e
-  /// :emoji: shortcodes em spans — usado tanto pelo texto normal
-  /// como pelas células de tabela.
   static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 14.5}) {
-    // Cor neutra para links/texto formatado, em vez de s.primary
-    // (azul) — branco levemente acinzentado no dark, cinza-escuro
-    // no light. Ver Bloco C, item 1.
+    // Cor de links/texto inline permanece SEMPRE neutra (cinza) —
+    // nunca azul, nunca qualquer outra cor, independentemente do tema.
     final linkColor = s.isDark ? const Color(0xFFE0E0E0) : const Color(0xFF3A3A3A);
 
-    // Substitui emoji shortcodes primeiro (não interfere com o resto).
     var processed = raw;
     kEmojiShortcodes.forEach((code, emoji) {
       if (processed.contains(code)) {
@@ -799,7 +845,6 @@ class _RichTextBlockParser {
       final token = m.group(0)!;
 
       if (token.startsWith(r'$')) {
-        // Matemática inline: $expr$
         final expr = token.substring(1, token.length - 1);
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,
@@ -839,7 +884,6 @@ class _RichTextBlockParser {
           ),
         ));
       } else {
-        // *itálico* ou _itálico_
         spans.add(TextSpan(
           text: token.substring(1, token.length - 1),
           style: const TextStyle(fontStyle: FontStyle.italic),
@@ -867,7 +911,18 @@ class _RichTextBlockParser {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TABELA
+// TABELA — implementação única, usada por tabelas markdown normais
+// (via _parseStructural acima) e por blocos ```widget_table``` (via
+// buildAiTableFromWidgetJson abaixo, chamada de aiwidgets.dart).
+//
+// Correção: colunas usam IntrinsicColumnWidth() em vez de
+// FlexColumnWidth() — a tabela cresce para o tamanho real do
+// conteúdo em vez de ser forçada a dividir a largura disponível
+// (que causava o texto a "juntar-se"/quebrar mal). A Table inteira
+// vive dentro de um SingleChildScrollView horizontal, para deslizar
+// lateralmente quando a largura total ultrapassa o ecrã — o
+// comportamento padrão esperado de uma tabela markdown.
+// Bordas retas (BorderRadius.zero).
 // ══════════════════════════════════════════════════════════════
 
 class _AiTable extends StatelessWidget {
@@ -881,50 +936,70 @@ class _AiTable extends StatelessWidget {
     final header = rows.first;
     final body = rows.length > 1 ? rows.sublist(1) : <List<String>>[];
 
-    // Bordas retas — sem raio (Bloco C, item 4).
     return ClipRRect(
       borderRadius: BorderRadius.zero,
-      child: Table(
-        border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
-        columnWidths: {
-          for (int i = 0; i < header.length; i++) i: const FlexColumnWidth(),
-        },
-        children: [
-          TableRow(
-            decoration: BoxDecoration(color: s.hover),
-            children: header
-                .map((c) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      child: RichText(
-                        text: TextSpan(
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: s.onSurface),
-                          children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 12.5),
-                        ),
-                      ),
-                    ))
-                .toList(),
-          ),
-          for (final row in body)
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
+          defaultColumnWidth: const IntrinsicColumnWidth(),
+          children: [
             TableRow(
-              children: row
+              decoration: BoxDecoration(color: s.hover),
+              children: header
                   .map((c) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                         child: RichText(
                           text: TextSpan(
-                            style: TextStyle(fontSize: 12.5, color: s.onSurface),
+                            style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: s.onSurface),
                             children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 12.5),
                           ),
                         ),
                       ))
                   .toList(),
             ),
-        ],
+            for (final row in body)
+              TableRow(
+                children: row
+                    .map((c) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(fontSize: 12.5, color: s.onSurface),
+                              children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 12.5),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Adaptador: constrói _AiTable a partir do JSON cru de um bloco
+/// ```widget_table``` ({ "headers": [...], "rows": [[...]] }).
+/// Chamado por aiwidgets.dart em buildAiWidget() — é o único ponto
+/// de contacto entre o dispatcher de widgets e a tabela real, que
+/// vive aqui e não em aiwidgets.dart.
+Widget buildAiTableFromWidgetJson(Map<String, dynamic> json, AppColorScheme s) {
+  final headers = (json['headers'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+  final bodyRows = (json['rows'] as List?)
+          ?.map((r) => (r as List).map((c) => c.toString()).toList())
+          .toList() ??
+      const <List<String>>[];
+  if (headers.isEmpty && bodyRows.isEmpty) return const SizedBox.shrink();
+  final allRows = <List<String>>[if (headers.isNotEmpty) headers, ...bodyRows];
+  return Container(
+    constraints: const BoxConstraints(maxWidth: 560),
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    child: _AiTable(rows: allRows, s: s),
+  );
 }
 
 // ══════════════════════════════════════════════════════════════

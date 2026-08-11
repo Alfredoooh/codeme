@@ -69,6 +69,18 @@ negrito (**texto**) normalmente — a aplicação processa a formatação em
 qualquer parte do texto, incluindo dentro de tabelas. Evita parágrafos
 longos e densos quando a informação pode ser organizada visualmente.
 
+Para blocos de nota, dica, aviso ou informação indispensável, usa o formato
+de admonition ao estilo GitHub, exatamente assim:
+
+> [!NOTE]
+> Texto da nota aqui.
+
+Os tipos disponíveis são NOTE (nota neutra), TIP (dica), IMPORTANT
+(informação indispensável), WARNING (aviso) e CAUTION (cuidado/perigo).
+A aplicação transforma isto automaticamente num cartão visual — nunca
+precisas de explicar ou descrever visualmente o cartão, apenas escrever
+o bloco neste formato exato.
+
 Para expressões matemáticas, usa \$expressão\$ para matemática dentro do
 texto corrido e \$\$expressão\$\$ numa linha própria para fórmulas em destaque.
 Podes usar notação LaTeX-like: frações com \\frac{a}{b}, raízes com
@@ -1071,7 +1083,27 @@ class AiTabState extends State<AiTab> {
     return prompt;
   }
 
+  /// Deteta se o texto acumulado até agora deve mostrar o pill
+  /// "A criar...". Cobre dois casos:
+  ///
+  /// 1. Um marcador especial (canvas, bloco widget, ou admonition)
+  ///    está CONFIRMADAMENTE aberto — o padrão de abertura já bateu
+  ///    por completo e ainda não fechou.
+  /// 2. O FIM do texto acumulado é, neste preciso instante, um
+  ///    PREFIXO PARCIAL de um desses marcadores — por exemplo o
+  ///    streaming acabou de entregar "[[canva" ou "```widget_b" ou
+  ///    "> [!NO". Isto tapa o bug em que um fragmento do próprio
+  ///    marcador (e não ainda o seu conteúdo) aparecia como texto
+  ///    solto na bolha, visível por um ou dois tokens antes do pill
+  ///    assumir.
+  ///
+  /// Sem o caso 2, o utilizador podia ver por instantes fragmentos
+  /// como "[[canvas:doc:Título||<p>" ou o JSON cru de um
+  /// ```widget_bar``` antes da deteção "oficial" disparar — daí a IA
+  /// parecer estar a "responder tudo diretamente mostrando o HTML ou
+  /// o JSON".
   String? _detectOpeningLabel(String text) {
+    // Caso 1a: canvas confirmadamente aberto.
     final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
     if (canvasOpenMatch.isNotEmpty) {
       final closesAfter = text.substring(canvasOpenMatch.last.start).contains(']]');
@@ -1085,10 +1117,58 @@ class AiTabState extends State<AiTab> {
         };
       }
     }
+    // Caso 1b: bloco widget_x confirmadamente aberto.
     if (hasOpenWidgetBlock(text)) {
       return 'A criar widget...';
     }
+
+    // Caso 2: sufixo do texto acumulado é um prefixo parcial de um
+    // dos marcadores especiais — ainda não deu para confirmar o
+    // padrão completo, mas já não é seguro tratar como texto normal.
+    if (_endsWithPartialMarker(text)) {
+      return 'A criar...';
+    }
+
     return null;
+  }
+
+  /// Lista de marcadores cujo início parcial no fim do texto deve
+  /// disparar o pill preventivamente, para nunca deixar o próprio
+  /// marcador (ainda incompleto) ser lido como texto pelo utilizador.
+  static const List<String> _kPartialMarkerPrefixes = [
+    '[[canvas:',
+    '```widget_table',
+    '```widget_code',
+    '```widget_bar',
+    '```widget_pie',
+    '```widget_market',
+    '```widget_calendar',
+    '```widget_timer',
+    '```widget_mindmap',
+    '```widget_graph',
+    '```widget_map',
+    '> [!NOTE]',
+    '> [!TIP]',
+    '> [!IMPORTANT]',
+    '> [!WARNING]',
+    '> [!CAUTION]',
+  ];
+
+  bool _endsWithPartialMarker(String text) {
+    // Olha apenas para a cauda do texto (últimos ~24 caracteres) por
+    // eficiência — nenhum destes marcadores tem mais do que isso.
+    final tail = text.length > 24 ? text.substring(text.length - 24) : text;
+    for (final marker in _kPartialMarkerPrefixes) {
+      // Verifica se `tail` termina com um prefixo não-vazio de `marker`
+      // (do tamanho 1 até ao tamanho de marker - 1 — um match completo
+      // já seria apanhado pelo Caso 1, então aqui só interessam
+      // prefixos estritamente parciais).
+      for (int len = marker.length - 1; len >= 1; len--) {
+        final prefix = marker.substring(0, len);
+        if (tail.endsWith(prefix)) return true;
+      }
+    }
+    return false;
   }
 
   /// Reenvia uma mensagem exatamente como se o utilizador a tivesse
@@ -2115,6 +2195,11 @@ class _StreamingBubble extends StatelessWidget {
               // Enquanto o pill "A criar..." está ativo, o texto principal
               // fica escondido por trás do pill — só reaparece (via o
               // conteúdo já recebido) se o utilizador tocar para expandir.
+              // Isto é a defesa PRINCIPAL contra o vazamento de HTML/JSON
+              // cru: com creatingLabel != null (agora também disparado por
+              // prefixos parciais de marcador — ver _endsWithPartialMarker
+              // em AiTabState), o RichAiText do texto principal nunca
+              // chega a ser construído com um marcador ainda incompleto.
               if (creatingLabel == null && text.isNotEmpty)
                 RichAiText(
                   text: text,
@@ -2724,31 +2809,30 @@ class _ChatInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reducedShadow = <BoxShadow>[
+    // Input flutuante REAL: já não vive dentro de um Container com
+    // gradiente que "nasce" opaco e desvanece — isso criava a ilusão
+    // de estar preso a outro painel por trás. Agora é um cartão sólido
+    // e opaco em toda a sua área, com a própria sombra a dar a
+    // sensação de flutuar sobre o conteúdo da lista, exatamente como
+    // um FAB ou bottom sheet nativo.
+    final floatingShadow = <BoxShadow>[
       BoxShadow(
-        color: Colors.black.withOpacity(s.isDark ? 0.16 : 0.05),
-        blurRadius: 8,
-        offset: const Offset(0, 2),
+        color: Colors.black.withOpacity(s.isDark ? 0.28 : 0.10),
+        blurRadius: 20,
+        offset: const Offset(0, 6),
+      ),
+      BoxShadow(
+        color: Colors.black.withOpacity(s.isDark ? 0.14 : 0.04),
+        blurRadius: 4,
+        offset: const Offset(0, 1),
       ),
     ];
 
-    // Gradiente transparente igual ao _AppHeader do main.dart, mas
-    // invertido: o input vive no fundo do ecrã, por isso a cor "nasce"
-    // em baixo (sólida) e desvanece para cima (transparente) — o
-    // oposto do header, que é sólido em cima e transparente em baixo.
     final inner = Container(
       decoration: BoxDecoration(
+        color: s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: reducedShadow,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            s.floatingSurface.withOpacity(0.0),
-            s.floatingSurface,
-          ],
-          stops: const [0.0, 0.4],
-        ),
+        boxShadow: floatingShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

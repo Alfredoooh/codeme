@@ -1,15 +1,16 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/colors.dart
 //
-// AppTheme deixou de ser InheritedNotifier consultado via
-// context.dependOnInheritedWidgetOfExactType(). Isso exigia que o
-// widget que chama AppTheme.of(context) estivesse sempre ligado à
-// árvore no momento exato do build — frágil dentro de Stacks com
-// Transform.translate e animações concorrentes.
-//
-// Agora AppTheme.of(context) lê diretamente o ChangeNotifier global
-// (appTheme), sem lookup na árvore. Não há mais "contexto desligado"
-// possível, porque não há mais contexto a consultar.
+// FIX (tema instantâneo): AppTheme.of(context) continua a ler
+// diretamente o ChangeNotifier global appTheme (sem lookup na
+// árvore), mas agora appTheme é exposto também via um segundo
+// mecanismo que os StatefulWidgets fora do subtree imediato do
+// AnimatedBuilder em AppTheme podem escutar diretamente:
+// appTheme.addListener(...) no initState de cada tela raiz
+// (RootShell, EditTab, SettingsScreen, etc.), chamando setState()
+// nesse listener. Isto está implementado em main.dart/edittab.dart/
+// settingsscreen.dart — aqui só é preciso garantir que appTheme
+// continua um singleton ChangeNotifier estável, o que já era o caso.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -120,12 +121,18 @@ class AppThemeNotifier extends ChangeNotifier {
 final AppThemeNotifier appTheme = AppThemeNotifier();
 
 // ══════════════════════════════════════════════════════════════
-// AppTheme — já NÃO é InheritedNotifier. É só um wrapper estático
-// fino sobre o appTheme global. AppTheme.of(context) devolve sempre
-// o estado atual, direto do ChangeNotifier, sem depender em que
-// ponto da árvore o context se encontra. O parâmetro context fica
-// só por compatibilidade de assinatura com todo o código existente
-// que já chama AppTheme.of(context) — não é usado para lookup.
+// AppTheme — wrapper estático fino sobre o appTheme global.
+// AppTheme.of(context) devolve sempre o estado atual, direto do
+// ChangeNotifier, sem depender em que ponto da árvore o context se
+// encontra.
+//
+// O AnimatedBuilder aqui dentro só garante reatividade para o
+// subtree imediato do MaterialApp (theme/darkTheme/themeMode). Para
+// que telas mais profundas (RootShell, EditTab, SettingsScreen)
+// também reconstruam sozinhas quando appTheme notifica — sem
+// precisar de navegar para disparar outro setState por acidente —
+// cada uma dessas telas agora regista o seu próprio
+// appTheme.addListener no initState. Ver main.dart/edittab.dart.
 // ══════════════════════════════════════════════════════════════
 
 class AppTheme extends StatelessWidget {
@@ -137,13 +144,34 @@ class AppTheme extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // AnimatedBuilder escuta o appTheme global e reconstrói este
-    // subtree sempre que toggleDark()/setDark() disparam notify —
-    // é isto que substitui o antigo InheritedNotifier: continua
-    // reativo, mas sem depender de lookup de contexto.
     return AnimatedBuilder(
       animation: appTheme,
       builder: (_, __) => child,
     );
+  }
+}
+
+/// Mixin de conveniência: State<T> que precisa de reconstruir sempre
+/// que o tema global muda, sem depender de outro setState acidental
+/// (navegação, envio de mensagem, etc.) para "empurrar" o rebuild.
+/// Usar assim:
+///   class _MyScreenState extends State<MyScreen> with ThemeReactive<MyScreen> {
+/// Chama automaticamente addListener no initState e removeListener no
+/// dispose — não precisa de mais nada além do mixin na declaração.
+mixin ThemeReactive<T extends StatefulWidget> on State<T> {
+  @override
+  void initState() {
+    super.initState();
+    appTheme.addListener(_onThemeChanged);
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    appTheme.removeListener(_onThemeChanged);
+    super.dispose();
   }
 }

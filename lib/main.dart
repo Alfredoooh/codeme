@@ -81,6 +81,13 @@ class CraftLabApp extends StatelessWidget {
 // AppDrawer fica sempre montado, só desliza para fora de vista —
 // nunca é destruído/recriado ao reabrir. Body é empurrado
 // (Transform.translate) em vez de coberto — push nativo.
+//
+// FIX (tema instantâneo): _RootShellState agora usa ThemeReactive —
+// regista appTheme.addListener no initState e chama setState sempre
+// que o tema muda, independentemente de qualquer outra navegação ou
+// interação. Antes disto, só um setState de outro motivo (mudar de
+// tab, etc.) fazia o build() voltar a ler AppTheme.of(context) com o
+// valor novo — por isso o tema só "pegava" ao navegar.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -88,7 +95,8 @@ class RootShell extends StatefulWidget {
   @override State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> with SingleTickerProviderStateMixin {
+class _RootShellState extends State<RootShell>
+    with SingleTickerProviderStateMixin, ThemeReactive<RootShell> {
   late final AnimationController _drawerCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 260),
@@ -319,6 +327,12 @@ class _AiTabHeaderRefresh extends ChangeNotifier {
   void ping() => notifyListeners();
 }
 
+// FIX (problema 3 — ícone de documento/canvas não aparecia): esta
+// classe existia mas nunca era inserida na árvore de widgets, então
+// AiTabHostNavigation.of(context) em aitab.dart devolvia sempre null,
+// e a chamada a goToEditTab() era engolida silenciosamente pelo `?.`.
+// Agora AiTabHost envolve o AiTab com AiTabHostNavigation de verdade,
+// ligando goToEditTab à mesma navegação usada por onCanvasCreated.
 class AiTabHost extends StatefulWidget {
   final GlobalKey<AiTabState> aiTabKey;
   final VoidCallback onFirstMessage;
@@ -352,19 +366,52 @@ class _AiTabHostState extends State<AiTabHost> {
     }
   }
 
+  void _goToEditTab(EditorType type) {
+    // Delega no mesmo caminho que onCanvasCreated já usava para abrir
+    // o EditTab a partir de RootShell — precisa de um LocalCanvasItem
+    // "vazio" só como sinal de navegação quando chamado diretamente
+    // (ex: toque num _CanvasLink já existente, sem criar nada de novo).
+    // Nesse caso o conteúdo real já foi carregado via
+    // editTabController.requestLoadLocal(item) em _onOpenCanvas
+    // (aitab.dart) ANTES desta chamada — aqui só trocamos de tab.
+    RootShellNavigation.of(context)?.switchToEditTab(type);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AiTab(
-      key: widget.aiTabKey,
-      onFirstMessage: widget.onFirstMessage,
-      externalAction: widget.externalAction,
-      onExternalActionConsumed: widget.onExternalActionConsumed,
-      initialConversationId: widget.initialConversationId,
-      onHasMessagesChanged: widget.onHasMessagesChanged,
-      onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
-      onCanvasCreated: widget.onCanvasCreated,
+    return AiTabHostNavigation(
+      goToEditTab: _goToEditTab,
+      child: AiTab(
+        key: widget.aiTabKey,
+        onFirstMessage: widget.onFirstMessage,
+        externalAction: widget.externalAction,
+        onExternalActionConsumed: widget.onExternalActionConsumed,
+        initialConversationId: widget.initialConversationId,
+        onHasMessagesChanged: widget.onHasMessagesChanged,
+        onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
+        onCanvasCreated: widget.onCanvasCreated,
+      ),
     );
   }
+}
+
+/// Ponte entre AiTabHost (que não tem acesso direto ao setState de
+/// _RootShellState) e RootShell — usada por _onOpenCanvas (aitab.dart,
+/// via AiTabHostNavigation) para trocar _tab para AppTab.edit depois
+/// de editTabController.requestLoadLocal(item) já ter sido chamado.
+class RootShellNavigation extends InheritedWidget {
+  final ValueChanged<EditorType> switchToEditTab;
+  const RootShellNavigation({
+    super.key,
+    required this.switchToEditTab,
+    required super.child,
+  });
+
+  static RootShellNavigation? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<RootShellNavigation>();
+
+  @override
+  bool updateShouldNotify(RootShellNavigation oldWidget) => true;
 }
 
 class _AppHeader extends StatelessWidget {
