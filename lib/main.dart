@@ -88,11 +88,16 @@ class CraftLabApp extends StatelessWidget {
 // substituídos por openSlider()/closeSlider(). Já corrigido nas
 // duas ocorrências abaixo (_openDrawer / _closeDrawer).
 //
-// FIX (SliderOpen → SlideDirection): o build falhou com
-// "The getter 'SliderOpen' isn't defined". O enum publicado pelo
-// pacote flutter_slider_drawer chama-se SlideDirection, não
-// SliderOpen — este último nunca existiu na API do pacote.
-// Corrigido abaixo na propriedade slideDirection.
+// FIX (slideDirection): o valor correto é o enum SliderOpen (ex.:
+// SliderOpen.LEFT_TO_RIGHT), confirmado no README oficial do
+// pacote. O nome que MUDOU foi o do parâmetro — de sliderOpen: para
+// slideDirection: — não o nome do enum em si, que continua
+// SliderOpen. Duas tentativas anteriores erraram isto: primeiro
+// deixando o enum inexistente SliderOpen sem estar definido no
+// escopo certo, depois trocando para o enum errado SlideDirection
+// (que não existe no pacote). Confirmado por fim via changelog e
+// README oficiais do pacote — fica assim:
+// slideDirection: SliderOpen.LEFT_TO_RIGHT
 //
 // FIX (sliderShadow): removido. O erro do compilador ("No named
 // parameter with the name 'sliderShadow'") aponta para a classe
@@ -281,7 +286,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
         key: _sliderDrawerKey,
         appBar: null,
         sliderOpenSize: _drawerWidth,
-        slideDirection: SlideDirection.LEFT_TO_RIGHT,
+        slideDirection: SliderOpen.LEFT_TO_RIGHT,
         animationDuration: 260,
         slider: ClipRRect(
           borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
