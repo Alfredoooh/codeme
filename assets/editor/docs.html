@@ -76,6 +76,10 @@
   .conteudo p {
     margin: 0;
   }
+  .conteudo img {
+    max-width: 100%;
+    height: auto;
+  }
 
   .page-number {
     position: absolute;
@@ -164,6 +168,14 @@
     outline: 2px solid #2F7BF6;
     outline-offset: 2px;
   }
+  /* Estado de carregamento/erro para imagens remotas (URL via link) —
+     evita que uma imagem partida quebre o layout do documento; mostra
+     um placeholder discreto em vez do ícone quebrado nativo do WebView. */
+  .doc-img-wrap img.img-broken {
+    min-height: 60px;
+    background: #F2F2F2;
+    border: 1px dashed #CCCCCC;
+  }
 
   /* ── Gráficos inseridos (Chart.js) ── */
   .doc-chart-wrap {
@@ -182,6 +194,26 @@
   .doc-chart-wrap.chart-selected {
     outline: 2px solid #2F7BF6;
     outline-offset: 2px;
+  }
+
+  /* ── Modo preview (usado dentro do DocumentWidgetCard, Flutter) ──
+     Quando a página é carregada com ?preview=1 na URL (ver iniciar()),
+     o documento fica completamente não-interativo (sem contenteditable,
+     sem scroll do utilizador, sem seleção) e o corpo aplica um leve
+     zoom-out via JS (ajustarZoomPreview) para caber numa miniatura. O
+     Flutter (InAppWebView) é responsável por dimensionar o próprio
+     iframe/WebView ao tamanho do card; este modo só desliga a
+     interatividade e deixa o conteúdo pronto para ser fotografado
+     visualmente pelo card. */
+  body.preview-mode #canvasScroll {
+    overflow: hidden;
+    pointer-events: none;
+    padding: 0;
+    justify-content: flex-start;
+    align-items: center;
+  }
+  body.preview-mode .page-a4 {
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 6px 16px rgba(0,0,0,0.14);
   }
 </style>
 </head>
@@ -212,11 +244,24 @@
   var selectedImgEl = null;
   var selectedChartEl = null;
   var chartInstances = {}; // chartId -> instância Chart.js viva
+  var isPreviewMode = false;
+
+  function detectarModoPreview() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      isPreviewMode = params.get('preview') === '1';
+    } catch (e) {
+      isPreviewMode = false;
+    }
+    if (isPreviewMode) {
+      document.body.classList.add('preview-mode');
+    }
+  }
 
   function ajustarZoom() {
-    var margem = 24;
-    var largura = canvasScroll.clientWidth;
-    var escala = Math.min((largura - margem) / PAGE_W, 1);
+    var margem = isPreviewMode ? 0 : 24;
+    var larguraDisponivel = canvasScroll.clientWidth;
+    var escala = Math.min((larguraDisponivel - margem) / PAGE_W, 1);
     fitScale = (escala > 0 && isFinite(escala)) ? escala : 1;
     pagesStack.style.transform = 'scale(' + fitScale + ')';
   }
@@ -231,13 +276,15 @@
 
     var contentEl = document.createElement('div');
     contentEl.className = 'conteudo';
-    contentEl.setAttribute('contenteditable', 'true');
+    contentEl.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
     contentEl.setAttribute('spellcheck', 'true');
     contentEl.innerHTML = '<p><br></p>';
 
-    contentEl.addEventListener('input', handleInput);
-    contentEl.addEventListener('paste', aoColar);
-    contentEl.addEventListener('click', aoClicarNoConteudo);
+    if (!isPreviewMode) {
+      contentEl.addEventListener('input', handleInput);
+      contentEl.addEventListener('paste', aoColar);
+      contentEl.addEventListener('click', aoClicarNoConteudo);
+    }
 
     var pageNumberEl = document.createElement('div');
     pageNumberEl.className = 'page-number';
@@ -453,6 +500,7 @@
   }
 
   function agendarGravacao() {
+    if (isPreviewMode) return;
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
       var html = getContent();
@@ -474,6 +522,21 @@
     chartInstances = {};
   }
 
+  /// Marca visualmente qualquer <img> cujo carregamento falhe (ex: URL
+  /// remota inválida/inacessível gerada pela IA), em vez de deixar o
+  /// ícone de imagem quebrada nativo do WebView, que fica feio dentro
+  /// do documento. Chamado depois de setContent() e depois de inserir
+  /// uma imagem nova.
+  function monitorizarErrosDeImagem(escopoEl) {
+    var imgs = escopoEl.querySelectorAll('img:not([data-error-bound])');
+    imgs.forEach(function (img) {
+      img.setAttribute('data-error-bound', '1');
+      img.addEventListener('error', function () {
+        img.classList.add('img-broken');
+      });
+    });
+  }
+
   function setContent(html) {
     destruirTodosOsCharts();
     folhas.forEach(function (f) { f.pageEl.remove(); });
@@ -489,6 +552,7 @@
     htmls.forEach(function (h) {
       var folha = criarFolha();
       folha.contentEl.innerHTML = h || '<p><br></p>';
+      monitorizarErrosDeImagem(folha.contentEl);
     });
 
     reativarHandlersDeFormasEImagens();
@@ -508,6 +572,7 @@
   }
 
   function focarSePreciso() {
+    if (isPreviewMode) return;
     var el = getActiveContentEl();
     if (el && document.activeElement !== el) {
       el.focus();
@@ -575,8 +640,6 @@
   }
 
   // ── Cor de texto e destaque (highlight/marcador) ─────────────
-  // Ambos usam execCommand nativo do contenteditable, funcionam em
-  // qualquer seleção de texto ativa dentro de qualquer página.
 
   function setColor(hexColor) {
     focarSePreciso();
@@ -588,8 +651,6 @@
   function setHighlight(hexColor) {
     focarSePreciso();
     document.execCommand('styleWithCSS', false, true);
-    // hiliteColor funciona no Chromium (WebView Android); backColor
-    // é o fallback usado por alguns motores mais antigos.
     var aplicou = document.execCommand('hiliteColor', false, hexColor);
     if (!aplicou) {
       document.execCommand('backColor', false, hexColor);
@@ -624,16 +685,25 @@
   }
 
   // ── Imagens ───────────────────────────────────────────────────
+  // insertImageAtCursor aceita tanto data-url (vindas do picker local)
+  // como URLs remotas normais (https://...) — funciona identicamente
+  // em ambos os casos, porque é apenas o atributo src de um <img>. Sem
+  // isto seria preciso um caminho separado; um <img src> comum já
+  // carrega qualquer URL pública, incluindo as que a IA insere via
+  // [[canvas:doc:...]].
 
-  function insertImageAtCursor(dataUrl) {
+  function insertImageAtCursor(url) {
     focarSePreciso();
     var html = '<span class="doc-img-wrap" contenteditable="false">' +
-      '<img src="' + dataUrl + '" />' +
+      '<img src="' + url + '" />' +
       '<div class="resize-handle"></div>' +
       '</span>&nbsp;';
     document.execCommand('insertHTML', false, html);
     handleInput();
-    setTimeout(reativarHandlersDeFormasEImagens, 30);
+    setTimeout(function () {
+      reativarHandlersDeFormasEImagens();
+      monitorizarErrosDeImagem(document.body);
+    }, 30);
   }
 
   function insertLink(url, texto) {
@@ -645,8 +715,6 @@
   }
 
   // ── Formas (retângulo, círculo, linha, seta) ────────────────
-  // Inseridas como bloco flutuante dentro do fluxo do texto, com
-  // cor preenchível e redimensionável por arraste do handle.
 
   function insertShape(shapeKind, hexColor) {
     focarSePreciso();
@@ -699,14 +767,6 @@
   }
 
   // ── Gráficos (Chart.js) ───────────────────────────────────────
-  // A IA (ou o utilizador via toolbar) insere um gráfico passando um
-  // objeto de configuração no formato nativo do Chart.js:
-  //   { type: 'bar', data: {...}, options: {...} }
-  // A config fica gravada no atributo data-chart-config do wrapper
-  // (JSON escapado em HTML) para que setContent() consiga reidratar
-  // o Chart.js depois de um reload — sem isto o canvas ficaria em
-  // branco ao reabrir o documento, porque um <canvas> por si só não
-  // guarda o desenho no innerHTML.
 
   function escaparParaAtributo(str) {
     return str
@@ -941,9 +1001,6 @@
   }
 
   // ── API exposta ao toolbar Dart e/ou à IA (canvas automático) ─
-  // Tudo aqui é acionável tanto por toques do utilizador na toolbar
-  // como por chamadas diretas do lado Dart quando a IA gera um
-  // documento completo (setContent) ou edita um já existente.
 
   window.editorApi = {
     exec: exec,
@@ -966,6 +1023,7 @@
   };
 
   function iniciar() {
+    detectarModoPreview();
     ajustarZoom();
     window.addEventListener('resize', ajustarZoom);
     window.addEventListener('orientationchange', ajustarZoom);

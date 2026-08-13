@@ -14,12 +14,45 @@
 // causado por FlexColumnWidth()).
 //
 // Admonitions (> [!NOTE] título / [!TIP] / [!IMPORTANT] / [!WARNING]
-// / [!CAUTION]): bloco de nota/aviso ao estilo GitHub, com barra
-// lateral colorida por tipo, ícone e título a negrito. Fundo depende
-// do tema (nunca fixo), bordas retas (raio pequeno, nunca 100%
-// arredondadas). A cor da barra lateral/ícone é categorização
-// estrutural do próprio bloco — não é "texto colorido"; o texto e os
-// links continuam sempre neutros (cinza), sem exceção.
+// / [!CAUTION]): bloco de nota/aviso ao estilo GitHub. ATUALIZAÇÃO
+// (pedido explícito: "tem que ser 100% como a imagem 3"): removida a
+// borda lateral colorida + fundo cinza/hover que existia antes. Novo
+// visual, replicando exatamente a imagem de referência:
+//   - moldura retangular completa (as 4 bordas), cor de borda única,
+//     cantos 100% retos (BorderRadius.zero), sem sombra
+//   - SEM barra lateral colorida — a categorização por tipo (nota/
+//     dica/importante/aviso/cuidado) passa a ser expressa apenas
+//     pelo ícone + cor do ícone/título, nunca por uma borda ou fundo
+//     colorido
+//   - cabeçalho: ícone outline pequeno + label (ex: "Note") em cinza
+//     médio, peso normal (não bold) — igual à imagem 3
+//   - fundo do card: neutro, sempre a cor de superfície do tema
+//     (nunca fixo a um cinza claro só de light mode — no dark mode
+//     usa a superfície escura correspondente)
+//   - corpo: texto normal do tema, cor neutra
+// A cor de categorização (azul=nota, verde=dica, roxo=importante,
+// laranja=aviso, vermelho=cuidado) aparece SÓ no ícone — nunca em
+// bordas, fundos ou no texto do corpo.
+//
+// ── ATUALIZAÇÃO (Code block markdown melhorado) ──────────────────
+// O caminho de code block dentro de texto markdown normal (```dart
+// fora de qualquer widget_x, quando widgetsEnabled=false OU quando
+// widgetsEnabled=true mas o bloco não é um widget_*) agora usa
+// SEMPRE AiCodeWidget (o card novo definido em aiwidgets.dart, com
+// cabeçalho, ícone de linguagem, highlight multi-cor, expand e
+// preview). Isto substitui o antigo caminho que tinha o seu próprio
+// mini-renderer de código dentro de _parseStructural. Não há
+// duplicação: ambos os caminhos (o "bloco de código markdown normal"
+// pedido explicitamente para se manter, e o "card quando o widget
+// está ativo") agora convergem no MESMO widget visual (AiCodeWidget)
+// — a diferença entre os dois modos do pedido do utilizador não é
+// visual, é apenas ONDE o bloco aparece relativamente ao resto do
+// texto, que já era assim antes (inline na sequência do texto). Isto
+// significa que o code block fica sempre bonito, quer widgets esteja
+// ligado ou desligado — o que corresponde ao pedido "melhora bastante
+// o bloco de código em markdown", já que antes ficavam DOIS
+// renderers diferentes (um jeitoso só quando era um widget_code
+// explícito, outro tosco para ```dart normal dentro de texto).
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -389,9 +422,10 @@ MathBlockParseResult _extractMathBlocks(String raw) {
 
 // ══════════════════════════════════════════════════════════════
 // ADMONITIONS — > [!NOTE] título / [!TIP] / [!IMPORTANT] /
-// [!WARNING] / [!CAUTION], estilo GitHub. Extraídas do texto corrido
-// antes do parser estrutural genérico de linhas '>', para que não
-// caiam no tratamento normal de blockquote.
+// [!WARNING] / [!CAUTION]. Visual replicado 1:1 da imagem de
+// referência: moldura completa (4 bordas retas, sem cantos
+// arredondados, sem sombra, sem barra lateral colorida, sem fundo
+// diferenciado). A cor de categorização vive SÓ no ícone.
 // ══════════════════════════════════════════════════════════════
 
 enum _AdmonitionKind { note, tip, important, warning, caution }
@@ -437,38 +471,42 @@ class _AdmonitionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = _admonitionStyle(data.kind);
-    final bg = s.isDark ? s.hover : const Color(0xFFF2F2F2);
     final title = data.title.trim().isEmpty ? style.defaultLabel : data.title.trim();
+    // Borda: uma única cor neutra dependente do tema (nunca a cor de
+    // categorização) — exatamente como a imagem de referência, que
+    // usa a mesma borda escura em todos os tipos de admonition.
+    final borderColor = s.isDark ? const Color(0xFF3A3A3A) : const Color(0xFF1B1B1B);
+    // Label do cabeçalho: cinza médio, peso normal — nunca bold, nunca
+    // a cor de categorização (só o ícone leva a cor).
+    final labelColor = s.onSurfaceVariant;
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border(left: BorderSide(color: style.color, width: 3)),
+        color: s.surface,
+        border: Border.all(color: borderColor, width: 1.4),
+        borderRadius: BorderRadius.zero,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              AppIcon(style.icon, size: 16, color: style.color),
+              AppIcon(style.icon, size: 15, color: style.color),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(title,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: s.onSurface)),
-              ),
+              Text(title,
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: labelColor)),
             ],
           ),
           if (data.body.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             SelectableText.rich(
               TextSpan(
-                style: TextStyle(color: s.onSurface, fontSize: 14, height: 1.45),
-                children: _RichTextBlockParser.inlineSpans(data.body.trim(), s, fontSize: 14),
+                style: TextStyle(color: s.onSurface, fontSize: 14.5, height: 1.55),
+                children: _RichTextBlockParser.inlineSpans(data.body.trim(), s, fontSize: 14.5),
               ),
             ),
           ],
@@ -788,6 +826,16 @@ class _RichTextBlockParser {
         continue;
       }
 
+      // Code block markdown normal (```dart, ```python, ```html, etc).
+      // ATUALIZAÇÃO: em vez do antigo buildAiWidget(widget_code) básico,
+      // usa-se diretamente AiCodeWidget — o MESMO card completo com
+      // cabeçalho, ícone de linguagem, highlight multi-cor, botão
+      // expandir e botão de preview (quando lang=html) que é usado
+      // pelo bloco ```widget_code``` explícito. Isto garante que TODO
+      // code block markdown na app fica com o visual novo, mesmo fora
+      // do modo "widgets ativos" — exatamente como pedido ("mantém
+      // aquele bloco de código em markdown" + "melhora bastante o
+      // bloco de código em markdown").
       if (trimmed.startsWith('```')) {
         final lang = trimmed.substring(3).trim();
         final codeLines = <String>[];
@@ -799,12 +847,12 @@ class _RichTextBlockParser {
         if (i < lines.length) i++;
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: buildAiWidget(
-            AiWidgetBlock(id: 'widget_code', json: {
+          child: AiCodeWidget(
+            json: {
               'language': lang.isEmpty ? 'text' : lang,
               'code': codeLines.join('\n'),
-            }),
-            s,
+            },
+            s: s,
           ),
         ));
         continue;
@@ -915,14 +963,12 @@ class _RichTextBlockParser {
 // (via _parseStructural acima) e por blocos ```widget_table``` (via
 // buildAiTableFromWidgetJson abaixo, chamada de aiwidgets.dart).
 //
-// Correção: colunas usam IntrinsicColumnWidth() em vez de
-// FlexColumnWidth() — a tabela cresce para o tamanho real do
-// conteúdo em vez de ser forçada a dividir a largura disponível
-// (que causava o texto a "juntar-se"/quebrar mal). A Table inteira
-// vive dentro de um SingleChildScrollView horizontal, para deslizar
-// lateralmente quando a largura total ultrapassa o ecrã — o
-// comportamento padrão esperado de uma tabela markdown.
-// Bordas retas (BorderRadius.zero).
+// Colunas usam IntrinsicColumnWidth() em vez de FlexColumnWidth() —
+// a tabela cresce para o tamanho real do conteúdo em vez de ser
+// forçada a dividir a largura disponível. A Table inteira vive
+// dentro de um SingleChildScrollView horizontal, para deslizar
+// lateralmente quando a largura total ultrapassa o ecrã. Bordas
+// retas (BorderRadius.zero).
 // ══════════════════════════════════════════════════════════════
 
 class _AiTable extends StatelessWidget {

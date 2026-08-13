@@ -177,8 +177,39 @@ class _EditTabState extends State<EditTab> {
     ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
   }
 
+  /// CORREÇÃO (bug real confirmado): antes, esta função ignorava
+  /// item.kind e chamava sempre _injectCanvas, que chama sempre
+  /// editorApi.setContent(...) — mesmo para sheet/slide, cujos HTML
+  /// (sheets.html, slides.html) já expõem editorApi.setContentFromAi
+  /// especificamente para conteúdo vindo da IA.
+  ///
+  /// Confirmado contra o código real de sheets.html e slides.html:
+  /// `function setContentFromAi(json) { setContent(json); return
+  /// true; }` — ou seja, setContentFromAi é um wrapper fino que
+  /// delega para o mesmo setContent(json), que por sua vez faz
+  /// `JSON.parse(json || '{}')` internamente. Isto significa que
+  /// setContentFromAi espera uma STRING JSON, exatamente como
+  /// setContent — não um objeto já parseado. Por isso o escaping de
+  /// string usado abaixo é o mesmo que _injectCanvas já usa para doc,
+  /// só troca o nome da função JS chamada consoante o kind.
+  ///
+  /// whiteboard.html também segue este padrão: `function
+  /// setContent(json) { var dados = JSON.parse(json || '{}'); ... }`
+  /// — mesma necessidade de string escapada, via setContent normal
+  /// (whiteboard.html não expõe setContentFromAi, só setContent).
   void _injectLocalCanvas(InAppWebViewController ctrl, LocalCanvasItem item) {
-    _injectCanvas(ctrl, item.content);
+    if (item.kind == LocalCanvasKind.doc) {
+      _injectCanvas(ctrl, item.content);
+    } else if (item.kind == LocalCanvasKind.sheet || item.kind == LocalCanvasKind.slide) {
+      final escaped = item.content
+          .replaceAll('\\', '\\\\')
+          .replaceAll("'", "\\'")
+          .replaceAll('\n', '\\n');
+      ctrl.evaluateJavascript(source: "editorApi.setContentFromAi('$escaped')");
+    } else {
+      // whiteboard: usa setContent normal, mesmo escaping.
+      _injectCanvas(ctrl, item.content);
+    }
   }
 
   void _runJs(String script) =>

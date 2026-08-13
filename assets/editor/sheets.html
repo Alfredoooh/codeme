@@ -84,6 +84,7 @@
     text-overflow: ellipsis;
     vertical-align: middle;
     background: #FFFFFF;
+    position: relative;
   }
   .cell.selected {
     outline: 2px solid #2F7BF6;
@@ -97,6 +98,33 @@
   .cell[data-bold="1"] { font-weight: 700; }
   .cell[data-italic="1"] { font-style: italic; }
   .cell[data-underline="1"] { text-decoration: underline; }
+
+  /* ── Célula com imagem (renderização web rica em spreadsheet) ──
+     Uma célula pode conter uma imagem (via renderCellImage) em vez de
+     texto puro. A célula aumenta de altura automaticamente para caber
+     a miniatura; o texto normal da célula (se algum) fica escondido
+     enquanto houver imagem, para não sobrepor. */
+  .cell.has-image {
+    height: 64px;
+    padding: 3px;
+    white-space: normal;
+    overflow: visible;
+    vertical-align: middle;
+  }
+  .cell.has-image img {
+    max-width: 100%;
+    max-height: 58px;
+    display: block;
+    margin: 0 auto;
+    border-radius: 2px;
+    object-fit: contain;
+  }
+  .cell.has-image img.img-broken {
+    min-height: 40px;
+    min-width: 40px;
+    background: #F2F2F2;
+    border: 1px dashed #CCCCCC;
+  }
 
   /* ── Rodapé "+ Adicionar linhas" ── */
   #addRowsBar {
@@ -127,6 +155,15 @@
   #addRowsBtn:active {
     background: #E4E6E8;
   }
+
+  /* ── Modo preview (usado dentro do DocumentWidgetCard, Flutter) ── */
+  body.preview-mode #gridScroll {
+    overflow: hidden;
+    pointer-events: none;
+  }
+  body.preview-mode #addRowsBar {
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -147,9 +184,22 @@
 
   var gridTable = document.getElementById('gridTable');
   var addRowsBtn = document.getElementById('addRowsBtn');
-  var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align, color, fill }
+  var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align, color, fill, image }
   var selectedCellKey = null;
   var saveTimeout = null;
+  var isPreviewMode = false;
+
+  function detectarModoPreview() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      isPreviewMode = params.get('preview') === '1';
+    } catch (e) {
+      isPreviewMode = false;
+    }
+    if (isPreviewMode) {
+      document.body.classList.add('preview-mode');
+    }
+  }
 
   function colLetter(idx) {
     var letra = '';
@@ -207,7 +257,7 @@
     for (var cc = 0; cc < COLS; cc++) {
       var td = document.createElement('td');
       td.className = 'cell';
-      td.setAttribute('contenteditable', 'true');
+      td.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
       td.setAttribute('data-key', cellKey(cc, r));
       tr.appendChild(td);
     }
@@ -239,6 +289,11 @@
   function aoEditar(evento) {
     var td = evento.target.closest ? evento.target.closest('.cell') : null;
     if (!td) return;
+    // Se a célula tem imagem, edição de texto direto no contenteditable
+    // fica desativada nesse td (renderCellImage já marca has-image e
+    // o utilizador remove a imagem explicitamente antes de escrever
+    // texto ali de novo — ver removeCellImage).
+    if (td.classList.contains('has-image')) return;
     var key = td.getAttribute('data-key');
     var valor = td.textContent;
     if (!cellsData[key]) cellsData[key] = {};
@@ -251,6 +306,7 @@
   }
 
   function agendarGravacao() {
+    if (isPreviewMode) return;
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
       if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
@@ -263,6 +319,40 @@
     var el = gridTable.querySelector('[data-key="' + key + '"]');
     if (!el) return;
     el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  // ── Renderização de imagem por célula ──────────────────────────
+  // Permite que uma célula contenha uma imagem em vez de/além do
+  // texto — parte do requisito "tudo que um html consegue renderizar
+  // o sheets também consegue". Usa-se tanto pelo toolbar do
+  // utilizador como pela IA (setContentFromAi, que já suporta o campo
+  // "image" por célula, ver setContent abaixo).
+
+  function renderCellImage(key, url) {
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (!td) return;
+    if (!cellsData[key]) cellsData[key] = {};
+    cellsData[key].image = url;
+
+    td.classList.add('has-image');
+    td.innerHTML = '';
+    var img = document.createElement('img');
+    img.src = url;
+    img.addEventListener('error', function () {
+      img.classList.add('img-broken');
+    });
+    td.appendChild(img);
+    agendarGravacao();
+  }
+
+  function removeCellImage(key) {
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (!td) return;
+    if (cellsData[key]) delete cellsData[key].image;
+    td.classList.remove('has-image');
+    td.innerHTML = '';
+    td.textContent = (cellsData[key] && cellsData[key].value) || '';
+    agendarGravacao();
   }
 
   // ── API exposta ao toolbar Dart (específica de sheets) ─────────
@@ -326,14 +416,11 @@
   }
 
   function insertRowBelow() {
-    // Insere imediatamente a seguir à linha da célula selecionada
-    // (ou no fim, se nada estiver selecionado). Reconstrói apenas
-    // os data-key das linhas subsequentes, sem tocar no resto.
     var tbody = gridTable.querySelector('tbody');
     var linhaBase = 0;
     if (selectedCellKey) {
       var match = selectedCellKey.match(/^[A-Z]+(\d+)$/);
-      if (match) linhaBase = parseInt(match[1], 10); // linha 1-indexed atual
+      if (match) linhaBase = parseInt(match[1], 10);
     } else {
       linhaBase = ROWS;
     }
@@ -362,10 +449,6 @@
   }
 
   function addMoreRows(quantidade) {
-    // Adiciona N linhas de uma vez ao fim da grid — usado pelo botão
-    // "+ Adicionar linhas" e exposto também ao Dart, para não obrigar
-    // 50 chamadas individuais a insertRowBelow() (que reconstrói
-    // data-keys a cada chamada e seria lento em lote).
     var n = Math.max(1, Math.min(500, quantidade || 50));
     var tbody = gridTable.querySelector('tbody');
     var fragmento = document.createDocumentFragment();
@@ -402,9 +485,6 @@
   }
 
   function applyFormula(formula) {
-    // SE, SOMASE, CONTASE, PROCV, CONCATENAR etc. — motor de fórmulas
-    // fica do lado Dart/nativo; aqui só recebemos o resultado já calculado
-    // e escrevemos na célula selecionada.
     if (!selectedCellKey) return;
     var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
     if (!el) return;
@@ -418,37 +498,66 @@
     return JSON.stringify(cellsData);
   }
 
+  /// Aplica um objeto cellsData (formato {"cells": {...}} ou o objeto
+  /// de células diretamente) à grid, incluindo o campo "image" novo
+  /// por célula. Usado tanto para restaurar um documento guardado
+  /// (setContent normal) como pelo caminho da IA (setContentFromAi,
+  /// que delega diretamente para aqui — ver função abaixo).
+  function aplicarCellsData(dados) {
+    cellsData = dados;
+    Object.keys(dados).forEach(function (key) {
+      var el = gridTable.querySelector('[data-key="' + key + '"]');
+      if (!el) return;
+      var d = dados[key];
+      if (d.image) {
+        renderCellImage(key, d.image);
+        return;
+      }
+      if (d.value !== undefined) el.textContent = d.value;
+      if (d.bold) el.setAttribute('data-bold', '1');
+      if (d.italic) el.setAttribute('data-italic', '1');
+      if (d.underline) el.setAttribute('data-underline', '1');
+      if (d.align) el.style.textAlign = d.align;
+      if (d.color) el.style.color = d.color;
+      if (d.fill) el.style.background = d.fill;
+      var ehNumero = (d.value || '').toString().trim() !== '' && !isNaN((d.value || '').toString().trim());
+      el.classList.toggle('number', ehNumero);
+    });
+  }
+
   function setContent(json) {
     try {
-      var dados = JSON.parse(json || '{}');
-      cellsData = dados;
-      Object.keys(dados).forEach(function (key) {
-        var el = gridTable.querySelector('[data-key="' + key + '"]');
-        if (!el) return;
-        var d = dados[key];
-        if (d.value !== undefined) el.textContent = d.value;
-        if (d.bold) el.setAttribute('data-bold', '1');
-        if (d.italic) el.setAttribute('data-italic', '1');
-        if (d.underline) el.setAttribute('data-underline', '1');
-        if (d.align) el.style.textAlign = d.align;
-        if (d.color) el.style.color = d.color;
-        if (d.fill) el.style.background = d.fill;
-        var ehNumero = (d.value || '').toString().trim() !== '' && !isNaN((d.value || '').toString().trim());
-        el.classList.toggle('number', ehNumero);
-      });
+      var parsed = JSON.parse(json || '{}');
+      // Aceita tanto o formato cru {"A1": {...}} como o formato
+      // envelopado {"cells": {"A1": {...}}} que kAiSystemPrompt (lado
+      // Dart) instrui a IA a gerar — normaliza para o formato cru
+      // internamente, mas getContent() continua a devolver sempre o
+      // formato cru (sem "cells"), inalterado desde sempre, para não
+      // quebrar quem já lia/escrevia neste formato antes.
+      var dados = parsed && parsed.cells ? parsed.cells : parsed;
+      aplicarCellsData(dados || {});
     } catch (e) {
       // JSON inválido — mantém grid vazia
     }
   }
 
-  function setContentFromAi() {
-    // A folha de cálculo nunca é escrita pela IA — só pelo utilizador
-    // (input direto na grid) ou pelo toolbar nativo via setContent().
-    // Este ponto de entrada existe apenas como segunda camada de defesa
-    // a par do bloqueio já feito do lado Dart (edittab.dart não invoca
-    // setContent para LocalCanvasKind.sheet vindo da IA); mesmo que
-    // algum caminho futuro tente chamar isto diretamente, não faz nada.
-    return false;
+  /// ATUALIZAÇÃO (sheets reais gerados pela IA): esta função era
+  /// antes uma segunda camada de defesa que devolvia false sem fazer
+  /// nada, para impedir a IA de escrever na folha de cálculo. Esse
+  /// bloqueio foi removido do lado Dart (aitab.dart não descarta mais
+  /// blocos [[canvas:sheet:...]]) — esta função passa a ser o ponto
+  /// de entrada REAL chamado quando um documento sheet criado pela IA
+  /// é carregado no editor. Aceita exatamente o mesmo formato JSON
+  /// documentado em kAiSystemPrompt: {"cells": {"A1": {...}, ...}}.
+  function setContentFromAi(json) {
+    setContent(json);
+    return true;
+  }
+
+  function getSlideCount() {
+    // Mantido por paridade de interface com slides.html, não usado
+    // em sheets — sempre 1 "página" lógica (a grid inteira).
+    return 1;
   }
 
   window.editorApi = {
@@ -459,6 +568,8 @@
     insertRowBelow: insertRowBelow,
     addMoreRows: addMoreRows,
     applyFormula: applyFormula,
+    renderCellImage: renderCellImage,
+    removeCellImage: removeCellImage,
     scrollToCell: scrollParaCelula,
     getContent: getContent,
     setContent: setContent,
@@ -466,8 +577,11 @@
   };
 
   function iniciar() {
+    detectarModoPreview();
     construirGrid();
-    addRowsBtn.addEventListener('click', function () { addMoreRows(50); });
+    if (!isPreviewMode) {
+      addRowsBtn.addEventListener('click', function () { addMoreRows(50); });
+    }
 
     var conteudoInicial = '';
     if (window.AndroidBridge && window.AndroidBridge.loadDocument) {

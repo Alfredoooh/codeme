@@ -11,6 +11,17 @@
 // nesse listener. Isto está implementado em main.dart/edittab.dart/
 // settingsscreen.dart — aqui só é preciso garantir que appTheme
 // continua um singleton ChangeNotifier estável, o que já era o caso.
+//
+// ── ATUALIZAÇÃO (Card universal de widget / DocumentWidgetCard) ──
+// Adicionadas duas cores novas a AppColorScheme, usadas pelo card de
+// documento (preview A4 em stack + barra de ações): `previewBackdrop`
+// (fundo cinza atrás do stack de páginas, área de preview) e
+// `downloadButtonBg` (fundo do container cinza que embrulha o botão
+// pill azul + botão circular de download, conforme pedido explícito:
+// "o botão de baixar está dentro de um container cinza mas tem que
+// variar conforme o tema"). Ambas seguem o mesmo padrão de todas as
+// outras cores deste ficheiro: getter computado a partir de isDark,
+// nunca um valor fixo usado diretamente fora daqui.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,6 +70,19 @@ class AppColorScheme {
 
   Color get projectsTabBg      => const Color(0xFF0F6CBD);
   Color get projectsTabFg      => const Color(0xFFFFFFFF);
+
+  /// Fundo da área de preview (grande, topo) do DocumentWidgetCard —
+  /// onde a InAppWebView em miniatura / stack de páginas A4 aparece.
+  /// Cinza claro neutro em light, cinza escuro neutro em dark — nunca
+  /// a mesma cor do cardBackground, para dar profundidade visual ao
+  /// preview tal como a imagem de referência (Image 1) mostra.
+  Color get previewBackdrop    => isDark ? const Color(0xFF262626) : const Color(0xFFE3E3E3);
+
+  /// Fundo do container que embrulha a barra de ações do
+  /// DocumentWidgetCard (botão pill "Abrir direto no editor" + botão
+  /// circular de download). Pedido explícito do utilizador: este
+  /// container tem de variar com o tema, nunca fixo.
+  Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE5E5EA);
 
   List<BoxShadow> get cardShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]

@@ -22,6 +22,15 @@ dependencies:
   math_expressions: ^2.6.0
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+  pdf: ^3.10.0
+  html: ^0.15.0
+  archive: ^3.4.0
+  pdfx: ^2.6.0
+  share_plus: ^7.2.0
+  path_provider: ^2.1.0
+  flutter_highlight: ^0.7.0
+  highlight: ^0.7.0
+  visibility_detector: ^0.4.0+2
 
 flutter:
   uses-material-design: true

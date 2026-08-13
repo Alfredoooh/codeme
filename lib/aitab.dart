@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
@@ -15,6 +16,7 @@ import 'api_service.dart';
 import 'auth_service.dart';
 import 'aiwidgets.dart';
 import 'widgets.dart';
+import 'exportservice.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem;
 
 // ══════════════════════════════════════════════════════════════
@@ -56,6 +58,21 @@ extension AiModelX on AiModel {
 
 // ══════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
+//
+// ATUALIZAÇÃO (sheets e slides reais): removida a secção que
+// proibia explicitamente a IA de gerar sheet/slide. Adicionadas
+// instruções completas com exemplo de payload JSON para cada um dos
+// dois novos tipos, no MESMO formato que sheets.html/slides.html já
+// consomem via window.editorApi.setContent(json) — ver
+// _scanForCanvasItems mais abaixo, que agora aceita os 3 kinds sem
+// bloqueio, e showCanvasSheet/DocumentWidgetCard, que já sabem
+// distinguir o kind pelo LocalCanvasItem.kind.
+//
+// ATUALIZAÇÃO (HTML rico / imagens via link): instrução explícita de
+// que <img src="https://..."> com URLs reais é permitido e desejável
+// dentro do payload de doc, e que o HTML pode conter qualquer
+// elemento que uma página web normal suporta (gráficos via
+// data-ai-chart, como já estava documentado).
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
@@ -96,6 +113,14 @@ tua resposta:
 
 [[canvas:doc:Título do documento||<p>conteúdo em html aqui</p>]]
 
+O HTML dentro de um documento "doc" pode conter qualquer elemento que uma
+página web normal suporta, não só texto: podes incluir imagens reais através
+de <img src="https://url-real-da-imagem.jpg" /> sempre que isso ajudar o
+documento (fotografias, diagramas, capas), tabelas HTML, listas, títulos,
+citações, e qualquer formatação inline. Usa sempre URLs de imagem reais e
+publicamente acessíveis quando incluíres uma imagem — nunca inventes um URL
+que não sabes se existe.
+
 Podes aplicar cor ao texto e destaque (highlight/marcador) diretamente no
 HTML gerado, usando estilos inline no próprio texto, exatamente como o
 editor os interpreta:
@@ -116,24 +141,53 @@ O JSON dentro de data-ai-chart segue o formato de configuração nativo do
 Chart.js (type, data, options). A aplicação substitui este marcador por um
 gráfico interativo real no documento.
 
-Nunca mostres o bloco [[canvas:...]] ao utilizador como texto explicado —
-ele é processado automaticamente pela aplicação e transformado num cartão
-de documento navegável.
+Quando o utilizador pedir para criares uma FOLHA DE CÁLCULO, gera o
+conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
 
-IMPORTANTE: apenas o tipo "doc" (documento de texto corrido) pode ser criado
-ou editado através de [[canvas:...]]. Não existe suporte para criares folhas
-de cálculo ou apresentações — se o utilizador pedir uma folha de cálculo ou
-uma apresentação, explica em texto normal que ainda não consegues criar esse
-tipo de ficheiro diretamente, e oferece uma alternativa em texto ou tabela
-markdown dentro da própria conversa.
+[[canvas:sheet:Título da folha||<json>]]
+
+O <json> segue este formato exato — um objeto "cells" em que cada chave é
+a referência da célula (ex: "A1", "B3") e o valor é um objeto com o
+conteúdo e formatação dessa célula:
+
+{"cells":{"A1":{"value":"Produto","bold":true},"B1":{"value":"Preço","bold":true},"A2":{"value":"Café"},"B2":{"value":"3.50"},"A3":{"value":"Chá"},"B3":{"value":"2.80"}}}
+
+Campos aceites em cada célula: "value" (texto ou número, obrigatório),
+"bold", "italic", "underline" (booleanos, opcionais), "align" ("left",
+"center" ou "right", opcional), "color" (cor do texto em hex, opcional),
+"fill" (cor de fundo da célula em hex, opcional). Usa referências de
+célula normais (colunas A-Z, linhas numeradas a partir de 1). Gera sempre
+JSON válido, sem comentários, sem vírgulas a mais.
+
+Quando o utilizador pedir para criares uma APRESENTAÇÃO ou SLIDES, gera o
+conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
+
+[[canvas:slide:Título da apresentação||<json>]]
+
+O <json> segue este formato exato — uma lista de slides, cada um com uma
+lista de elementos posicionados (coordenadas em pixels num slide de
+960x540):
+
+{"slides":[{"id":0,"elements":[{"id":0,"type":"text","x":80,"y":60,"w":800,"h":100,"fontSize":36,"color":"#1a1a1a","html":"Título da apresentação"},{"id":1,"type":"text","x":80,"y":180,"w":800,"h":300,"fontSize":20,"color":"#444444","html":"Texto de conteúdo do primeiro slide"}]},{"id":1,"elements":[{"id":2,"type":"image","x":100,"y":100,"w":400,"h":260,"src":"https://url-real-da-imagem.jpg"}]}],"currentSlideIndex":0}
+
+Cada elemento tem "type": "text" (com "html", "fontSize", "color"),
+"image" (com "src", que deve ser um URL real e publicamente acessível), ou
+"shape" (com "shapeKind": "rect" ou "circle", e "color"). Todos os
+elementos precisam de "id" (número único crescente dentro da
+apresentação), "x", "y", "w", "h" em pixels. Gera sempre JSON válido.
+
+Nunca mostres qualquer bloco [[canvas:...]] ao utilizador como texto
+explicado — ele é processado automaticamente pela aplicação e transformado
+num cartão de documento navegável, com pré-visualização real e opções de
+abrir no editor ou descarregar.
 
 IMPORTANTE: blocos de código normais (```dart, ```python, ```js, ```html,
 ```css, etc.) NUNCA devem ser embrulhados em [[canvas:...]] — mesmo que sejam
 uma página HTML completa, um componente, ou um ficheiro inteiro. Blocos de
 código ficam sempre como blocos de código markdown normais, visíveis
 diretamente na conversa, exatamente como qualquer outra resposta técnica.
-Só documentos de texto corrido usam o formato [[canvas:...]] — nunca código,
-nunca folhas de cálculo, nunca apresentações.
+Só documentos (doc), folhas de cálculo (sheet) e apresentações (slide) usam
+o formato [[canvas:...]] — nunca código.
 ''';
 
 const String kAiWidgetsInstructions = '''
@@ -154,7 +208,8 @@ APENAS um objeto JSON válido no corpo do bloco:
 - ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
 
 Não uses widget_code — blocos de código normais já aparecem automaticamente
-formatados. Não uses widget_sheet — foi descontinuado. Usa estes widgets
+formatados. Não uses widget_sheet — foi descontinuado (usa
+[[canvas:sheet:...]] para folhas de cálculo reais). Usa estes widgets
 apenas quando acrescentam valor real à resposta (dados quantitativos,
 comparações visuais, localização, tempo), nunca como enfeite. Nunca
 expliques ao utilizador que estás a gerar um bloco widget — ele é
@@ -197,6 +252,15 @@ extension LocalCanvasKindX on LocalCanvasKind {
       case LocalCanvasKind.doc:        return EditorType.docs;
     }
   }
+
+  /// Rótulo curto usado no preview do DocumentWidgetCard e no popup
+  /// de download, para identificar o tipo de ficheiro ao utilizador.
+  String get shortLabel => const {
+        LocalCanvasKind.doc:        'Documento',
+        LocalCanvasKind.sheet:      'Folha de cálculo',
+        LocalCanvasKind.slide:      'Apresentação',
+        LocalCanvasKind.whiteboard: 'Quadro branco',
+      }[this]!;
 }
 
 class LocalCanvasItem {
@@ -222,31 +286,28 @@ final RegExp _kExplicitCanvasRe = RegExp(
   r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
 );
 
-/// Extrai APENAS blocos [[canvas:...]] explícitos. Blocos de código
+/// Extrai blocos [[canvas:...]] explícitos, para os 4 kinds
+/// suportados (doc, sheet, slide, whiteboard). Blocos de código
 /// (``` de qualquer linguagem, incluindo widget_*) nunca são tocados
 /// aqui — ficam no texto para RichAiText tratar (código normal ou
 /// widget interativo).
 ///
-/// BLOQUEIO sheet/slide: a IA só é instruída (kAiSystemPrompt) a gerar
-/// "doc". Como defesa adicional caso a IA ignore essa instrução, blocos
-/// [[canvas:sheet:...]] e [[canvas:slide:...]] são descartados aqui —
-/// removidos do texto mas NUNCA transformados em LocalCanvasItem, logo
-/// nunca chegam a slides.html/sheets.html via setContent.
+/// ATUALIZAÇÃO (sheets e slides reais): o bloqueio anterior que
+/// descartava silenciosamente 'sheet' e 'slide' foi REMOVIDO. Os 4
+/// kinds seguem agora exatamente o mesmo caminho — a IA já está
+/// instruída (kAiSystemPrompt) a gerar o JSON correto para cada um,
+/// e o consumidor final (sheets.html/slides.html via
+/// window.editorApi.setContentFromAi, ver notas em edittab.dart no
+/// prompt de continuação) já sabe interpretar esse JSON.
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
   final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
     final kindStr = m.group(1)!;
-
-    // Defesa: a IA nunca deve gerar sheet/slide (kAiSystemPrompt já
-    // não o instrui a isso), mas se o fizer mesmo assim, o bloco é
-    // removido do texto e simplesmente ignorado — nunca vira item.
-    if (kindStr == 'sheet' || kindStr == 'slide') {
-      return '';
-    }
-
     final title = m.group(2)!.trim();
     final content = m.group(3)!;
     final kind = switch (kindStr) {
+      'sheet' => LocalCanvasKind.sheet,
+      'slide' => LocalCanvasKind.slide,
       'whiteboard' => LocalCanvasKind.whiteboard,
       _ => LocalCanvasKind.doc,
     };
@@ -928,6 +989,544 @@ class _MenuSwitchRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
+// DOCUMENT WIDGET CARD — card universal para doc/sheet/slide criados
+// pela IA. Substitui o antigo _CanvasLink (link de texto azul
+// sublinhado) por um card completo: preview no topo + barra de ações
+// por baixo, tal como a imagem de referência (botão pill azul "Abrir
+// direto no editor" + botão circular de download, dentro de um
+// container cinza que varia com o tema via s.downloadButtonBg).
+//
+// ATUALIZAÇÃO (preview real + export real): a área de preview passa
+// a ser uma InAppWebView não-interativa, carregando o mesmo HTML de
+// assets/editor/*.html que o editor real usa, com ?preview=1 (ver
+// _kPreviewAsset abaixo — confirmado contra docs.html/sheets.html/
+// slides.html reais: os três leem `params.get('preview') === '1'` e
+// aplicam a classe preview-mode, que desativa contenteditable/scroll/
+// seleção do lado do próprio HTML). whiteboard.html NÃO tem esse
+// mecanismo (confirmado: não existe a palavra "preview" no ficheiro)
+// — a não-interatividade dele é garantida inteiramente do lado
+// Flutter via IgnorePointer, que também é aplicado aos outros 3 kinds
+// como camada extra de segurança (o WebView nunca deve roubar gestos
+// do card, mesmo que o JS de preview falhe por algum motivo).
+//
+// Efeito stack (só para doc, só quando o documento tem mais de uma
+// página): docs.html expõe o número de páginas indiretamente através
+// do próprio formato de getContent()/setContent(), que junta as
+// páginas com o separador literal '<div class="page-break-marker">
+// </div>' (confirmado nas linhas reais de docs.html). Como o HTML não
+// expõe nenhuma função editorApi para consultar a contagem de
+// páginas diretamente, a contagem é feita aqui no lado Dart a partir
+// de item.content, usando o mesmo separador — é o mesmo contrato que
+// o próprio docs.html usa internamente, não uma suposição nova.
+//
+// NOTA DE HONESTIDADE (InAppWebViewSettings): as propriedades usadas
+// abaixo para desativar scroll/zoom do WebView em modo preview
+// (disableVerticalScroll, disableHorizontalScroll, supportZoom) são
+// nomes estáveis e amplamente documentados da API pública do pacote
+// flutter_inappwebview há várias versões, mas não foi possível
+// confirmá-los especificamente contra a versão ^6.1.5 fixada no
+// pubspec.yaml neste ambiente (sem acesso à documentação do pacote
+// nem à rede). As restantes propriedades usadas aqui
+// (transparentBackground, javaScriptEnabled, allowFileAccessFrom-
+// FileURLs, useHybridComposition) estão confirmadas por já serem
+// usadas exatamente assim em edittab.dart real. Se o build falhar
+// nalguma destas três, o nome exato terá de ser confirmado contra
+// a documentação da versão instalada.
+// ══════════════════════════════════════════════════════════════
+
+/// Devolve o caminho de asset do HTML certo para o preview do kind,
+/// já com o parâmetro ?preview=1 confirmado nos 3 HTML que o suportam
+/// (docs, sheets, slides). whiteboard.html não tem esse mecanismo —
+/// devolve o htmlAsset normal, sem query string, e a não-
+/// interatividade fica inteiramente a cargo do IgnorePointer Flutter.
+String _previewHtmlAsset(LocalCanvasKind kind) {
+  final base = kind.editorType.htmlAsset;
+  if (kind == LocalCanvasKind.whiteboard) return base;
+  return '$base?preview=1';
+}
+
+/// Conta o número de "páginas" de um documento doc a partir do mesmo
+/// separador literal que docs.html usa em getContent()/setContent()
+/// ('<div class="page-break-marker"></div>'). Para sheet/slide/
+/// whiteboard isto não se aplica (devolve sempre 1) — só doc tem o
+/// conceito de páginas múltiplas neste editor.
+int _docPageCount(LocalCanvasItem item) {
+  if (item.kind != LocalCanvasKind.doc) return 1;
+  const marker = '<div class="page-break-marker"></div>';
+  if (item.content.isEmpty) return 1;
+  return item.content.split(marker).length;
+}
+
+class DocumentWidgetCard extends StatefulWidget {
+  final AppColorScheme s;
+  final LocalCanvasItem item;
+  final VoidCallback onOpenEditor;
+  const DocumentWidgetCard({
+    super.key,
+    required this.s,
+    required this.item,
+    required this.onOpenEditor,
+  });
+
+  @override
+  State<DocumentWidgetCard> createState() => _DocumentWidgetCardState();
+}
+
+class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
+  /// Formato atualmente a exportar (null = nenhum em curso). Usado
+  /// para mostrar um pequeno spinner inline na opção tocada dentro do
+  /// bottom sheet de download, enquanto a exportação real corre.
+  String? _exportingFormat;
+
+  InAppWebViewController? _previewController;
+
+  List<({String id, String label, String icon})> get _downloadOptions {
+    switch (widget.item.kind) {
+      case LocalCanvasKind.doc:
+        return const [
+          (id: 'docx', label: 'Baixar como .docx', icon: 'description_outlined.svg'),
+          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
+          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
+        ];
+      case LocalCanvasKind.sheet:
+        return const [
+          (id: 'xlsx', label: 'Baixar como .xlsx', icon: 'table_chart.svg'),
+          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
+          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
+        ];
+      case LocalCanvasKind.slide:
+        return const [
+          (id: 'pptx', label: 'Baixar como .pptx', icon: 'slideshow.svg'),
+          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
+          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
+        ];
+      case LocalCanvasKind.whiteboard:
+        return const [
+          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
+          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
+        ];
+    }
+  }
+
+  void _openDownloadSheet() {
+    final s = widget.s;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: SheetGrabber(s: s)),
+                  Row(children: [
+                    AppIcon('download.svg', color: s.onSurface, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Baixar "${widget.item.title}"',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  for (final opt in _downloadOptions)
+                    _DownloadOptionRow(
+                      s: s,
+                      label: opt.label,
+                      icon: opt.icon,
+                      loading: _exportingFormat == opt.id,
+                      onTap: _exportingFormat != null
+                          ? null
+                          : () async {
+                              setModalState(() => _exportingFormat = opt.id);
+                              await _exportAs(context, opt.id);
+                              setModalState(() => _exportingFormat = null);
+                            },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Chamada real ao ExportService (lib/exportservice.dart), que já
+  /// existe e implementa export() para pdf/png/docx/xlsx/pptx a
+  /// partir de um LocalCanvasItem. Em caso de erro (rede, formato de
+  /// conteúdo inesperado, etc.) mostra um SnackBar com a mensagem em
+  /// vez de deixar a app presa a "a exportar" indefinidamente.
+  Future<void> _exportAs(BuildContext context, String format) async {
+    try {
+      final bytes = await ExportService.export(item: widget.item, format: format);
+      await ExportService.shareBytes(bytes, filename: '${widget.item.title}.$format');
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível exportar: $e')),
+      );
+    }
+  }
+
+  void _injectPreviewContent(InAppWebViewController ctrl) {
+    final item = widget.item;
+    if (item.kind == LocalCanvasKind.doc) {
+      final escaped = item.content
+          .replaceAll('\\', '\\\\')
+          .replaceAll("'", "\\'")
+          .replaceAll('\n', '\\n');
+      ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
+    } else if (item.kind == LocalCanvasKind.sheet || item.kind == LocalCanvasKind.slide) {
+      // setContentFromAi faz JSON.parse(json) internamente em
+      // sheets.html/slides.html — espera uma string, exatamente como
+      // setContent. O escaping usado é o mesmo de _injectCanvas em
+      // edittab.dart, só troca o nome da função JS chamada.
+      final escaped = item.content
+          .replaceAll('\\', '\\\\')
+          .replaceAll("'", "\\'")
+          .replaceAll('\n', '\\n');
+      ctrl.evaluateJavascript(source: "editorApi.setContentFromAi('$escaped')");
+    } else {
+      // whiteboard: setContent(json) também faz JSON.parse
+      // internamente (confirmado em whiteboard.html real).
+      final escaped = item.content
+          .replaceAll('\\', '\\\\')
+          .replaceAll("'", "\\'")
+          .replaceAll('\n', '\\n');
+      ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final item = widget.item;
+    final pageCount = _docPageCount(item);
+    final showStack = item.kind == LocalCanvasKind.doc && pageCount > 1;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 340),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: s.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        GestureDetector(
+          onTap: widget.onOpenEditor,
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              width: double.infinity,
+              color: s.previewBackdrop,
+              child: Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.center,
+                children: [
+                  // Folhas de sombra atrás, só quando há mais de uma
+                  // página — dão o efeito de stack de documento sem
+                  // simular nada dentro da WebView.
+                  if (showStack)
+                    Positioned(
+                      top: 14, left: 10, right: -6, bottom: -6,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: s.cardBackground,
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: s.cardShadow,
+                        ),
+                      ),
+                    ),
+                  if (showStack)
+                    Positioned(
+                      top: 7, left: 5, right: -3, bottom: -3,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: s.cardBackground,
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: s.cardShadow,
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    top: showStack ? 0 : 0,
+                    left: showStack ? 0 : 0,
+                    right: showStack ? 12 : 0,
+                    bottom: showStack ? 12 : 0,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: IgnorePointer(
+                        child: InAppWebView(
+                          initialFile: _previewHtmlAsset(item.kind),
+                          initialSettings: InAppWebViewSettings(
+                            transparentBackground: true,
+                            javaScriptEnabled: true,
+                            allowFileAccessFromFileURLs: true,
+                            allowUniversalAccessFromFileURLs: true,
+                            useHybridComposition: true,
+                            disableVerticalScroll: true,
+                            disableHorizontalScroll: true,
+                            supportZoom: false,
+                          ),
+                          onWebViewCreated: (c) {
+                            _previewController = c;
+                          },
+                          onLoadStop: (c, _) => _injectPreviewContent(c),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Ícone/label do tipo, sobreposto discretamente no
+                  // canto: mantém a identificação visual imediata do
+                  // tipo de documento mesmo com o preview real por
+                  // baixo, sem cobrir o conteúdo do preview.
+                  Positioned(
+                    right: showStack ? 20 : 8,
+                    bottom: showStack ? 20 : 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: s.cardBackground.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          EditorTypeIcon(item.kind.editorType.svgAsset, size: 13),
+                          const SizedBox(width: 4),
+                          Text(item.kind.shortLabel,
+                              style: TextStyle(fontSize: 10, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          color: s.downloadButtonBg,
+          child: Row(children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: widget.onOpenEditor,
+                child: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
+                  child: Text('Abrir direto no editor',
+                      style: TextStyle(color: s.onPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _openDownloadSheet,
+              child: Container(
+                width: 40, height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle),
+                child: AppIcon('download.svg', color: s.onSurface, size: 18),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _DownloadOptionRow extends StatefulWidget {
+  final AppColorScheme s;
+  final String label;
+  final String icon;
+  final bool loading;
+  final VoidCallback? onTap;
+  const _DownloadOptionRow({
+    required this.s,
+    required this.label,
+    required this.icon,
+    required this.loading,
+    required this.onTap,
+  });
+  @override State<_DownloadOptionRow> createState() => _DownloadOptionRowState();
+}
+
+class _DownloadOptionRowState extends State<_DownloadOptionRow> {
+  bool _h = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   widget.onTap == null ? null : (_) => setState(() => _h = true),
+      onTapCancel: widget.onTap == null ? null : ()  => setState(() => _h = false),
+      onTapUp:     widget.onTap == null ? null : (_) => setState(() => _h = false),
+      onTap:       widget.onTap,
+      child: Opacity(
+        opacity: widget.onTap == null && !widget.loading ? 0.4 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: _h ? s.hover : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            if (widget.loading)
+              SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: s.primary))
+            else
+              AppIcon(widget.icon, size: 18, color: s.onSurface),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(widget.label,
+                  style: TextStyle(fontSize: 14, color: s.onSurface, fontWeight: FontWeight.w500)),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STREAM ELEMENTS — usados por _parseStreamingContent (partilhado
+// entre esta parte do ficheiro e mais abaixo, onde _StreamingBubble
+// consome a lista produzida).
+// ══════════════════════════════════════════════════════════════
+
+sealed class _StreamElement {}
+
+class _StreamText extends _StreamElement {
+  final String text;
+  _StreamText(this.text);
+}
+
+class _StreamOpenBlock extends _StreamElement {
+  final String label;
+  _StreamOpenBlock(this.label);
+}
+
+class _StreamClosedCanvas extends _StreamElement {
+  final LocalCanvasItem item;
+  _StreamClosedCanvas(this.item);
+}
+
+class _StreamClosedWidget extends _StreamElement {
+  final AiWidgetBlock block;
+  _StreamClosedWidget(this.block);
+}
+
+List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
+  final elements = <_StreamElement>[];
+  final canvasScan = _scanForCanvasItems(raw, idGen);
+
+  var remaining = canvasScan.cleanText;
+  final widgetParse = parseAiWidgetBlocks(remaining);
+  remaining = widgetParse.textWithMarkers;
+
+  final parts = remaining.split(RegExp(r'\u0000WB(\d+)\u0000'));
+  final markerMatches = RegExp(r'\u0000WB(\d+)\u0000').allMatches(remaining).toList();
+
+  for (int i = 0; i < parts.length; i++) {
+    if (parts[i].isNotEmpty) {
+      elements.add(_StreamText(parts[i]));
+    }
+    if (i < markerMatches.length) {
+      final idx = int.parse(markerMatches[i].group(1)!);
+      if (idx < widgetParse.blocks.length) {
+        elements.add(_StreamClosedWidget(widgetParse.blocks[idx]));
+      }
+    }
+  }
+
+  for (final item in canvasScan.items) {
+    elements.add(_StreamClosedCanvas(item));
+  }
+
+  final openLabel = _detectOpeningLabel(raw);
+  if (openLabel != null) {
+    elements.add(_StreamOpenBlock(openLabel));
+  }
+
+  return elements;
+}
+
+String? _detectOpeningLabel(String text) {
+  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
+  if (canvasOpenMatch.isNotEmpty) {
+    final closesAfter = text.substring(canvasOpenMatch.last.start).contains(']]');
+    if (!closesAfter) {
+      final kindStr = canvasOpenMatch.last.group(1)!;
+      return switch (kindStr) {
+        'sheet' => 'A criar folha de cálculo...',
+        'slide' => 'A criar apresentação...',
+        'whiteboard' => 'A criar quadro branco...',
+        _ => 'A criar documento...',
+      };
+    }
+  }
+  if (hasOpenWidgetBlock(text)) {
+    return 'A criar widget...';
+  }
+  if (_endsWithPartialMarker(text)) {
+    return 'A criar...';
+  }
+  return null;
+}
+
+const List<String> _kPartialMarkerPrefixes = [
+  '[[canvas:',
+  '```widget_table',
+  '```widget_code',
+  '```widget_bar',
+  '```widget_pie',
+  '```widget_market',
+  '```widget_calendar',
+  '```widget_timer',
+  '```widget_mindmap',
+  '```widget_graph',
+  '```widget_map',
+  '> [!NOTE]',
+  '> [!TIP]',
+  '> [!IMPORTANT]',
+  '> [!WARNING]',
+  '> [!CAUTION]',
+];
+
+bool _endsWithPartialMarker(String text) {
+  final tail = text.length > 24 ? text.substring(text.length - 24) : text;
+  for (final marker in _kPartialMarkerPrefixes) {
+    for (int len = marker.length - 1; len >= 1; len--) {
+      final prefix = marker.substring(0, len);
+      if (tail.endsWith(prefix)) return true;
+    }
+  }
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════════
 // AI TAB
 // ══════════════════════════════════════════════════════════════
 
@@ -980,18 +1579,6 @@ class AiTabState extends State<AiTab> {
   int _attachedFileIdSeq = 0;
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
-
-  /// Não-nulo enquanto a IA está a "desenhar" um canvas OU um widget.
-  String? _creatingLabel;
-
-  /// Guarda o texto de streaming acumulado até ao momento em que o
-  /// pill "A criar..." apareceu — usado para reconstruir o conteúdo
-  /// já recebido quando o utilizador toca no pill para expandir.
-  String? _creatingSnapshotText;
-
-  /// Controla se o pill "A criar..." está expandido (mostra o processo
-  /// já recebido em vez de só o pill compacto).
-  bool _creatingExpanded = false;
 
   int get canvasCount => _canvases.length;
   bool get widgetsEnabled => _widgetsEnabled;
@@ -1062,9 +1649,6 @@ class AiTabState extends State<AiTab> {
       _sending = false;
       _streamingText = '';
       _streamingThink = null;
-      _creatingLabel = null;
-      _creatingSnapshotText = null;
-      _creatingExpanded = false;
       _attachedFiles.clear();
     });
     if (_msgs.isNotEmpty) widget.onFirstMessage();
@@ -1083,94 +1667,6 @@ class AiTabState extends State<AiTab> {
     return prompt;
   }
 
-  /// Deteta se o texto acumulado até agora deve mostrar o pill
-  /// "A criar...". Cobre dois casos:
-  ///
-  /// 1. Um marcador especial (canvas, bloco widget, ou admonition)
-  ///    está CONFIRMADAMENTE aberto — o padrão de abertura já bateu
-  ///    por completo e ainda não fechou.
-  /// 2. O FIM do texto acumulado é, neste preciso instante, um
-  ///    PREFIXO PARCIAL de um desses marcadores — por exemplo o
-  ///    streaming acabou de entregar "[[canva" ou "```widget_b" ou
-  ///    "> [!NO". Isto tapa o bug em que um fragmento do próprio
-  ///    marcador (e não ainda o seu conteúdo) aparecia como texto
-  ///    solto na bolha, visível por um ou dois tokens antes do pill
-  ///    assumir.
-  ///
-  /// Sem o caso 2, o utilizador podia ver por instantes fragmentos
-  /// como "[[canvas:doc:Título||<p>" ou o JSON cru de um
-  /// ```widget_bar``` antes da deteção "oficial" disparar — daí a IA
-  /// parecer estar a "responder tudo diretamente mostrando o HTML ou
-  /// o JSON".
-  String? _detectOpeningLabel(String text) {
-    // Caso 1a: canvas confirmadamente aberto.
-    final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
-    if (canvasOpenMatch.isNotEmpty) {
-      final closesAfter = text.substring(canvasOpenMatch.last.start).contains(']]');
-      if (!closesAfter) {
-        final kindStr = canvasOpenMatch.last.group(1)!;
-        return switch (kindStr) {
-          'sheet' => 'A criar folha de cálculo...',
-          'slide' => 'A criar apresentação...',
-          'whiteboard' => 'A criar quadro branco...',
-          _ => 'A criar documento...',
-        };
-      }
-    }
-    // Caso 1b: bloco widget_x confirmadamente aberto.
-    if (hasOpenWidgetBlock(text)) {
-      return 'A criar widget...';
-    }
-
-    // Caso 2: sufixo do texto acumulado é um prefixo parcial de um
-    // dos marcadores especiais — ainda não deu para confirmar o
-    // padrão completo, mas já não é seguro tratar como texto normal.
-    if (_endsWithPartialMarker(text)) {
-      return 'A criar...';
-    }
-
-    return null;
-  }
-
-  /// Lista de marcadores cujo início parcial no fim do texto deve
-  /// disparar o pill preventivamente, para nunca deixar o próprio
-  /// marcador (ainda incompleto) ser lido como texto pelo utilizador.
-  static const List<String> _kPartialMarkerPrefixes = [
-    '[[canvas:',
-    '```widget_table',
-    '```widget_code',
-    '```widget_bar',
-    '```widget_pie',
-    '```widget_market',
-    '```widget_calendar',
-    '```widget_timer',
-    '```widget_mindmap',
-    '```widget_graph',
-    '```widget_map',
-    '> [!NOTE]',
-    '> [!TIP]',
-    '> [!IMPORTANT]',
-    '> [!WARNING]',
-    '> [!CAUTION]',
-  ];
-
-  bool _endsWithPartialMarker(String text) {
-    // Olha apenas para a cauda do texto (últimos ~24 caracteres) por
-    // eficiência — nenhum destes marcadores tem mais do que isso.
-    final tail = text.length > 24 ? text.substring(text.length - 24) : text;
-    for (final marker in _kPartialMarkerPrefixes) {
-      // Verifica se `tail` termina com um prefixo não-vazio de `marker`
-      // (do tamanho 1 até ao tamanho de marker - 1 — um match completo
-      // já seria apanhado pelo Caso 1, então aqui só interessam
-      // prefixos estritamente parciais).
-      for (int len = marker.length - 1; len >= 1; len--) {
-        final prefix = marker.substring(0, len);
-        if (tail.endsWith(prefix)) return true;
-      }
-    }
-    return false;
-  }
-
   /// Reenvia uma mensagem exatamente como se o utilizador a tivesse
   /// escrito e tocado em enviar — usado pela pill de sugestão que
   /// aparece no fim de uma resposta da IA (item pedido: ao tocar na
@@ -1179,13 +1675,6 @@ class AiTabState extends State<AiTab> {
     if (text.trim().isEmpty || _sending) return;
     _ctrl.text = text;
     _send();
-  }
-
-  /// Alterna a expansão do pill "A criar..." — mostra/esconde o texto
-  /// já recebido durante o streaming até ao ponto em que a criação
-  /// começou a ser detetada.
-  void _toggleCreatingExpanded() {
-    setState(() => _creatingExpanded = !_creatingExpanded);
   }
 
   Future<void> _send() async {
@@ -1223,9 +1712,6 @@ class AiTabState extends State<AiTab> {
       _sending = true;
       _streamingText = '';
       _streamingThink = null;
-      _creatingLabel = null;
-      _creatingSnapshotText = null;
-      _creatingExpanded = false;
     });
     if (isFirst) {
       widget.onFirstMessage();
@@ -1265,14 +1751,6 @@ class AiTabState extends State<AiTab> {
           case ChatTokenEvent(text: final text):
             setState(() {
               _streamingText += text;
-              final newLabel = _detectOpeningLabel(_streamingText);
-              // Ao transitar de "sem label" para "com label", guarda o
-              // snapshot do texto recebido até esse ponto — é isto que
-              // o pill expandido mostra ao ser tocado.
-              if (newLabel != null && _creatingLabel == null) {
-                _creatingSnapshotText = _streamingText;
-              }
-              _creatingLabel = newLabel;
             });
             _scrollToEnd();
             break;
@@ -1290,9 +1768,6 @@ class AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _creatingLabel = null;
-              _creatingSnapshotText = null;
-              _creatingExpanded = false;
             });
             _notifyHeader();
             _scrollToEnd();
@@ -1313,9 +1788,6 @@ class AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _creatingLabel = null;
-              _creatingSnapshotText = null;
-              _creatingExpanded = false;
               _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
             });
             _scrollToEnd();
@@ -1325,9 +1797,6 @@ class AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _creatingLabel = null;
-              _creatingSnapshotText = null;
-              _creatingExpanded = false;
               _msgs.add(const ChatMessage(
                   role: 'assistant',
                   content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
@@ -1343,9 +1812,6 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingLabel = null;
-          _creatingSnapshotText = null;
-          _creatingExpanded = false;
           _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
         });
         _scrollToEnd();
@@ -1592,9 +2058,6 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingLabel = null;
-          _creatingSnapshotText = null;
-          _creatingExpanded = false;
           _conversationId = null;
           _attachedFiles.clear();
         });
@@ -1611,9 +2074,6 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingLabel = null;
-          _creatingSnapshotText = null;
-          _creatingExpanded = false;
           _conversationId = null;
           _attachedFiles.clear();
         });
@@ -1635,9 +2095,6 @@ class AiTabState extends State<AiTab> {
           _sending = false;
           _streamingText = '';
           _streamingThink = null;
-          _creatingLabel = null;
-          _creatingSnapshotText = null;
-          _creatingExpanded = false;
           _conversationId = null;
           _attachedFiles.clear();
         });
@@ -1744,24 +2201,17 @@ class AiTabState extends State<AiTab> {
                         itemCount: _msgs.length + (_sending ? 1 : 0),
                         itemBuilder: (_, i) {
                           if (i >= _msgs.length) {
-                            final scan = _scanForCanvasItems(_streamingText, () => '');
+                            final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
                             return _StreamingBubble(
                               s: s,
-                              text: cleanAiText(scan.cleanText),
+                              elements: elements,
                               thinking: _streamingThink != null
                                   ? cleanAiText(_streamingThink!)
                                   : null,
-                              creatingLabel: _creatingLabel,
-                              creatingExpanded: _creatingExpanded,
-                              creatingSnapshotText: _creatingSnapshotText != null
-                                  ? cleanAiText(
-                                      _scanForCanvasItems(_creatingSnapshotText!, () => '').cleanText,
-                                    )
-                                  : null,
-                              onToggleCreatingExpanded: _toggleCreatingExpanded,
                               widgetsEnabled: _widgetsEnabled,
                               onEnableWidgets: () => setWidgetsEnabled(true),
                               onSuggestionTap: sendSuggestedMessage,
+                              onOpenCanvas: _onOpenCanvas,
                             );
                           }
                           final msg = _msgs[i];
@@ -1868,10 +2318,6 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Bloco D: troca do ícone svg pelo logo da app, mantendo
-                // a saudação de texto por baixo. Caminho do asset assumido
-                // como 'assets/logo.png' — confirmar/ajustar se diferente
-                // no pubspec.yaml do projeto.
                 Image.asset('assets/logo.png', width: 40, height: 40),
                 const SizedBox(height: 14),
                 Text(
@@ -2026,7 +2472,7 @@ class _AssistantBubble extends StatelessWidget {
                 ),
               for (final item in canvases) ...[
                 const SizedBox(height: 8),
-                _CanvasLink(s: s, item: item, onTap: () => onOpenCanvas(item)),
+                DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
               ],
               const SizedBox(height: 6),
               _AssistantActionBar(
@@ -2040,47 +2486,6 @@ class _AssistantBubble extends StatelessWidget {
           ),
         ),
       );
-}
-
-class _CanvasLink extends StatefulWidget {
-  final AppColorScheme s;
-  final LocalCanvasItem item;
-  final VoidCallback onTap;
-  const _CanvasLink({required this.s, required this.item, required this.onTap});
-  @override State<_CanvasLink> createState() => _CanvasLinkState();
-}
-
-class _CanvasLinkState extends State<_CanvasLink> {
-  bool _h = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final linkColor = widget.s.isDark ? const Color(0xFF6CB6FF) : const Color(0xFF0F6CBD);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: Opacity(
-        opacity: _h ? 0.7 : 1.0,
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          AppIcon('description_outlined.svg', size: 16, color: linkColor),
-          const SizedBox(width: 6),
-          Text(
-            widget.item.title,
-            style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-              color: linkColor,
-              decoration: TextDecoration.underline,
-              decorationColor: linkColor,
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
 }
 
 class _AssistantActionBar extends StatelessWidget {
@@ -2149,129 +2554,129 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// STREAMING BUBBLE — reescrita para consumir a lista de
+// _StreamElement produzida por _parseStreamingContent. Cada elemento
+// vira o widget certo: texto normal (RichAiText), pill de bloco em
+// aberto (shimmer), ou o resultado final já pronto (DocumentWidgetCard
+// / widget renderizado) — nunca esconde o resto do conteúdo.
+// ══════════════════════════════════════════════════════════════
+
 class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
-  final String text;
+  final List<_StreamElement> elements;
   final String? thinking;
-  final String? creatingLabel;
-  final bool creatingExpanded;
-  final String? creatingSnapshotText;
-  final VoidCallback onToggleCreatingExpanded;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
+  final ValueChanged<LocalCanvasItem> onOpenCanvas;
   const _StreamingBubble({
     required this.s,
-    required this.text,
+    required this.elements,
     this.thinking,
-    this.creatingLabel,
-    this.creatingExpanded = false,
-    this.creatingSnapshotText,
-    required this.onToggleCreatingExpanded,
     required this.widgetsEnabled,
     required this.onEnableWidgets,
     required this.onSuggestionTap,
+    required this.onOpenCanvas,
   });
 
   @override
-  Widget build(BuildContext context) => Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 18),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (thinking != null && thinking!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(thinking!,
-                      style: TextStyle(
-                          color: s.onSurfaceVariant,
-                          fontSize: 12.5,
-                          fontStyle: FontStyle.italic,
-                          height: 1.4)),
-                ),
-              // Enquanto o pill "A criar..." está ativo, o texto principal
-              // fica escondido por trás do pill — só reaparece (via o
-              // conteúdo já recebido) se o utilizador tocar para expandir.
-              // Isto é a defesa PRINCIPAL contra o vazamento de HTML/JSON
-              // cru: com creatingLabel != null (agora também disparado por
-              // prefixos parciais de marcador — ver _endsWithPartialMarker
-              // em AiTabState), o RichAiText do texto principal nunca
-              // chega a ser construído com um marcador ainda incompleto.
-              if (creatingLabel == null && text.isNotEmpty)
-                RichAiText(
-                  text: text,
-                  s: s,
-                  widgetsEnabled: widgetsEnabled,
-                  onEnableWidgets: onEnableWidgets,
-                  onSuggestionTap: onSuggestionTap,
-                ),
-              if (creatingLabel != null) ...[
-                if (creatingExpanded &&
-                    creatingSnapshotText != null &&
-                    creatingSnapshotText!.isNotEmpty) ...[
-                  RichAiText(
-                    text: creatingSnapshotText!,
-                    s: s,
-                    widgetsEnabled: widgetsEnabled,
-                    onEnableWidgets: onEnableWidgets,
-                    onSuggestionTap: onSuggestionTap,
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                _CanvasCreatingPill(
-                  s: s,
-                  label: creatingLabel!,
-                  expanded: creatingExpanded,
-                  onTap: onToggleCreatingExpanded,
-                ),
-              ] else if (text.isEmpty)
-                AiSmallDotsLoader(color: s.onSurfaceVariant),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+
+    if (thinking != null && thinking!.isNotEmpty) {
+      children.add(Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(thinking!,
+            style: TextStyle(
+                color: s.onSurfaceVariant,
+                fontSize: 12.5,
+                fontStyle: FontStyle.italic,
+                height: 1.4)),
+      ));
+    }
+
+    bool anyContent = false;
+    for (final el in elements) {
+      switch (el) {
+        case _StreamText(:final text):
+          final cleaned = cleanAiText(text);
+          if (cleaned.trim().isEmpty) continue;
+          anyContent = true;
+          children.add(RichAiText(
+            text: cleaned,
+            s: s,
+            widgetsEnabled: widgetsEnabled,
+            onEnableWidgets: onEnableWidgets,
+            onSuggestionTap: onSuggestionTap,
+          ));
+        case _StreamOpenBlock(:final label):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: _CanvasCreatingPill(s: s, label: label),
+          ));
+        case _StreamClosedCanvas(:final item):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
+          ));
+        case _StreamClosedWidget(:final block):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: buildAiWidget(block, s),
+          ));
+      }
+    }
+
+    if (!anyContent) {
+      children.add(AiSmallDotsLoader(color: s.onSurfaceVariant));
+    }
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// Pill "A criar..." — ícone tools.svg + texto com shimmer contínuo.
-/// Tocável: expande/contrai para mostrar o processo já recebido até
-/// ao momento em que a criação do bloco especial começou.
+/// ATUALIZAÇÃO (fix do streaming): este pill já não é um estado
+/// binário que decide se o resto da bolha aparece — é agora só mais
+/// um elemento inline na lista de _StreamElement, colocado exatamente
+/// no ponto do texto onde o bloco especial está a ser escrito.
+/// Enquanto o bloco correspondente não fecha, este pill continua a
+/// aparecer (com shimmer) nessa mesma posição a cada rebuild; assim
+/// que fecha, _parseStreamingContent deixa de produzir um
+/// _StreamOpenBlock naquele ponto e passa a produzir o resultado
+/// final (_StreamClosedCanvas / _StreamClosedWidget) — o shimmer
+/// para de vez, sem intervenção adicional.
 class _CanvasCreatingPill extends StatelessWidget {
   final AppColorScheme s;
   final String label;
-  final bool expanded;
-  final VoidCallback onTap;
-  const _CanvasCreatingPill({
-    required this.s,
-    required this.label,
-    required this.expanded,
-    required this.onTap,
-  });
+  const _CanvasCreatingPill({required this.s, required this.label});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon('tools.svg', color: s.primary, size: 15),
-            const SizedBox(width: 8),
-            _ShimmerText(
-              text: label,
-              baseColor: s.primary,
-              highlightColor: s.isDark ? Colors.white : Colors.white,
-            ),
-            const SizedBox(width: 6),
-            AnimatedRotation(
-              turns: expanded ? 0.5 : 0.0,
-              duration: const Duration(milliseconds: 180),
-              child: AppIcon('chevron_down.svg', color: s.primary, size: 13),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon('tools.svg', color: s.primary, size: 15),
+          const SizedBox(width: 8),
+          _ShimmerText(
+            text: label,
+            baseColor: s.primary,
+            highlightColor: s.isDark ? Colors.white : Colors.white,
+          ),
+        ],
       );
 }
 
@@ -2571,9 +2976,7 @@ class _MessageActionRowState extends State<_MessageActionRow> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SELECT TEXT SHEET — colado às bordas (Bloco D): margin 10→0,
-// borderRadius 28→14 no topo apenas, mesmo padrão dos outros bottom
-// sheets full-width corrigidos neste bloco.
+// SELECT TEXT SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showSelectTextSheet(
@@ -2625,9 +3028,7 @@ Future<void> showSelectTextSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACHED FILES SHEET — novo (Bloco D, item "anexos com conteúdo
-// real"): lista os ficheiros/fotos anexados à mensagem ainda não
-// enviada, com opção de remover cada um antes de enviar.
+// ATTACHED FILES SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachedFilesSheet(
@@ -2809,12 +3210,6 @@ class _ChatInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Input flutuante REAL: já não vive dentro de um Container com
-    // gradiente que "nasce" opaco e desvanece — isso criava a ilusão
-    // de estar preso a outro painel por trás. Agora é um cartão sólido
-    // e opaco em toda a sua área, com a própria sombra a dar a
-    // sensação de flutuar sobre o conteúdo da lista, exatamente como
-    // um FAB ou bottom sheet nativo.
     final floatingShadow = <BoxShadow>[
       BoxShadow(
         color: Colors.black.withOpacity(s.isDark ? 0.28 : 0.10),
@@ -2882,8 +3277,6 @@ class _ChatInput extends StatelessWidget {
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      // Tom azul leve, consistente com send.svg — antes
-                      // era s.hover (neutro).
                       color: s.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
@@ -2925,8 +3318,6 @@ class _ChatInput extends StatelessWidget {
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      // Tom azul leve, substitui as cores neutras fixas
-                      // anteriores (0xFF3A3A3C dark / 0xFFE5E5EA light).
                       color: s.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
@@ -3029,10 +3420,6 @@ class _AttachedToolPill extends StatelessWidget {
       );
 }
 
-/// Pill que aparece no bottom bar quando há ficheiros/fotos anexados
-/// à mensagem ainda não enviada. Ao tocar, abre o modal que lista os
-/// anexos (showAttachedFilesSheet). Só aparece quando o conjunto de
-/// anexos não está vazio (item pedido no Bloco D).
 class _AttachedFilesPill extends StatelessWidget {
   final AppColorScheme s;
   final int count;
@@ -3176,8 +3563,7 @@ void showAttachPopup(
 }
 
 // ══════════════════════════════════════════════════════════════
-// CANVAS SHEET — colado às bordas (Bloco D): margin 10→0,
-// borderRadius 28→14 no topo apenas.
+// CANVAS SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showCanvasSheet(
@@ -3313,12 +3699,7 @@ class _CanvasCardState extends State<_CanvasCard> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// VOICE RECORD SHEET — colado às bordas (Bloco D): margin 10→0,
-// borderRadius 28→14 no topo apenas. Não estava explicitamente
-// nomeado na lista de modais a corrigir, mas é o mesmo tipo de
-// bottom sheet full-width que os outros três (showAiEditModal,
-// showSelectTextSheet, showCanvasSheet) — corrigido para manter
-// consistência visual entre todos os modais deste tipo.
+// VOICE RECORD SHEET
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(

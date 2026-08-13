@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
 <title>Apresentação</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   * {
     box-sizing: border-box;
@@ -18,12 +19,6 @@
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
-
-  /* ── Layout mobile: slide grande no centro (scroll/zoom para ver
-     o slide atual em detalhe) + faixa de miniaturas navegável por
-     baixo — o mesmo padrão que apps de apresentação usam em ecrãs
-     pequenos, em vez de tentar mostrar o slide 16:9 inteiro giant
-     e as miniaturas ao lado, que não cabe em largura de telemóvel. ── */
 
   #root {
     display: flex;
@@ -80,11 +75,23 @@
     object-fit: contain;
     pointer-events: none;
   }
+  .slide-element[data-type="image"] img.img-broken {
+    background: #F2F2F2;
+    border: 1px dashed #CCCCCC;
+  }
   .slide-element[data-type="shape"] {
     border-radius: 4px;
   }
   .slide-element[data-type="shape"].shape-circle {
     border-radius: 50%;
+  }
+  /* ── Gráfico embebido num slide (Chart.js) — novo tipo de elemento,
+     paralelo ao já existente em docs.html, para o requisito de
+     "renderizar tudo que uma página web consegue" também em slides. ── */
+  .slide-element[data-type="chart"] canvas {
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none;
   }
 
   .element-resize-handle {
@@ -103,7 +110,6 @@
     display: block;
   }
 
-  /* ── Contador de slide no canto (X / Y) — orientação mobile ── */
   #slideCounter {
     position: absolute;
     top: 10px;
@@ -118,7 +124,6 @@
     z-index: 4;
   }
 
-  /* ── Setas de navegação lateral (tap para trocar de slide) ── */
   .nav-arrow {
     position: absolute;
     top: 50%;
@@ -140,8 +145,6 @@
   .nav-arrow.next { right: 10px; }
   .nav-arrow.hidden { opacity: 0.25; pointer-events: none; }
 
-  /* ── Faixa de miniaturas horizontal por baixo (estilo PowerPoint
-     mobile / Keynote mobile / Google Slides mobile) ── */
   #thumbStrip {
     height: 92px;
     flex-shrink: 0;
@@ -200,6 +203,17 @@
     font-size: 22px;
     font-weight: 300;
   }
+
+  /* ── Modo preview (usado dentro do DocumentWidgetCard, Flutter) ── */
+  body.preview-mode #thumbStrip {
+    display: none;
+  }
+  body.preview-mode #mainStage {
+    pointer-events: none;
+  }
+  body.preview-mode .nav-arrow {
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -222,7 +236,7 @@
 
   var SLIDE_W = 960;
   var SLIDE_H = 540;
-  var THUMB_SCALE = 96 / SLIDE_W; // largura da miniatura / largura real do slide
+  var THUMB_SCALE = 96 / SLIDE_W;
 
   var mainStage = document.getElementById('mainStage');
   var slideCanvas = document.getElementById('slideCanvas');
@@ -238,17 +252,41 @@
   var selectedElementId = null;
   var fitScale = 1;
   var saveTimeout = null;
+  var isPreviewMode = false;
+  var chartInstancesSlides = {}; // "slideIdx:elId" -> instância Chart.js viva
+
+  function detectarModoPreview() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      isPreviewMode = params.get('preview') === '1';
+    } catch (e) {
+      isPreviewMode = false;
+    }
+    if (isPreviewMode) {
+      document.body.classList.add('preview-mode');
+    }
+  }
 
   function ajustarZoom() {
-    var margem = 28;
+    var margem = isPreviewMode ? 0 : 28;
     var larguraDisponivel = mainStage.clientWidth - margem;
     var alturaDisponivel = mainStage.clientHeight - margem;
-    var escala = Math.min(larguraDisponivel / SLIDE_W, alturaDisponivel / SLIDE_H, 1.4);
+    var escala = Math.min(larguraDisponivel / SLIDE_W, alturaDisponivel / SLIDE_H, isPreviewMode ? 999 : 1.4);
     fitScale = (escala > 0 && isFinite(escala)) ? escala : 1;
     currentSlideEl.style.transform = 'scale(' + fitScale + ')';
   }
 
+  function destruirChartsDoSlideAtual() {
+    Object.keys(chartInstancesSlides).forEach(function (key) {
+      if (key.indexOf(currentSlideIndex + ':') === 0) {
+        try { chartInstancesSlides[key].destroy(); } catch (e) {}
+        delete chartInstancesSlides[key];
+      }
+    });
+  }
+
   function renderizarSlideAtual() {
+    destruirChartsDoSlideAtual();
     currentSlideEl.innerHTML = '';
     var slide = slides[currentSlideIndex];
     if (!slide) return;
@@ -264,32 +302,50 @@
       div.style.height = el.h + 'px';
 
       if (el.type === 'text') {
-        div.setAttribute('contenteditable', 'true');
+        div.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
         div.innerHTML = el.html || 'Texto';
         div.style.fontSize = (el.fontSize || 24) + 'px';
         if (el.color) div.style.color = el.color;
-        div.addEventListener('input', function () {
-          el.html = div.innerHTML;
-          agendarGravacao();
-        });
+        if (!isPreviewMode) {
+          div.addEventListener('input', function () {
+            el.html = div.innerHTML;
+            agendarGravacao();
+          });
+        }
       } else if (el.type === 'image') {
         var img = document.createElement('img');
         img.src = el.src;
+        img.addEventListener('error', function () { img.classList.add('img-broken'); });
         div.appendChild(img);
       } else if (el.type === 'shape') {
         div.style.background = el.color || '#2F7BF6';
         if (el.shapeKind === 'circle') div.classList.add('shape-circle');
+      } else if (el.type === 'chart') {
+        var canvas = document.createElement('canvas');
+        div.appendChild(canvas);
+        // Diferido para o próximo frame, para garantir que o canvas já
+        // tem dimensões de layout corretas antes do Chart.js medir.
+        (function (canvasEl, config, key) {
+          requestAnimationFrame(function () {
+            if (typeof Chart === 'undefined') return;
+            try {
+              chartInstancesSlides[key] = new Chart(canvasEl.getContext('2d'), config);
+            } catch (e) {}
+          });
+        })(canvas, el.chartConfig || { type: 'bar', data: { labels: [], datasets: [] } }, currentSlideIndex + ':' + el.id);
       }
 
-      var handle = document.createElement('div');
-      handle.className = 'element-resize-handle';
-      div.appendChild(handle);
-      ligarResizeHandle(handle, div, el);
+      if (!isPreviewMode) {
+        var handle = document.createElement('div');
+        handle.className = 'element-resize-handle';
+        div.appendChild(handle);
+        ligarResizeHandle(handle, div, el);
 
-      div.addEventListener('click', function (evento) {
-        evento.stopPropagation();
-        selecionarElemento(el.id);
-      });
+        div.addEventListener('click', function (evento) {
+          evento.stopPropagation();
+          selecionarElemento(el.id);
+        });
+      }
 
       currentSlideEl.appendChild(div);
     });
@@ -330,6 +386,12 @@
       el.h = Math.max(24, startH + deltaY);
       div.style.width = el.w + 'px';
       div.style.height = el.h + 'px';
+      if (el.type === 'chart') {
+        var key = currentSlideIndex + ':' + el.id;
+        if (chartInstancesSlides[key]) {
+          try { chartInstancesSlides[key].resize(); } catch (e) {}
+        }
+      }
     }
 
     function aoTerminar() {
@@ -367,6 +429,7 @@
   });
 
   function agendarGravacao() {
+    if (isPreviewMode) return;
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
       if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
@@ -374,8 +437,6 @@
       }
     }, 500);
   }
-
-  // ── Navegação entre slides (setas + swipe + miniaturas) ──────
 
   function atualizarContadorENavegacao() {
     slideCounterEl.textContent = (currentSlideIndex + 1) + ' / ' + slides.length;
@@ -386,10 +447,10 @@
   navPrev.addEventListener('click', function () { goToSlide(currentSlideIndex - 1); });
   navNext.addEventListener('click', function () { goToSlide(currentSlideIndex + 1); });
 
-  // Swipe horizontal no stage principal para trocar de slide.
   (function ligarSwipe() {
     var startX = 0, startY = 0, tocando = false;
     mainStage.addEventListener('touchstart', function (evento) {
+      if (isPreviewMode) return;
       if (evento.touches.length !== 1) return;
       tocando = true;
       startX = evento.touches[0].clientX;
@@ -397,6 +458,7 @@
     }, { passive: true });
 
     mainStage.addEventListener('touchend', function (evento) {
+      if (isPreviewMode) return;
       if (!tocando) return;
       tocando = false;
       var endX = evento.changedTouches[0].clientX;
@@ -409,8 +471,6 @@
       }
     }, { passive: true });
   })();
-
-  // ── Faixa de miniaturas ───────────────────────────────────────
 
   function renderizarThumbs() {
     thumbStrip.innerHTML = '';
@@ -447,6 +507,12 @@
         } else if (el.type === 'shape') {
           mini.style.background = el.color || '#2F7BF6';
           mini.style.borderRadius = el.shapeKind === 'circle' ? '50%' : '4px';
+        } else if (el.type === 'chart') {
+          // Miniatura de gráfico: placeholder sólido leve em vez de
+          // renderizar um segundo Chart.js por thumbnail (custoso e
+          // desnecessário numa faixa de miniaturas).
+          mini.style.background = '#EEF2F8';
+          mini.style.border = '1px solid #D8DEE8';
         }
         scaled.appendChild(mini);
       });
@@ -463,11 +529,13 @@
       thumbStrip.appendChild(thumb);
     });
 
-    var addBtn = document.createElement('div');
-    addBtn.className = 'thumb-add';
-    addBtn.textContent = '+';
-    addBtn.addEventListener('click', function () { addSlide(); });
-    thumbStrip.appendChild(addBtn);
+    if (!isPreviewMode) {
+      var addBtn = document.createElement('div');
+      addBtn.className = 'thumb-add';
+      addBtn.textContent = '+';
+      addBtn.addEventListener('click', function () { addSlide(); });
+      thumbStrip.appendChild(addBtn);
+    }
   }
 
   function atualizarThumbAtiva() {
@@ -523,13 +591,13 @@
     agendarGravacao();
   }
 
-  function insertImage(dataUrl) {
+  function insertImage(url) {
     var slide = slides[currentSlideIndex];
     var novoElemento = {
       id: nextElementId++,
       type: 'image',
       x: 100, y: 100, w: 300, h: 200,
-      src: dataUrl
+      src: url
     };
     slide.elements.push(novoElemento);
     renderizarSlideAtual();
@@ -552,9 +620,33 @@
     agendarGravacao();
   }
 
+  /// Insere um gráfico Chart.js no slide atual — mesmo formato de
+  /// configuração usado em docs.html (data-ai-chart), aqui recebido
+  /// diretamente como objeto/string JSON. Parte do requisito
+  /// "renderizar tudo que uma página web consegue" também em slides.
+  function insertChart(chartConfigJson) {
+    var config = typeof chartConfigJson === 'string' ? JSON.parse(chartConfigJson) : chartConfigJson;
+    var slide = slides[currentSlideIndex];
+    var novoElemento = {
+      id: nextElementId++,
+      type: 'chart',
+      x: 100, y: 100, w: 480, h: 300,
+      chartConfig: config
+    };
+    slide.elements.push(novoElemento);
+    renderizarSlideAtual();
+    renderizarThumbs();
+    agendarGravacao();
+  }
+
   function deleteSelectedElement() {
     if (selectedElementId === null) return;
     var slide = slides[currentSlideIndex];
+    var key = currentSlideIndex + ':' + selectedElementId;
+    if (chartInstancesSlides[key]) {
+      try { chartInstancesSlides[key].destroy(); } catch (e) {}
+      delete chartInstancesSlides[key];
+    }
     slide.elements = slide.elements.filter(function (el) { return el.id !== selectedElementId; });
     selectedElementId = null;
     renderizarSlideAtual();
@@ -614,34 +706,39 @@
     return JSON.stringify({ slides: slides, currentSlideIndex: currentSlideIndex });
   }
 
+  function aplicarSlidesData(dados) {
+    if (dados.slides && dados.slides.length) {
+      slides = dados.slides;
+      currentSlideIndex = dados.currentSlideIndex || 0;
+      nextElementId = 0;
+      slides.forEach(function (s) {
+        s.elements.forEach(function (el) {
+          if (el.id >= nextElementId) nextElementId = el.id + 1;
+        });
+      });
+      renderizarSlideAtual();
+      renderizarThumbs();
+    }
+  }
+
   function setContent(json) {
     try {
       var dados = JSON.parse(json || '{}');
-      if (dados.slides && dados.slides.length) {
-        slides = dados.slides;
-        currentSlideIndex = dados.currentSlideIndex || 0;
-        nextElementId = 0;
-        slides.forEach(function (s) {
-          s.elements.forEach(function (el) {
-            if (el.id >= nextElementId) nextElementId = el.id + 1;
-          });
-        });
-        renderizarSlideAtual();
-        renderizarThumbs();
-      }
+      aplicarSlidesData(dados);
     } catch (e) {
       // JSON inválido — mantém slide único vazio
     }
   }
 
-  function setContentFromAi() {
-    // A apresentação nunca é escrita pela IA — só pelo utilizador
-    // (edição direta na toolbar/slide) ou por setContent() vindo do
-    // toolbar nativo ao trocar de documento guardado. Este ponto de
-    // entrada existe como segunda camada de defesa a par do bloqueio
-    // já feito do lado Dart (edittab.dart não invoca setContent para
-    // LocalCanvasKind.slide vindo da IA); não faz nada mesmo se chamado.
-    return false;
+  /// ATUALIZAÇÃO (slides reais gerados pela IA): tal como em
+  /// sheets.html, esta função era antes uma segunda camada de defesa
+  /// que recusava conteúdo vindo da IA. Esse bloqueio foi removido do
+  /// lado Dart — agora é o ponto de entrada real para uma apresentação
+  /// criada via [[canvas:slide:...]], usando exatamente o formato
+  /// documentado em kAiSystemPrompt: {"slides": [...], "currentSlideIndex": 0}.
+  function setContentFromAi(json) {
+    setContent(json);
+    return true;
   }
 
   function getSlideCount() {
@@ -655,6 +752,7 @@
     insertTextBox: insertTextBox,
     insertImage: insertImage,
     insertShape: insertShape,
+    insertChart: insertChart,
     deleteSelectedElement: deleteSelectedElement,
     applyTextFormat: applyTextFormat,
     setSelectedTextColor: setSelectedTextColor,
@@ -667,6 +765,7 @@
   };
 
   function iniciar() {
+    detectarModoPreview();
     ajustarZoom();
     window.addEventListener('resize', ajustarZoom);
     window.addEventListener('orientationchange', ajustarZoom);
