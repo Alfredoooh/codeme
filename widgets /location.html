@@ -1,0 +1,302 @@
+Mapa para localizações 
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Card Mapa</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: #1c1c1e;
+      border-radius: 32px;
+      padding: 10px;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .card-preview {
+      border-radius: 24px;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background: #141414;
+      position: relative;
+    }
+
+    #mapEl {
+      width: 100%;
+      height: 100%;
+      background: #1a1a1a;
+    }
+
+    /* Leaflet gera controlos próprios — ajustamos o tema para combinar com o card */
+    .leaflet-control-zoom {
+      border: none !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+    }
+
+    .leaflet-control-zoom a {
+      background: #1c1c1e !important;
+      color: #ddd !important;
+      border: none !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: #262626 !important;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(20,20,20,0.75) !important;
+      color: #888 !important;
+      font-size: 9px !important;
+    }
+
+    .leaflet-control-attribution a { color: #aaa !important; }
+
+    .leaflet-popup-content-wrapper {
+      background: #1c1c1e !important;
+      color: #eee !important;
+      border-radius: 14px !important;
+    }
+
+    .leaflet-popup-tip {
+      background: #1c1c1e !important;
+    }
+
+    /* Badge de localização flutuante */
+    .location-badge {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      background: rgba(20,20,20,0.8);
+      color: #eee;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 16px;
+      z-index: 500;
+      pointer-events: none;
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .location-badge i { color: #2e8bc9; font-size: 11px; }
+
+    /* Botão recentrar */
+    .recenter-btn {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      width: 36px;
+      height: 36px;
+      background: #1c1c1e;
+      border: none;
+      border-radius: 50%;
+      color: #ddd;
+      font-size: 13px;
+      cursor: pointer;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: background 0.15s;
+    }
+
+    .recenter-btn:hover { background: #262626; }
+
+    /* Actions */
+    .card-actions {
+      display: flex;
+      align-items: center;
+      background: #252525;
+      border-radius: 50px;
+      padding: 5px;
+      gap: 6px;
+    }
+
+    .search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #eee;
+      font-size: 14px;
+      padding: 11px 14px;
+      outline: none;
+    }
+
+    .search-input::placeholder { color: #777; }
+
+    .btn-circle {
+      width: 40px;
+      height: 40px;
+      background: #2e8bc9;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 15px;
+    }
+
+    .btn-circle:hover  { background: #2578b0; }
+    .btn-circle:active { background: #1f6a9e; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-preview">
+      <div class="location-badge" id="locBadge">
+        <i class="fa-solid fa-location-dot"></i>
+        <span id="locBadgeText">A localizar…</span>
+      </div>
+      <div id="mapEl"></div>
+      <button class="recenter-btn" id="recenterBtn" title="Centrar na minha localização">
+        <i class="fa-solid fa-location-crosshairs"></i>
+      </button>
+    </div>
+
+    <div class="card-actions">
+      <input type="text" class="search-input" id="searchInput" placeholder="Procurar morada ou local…" />
+      <button class="btn-circle" id="searchBtn" title="Procurar">
+        <i class="fa-solid fa-magnifying-glass"></i>
+      </button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // ---------- Localização inicial ----------
+    // A IA ajusta estas coordenadas de partida consoante o contexto do pedido.
+    var DEFAULT_LAT = 38.7223;
+    var DEFAULT_LNG = -9.1393;
+    var DEFAULT_ZOOM = 13;
+    var DEFAULT_LABEL = 'Lisboa, Portugal';
+
+    var map = L.map('mapEl', {
+      zoomControl: true,
+      attributionControl: true
+    }).setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
+
+    // Tema escuro via CARTO (gratuito, sem chave de API, baseado em dados OpenStreetMap)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    var currentMarker = null;
+
+    var pulseIcon = L.divIcon({
+      className: 'custom-pulse-icon',
+      html: '<div style="position:relative;width:18px;height:18px;">' +
+              '<div style="position:absolute;inset:0;background:#2e8bc9;border-radius:50%;opacity:0.35;animation:pulseRing 1.8s ease-out infinite;"></div>' +
+              '<div style="position:absolute;top:4px;left:4px;width:10px;height:10px;background:#2e8bc9;border:2px solid #fff;border-radius:50%;"></div>' +
+            '</div>' +
+            '<style>@keyframes pulseRing{0%{transform:scale(0.6);opacity:0.6;}100%{transform:scale(2.2);opacity:0;}}</style>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+
+    function setMarker(lat, lng, label) {
+      if (currentMarker) map.removeLayer(currentMarker);
+      currentMarker = L.marker([lat, lng], { icon: pulseIcon }).addTo(map);
+      if (label) currentMarker.bindPopup(label);
+      document.getElementById('locBadgeText').textContent = label || (lat.toFixed(4) + ', ' + lng.toFixed(4));
+    }
+
+    setMarker(DEFAULT_LAT, DEFAULT_LNG, DEFAULT_LABEL);
+
+    // ---------- Geolocalização real do dispositivo ----------
+    function locateUser() {
+      if (!navigator.geolocation) return;
+      document.getElementById('locBadgeText').textContent = 'A localizar…';
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          var lat = pos.coords.latitude;
+          var lng = pos.coords.longitude;
+          map.setView([lat, lng], 15);
+          setMarker(lat, lng, 'A sua localização');
+        },
+        function() {
+          // permissão negada ou indisponível — mantém localização por defeito
+          document.getElementById('locBadgeText').textContent = DEFAULT_LABEL;
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    document.getElementById('recenterBtn').addEventListener('click', locateUser);
+
+    // tenta localizar automaticamente ao abrir (silenciosamente falha se negado)
+    locateUser();
+
+    // ---------- Procura por morada / local (Nominatim — OpenStreetMap, gratuito) ----------
+    var searchInput = document.getElementById('searchInput');
+    var searchBtn = document.getElementById('searchBtn');
+
+    function doSearch() {
+      var query = searchInput.value.trim();
+      if (!query) return;
+
+      document.getElementById('locBadgeText').textContent = 'A procurar…';
+
+      fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query))
+        .then(function(res) { return res.json(); })
+        .then(function(results) {
+          if (!results.length) {
+            document.getElementById('locBadgeText').textContent = 'Local não encontrado';
+            return;
+          }
+          var r = results[0];
+          var lat = parseFloat(r.lat);
+          var lng = parseFloat(r.lon);
+          map.setView([lat, lng], 14);
+          setMarker(lat, lng, r.display_name.split(',').slice(0, 2).join(','));
+        })
+        .catch(function() {
+          document.getElementById('locBadgeText').textContent = 'Erro na procura';
+        });
+    }
+
+    searchBtn.addEventListener('click', doSearch);
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // Leaflet precisa de recalcular o tamanho depois do layout do card assentar
+    setTimeout(function() { map.invalidateSize(); }, 100);
+    window.addEventListener('resize', function() { map.invalidateSize(); });
+  </script>
+</body>
+</html>
+

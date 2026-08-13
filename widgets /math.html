@@ -1,0 +1,1009 @@
+widget math graphs
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Card Gráfico de Função</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: #1c1c1e;
+      border-radius: 32px;
+      padding: 10px;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    /* Preview do gráfico */
+    .card-preview {
+      border-radius: 24px;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background: #141414;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .eq-badge {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      color: #e8e8e8;
+      font-size: 15px;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      z-index: 2;
+      pointer-events: none;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+
+    .roots-badge {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      color: #999;
+      font-size: 10.5px;
+      font-family: -apple-system, sans-serif;
+      z-index: 2;
+      pointer-events: none;
+      text-align: right;
+      line-height: 1.5;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+
+    .graph-area {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Legenda */
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 6px 14px 10px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: #999;
+    }
+
+    .legend-line {
+      width: 16px;
+      height: 2px;
+      border-radius: 2px;
+    }
+
+    /* Painel de controlos — só sliders */
+    .controls-panel {
+      background: #202020;
+      border-radius: 20px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slider-label {
+      color: #ccc;
+      font-size: 13px;
+      font-style: italic;
+      font-family: Georgia, serif;
+      width: 16px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .slider-value {
+      color: #888;
+      font-size: 12px;
+      width: 38px;
+      flex-shrink: 0;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .slider-track-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 28px;
+      background: transparent;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 5px;
+      background: #333;
+      border-radius: 3px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      margin-top: -7.5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      transition: transform 0.1s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 5px;
+      background: #333;
+      border-radius: 3px;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border: none;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    /* Actions — editar / animar / repor */
+    .card-actions {
+      display: flex;
+      align-items: center;
+      background: #252525;
+      border-radius: 50px;
+      padding: 5px;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      flex: 1;
+      background: #2e8bc9;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 50px;
+      padding: 11px 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+      letter-spacing: 0.1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .btn-primary:hover  { background: #2578b0; }
+    .btn-primary:active { background: #1f6a9e; }
+
+    .btn-circle {
+      width: 40px;
+      height: 40px;
+      background: #2e8bc9;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 15px;
+    }
+
+    .btn-circle:hover  { background: #2578b0; }
+    .btn-circle:active { background: #1f6a9e; }
+
+    .btn-circle.active {
+      background: #1f6a9e;
+    }
+
+    /* ---------- Modal de edição ---------- */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 50;
+      backdrop-filter: blur(2px);
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-sheet {
+      background: #1c1c1e;
+      width: 100%;
+      max-width: 420px;
+      border-radius: 28px 28px 0 0;
+      padding: 18px 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 82vh;
+      overflow-y: auto;
+      animation: sheetUp 0.22s ease-out;
+    }
+
+    @keyframes sheetUp {
+      from { transform: translateY(24px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-handle {
+      width: 36px;
+      height: 4px;
+      background: #3a3a3a;
+      border-radius: 3px;
+      margin: 0 auto;
+    }
+
+    .modal-title {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .modal-field label {
+      display: block;
+      color: #888;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 8px;
+    }
+
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .type-chip {
+      background: #262626;
+      border: 1px solid #333;
+      color: #aaa;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 9px 6px;
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .type-chip.active {
+      background: #2e8bc9;
+      border-color: #2e8bc9;
+      color: #fff;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-modal-cancel {
+      flex: 1;
+      background: #262626;
+      border: 1px solid #333;
+      color: #ccc;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+
+    .btn-modal-save {
+      flex: 1;
+      background: #2e8bc9;
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+
+    .btn-modal-save:hover { background: #2578b0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-preview">
+      <div class="eq-badge" id="eqBadge"></div>
+      <div class="roots-badge" id="rootsBadge"></div>
+      <div class="graph-area" id="graphArea">
+        <canvas id="graphCanvas"></canvas>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="controls-panel">
+      <div id="slidersHost"></div>
+    </div>
+
+    <div class="card-actions">
+      <button class="btn-primary" id="editBtn">
+        <i class="fa-solid fa-pen"></i>
+        Editar
+      </button>
+      <button class="btn-circle" id="animateBtn" title="Animar">
+        <i class="fa-solid fa-play"></i>
+      </button>
+      <button class="btn-circle" id="resetBtn" title="Repor">
+        <i class="fa-solid fa-rotate-left"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal de edição -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Editar gráfico</div>
+
+      <div class="modal-field">
+        <label>Tipo de função</label>
+        <div class="type-grid" id="typeGrid"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" id="modalCancel">Cancelar</button>
+        <button class="btn-modal-save" id="modalSave">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Definição dos tipos de gráfico ----------
+    // O tipo inicial é escolhido pela IA ao gerar o widget (ver INITIAL_TYPE),
+    // consoante o que o aluno/professor pediu (resolver uma equação, estudar
+    // uma família de funções, etc). O seletor de tipo só existe dentro do modal.
+    var FUNCTIONS = {
+      linear: {
+        label: 'Linear',
+        color: '#2e8bc9',
+        params: [
+          { key: 'm', label: 'm', min: -5, max: 5, step: 0.1, default: 1 },
+          { key: 'b', label: 'b', min: -8, max: 8, step: 0.5, default: 0 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.m) + 'x' + signed(p.b); },
+        fn: function(x, p) { return p.m * x + p.b; },
+        domain: [-10, 10],
+        range: [-9, 9],
+        roots: function(p) {
+          if (p.m === 0) return [];
+          return [-p.b / p.m];
+        }
+      },
+      quadratic: {
+        label: 'Quadrática',
+        color: '#e05e5e',
+        params: [
+          { key: 'a', label: 'a', min: -3, max: 3, step: 0.1, default: 1 },
+          { key: 'h', label: 'h', min: -5, max: 5, step: 0.5, default: 0 },
+          { key: 'k', label: 'k', min: -6, max: 6, step: 0.5, default: -2 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.a) + '(x' + signed(-p.h) + ')² ' + signed(p.k); },
+        fn: function(x, p) { return p.a * Math.pow(x - p.h, 2) + p.k; },
+        domain: [-10, 10],
+        range: [-9, 9],
+        roots: function(p) {
+          if (p.a === 0) return [];
+          var disc = -p.k / p.a;
+          if (disc < 0) return [];
+          var d = Math.sqrt(disc);
+          return disc === 0 ? [p.h] : [p.h - d, p.h + d];
+        }
+      },
+      cubic: {
+        label: 'Cúbica',
+        color: '#8ecc4e',
+        params: [
+          { key: 'a', label: 'a', min: -1.5, max: 1.5, step: 0.05, default: 0.3 },
+          { key: 'h', label: 'h', min: -4, max: 4, step: 0.5, default: 0 },
+          { key: 'k', label: 'k', min: -6, max: 6, step: 0.5, default: 0 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.a) + '(x' + signed(-p.h) + ')³ ' + signed(p.k); },
+        fn: function(x, p) { return p.a * Math.pow(x - p.h, 3) + p.k; },
+        domain: [-10, 10],
+        range: [-9, 9],
+        roots: function(p) {
+          if (p.a === 0) return [];
+          var val = -p.k / p.a;
+          var cbrt = Math.sign(val) * Math.pow(Math.abs(val), 1 / 3);
+          return [p.h + cbrt];
+        }
+      },
+      exponential: {
+        label: 'Exponencial',
+        color: '#2e8bc9',
+        params: [
+          { key: 'b', label: 'b', min: 1.1, max: 4, step: 0.1, default: 2 },
+          { key: 'x0', label: 'x', min: -3, max: 3, step: 0.1, default: 1.2 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.b) + 'ˣ'; },
+        fn: function(x, p) { return Math.pow(p.b, x); },
+        domain: [-8, 8],
+        range: [-2, 9],
+        marker: function(p) { return { x: p.x0, y: Math.pow(p.b, p.x0) }; },
+        roots: function() { return []; }
+      },
+      logarithmic: {
+        label: 'Logarítmica',
+        color: '#4ec994',
+        params: [
+          { key: 'b', label: 'b', min: 1.1, max: 4, step: 0.1, default: 2 }
+        ],
+        eq: function(p) { return 'y = log' + sub(fmt(p.b)) + '(x)'; },
+        fn: function(x, p) { return Math.log(x) / Math.log(p.b); },
+        domain: [0.01, 12],
+        range: [-4, 5],
+        excludeNonPositive: true,
+        roots: function() { return [1]; }
+      },
+      sine: {
+        label: 'Seno',
+        color: '#f0a500',
+        params: [
+          { key: 'a', label: 'a', min: 0.5, max: 4, step: 0.1, default: 1 },
+          { key: 'f', label: 'f', min: 0.2, max: 3, step: 0.1, default: 1 },
+          { key: 'p', label: 'φ', min: -3.14, max: 3.14, step: 0.1, default: 0 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.a) + 'sen(' + fmt(p.f) + 'x' + signed(p.p) + ')'; },
+        fn: function(x, p) { return p.a * Math.sin(p.f * x + p.p); },
+        domain: [-10, 10],
+        range: [-5, 5],
+        roots: function(p) {
+          if (p.f === 0) return [];
+          var rs = [];
+          for (var n = -4; n <= 4; n++) {
+            var x = (n * Math.PI - p.p) / p.f;
+            if (x >= -10 && x <= 10) rs.push(x);
+          }
+          return rs;
+        }
+      },
+      cosine: {
+        label: 'Cosseno',
+        color: '#f0a500',
+        params: [
+          { key: 'a', label: 'a', min: 0.5, max: 4, step: 0.1, default: 1 },
+          { key: 'f', label: 'f', min: 0.2, max: 3, step: 0.1, default: 1 },
+          { key: 'p', label: 'φ', min: -3.14, max: 3.14, step: 0.1, default: 0 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.a) + 'cos(' + fmt(p.f) + 'x' + signed(p.p) + ')'; },
+        fn: function(x, p) { return p.a * Math.cos(p.f * x + p.p); },
+        domain: [-10, 10],
+        range: [-5, 5],
+        roots: function(p) {
+          if (p.f === 0) return [];
+          var rs = [];
+          for (var n = -4; n <= 4; n++) {
+            var x = ((n + 0.5) * Math.PI - p.p) / p.f;
+            if (x >= -10 && x <= 10) rs.push(x);
+          }
+          return rs;
+        }
+      },
+      absolute: {
+        label: 'Módulo',
+        color: '#c77dff',
+        params: [
+          { key: 'a', label: 'a', min: -3, max: 3, step: 0.1, default: 1 },
+          { key: 'h', label: 'h', min: -6, max: 6, step: 0.5, default: 0 },
+          { key: 'k', label: 'k', min: -6, max: 6, step: 0.5, default: -2 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.a) + '|x' + signed(-p.h) + '| ' + signed(p.k); },
+        fn: function(x, p) { return p.a * Math.abs(x - p.h) + p.k; },
+        domain: [-10, 10],
+        range: [-9, 9],
+        roots: function(p) {
+          if (p.a === 0) return [];
+          var v = -p.k / p.a;
+          if (v < 0) return [];
+          if (v === 0) return [p.h];
+          return [p.h - v, p.h + v];
+        }
+      },
+      rational: {
+        label: 'Racional',
+        color: '#5ecbe0',
+        params: [
+          { key: 'a', label: 'a', min: -6, max: 6, step: 0.25, default: 2 },
+          { key: 'h', label: 'h', min: -5, max: 5, step: 0.5, default: 0 },
+          { key: 'k', label: 'k', min: -5, max: 5, step: 0.5, default: 0 }
+        ],
+        eq: function(p) { return 'y = ' + fmt(p.a) + ' / (x' + signed(-p.h) + ') ' + signed(p.k); },
+        fn: function(x, p) { return p.a / (x - p.h) + p.k; },
+        domain: [-10, 10],
+        range: [-9, 9],
+        asymptoteX: function(p) { return p.h; },
+        excludeAt: function(p) { return p.h; },
+        roots: function(p) {
+          if (p.k === 0) return [];
+          var x = -p.a / p.k + p.h;
+          return [x];
+        }
+      },
+      circle: {
+        label: 'Círculo',
+        color: '#c77dff',
+        params: [
+          { key: 'r', label: 'r', min: 1, max: 6, step: 0.25, default: 3 },
+          { key: 'cx', label: 'cx', min: -5, max: 5, step: 0.5, default: 0 },
+          { key: 'cy', label: 'cy', min: -5, max: 5, step: 0.5, default: 0 }
+        ],
+        eq: function(p) { return '(x' + signed(-p.cx) + ')² + (y' + signed(-p.cy) + ')² = ' + fmt(p.r) + '²'; },
+        isParametric: true,
+        fn: function(t, p) {
+          return { x: p.cx + p.r * Math.cos(t), y: p.cy + p.r * Math.sin(t) };
+        },
+        domain: [-8, 8],
+        range: [-7, 7],
+        roots: function() { return []; }
+      }
+    };
+
+    // >>> A IA define aqui qual gráfico faz sentido para o pedido do utilizador <<<
+    var INITIAL_TYPE = 'quadratic';
+
+    function fmt(n) {
+      var r = Math.round(n * 100) / 100;
+      return (r % 1 === 0) ? String(r) : r.toFixed(2).replace(/0$/, '');
+    }
+    function signed(n) {
+      var r = Math.round(n * 100) / 100;
+      if (r === 0) return '';
+      return (r > 0 ? ' + ' : ' - ') + fmt(Math.abs(r));
+    }
+    function sub(s) {
+      var map = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','.':'.' };
+      return s.split('').map(function(c){ return map[c] || c; }).join('');
+    }
+
+    // ---------- Estado ----------
+    var currentType = INITIAL_TYPE;
+    var state = {};
+    Object.keys(FUNCTIONS).forEach(function(key) {
+      state[key] = {};
+      FUNCTIONS[key].params.forEach(function(p) { state[key][p.key] = p.default; });
+    });
+
+    var canvas = document.getElementById('graphCanvas');
+    var ctx = canvas.getContext('2d');
+    var graphArea = document.getElementById('graphArea');
+    var animating = false;
+    var animParam = null;
+    var animDir = 1;
+    var animRAF = null;
+
+    // ---------- Sliders ----------
+    var slidersHost = document.getElementById('slidersHost');
+    function buildSliders() {
+      slidersHost.innerHTML = '';
+      var def = FUNCTIONS[currentType];
+      def.params.forEach(function(p) {
+        var row = document.createElement('div');
+        row.className = 'slider-row';
+        row.style.marginBottom = '8px';
+
+        var label = document.createElement('div');
+        label.className = 'slider-label';
+        label.textContent = p.label;
+
+        var wrap = document.createElement('div');
+        wrap.className = 'slider-track-wrap';
+
+        var input = document.createElement('input');
+        input.type = 'range';
+        input.min = p.min;
+        input.max = p.max;
+        input.step = p.step;
+        input.value = state[currentType][p.key];
+        input.dataset.key = p.key;
+
+        var valEl = document.createElement('div');
+        valEl.className = 'slider-value';
+        valEl.textContent = fmt(state[currentType][p.key]);
+
+        input.addEventListener('input', function() {
+          state[currentType][p.key] = parseFloat(input.value);
+          valEl.textContent = fmt(state[currentType][p.key]);
+          draw();
+        });
+
+        wrap.appendChild(input);
+        row.appendChild(label);
+        row.appendChild(wrap);
+        row.appendChild(valEl);
+        slidersHost.appendChild(row);
+      });
+    }
+
+    // ---------- Legenda + badges ----------
+    var legend = document.getElementById('legend');
+    var eqBadge = document.getElementById('eqBadge');
+    var rootsBadge = document.getElementById('rootsBadge');
+
+    function buildLegend() {
+      var def = FUNCTIONS[currentType];
+      legend.innerHTML =
+        '<div class="legend-item"><div class="legend-line" style="background:' + def.color + '"></div>' + def.label + '</div>' +
+        '<div class="legend-item"><div class="legend-line" style="background:#3a3a3a"></div>eixos</div>';
+    }
+
+    function updateBadges() {
+      var def = FUNCTIONS[currentType];
+      eqBadge.textContent = def.eq(state[currentType]);
+
+      var roots = def.roots ? def.roots(state[currentType]) : [];
+      roots = roots.filter(function(r) { return isFinite(r); });
+      if (!roots.length) {
+        rootsBadge.textContent = '';
+      } else if (roots.length === 1) {
+        rootsBadge.textContent = 'raiz: x = ' + fmt(roots[0]);
+      } else {
+        rootsBadge.innerHTML = 'raízes:<br>' + roots.map(function(r) { return 'x = ' + fmt(r); }).join(', ');
+      }
+    }
+
+    // ---------- Canvas setup / mapeamento coordenadas ----------
+    var dpr = Math.max(window.devicePixelRatio || 1, 1);
+
+    function resizeCanvas() {
+      var rect = graphArea.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function mapPoint(x, y, w, h, dom, rng) {
+      var px = (x - dom[0]) / (dom[1] - dom[0]) * w;
+      var py = h - (y - rng[0]) / (rng[1] - rng[0]) * h;
+      return { x: px, y: py };
+    }
+
+    function draw() {
+      var rect = graphArea.getBoundingClientRect();
+      var w = rect.width, h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      var def = FUNCTIONS[currentType];
+      var p = state[currentType];
+      var dom = def.domain, rng = def.range;
+
+      // grelha
+      ctx.strokeStyle = '#252525';
+      ctx.lineWidth = 1;
+      var stepX = (dom[1] - dom[0]) / 10;
+      var stepY = (rng[1] - rng[0]) / 8;
+      for (var gx = Math.ceil(dom[0] / stepX) * stepX; gx <= dom[1]; gx += stepX) {
+        var a = mapPoint(gx, 0, w, h, dom, rng);
+        ctx.beginPath();
+        ctx.moveTo(a.x, 0);
+        ctx.lineTo(a.x, h);
+        ctx.stroke();
+      }
+      for (var gy = Math.ceil(rng[0] / stepY) * stepY; gy <= rng[1]; gy += stepY) {
+        var b = mapPoint(0, gy, w, h, dom, rng);
+        ctx.beginPath();
+        ctx.moveTo(0, b.y);
+        ctx.lineTo(w, b.y);
+        ctx.stroke();
+      }
+
+      // eixos x/y bem marcados, com setas e labels
+      ctx.strokeStyle = '#4a4a4a';
+      ctx.lineWidth = 1.5;
+      var origin = mapPoint(0, 0, w, h, dom, rng);
+      var oy = Math.min(Math.max(origin.y, 0), h);
+      var ox = Math.min(Math.max(origin.x, 0), w);
+
+      // eixo X
+      ctx.beginPath();
+      ctx.moveTo(0, oy);
+      ctx.lineTo(w, oy);
+      ctx.stroke();
+      // seta eixo X
+      ctx.beginPath();
+      ctx.moveTo(w - 8, oy - 4);
+      ctx.lineTo(w, oy);
+      ctx.lineTo(w - 8, oy + 4);
+      ctx.stroke();
+
+      // eixo Y
+      ctx.beginPath();
+      ctx.moveTo(ox, 0);
+      ctx.lineTo(ox, h);
+      ctx.stroke();
+      // seta eixo Y
+      ctx.beginPath();
+      ctx.moveTo(ox - 4, 8);
+      ctx.lineTo(ox, 0);
+      ctx.lineTo(ox + 4, 8);
+      ctx.stroke();
+
+      // labels x, y
+      ctx.fillStyle = '#5a5a5a';
+      ctx.font = 'italic 11px Georgia, serif';
+      ctx.fillText('x', w - 14, oy - 8);
+      ctx.fillText('y', ox + 8, 14);
+
+      // marcas numéricas nos eixos
+      ctx.fillStyle = '#5a5a5a';
+      ctx.font = '9px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      for (var mx = Math.ceil(dom[0] / stepX) * stepX; mx <= dom[1]; mx += stepX) {
+        if (Math.abs(mx) < stepX / 4) continue;
+        var mpx = mapPoint(mx, 0, w, h, dom, rng);
+        ctx.fillText(fmt(mx), mpx.x, oy + 12);
+      }
+      ctx.textAlign = 'right';
+      for (var my = Math.ceil(rng[0] / stepY) * stepY; my <= rng[1]; my += stepY) {
+        if (Math.abs(my) < stepY / 4) continue;
+        var mpy = mapPoint(0, my, w, h, dom, rng);
+        ctx.fillText(fmt(my), ox - 6, mpy.y + 3);
+      }
+      ctx.textAlign = 'left';
+
+      // assíntota vertical (ex: racional)
+      if (def.asymptoteX) {
+        var ax = def.asymptoteX(p);
+        var am = mapPoint(ax, 0, w, h, dom, rng);
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(am.x, 0);
+        ctx.lineTo(am.x, h);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // curva
+      ctx.strokeStyle = def.color;
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+
+      if (def.isParametric) {
+        var steps = 200;
+        for (var i = 0; i <= steps; i++) {
+          var t = (i / steps) * Math.PI * 2;
+          var pt = def.fn(t, p);
+          var m = mapPoint(pt.x, pt.y, w, h, dom, rng);
+          if (i === 0) ctx.moveTo(m.x, m.y); else ctx.lineTo(m.x, m.y);
+        }
+      } else {
+        var samples = 320;
+        var first = true;
+        var excludeAt = def.excludeAt ? def.excludeAt(p) : null;
+        for (var s = 0; s <= samples; s++) {
+          var x = dom[0] + (dom[1] - dom[0]) * (s / samples);
+          if (def.excludeNonPositive && x <= 0) { first = true; continue; }
+          if (excludeAt !== null && Math.abs(x - excludeAt) < 0.03) { first = true; continue; }
+          var y = def.fn(x, p);
+          if (!isFinite(y) || y < rng[0] - 4 || y > rng[1] + 4) { first = true; continue; }
+          var m2 = mapPoint(x, y, w, h, dom, rng);
+          if (first) { ctx.moveTo(m2.x, m2.y); first = false; }
+          else ctx.lineTo(m2.x, m2.y);
+        }
+      }
+      ctx.stroke();
+
+      // raízes marcadas no eixo X
+      var roots = def.roots ? def.roots(p) : [];
+      roots.filter(function(r){ return isFinite(r) && r >= dom[0] && r <= dom[1]; }).forEach(function(r) {
+        var rp = mapPoint(r, 0, w, h, dom, rng);
+        ctx.beginPath();
+        ctx.arc(rp.x, oy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.strokeStyle = def.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+
+      // ponto marcador (ex: exponencial)
+      if (def.marker) {
+        var mk = def.marker(p);
+        var mp = mapPoint(mk.x, mk.y, w, h, dom, rng);
+        ctx.fillStyle = def.color;
+        ctx.beginPath();
+        ctx.arc(mp.x, mp.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#141414';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      updateBadges();
+    }
+
+    // ---------- Animar (botão circular na barra de ações) ----------
+    var animateBtn = document.getElementById('animateBtn');
+
+    function primaryAnimParam() {
+      return FUNCTIONS[currentType].params[0];
+    }
+
+    function toggleAnimation() {
+      if (animating) { stopAnimation(); return; }
+      animating = true;
+      animParam = primaryAnimParam();
+      animDir = 1;
+      animateBtn.classList.add('active');
+      animateBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+      animLoop();
+    }
+
+    function stopAnimation() {
+      animating = false;
+      if (animRAF) cancelAnimationFrame(animRAF);
+      animateBtn.classList.remove('active');
+      animateBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    }
+
+    function animLoop() {
+      if (!animating || !animParam) return;
+      var key = animParam.key;
+      var speed = (animParam.max - animParam.min) / 140;
+      state[currentType][key] += speed * animDir;
+      if (state[currentType][key] >= animParam.max) { state[currentType][key] = animParam.max; animDir = -1; }
+      if (state[currentType][key] <= animParam.min) { state[currentType][key] = animParam.min; animDir = 1; }
+
+      var slider = slidersHost.querySelector('input[data-key="' + key + '"]');
+      if (slider) {
+        slider.value = state[currentType][key];
+        var valEl = slider.parentElement.nextElementSibling;
+        if (valEl) valEl.textContent = fmt(state[currentType][key]);
+      }
+
+      draw();
+      animRAF = requestAnimationFrame(animLoop);
+    }
+
+    animateBtn.addEventListener('click', toggleAnimation);
+
+    // ---------- Repor (botão circular na barra de ações) ----------
+    document.getElementById('resetBtn').addEventListener('click', function() {
+      stopAnimation();
+      var def = FUNCTIONS[currentType];
+      def.params.forEach(function(p) { state[currentType][p.key] = p.default; });
+      buildSliders();
+      draw();
+    });
+
+    // ---------- Modal de edição (só troca o tipo de função) ----------
+    var modalOverlay = document.getElementById('modalOverlay');
+    var typeGrid = document.getElementById('typeGrid');
+    var editBtn = document.getElementById('editBtn');
+    var modalCancel = document.getElementById('modalCancel');
+    var modalSave = document.getElementById('modalSave');
+    var pendingType = currentType;
+
+    Object.keys(FUNCTIONS).forEach(function(key) {
+      var chip = document.createElement('div');
+      chip.className = 'type-chip' + (key === currentType ? ' active' : '');
+      chip.textContent = FUNCTIONS[key].label;
+      chip.dataset.key = key;
+      chip.addEventListener('click', function() {
+        pendingType = key;
+        Array.prototype.forEach.call(typeGrid.children, function(el) {
+          el.classList.toggle('active', el.dataset.key === key);
+        });
+      });
+      typeGrid.appendChild(chip);
+    });
+
+    function openModal() {
+      pendingType = currentType;
+      Array.prototype.forEach.call(typeGrid.children, function(el) {
+        el.classList.toggle('active', el.dataset.key === currentType);
+      });
+      modalOverlay.classList.add('open');
+    }
+
+    function closeModal() {
+      modalOverlay.classList.remove('open');
+    }
+
+    editBtn.addEventListener('click', openModal);
+    modalCancel.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', function(e) {
+      if (e.target === modalOverlay) closeModal();
+    });
+
+    modalSave.addEventListener('click', function() {
+      stopAnimation();
+      currentType = pendingType;
+      buildSliders();
+      buildLegend();
+      draw();
+      closeModal();
+    });
+
+    // ---------- Init ----------
+    function init() {
+      resizeCanvas();
+      buildSliders();
+      buildLegend();
+      draw();
+    }
+
+    window.addEventListener('resize', function() {
+      stopAnimation();
+      resizeCanvas();
+      draw();
+    });
+
+    init();
+  </script>
+</body>
+</html>

@@ -1172,6 +1172,11 @@ class _MarketChartPainter extends CustomPainter {
 // pode ligar este botão a esse serviço via callback opcional).
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// CALENDAR — redesenhado conforme o design fornecido (card 100%).
+// Suporta tema claro/escuro via AppColorScheme.
+// ══════════════════════════════════════════════════════════════
+
 class AiCalendarWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
@@ -1208,6 +1213,19 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       ));
     }
   }
+
+  // Cores adaptativas (tema escuro/claro)
+  Color _cardBg()          => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color _previewBg()       => widget.s.isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF8F8F8);
+  Color _monthTextColor()  => widget.s.isDark ? Colors.white : Colors.black87;
+  Color _navBtnBg()        => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
+  Color _navIconColor()    => widget.s.isDark ? const Color(0xFFAAAAAA) : Colors.black54;
+  Color _weekdayColor()    => widget.s.isDark ? const Color(0xFF555555) : Colors.black45;
+  Color _dayNumColor()     => widget.s.isDark ? const Color(0xFFCCCCCC) : Colors.black87;
+  Color _otherMonthColor() => widget.s.isDark ? const Color(0xFF3A3A3A) : Colors.black26;
+  Color _selectedBg()      => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
+  Color _actionsBg()       => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
+  Color _accent()          => const Color(0xFF2E8BC9); // azul do design (mantido nos dois temas)
 
   void _openNewEventSheet() {
     final s = widget.s;
@@ -1285,136 +1303,270 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final bg = s.isDark ? const Color(0xFF1B1B1B) : Colors.white;
-    final border = s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
-    final mutedClr = s.isDark ? const Color(0xFF888888) : const Color(0xFF999999);
-    final evBg = s.isDark ? const Color(0xFF252535) : const Color(0xFFF7F6FF);
 
     final y = _current.year, m = _current.month;
-    final firstDay = DateTime(y, m, 1).weekday % 7;
+    final firstDay = DateTime(y, m, 1).weekday % 7; // 0 = Dom, 6 = Sáb
     final daysInMonth = DateTime(y, m + 1, 0).day;
     final daysInPrev = DateTime(y, m, 0).day;
 
+    // Lista de widgets para cada célula (incluindo vazios)
     final cells = <Widget>[];
+    // Dias do mês anterior
     for (int i = firstDay - 1; i >= 0; i--) {
-      cells.add(_dayCell((daysInPrev - i).toString(), other: true, isToday: false, isSel: false, onTap: null));
+      final day = daysInPrev - i;
+      cells.add(_buildDayCell(
+        label: day.toString(),
+        isOtherMonth: true,
+        isToday: false,
+        isSelected: false,
+        eventColors: const [],
+        onTap: null,
+      ));
     }
+    // Dias do mês atual
     for (int d = 1; d <= daysInMonth; d++) {
       final key = _key(y, m, d);
       final isToday = DateTime(y, m, d) == DateTime(_today.year, _today.month, _today.day);
-      cells.add(_dayCell(d.toString(),
-          other: false, isToday: isToday, isSel: key == _selectedKey, hasEvent: _events[key]?.isNotEmpty == true,
-          onTap: () => setState(() => _selectedKey = key)));
+      final dayEvents = _events[key] ?? const [];
+      cells.add(_buildDayCell(
+        label: d.toString(),
+        isOtherMonth: false,
+        isToday: isToday,
+        isSelected: key == _selectedKey,
+        eventColors: dayEvents.map((e) => e.color).toList(),
+        onTap: () => setState(() => _selectedKey = key),
+      ));
     }
+    // Dias do mês seguinte para completar a grelha
     final total = firstDay + daysInMonth;
     final rem = total % 7 == 0 ? 0 : 7 - total % 7;
     for (int d = 1; d <= rem; d++) {
-      cells.add(_dayCell(d.toString(), other: true, isToday: false, isSel: false, onTap: null));
+      cells.add(_buildDayCell(
+        label: d.toString(),
+        isOtherMonth: true,
+        isToday: false,
+        isSelected: false,
+        eventColors: const [],
+        onTap: null,
+      ));
     }
 
-    final dayEvents = _events[_selectedKey] ?? const [];
+    // Dividir em linhas de 7
+    final rows = <List<Widget>>[];
+    for (int i = 0; i < cells.length; i += 7) {
+      rows.add(cells.sublist(i, math.min(i + 7, cells.length)));
+    }
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(color: bg, border: Border.all(color: border, width: 1.5), borderRadius: BorderRadius.circular(10)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-          child: Row(children: [
-            GestureDetector(
-              onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1)),
-              child: AppIcon('chevron_left.svg', size: 16, color: mutedClr),
-            ),
-            Expanded(
-              child: Text('${_months[m - 1]} $y',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: s.onSurface)),
-            ),
-            GestureDetector(
-              onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1)),
-              child: AppIcon('chevron_right.svg', size: 16, color: mutedClr),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: _weekdays
-                .map((w) => Expanded(
-                      child: Center(
-                        child: Text(w, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: mutedClr)),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _cardBg(),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(s.isDark ? 0.3 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Preview do calendário (aspect ratio 4:3) ──
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _previewBg(),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  // Cabeçalho do mês
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${_months[m - 1]} $y',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: _monthTextColor(),
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            _buildNavButton(
+                              icon: 'chevron_left.svg',
+                              onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1)),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildNavButton(
+                              icon: 'chevron_right.svg',
+                              onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Dias da semana
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: _weekdays.map((w) => Expanded(
+                        child: Center(
+                          child: Text(
+                            w,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _weekdayColor(),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Grelha de dias (preenche o restante)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                      child: Column(
+                        children: rows.map((row) => Expanded(
+                          child: Row(
+                            children: row.map((cell) => Expanded(child: cell)).toList(),
+                          ),
+                        )).toList(),
                       ),
-                    ))
-                .toList(),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-          child: GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: cells,
-          ),
-        ),
-        if (dayEvents.isNotEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-            decoration: BoxDecoration(color: evBg, border: Border(top: BorderSide(color: border, width: 1))),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: dayEvents.map((ev) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(children: [
-                      Container(width: 6, height: 6, decoration: BoxDecoration(color: ev.color, shape: BoxShape.circle)),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(ev.name, style: TextStyle(fontSize: 12.5, color: s.onSurface))),
-                      if (ev.time.isNotEmpty)
-                        Text(ev.time, style: TextStyle(fontSize: 11, color: mutedClr)),
-                    ]),
-                  )).toList(),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        _WidgetActionBar(s: s, actions: [
-          _WidgetAction(icon: 'add.svg', label: 'Novo evento', primary: true, onTap: _openNewEventSheet),
-        ]),
-      ]),
+          const SizedBox(height: 10),
+          // ── Ações (botão único em pílula) ──
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: _actionsBg(),
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: GestureDetector(
+              onTap: _openNewEventSheet,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: _accent(),
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon('add.svg', size: 14, color: Colors.white),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Novo evento',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _dayCell(String label, {required bool other, required bool isToday, required bool isSel, bool hasEvent = false, VoidCallback? onTap}) {
-    final s = widget.s;
+  // Botão circular de navegação (mês anterior/ seguinte)
+  Widget _buildNavButton({required String icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.all(2),
-        alignment: Alignment.center,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
-          color: isSel ? const Color(0xFF6F5AF6) : (isToday ? const Color(0xFF6F5AF6).withOpacity(0.15) : Colors.transparent),
+          color: _navBtnBg(),
           shape: BoxShape.circle,
         ),
+        child: AppIcon(icon, size: 12, color: _navIconColor()),
+      ),
+    );
+  }
+
+  // Célula de dia (número + dots de eventos)
+  Widget _buildDayCell({
+    required String label,
+    required bool isOtherMonth,
+    required bool isToday,
+    required bool isSelected,
+    required List<Color> eventColors,
+    required VoidCallback? onTap,
+  }) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? _selectedBg() : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            Text(label,
+            // Número do dia
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isToday ? _accent() : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                label,
                 style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: isToday || isSel ? FontWeight.w700 : FontWeight.w400,
-                  color: isSel
+                  fontSize: 12,
+                  fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
+                  color: isToday
                       ? Colors.white
-                      : other
-                          ? s.onSurfaceVariant.withOpacity(0.35)
-                          : s.onSurface,
-                )),
-            if (hasEvent && !isSel)
-              Container(
-                margin: const EdgeInsets.only(top: 1),
-                width: 4, height: 4,
-                decoration: const BoxDecoration(color: Color(0xFF6F5AF6), shape: BoxShape.circle),
+                      : isOtherMonth
+                          ? _otherMonthColor()
+                          : _dayNumColor(),
+                ),
+              ),
+            ),
+            // Dots de eventos (máx 2)
+            if (eventColors.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
+                  children: eventColors.take(2).map((c) => Container(
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 1),
+                    decoration: BoxDecoration(
+                      color: c,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  )).toList(),
+                ),
               ),
           ],
         ),

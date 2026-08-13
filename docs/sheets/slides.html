@@ -1,0 +1,326 @@
+widget para docs sheets e slides
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Card Documento</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: #1c1c1e;
+      border-radius: 32px;
+      padding: 10px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .card-preview {
+      border-radius: 24px;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background: #c8c8c8;
+      position: relative;
+    }
+
+    /* Área de scroll — ocupa todo o card-preview */
+    .doc-viewport {
+      width: 100%;
+      height: 100%;
+      overflow-y: scroll;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      background: #c8c8c8;
+      position: relative;
+    }
+
+    .doc-viewport::-webkit-scrollbar { width: 0; }
+
+    /* Wrapper que recebe o transform scale — transform-origin top left */
+    .doc-scaler {
+      transform-origin: top left;
+      /* largura e transform definidos via JS */
+    }
+
+    /* Idêntico ao docs.html original */
+    #pagesStack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 20px 0 40px;
+    }
+
+    .page-a4 {
+      background: #FFFFFF;
+      width: 794px;
+      height: 1123px;
+      padding: 96px 72px;
+      border: 1px solid #CCCCCC;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.16);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Georgia, serif;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #1a1a1a;
+    }
+
+    .page-a4 h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #111;
+    }
+
+    .page-a4 h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 28px;
+      margin-bottom: 8px;
+      color: #222;
+    }
+
+    .page-a4 p { margin-bottom: 12px; }
+
+    .page-a4 ul {
+      margin: 8px 0 12px 24px;
+    }
+
+    .page-a4 ul li { margin-bottom: 6px; }
+
+    .page-a4 .divider {
+      border: none;
+      border-top: 1px solid #ddd;
+      margin: 20px 0;
+    }
+
+    .page-number {
+      position: absolute;
+      bottom: 14px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: #9a9a9a;
+      pointer-events: none;
+    }
+
+    /* Indicador flutuante */
+    .page-indicator {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      pointer-events: none;
+      z-index: 10;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Actions */
+    .card-actions {
+      display: flex;
+      align-items: center;
+      background: #252525;
+      border-radius: 50px;
+      padding: 5px;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      flex: 1;
+      background: #2e8bc9;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 50px;
+      padding: 11px 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-primary:hover  { background: #2578b0; }
+    .btn-primary:active { background: #1f6a9e; }
+
+    .btn-circle {
+      width: 40px;
+      height: 40px;
+      background: #2e8bc9;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 15px;
+      transition: background 0.2s;
+    }
+
+    .btn-circle:hover  { background: #2578b0; }
+    .btn-circle:active { background: #1f6a9e; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-preview">
+      <div class="doc-viewport" id="viewport">
+        <div class="doc-scaler" id="scaler">
+          <div id="pagesStack">
+
+            <!-- Página 1 -->
+            <div class="page-a4">
+              <h1>Relatório Trimestral</h1>
+              <p style="color:#888; font-size:13px;">Outubro · Novembro · Dezembro 2024</p>
+              <hr class="divider"/>
+              <h2>Resumo Executivo</h2>
+              <p>O trimestre registou um crescimento sólido em todas as áreas de negócio, com destaque para a expansão da base de clientes e a melhoria das margens operacionais face ao período homólogo.</p>
+              <h2>Resultados Principais</h2>
+              <ul>
+                <li>Receita total: <strong>€ 2.4M</strong> (+18% vs Q3)</li>
+                <li>Novos clientes: <strong>134</strong></li>
+                <li>NPS médio: <strong>72</strong></li>
+                <li>Churn mensal: <strong>1.2%</strong></li>
+              </ul>
+              <h2>Observações</h2>
+              <p>A equipa de produto lançou três funcionalidades críticas que contribuíram diretamente para a retenção. O pipeline de vendas encontra-se em máximos históricos.</p>
+              <h2>Próximos Passos</h2>
+              <p>Iniciar processo de contratação para as equipas de engenharia e marketing, consolidar parcerias estratégicas e preparar o lançamento do produto v2.</p>
+              <div class="page-number">1</div>
+            </div>
+
+            <!-- Página 2 -->
+            <div class="page-a4">
+              <h1>Análise Detalhada</h1>
+              <hr class="divider"/>
+              <h2>Desempenho por Canal</h2>
+              <p>O canal digital representou <strong>68%</strong> da receita total, consolidando a estratégia de crescimento orgânico iniciada em 2023.</p>
+              <ul>
+                <li>SEO / Orgânico: <strong>€ 820K</strong></li>
+                <li>Paid Media: <strong>€ 610K</strong></li>
+                <li>Parcerias: <strong>€ 440K</strong></li>
+                <li>Direto / Referência: <strong>€ 530K</strong></li>
+              </ul>
+              <h2>Custos Operacionais</h2>
+              <p>Os custos mantiveram-se dentro do orçamento aprovado, com uma redução de 4% face ao trimestre anterior graças à otimização de infraestrutura.</p>
+              <h2>Conclusão</h2>
+              <p>O desempenho do Q4 confirma a trajetória positiva da empresa e valida as decisões estratégicas tomadas ao longo de 2024. O objetivo para 2025 é atingir os <strong>€ 12M</strong> de receita anual recorrente.</p>
+              <div class="page-number">2</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <div class="page-indicator" id="pageIndicator">1 / 2</div>
+    </div>
+
+    <div class="card-actions">
+      <button class="btn-primary">Abrir no editor</button>
+      <button class="btn-circle" title="Copiar">
+        <i class="fa-regular fa-copy"></i>
+      </button>
+      <button class="btn-circle" title="Download">
+        <i class="fa-solid fa-arrow-down"></i>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    var PAGE_W = 794;
+    var viewport  = document.getElementById('viewport');
+    var scaler    = document.getElementById('scaler');
+    var indicator = document.getElementById('pageIndicator');
+    var pages     = document.querySelectorAll('.page-a4');
+    var totalPages = pages.length;
+
+    function applyScale() {
+      var vw = viewport.clientWidth;
+      var scale = vw / PAGE_W;
+
+      scaler.style.width           = PAGE_W + 'px';
+      scaler.style.transform       = 'scale(' + scale + ')';
+      scaler.style.transformOrigin = 'top left';
+
+      // O transform CSS não altera o layout flow, por isso forçamos
+      // a altura do scaler no DOM para que o viewport faça scroll correto
+      var naturalH = scaler.scrollHeight;
+      // após transform a altura visual é naturalH * scale
+      // definimos min-height no próprio scaler para o viewport o reconhecer
+      scaler.style.minHeight = '';
+      requestAnimationFrame(function () {
+        var scaledH = scaler.getBoundingClientRect().height;
+        // Criamos um espaçador invisível dentro do viewport
+        if (!document.getElementById('__spacer')) {
+          var sp = document.createElement('div');
+          sp.id = '__spacer';
+          sp.style.cssText = 'position:absolute;top:0;left:0;width:1px;pointer-events:none;';
+          viewport.appendChild(sp);
+        }
+        document.getElementById('__spacer').style.height = scaledH + 'px';
+        viewport.style.position = 'relative';
+      });
+    }
+
+    function updateIndicator() {
+      var vw    = viewport.clientWidth;
+      var scale = vw / PAGE_W;
+      var scrollTop = viewport.scrollTop;
+
+      // altura de cada página escalada + gap escalado
+      var pageH = 1123 * scale;
+      var gap   = 24   * scale;
+      var padTop = 20  * scale;
+
+      var current = 1;
+      for (var i = 0; i < totalPages; i++) {
+        var pageTop = padTop + i * (pageH + gap);
+        if (scrollTop >= pageTop - pageH * 0.3) {
+          current = i + 1;
+        }
+      }
+      indicator.textContent = current + ' / ' + totalPages;
+    }
+
+    applyScale();
+    updateIndicator();
+
+    viewport.addEventListener('scroll', updateIndicator);
+    window.addEventListener('resize', function () {
+      applyScale();
+      updateIndicator();
+    });
+  </script>
+</body>
+</html>
