@@ -165,13 +165,14 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — agora renderizado como o `slider` do SliderDrawer
-// (flutter_slider_drawer). Todo o conteúdo visual (ícones, tamanhos,
-// pills, tiles, popups) é o mesmo de antes — só o mecanismo de
-// fecho mudou: onClose() deixou de existir como callback próprio;
-// em vez disso, este widget recebe o GlobalKey<SliderDrawerState> do
-// RootShell e chama drawerKey.currentState?.closeDrawer() diretamente
-// em cada ação que antes fechava o drawer.
+// DRAWER — renderizado como o `slider` do SliderDrawer
+// (flutter_slider_drawer). Recebe o GlobalKey<SliderDrawerState> do
+// RootShell e chama drawerKey.currentState?.closeSlider() em cada
+// ação que fecha o drawer.
+//
+// FIX: closeSlider() em vez de closeDrawer() — ver nota detalhada
+// em main.dart sobre a divergência entre o README publicado e a API
+// real da versão 3.0.2 instalada, confirmada pelo erro do compilador.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -239,7 +240,7 @@ class _AppDrawerState extends State<AppDrawer> {
     }
   }
 
-  void _closeDrawer() => widget.drawerKey.currentState?.closeDrawer();
+  void _closeDrawer() => widget.drawerKey.currentState?.closeSlider();
 
   void _openSearch(BuildContext context) {
     _closeDrawer();

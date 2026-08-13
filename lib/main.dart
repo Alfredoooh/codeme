@@ -78,29 +78,28 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — agora usa flutter_slider_drawer (SliderDrawer) em vez
-// do Stack manual com AnimationController próprio. O pacote controla
-// sozinho a animação de abertura/fecho e o "empurrar" do body — o que
-// antes era feito manualmente com Transform.translate(offset) num
-// AnimatedBuilder ligado a um AnimationController nosso.
+// ROOT SHELL — usa flutter_slider_drawer (SliderDrawer) em vez do
+// Stack manual com AnimationController próprio.
 //
-// IMPORTANTE (nome do parâmetro de direção): o pacote documenta o
-// enum `SliderOpen.LEFT_TO_RIGHT` no README da própria tag v3.0.2,
-// mas não foi possível confirmar com 100% de certeza, a partir das
-// fontes disponíveis nesta sessão, se o nome do parâmetro que recebe
-// esse enum é exatamente `slideDirection` (nome mencionado de forma
-// isolada no changelog, nunca visto lado a lado com o valor do enum
-// num trecho de código real). Se o teu editor assinalar erro nesta
-// linha ao correr `flutter pub get`, o autocomplete do IDE vai
-// mostrar o nome certo — é apenas este UM nome de parâmetro que pode
-// precisar de ajuste, não a estrutura do resto do ficheiro.
-//   slideDirection: SliderOpen.LEFT_TO_RIGHT,
+// FIX (build falhado anteriormente): SliderDrawerState na versão
+// 3.0.2 realmente instalada NÃO expõe openDrawer()/closeDrawer() —
+// esses nomes existiam numa fase antiga da API e o README publicado
+// ainda os mostra, mas o próprio changelog do pacote regista que
+// foram substituídos por openSlider()/closeSlider() ("replace
+// closeDrawer and openDrawer to closeSlider and openSlider in
+// respectively"). O erro do compilador confirmou isto apontando
+// diretamente para flutter_slider_drawer-3.0.2/lib/src/
+// slider_drawer.dart. Corrigido abaixo nas duas ocorrências.
 //
-// appBar: null — esconde a appbar própria do plugin (confirmado nas
-// release notes do pacote: "replace hasAppBar to appBar: if you set
-// appBar:null then it will hide"), porque o teu _AppHeader já existe
-// e continua a ser desenhado por cima do `child`, exatamente como
-// antes.
+// FIX (sliderShadow): removido. O erro do compilador ("No named
+// parameter with the name 'sliderShadow'") aponta para a classe
+// SliderDrawer realmente instalada não aceitando esse nome, apesar
+// de o changelog do pacote mencionar um parâmetro com esse nome
+// numa fase anterior. Não foi possível confirmar, a partir das
+// fontes disponíveis nesta sessão, se foi renomeado ou movido para
+// dentro de outro objeto de configuração — por isso foi removido em
+// vez de arriscar um terceiro nome incorreto. O pacote continua a
+// desenhar a sua sombra própria por defeito.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -118,8 +117,8 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => _sliderDrawerKey.currentState?.openDrawer();
-  void _closeDrawer() => _sliderDrawerKey.currentState?.closeDrawer();
+  void _openDrawer()  => _sliderDrawerKey.currentState?.openSlider();
+  void _closeDrawer() => _sliderDrawerKey.currentState?.closeSlider();
 
   void _openSettings() {
     _closeDrawer();
@@ -281,11 +280,6 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
         sliderOpenSize: _drawerWidth,
         slideDirection: SliderOpen.LEFT_TO_RIGHT,
         animationDuration: 260,
-        sliderShadow: BoxShadow(
-          color: s.barrier.withOpacity(0.35),
-          blurRadius: 24,
-          spreadRadius: 2,
-        ),
         slider: ClipRRect(
           borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
           child: AppDrawer(
