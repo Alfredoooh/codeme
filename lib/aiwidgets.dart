@@ -1596,28 +1596,28 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   }
 
   List<_MarketDataPoint> _getSeries(String pairKey, String tfKey) {
-    final cacheKey = '$pairKey_$tfKey';
-    if (_seriesCache.containsKey(cacheKey)) return _seriesCache[cacheKey]!;
+  final cacheKey = '${pairKey}_$tfKey';
+  if (_seriesCache.containsKey(cacheKey)) return _seriesCache[cacheKey]!;
 
-    final pair = _pairs.firstWhere((p) => p.key == pairKey);
-    final tf = _timeframes.firstWhere((t) => t.key == tfKey);
-    final rand = math.Random(_hashKey(cacheKey));
+  final pair = _pairs.firstWhere((p) => p.key == pairKey);
+  final tf = _timeframes.firstWhere((t) => t.key == tfKey);
+  final rand = math.Random(_hashKey(cacheKey));
 
-    final points = <_MarketDataPoint>[];
-    double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final stepMs = tf.key == '1D' ? 60 * 60 * 1000 : 
-                    tf.key == '1W' ? 24 * 60 * 60 * 1000 :
-                    tf.key == '1M' ? 24 * 60 * 60 * 1000 :
-                    30 * 24 * 60 * 60 * 1000;
+  final points = <_MarketDataPoint>[];
+  double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final stepMs = tf.key == '1D' ? 60 * 60 * 1000 : 
+                  tf.key == '1W' ? 24 * 60 * 60 * 1000 :
+                  tf.key == '1M' ? 24 * 60 * 60 * 1000 :
+                  30 * 24 * 60 * 60 * 1000;
 
-    for (int i = tf.points; i >= 0; i--) {
-      price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
-      points.add(_MarketDataPoint(now - i * stepMs, price));
-    }
-    _seriesCache[cacheKey] = points;
-    return points;
+  for (int i = tf.points; i >= 0; i--) {
+    price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
+    points.add(_MarketDataPoint((now - i * stepMs).toDouble(), price));
   }
+  _seriesCache[cacheKey] = points;
+  return points;
+}
 
   int _hashKey(String str) {
     int h = 0;
