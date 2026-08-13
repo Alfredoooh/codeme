@@ -17,6 +17,11 @@ import 'auth_service.dart';
 import 'authscreens.dart';
 import 'home/home.dart';
 
+// Se kCupertinoOut / kCupertinoIn não estiverem definidos noutro ficheiro,
+// descomente estas linhas:
+// const Curve kCupertinoOut = Curves.easeOut;
+// const Curve kCupertinoIn = Curves.easeIn;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) {
@@ -274,26 +279,34 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
 
     return Scaffold(
       backgroundColor: isAiTab ? s.pageBackground : s.surface,
-      body: SliderDrawer(
-        key: _sliderDrawerKey,
-        appBar: null,
-        sliderOpenSize: _drawerWidth,
-        slideDirection: SliderOpen.LEFT_TO_RIGHT,
-        animationDuration: 260,
-        slider: ClipRRect(
-          borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
-          child: AppDrawer(
-            s: s,
-            drawerKey: _sliderDrawerKey,
-            onSettings: _openSettings,
-            onGoHome: _goHome,
-            currentTab: _tab,
-            onSelectTab: _selectTab,
-            onOpenConversation: _onOpenConversation,
-            onNewChat: () => _onConversationAction(ConversationAction.newChat),
+      body: RootShellNavigation(
+        switchToEditTab: (type) {
+          setState(() {
+            _tab = AppTab.edit;
+            _editorType = type;
+          });
+        },
+        child: SliderDrawer(
+          key: _sliderDrawerKey,
+          appBar: null,
+          sliderOpenSize: _drawerWidth,
+          slideDirection: SliderOpen.LEFT_TO_RIGHT,
+          animationDuration: 260,
+          slider: ClipRRect(
+            borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
+            child: AppDrawer(
+              s: s,
+              drawerKey: _sliderDrawerKey,
+              onSettings: _openSettings,
+              onGoHome: _goHome,
+              currentTab: _tab,
+              onSelectTab: _selectTab,
+              onOpenConversation: _onOpenConversation,
+              onNewChat: () => _onConversationAction(ConversationAction.newChat),
+            ),
           ),
+          child: bodyContent,
         ),
-        child: bodyContent,
       ),
     );
   }
