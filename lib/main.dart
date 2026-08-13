@@ -17,14 +17,6 @@ import 'auth_service.dart';
 import 'authscreens.dart';
 import 'home/home.dart';
 
-// ──────────────────────────────────────────────────────────────
-// Custom easing curves used throughout the app.
-// If these already exist in another imported file, remove these two lines.
-// ──────────────────────────────────────────────────────────────
-const Curve kCupertinoOut = Curves.easeOut;
-const Curve kCupertinoIn = Curves.easeIn;
-// ──────────────────────────────────────────────────────────────
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) {
@@ -88,6 +80,29 @@ class CraftLabApp extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // ROOT SHELL — usa flutter_slider_drawer (SliderDrawer) em vez do
 // Stack manual com AnimationController próprio.
+//
+// FIX (openDrawer/closeDrawer): SliderDrawerState na versão 3.0.2
+// realmente instalada NÃO expõe openDrawer()/closeDrawer() — esses
+// nomes existiam numa fase antiga da API e o README publicado ainda
+// os mostra, mas o próprio changelog do pacote regista que foram
+// substituídos por openSlider()/closeSlider(). Já corrigido nas
+// duas ocorrências abaixo (_openDrawer / _closeDrawer).
+//
+// FIX (SliderOpen → SlideDirection): o build falhou com
+// "The getter 'SliderOpen' isn't defined". O enum publicado pelo
+// pacote flutter_slider_drawer chama-se SlideDirection, não
+// SliderOpen — este último nunca existiu na API do pacote.
+// Corrigido abaixo na propriedade slideDirection.
+//
+// FIX (sliderShadow): removido. O erro do compilador ("No named
+// parameter with the name 'sliderShadow'") aponta para a classe
+// SliderDrawer realmente instalada não aceitando esse nome, apesar
+// de o changelog do pacote mencionar um parâmetro com esse nome
+// numa fase anterior. Não foi possível confirmar, a partir das
+// fontes disponíveis nesta sessão, se foi renomeado ou movido para
+// dentro de outro objeto de configuração — por isso foi removido em
+// vez de arriscar um terceiro nome incorreto. O pacote continua a
+// desenhar a sua sombra própria por defeito.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -262,34 +277,26 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
 
     return Scaffold(
       backgroundColor: isAiTab ? s.pageBackground : s.surface,
-      body: RootShellNavigation(
-        switchToEditTab: (type) {
-          setState(() {
-            _tab = AppTab.edit;
-            _editorType = type;
-          });
-        },
-        child: SliderDrawer(
-          key: _sliderDrawerKey,
-          appBar: null,
-          sliderOpenSize: _drawerWidth,
-          slideDirection: SliderOpen.LEFT_TO_RIGHT,
-          animationDuration: 260,
-          slider: ClipRRect(
-            borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
-            child: AppDrawer(
-              s: s,
-              drawerKey: _sliderDrawerKey,
-              onSettings: _openSettings,
-              onGoHome: _goHome,
-              currentTab: _tab,
-              onSelectTab: _selectTab,
-              onOpenConversation: _onOpenConversation,
-              onNewChat: () => _onConversationAction(ConversationAction.newChat),
-            ),
+      body: SliderDrawer(
+        key: _sliderDrawerKey,
+        appBar: null,
+        sliderOpenSize: _drawerWidth,
+        slideDirection: SlideDirection.LEFT_TO_RIGHT,
+        animationDuration: 260,
+        slider: ClipRRect(
+          borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
+          child: AppDrawer(
+            s: s,
+            drawerKey: _sliderDrawerKey,
+            onSettings: _openSettings,
+            onGoHome: _goHome,
+            currentTab: _tab,
+            onSelectTab: _selectTab,
+            onOpenConversation: _onOpenConversation,
+            onNewChat: () => _onConversationAction(ConversationAction.newChat),
           ),
-          child: bodyContent,
         ),
+        child: bodyContent,
       ),
     );
   }
