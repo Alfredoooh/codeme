@@ -44,6 +44,7 @@
 // 2) 'Object' aparecia duas vezes na mesma literal `const Set<String>
 //    _types` — Dart avalia Set const em tempo de compilação e
 //    rejeita elementos duplicados; removida a segunda ocorrência.
+// 3) Função _parseColor em falta — adicionada como função top-level.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -60,6 +61,28 @@ import 'dart:ui' as ui;
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
+
+// ══════════════════════════════════════════════════════════════
+// FUNÇÃO AUXILIAR _parseColor (adicionada para corrigir build)
+// ══════════════════════════════════════════════════════════════
+Color? _parseColor(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is Color) return raw;
+  if (raw is int) return Color(raw);
+
+  if (raw is String) {
+    var hex = raw.trim().replaceFirst('#', '');
+    if (hex.length == 6) {
+      hex = 'FF$hex'; // adiciona opacidade total
+    }
+    if (hex.length == 8) {
+      final value = int.tryParse(hex, radix: 16);
+      if (value != null) return Color(value);
+    }
+  }
+
+  return null;
+}
 
 // ══════════════════════════════════════════════════════════════
 // IDS DE WIDGET SUPORTADOS
