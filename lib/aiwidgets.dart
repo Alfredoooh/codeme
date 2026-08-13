@@ -548,13 +548,13 @@ class _CircularActionButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
             color: primary,
             shape: BoxShape.circle,
           ),
-          child: AppIcon(icon, size: 15, color: Colors.white),
+          child: AppIcon(icon, size: 13, color: Colors.white),
         ),
       ),
     );
@@ -1111,7 +1111,7 @@ class _UnifiedChartPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE WIDGET
+// NOVO WIDGET DE CÓDIGO (design atualizado)
 // ══════════════════════════════════════════════════════════════
 
 class AiCodeWidget extends StatefulWidget {
@@ -1124,9 +1124,6 @@ class AiCodeWidget extends StatefulWidget {
 
 class _AiCodeWidgetState extends State<AiCodeWidget> {
   bool _copied = false;
-  bool _expanded = false;
-
-  static const double _collapsedMaxHeight = 340;
 
   bool get _isHtml {
     final lang = (widget.json['language'] ?? widget.json['lang'] ?? '').toString().toLowerCase();
@@ -1140,195 +1137,256 @@ class _AiCodeWidgetState extends State<AiCodeWidget> {
     ));
   }
 
+  void _copyCode(String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    setState(() => _copied = true);
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
     final lang = (widget.json['language'] ?? widget.json['lang'] ?? 'text').toString();
     final code = (widget.json['code'] ?? widget.json['content'] ?? widget.json['text'] ?? '').toString();
-    final lineCount = code.replaceAll('\r\n', '\n').split('\n').length;
 
-    final bg = s.isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA);
-    final headerBg = s.isDark ? const Color(0xFF252526) : const Color(0xFFF3F3F3);
-    final border = s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
-    final headerTxt = s.isDark ? const Color(0xFFCCCCCC) : const Color(0xFF3A3A3A);
+    // Cores fixas do design (dark)
+    const cardBg = Color(0xFF1C1C1E);
+    const previewBg = Color(0xFF141414);
+    const lineNumBg = Color(0xFF1A1A1A);
+    const lineNumBorder = Color(0xFF2A2A2A);
+    const actionBarBg = Color(0xFF252525);
+    const primary = Color(0xFF2E8BC9);
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 760),
       margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: bg,
-        border: Border.all(color: border, width: 1),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(s.isDark ? 0.22 : 0.05), blurRadius: 18, offset: const Offset(0, 6))],
+        color: cardBg,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          height: 40,
-          color: headerBg,
-          padding: const EdgeInsets.only(left: 12, right: 6),
-          child: Row(children: [
-            LanguageIcon(language: lang, size: 15),
-            const SizedBox(width: 7),
-            Text(_langDisplayName(lang),
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: headerTxt, letterSpacing: 0.1)),
-            const SizedBox(width: 8),
-            Text('· $lineCount linhas',
-                style: TextStyle(fontSize: 11, color: headerTxt.withOpacity(0.55))),
-            const Spacer(),
-            if (_isHtml)
-              _HeaderIconButton(
-                icon: 'play.svg',
-                tooltip: 'Pré-visualizar',
-                color: headerTxt,
-                onTap: () => _openPreview(context),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: previewBg,
+                borderRadius: BorderRadius.circular(24),
               ),
-            _HeaderIconButton(
-              icon: _expanded ? 'collapse.svg' : 'expand.svg',
-              tooltip: _expanded ? 'Reduzir' : 'Expandir',
-              color: headerTxt,
-              onTap: () => setState(() => _expanded = !_expanded),
+              clipBehavior: Clip.antiAlias,
+              child: _StickyCodeView(
+                code: code,
+                language: lang,
+                isDark: true,
+                lineNumBg: lineNumBg,
+                lineNumBorder: lineNumBorder,
+              ),
             ),
-            _HeaderIconButton(
-              icon: _copied ? 'check.svg' : 'copy.svg',
-              tooltip: 'Copiar',
-              color: headerTxt,
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: code));
-                setState(() => _copied = true);
-                Future.delayed(const Duration(milliseconds: 1000), () { if (mounted) setState(() => _copied = false); });
-              },
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: actionBarBg,
+              borderRadius: BorderRadius.circular(50),
             ),
-          ]),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_isHtml) {
+                        _openPreview(context);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Pré-visualização disponível apenas para HTML'),
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      decoration: BoxDecoration(
+                        color: primary,
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AppIcon('play.svg', size: 14, color: Colors.white),
+                          const SizedBox(width: 7),
+                          Text(
+                            'Pré-visualizar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _CodeCircleButton(
+                  icon: _copied ? 'check.svg' : 'copy.svg',
+                  tooltip: 'Copiar',
+                  onTap: () => _copyCode(code),
+                ),
+                const SizedBox(width: 6),
+                _CodeCircleButton(
+                  icon: 'download.svg',
+                  tooltip: 'Download',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Download em breve')),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CodeCircleButton extends StatelessWidget {
+  final String icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _CodeCircleButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            color: Color(0xFF2E8BC9),
+            shape: BoxShape.circle,
+          ),
+          child: AppIcon(icon, size: 13, color: Colors.white),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: kCupertinoOut,
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: _expanded ? double.infinity : _collapsedMaxHeight,
+      ),
+    );
+  }
+}
+
+// Widget para código com números de linha fixos à esquerda
+class _StickyCodeView extends StatelessWidget {
+  final String code;
+  final String language;
+  final bool isDark;
+  final Color lineNumBg;
+  final Color lineNumBorder;
+
+  const _StickyCodeView({
+    required this.code,
+    required this.language,
+    required this.isDark,
+    required this.lineNumBg,
+    required this.lineNumBorder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = code.replaceAll('\r\n', '\n').split('\n');
+    final lineNumColor = isDark ? const Color(0xFF444444) : const Color(0xFF999999);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            decoration: BoxDecoration(
+              color: lineNumBg,
+              border: Border(
+                right: BorderSide(color: lineNumBorder, width: 1),
+              ),
             ),
-            child: SingleChildScrollView(
-              physics: _expanded ? const NeverScrollableScrollPhysics() : null,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                  child: CodeHighlightView(code: code, language: lang, isDark: s.isDark),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(lines.length, (i) => 
+                Text(
+                  '${i + 1}',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    height: 1.7,
+                    color: lineNumColor,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        if (!_expanded && lineCount > 14)
-          GestureDetector(
-            onTap: () => setState(() => _expanded = true),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: headerBg.withOpacity(0.6),
-                border: Border(top: BorderSide(color: border, width: 1)),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      height: 1.7,
+                      color: Color(0xFFD4D4D4),
+                    ),
+                    children: CodeHighlightView.highlightLines(lines, language, isDark),
+                  ),
+                ),
               ),
-              child: Text('Mostrar tudo ($lineCount linhas)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: s.primary)),
             ),
           ),
-      ]),
-    );
-  }
-}
-
-String _langDisplayName(String lang) {
-  const names = {
-    'dart': 'Dart', 'js': 'JavaScript', 'javascript': 'JavaScript',
-    'ts': 'TypeScript', 'typescript': 'TypeScript', 'py': 'Python',
-    'python': 'Python', 'html': 'HTML', 'htm': 'HTML', 'css': 'CSS',
-    'json': 'JSON', 'yaml': 'YAML', 'yml': 'YAML', 'xml': 'XML',
-    'sql': 'SQL', 'sh': 'Shell', 'bash': 'Bash', 'kotlin': 'Kotlin',
-    'java': 'Java', 'c': 'C', 'cpp': 'C++', 'csharp': 'C#', 'cs': 'C#',
-    'swift': 'Swift', 'go': 'Go', 'rust': 'Rust', 'php': 'PHP',
-    'ruby': 'Ruby', 'text': 'Texto', 'plaintext': 'Texto', 'markdown': 'Markdown', 'md': 'Markdown',
-  };
-  return names[lang.toLowerCase()] ?? (lang.isEmpty ? 'Texto' : lang);
-}
-
-class _HeaderIconButton extends StatefulWidget {
-  final String icon;
-  final String tooltip;
-  final Color color;
-  final VoidCallback onTap;
-  const _HeaderIconButton({required this.icon, required this.tooltip, required this.color, required this.onTap});
-  @override
-  State<_HeaderIconButton> createState() => _HeaderIconButtonState();
-}
-
-class _HeaderIconButtonState extends State<_HeaderIconButton> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: widget.tooltip,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown:   (_) => setState(() => _h = true),
-          onTapCancel: ()  => setState(() => _h = false),
-          onTapUp:     (_) => setState(() => _h = false),
-          onTap:       widget.onTap,
-          child: Container(
-            width: 28, height: 28,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _h ? widget.color.withOpacity(0.12) : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: AppIcon(widget.icon, size: 13, color: widget.color),
-          ),
-        ),
-      );
-}
-
-// ══════════════════════════════════════════════════════════════
-// LANGUAGE ICON
-// ══════════════════════════════════════════════════════════════
-
-class LanguageIcon extends StatelessWidget {
-  final String language;
-  final double size;
-  const LanguageIcon({super.key, required this.language, this.size = 16});
-
-  static const Map<String, String> _fallbackGlyph = {
-    'dart': '🎯', 'js': 'JS', 'javascript': 'JS', 'ts': 'TS', 'typescript': 'TS',
-    'py': '🐍', 'python': '🐍', 'html': '🌐', 'htm': '🌐', 'css': '🎨',
-    'json': '{}', 'yaml': '⚙', 'yml': '⚙', 'xml': '</>', 'sql': '🗄',
-    'sh': '\$', 'bash': '\$', 'kotlin': 'K', 'java': '☕', 'c': 'C',
-    'cpp': 'C++', 'csharp': 'C#', 'cs': 'C#', 'swift': '🐦', 'go': 'Go',
-    'rust': '🦀', 'php': '🐘', 'ruby': '💎',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final glyph = _fallbackGlyph[language.toLowerCase()] ?? '#';
-    return SizedBox(
-      width: size + 2, height: size + 2,
-      child: Center(
-        child: Text(glyph, style: TextStyle(fontSize: size * 0.8, height: 1)),
+        ],
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CODE HIGHLIGHT VIEW
-// ══════════════════════════════════════════════════════════════
-
+// Atualizar CodeHighlightView para expor highlightLines (estático)
 class CodeHighlightView extends StatelessWidget {
   final String code;
   final String language;
   final bool isDark;
   const CodeHighlightView({super.key, required this.code, required this.language, required this.isDark});
+
+  static List<TextSpan> highlightLines(List<String> lines, String language, bool isDark) {
+    final spans = <TextSpan>[];
+    for (var i = 0; i < lines.length; i++) {
+      spans.addAll(_highlightLine(lines[i], language, isDark));
+      if (i < lines.length - 1) {
+        spans.add(const TextSpan(text: '\n'));
+      }
+    }
+    return spans;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1425,7 +1483,7 @@ class CodeHighlightView extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE PREVIEW SCREEN
+// CODE PREVIEW SCREEN (mantido)
 // ══════════════════════════════════════════════════════════════
 
 class AiCodePreviewScreen extends StatelessWidget {
@@ -1454,7 +1512,7 @@ class AiCodePreviewScreen extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET
+// MARKET WIDGET (design atualizado)
 // ══════════════════════════════════════════════════════════════
 
 class AiMarketWidget extends StatefulWidget {
@@ -1464,277 +1522,468 @@ class AiMarketWidget extends StatefulWidget {
   @override State<AiMarketWidget> createState() => _AiMarketWidgetState();
 }
 
-class _MarketData {
-  final double price;
-  final double change;
-  final List<double> prices;
-  final String name;
-  final String symbol;
-  const _MarketData({required this.price, required this.change, required this.prices, required this.name, required this.symbol});
+class _MarketPair {
+  final String key;
+  final String label;
+  final String sub;
+  final String badge;
+  final double basePrice;
+  final double volatility;
+  const _MarketPair({
+    required this.key,
+    required this.label,
+    required this.sub,
+    required this.badge,
+    required this.basePrice,
+    required this.volatility,
+  });
 }
 
-class _AiMarketWidgetState extends State<AiMarketWidget> {
-  bool _loading = true;
-  String? _error;
-  _MarketData? _data;
-  String _tf = '1D';
-  bool _fullscreen = false;
+class _MarketDataPoint {
+  final double t;
+  final double v;
+  const _MarketDataPoint(this.t, this.v);
+}
 
-  static const Map<String, ({int days, int points, double vol})> _tfCfg = {
-    '1D': (days: 1, points: 96, vol: 0.003),
-    '1S': (days: 7, points: 168, vol: 0.005),
-    '1M': (days: 30, points: 120, vol: 0.008),
-    '3M': (days: 90, points: 90, vol: 0.010),
-    '1A': (days: 365, points: 120, vol: 0.015),
-  };
+class _AiMarketWidgetState extends State<AiMarketWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  double _progress = 0.0;
 
-  static const Map<String, String> _cryptoIds = {
-    'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'BNB': 'binancecoin',
-    'XRP': 'ripple', 'ADA': 'cardano', 'DOGE': 'dogecoin', 'AVAX': 'avalanche-2',
-  };
+  static const List<_MarketPair> _pairs = [
+    _MarketPair(key: 'BTCUSD', label: 'BTC/USD', sub: 'Bitcoin', basePrice: 64200, volatility: 0.018, badge: 'cripto'),
+    _MarketPair(key: 'ETHUSD', label: 'ETH/USD', sub: 'Ethereum', basePrice: 3180, volatility: 0.022, badge: 'cripto'),
+    _MarketPair(key: 'EURUSD', label: 'EUR/USD', sub: 'Euro / Dólar', basePrice: 1.087, volatility: 0.004, badge: 'forex'),
+    _MarketPair(key: 'GBPUSD', label: 'GBP/USD', sub: 'Libra / Dólar', basePrice: 1.271, volatility: 0.005, badge: 'forex'),
+    _MarketPair(key: 'USDJPY', label: 'USD/JPY', sub: 'Dólar / Iene', basePrice: 156.4, volatility: 0.006, badge: 'forex'),
+    _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', basePrice: 2340, volatility: 0.009, badge: 'metal'),
+  ];
+
+  static const List<({String key, String label, int points})> _timeframes = [
+    (key: '1D', label: '1D', points: 24),
+    (key: '1W', label: '1W', points: 7),
+    (key: '1M', label: '1M', points: 30),
+    (key: '1Y', label: '1Y', points: 12),
+  ];
+
+  late String _currentPairKey;
+  late String _currentTf;
+  final Map<String, List<_MarketDataPoint>> _seriesCache = {};
+
+  _MarketPair get _currentPair => _pairs.firstWhere((p) => p.key == _currentPairKey);
 
   @override
-  void initState() { super.initState(); _load(_tf); }
-
-  List<double> _simHist(double price, int points, double vol) {
-    final rnd = math.Random();
-    final out = <double>[];
-    var p = price * (0.85 + rnd.nextDouble() * 0.1);
-    for (int i = 0; i < points; i++) {
-      p += (rnd.nextDouble() - 0.48) * price * vol;
-      p = math.max(p, price * 0.5);
-      out.add(p);
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    )..addListener(() {
+        setState(() => _progress = Curves.easeOutCubic.transform(_animController.value));
+      });
+    _currentTf = '1D';
+    _currentPairKey = (widget.json['symbol'] ?? 'BTCUSD').toString().toUpperCase();
+    if (!_pairs.any((p) => p.key == _currentPairKey)) {
+      _currentPairKey = 'BTCUSD';
     }
-    out.add(price);
-    return out;
+    _animController.forward(from: 0);
   }
 
-  Future<void> _load(String tf) async {
-    setState(() { _loading = true; _error = null; });
-    final type = (widget.json['type'] ?? 'forex').toString();
-    final symbol = (widget.json['symbol'] ?? 'USDEUR').toString();
-    final name = (widget.json['name'] ?? symbol).toString();
-    final cfg = _tfCfg[tf]!;
-    try {
-      _MarketData data;
-      if (type == 'forex') {
-        final base = symbol.substring(0, math.min(3, symbol.length)).toUpperCase();
-        final quote = symbol.length >= 6 ? symbol.substring(3, 6).toUpperCase() : 'USD';
-        final res = await http.get(Uri.parse('https://open.er-api.com/v6/latest/$base')).timeout(const Duration(seconds: 10));
-        final d = jsonDecode(res.body);
-        final rates = d['rates'] as Map<String, dynamic>?;
-        final price = (rates?[quote] as num?)?.toDouble() ?? (rates?['USD'] as num?)?.toDouble() ?? 1.0;
-        final prices = _simHist(price, cfg.points, 0.002);
-        data = _MarketData(price: price, change: ((price - prices.first) / prices.first) * 100, prices: prices, name: '$base/$quote', symbol: '$base/$quote');
-      } else if (type == 'crypto') {
-        final sym = symbol.toUpperCase();
-        final priceRes = await http.get(Uri.parse('https://api.coinbase.com/v2/prices/$sym-USD/spot')).timeout(const Duration(seconds: 10));
-        final priceJson = jsonDecode(priceRes.body);
-        final price = double.parse(priceJson['data']['amount'].toString());
-        List<double> prices;
-        try {
-          final id = _cryptoIds[sym];
-          final hRes = await http.get(Uri.parse('https://api.coingecko.com/api/v3/coins/$id/market_chart?vs_currency=usd&days=${cfg.days}&precision=2')).timeout(const Duration(seconds: 10));
-          final hJson = jsonDecode(hRes.body);
-          final rawPrices = (hJson['prices'] as List?)?.map((p) => (p[1] as num).toDouble()).toList() ?? [];
-          if (rawPrices.isEmpty) throw Exception('no history');
-          prices = rawPrices;
-        } catch (_) {
-          prices = _simHist(price, cfg.points, cfg.vol);
-        }
-        data = _MarketData(price: price, change: ((price - prices.first) / prices.first) * 100, prices: prices, name: name, symbol: sym);
-      } else {
-        final rnd = math.Random();
-        final price = 100 + rnd.nextDouble() * 50;
-        final prices = _simHist(price, cfg.points, cfg.vol);
-        data = _MarketData(price: price, change: ((price - prices.first) / prices.first) * 100, prices: prices, name: name, symbol: symbol);
-      }
-      if (mounted) setState(() { _data = data; _loading = false; _tf = tf; });
-    } catch (e) {
-      if (mounted) setState(() { _error = 'Erro: $e'; _loading = false; });
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  List<_MarketDataPoint> _getSeries(String pairKey, String tfKey) {
+    final cacheKey = '$pairKey_$tfKey';
+    if (_seriesCache.containsKey(cacheKey)) return _seriesCache[cacheKey]!;
+
+    final pair = _pairs.firstWhere((p) => p.key == pairKey);
+    final tf = _timeframes.firstWhere((t) => t.key == tfKey);
+    final rand = math.Random(_hashKey(cacheKey));
+
+    final points = <_MarketDataPoint>[];
+    double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stepMs = tf.key == '1D' ? 60 * 60 * 1000 : 
+                    tf.key == '1W' ? 24 * 60 * 60 * 1000 :
+                    tf.key == '1M' ? 24 * 60 * 60 * 1000 :
+                    30 * 24 * 60 * 60 * 1000;
+
+    for (int i = tf.points; i >= 0; i--) {
+      price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
+      points.add(_MarketDataPoint(now - i * stepMs, price));
+    }
+    _seriesCache[cacheKey] = points;
+    return points;
+  }
+
+  int _hashKey(String str) {
+    int h = 0;
+    for (final code in str.codeUnits) {
+      h = (h * 31 + code) & 0x7fffffff;
+    }
+    return h == 0 ? 1 : h;
+  }
+
+  String _formatPrice(double v, _MarketPair pair) {
+    if (pair.badge == 'forex') return v.toStringAsFixed(4);
+    if (v >= 1000) {
+      final formatted = v.round().toString();
+      return '\$$formatted';
+    }
+    return '\$${v.toStringAsFixed(2)}';
+  }
+
+  void _changePair(String key) {
+    setState(() {
+      _currentPairKey = key;
+      _animController.forward(from: 0);
+    });
+  }
+
+  void _changeTimeframe(String tf) {
+    setState(() {
+      _currentTf = tf;
+      _animController.forward(from: 0);
+    });
+  }
+
+  Future<void> _openPairSelector() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Color(0xFF3A3A3A),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Escolher par',
+              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: _pairs.map((pair) {
+                  final active = pair.key == _currentPairKey;
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(ctx, pair.key),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: active ? const Color(0xFF1C3A52) : const Color(0xFF232323),
+                        border: Border.all(color: active ? const Color(0xFF2E8BC9) : Colors.transparent),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(pair.label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                          Text(pair.sub, style: const TextStyle(color: Color(0xFF777777), fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && selected != _currentPairKey) {
+      _changePair(selected);
     }
   }
-
-  String _fmtPrice(double p, String type) {
-    if (type == 'forex') return p.toStringAsFixed(4);
-    if (p >= 1000) return '\$${p.toStringAsFixed(2)}';
-    if (p >= 1) return '\$${p.toStringAsFixed(2)}';
-    return '\$${p.toStringAsFixed(6)}';
-  }
-
-  void _toggleFullscreen() => setState(() => _fullscreen = !_fullscreen);
 
   @override
   Widget build(BuildContext context) {
-    final type = (widget.json['type'] ?? 'forex').toString();
-    const bg = Color(0xFF111318);
-    final s = widget.s;
-
-    final card = Container(
-      constraints: BoxConstraints(maxWidth: _fullscreen ? double.infinity : 420),
-      margin: EdgeInsets.symmetric(vertical: _fullscreen ? 0 : 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(_fullscreen ? 0 : 10),
-        boxShadow: _fullscreen ? null : [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 32, offset: const Offset(0, 8))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Expanded(
-          child: _loading
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6F5AF6)))),
-                )
-              : _error != null
-                  ? Padding(padding: const EdgeInsets.all(24), child: Text(_error!, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13)))
-                  : SingleChildScrollView(child: _buildLoaded(context, type)),
-        ),
-        _WidgetActionBar(s: AppColorScheme(true), actions: [
-          _WidgetAction(
-            icon: _fullscreen ? 'fullscreen_exit.svg' : 'fullscreen.svg',
-            label: _fullscreen ? 'Sair de ecrã inteiro' : 'Ecrã inteiro',
-            primary: true,
-            onTap: _toggleFullscreen,
-          ),
-        ]),
-      ]),
-    );
-
-    if (!_fullscreen) return card;
+    final pair = _currentPair;
+    final series = _getSeries(pair.key, _currentTf);
+    final first = series.first.v;
+    final last = series.last.v;
+    final change = ((last - first) / first) * 100;
+    final isUp = last >= first;
+    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
 
     return Container(
-      color: Colors.black,
-      width: double.infinity,
-      height: MediaQuery.of(context).size.height,
-      child: SafeArea(child: card),
-    );
-  }
-
-  Widget _buildLoaded(BuildContext context, String type) {
-    final d = _data!;
-    final isUp = d.change >= 0;
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: const BoxDecoration(color: Color(0xFF1E2128), shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Text(d.symbol.substring(0, math.min(2, d.symbol.length)).toUpperCase(),
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+      constraints: const BoxConstraints(maxWidth: 420),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(d.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
-              const SizedBox(height: 2),
-              Text('${d.symbol} · ${type.toUpperCase()}', style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
-            ]),
-          ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_fmtPrice(d.price, type), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: isUp ? const Color(0xFF0D2E1A) : const Color(0xFF2E0D0D), borderRadius: BorderRadius.circular(4)),
-              child: Text('${isUp ? '▲ +' : '▼ '}${d.change.abs().toStringAsFixed(2)}%',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isUp ? const Color(0xFF22C55E) : const Color(0xFFEF4444))),
-            ),
-          ]),
-        ]),
+        ],
       ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-        child: SizedBox(
-          height: _fullscreen ? 320 : 150,
-          child: CustomPaint(painter: _MarketChartPainter(prices: d.prices, isUp: isUp), child: const SizedBox.expand()),
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: _tfCfg.keys.map((tf) {
-            final selected = tf == _tf;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: GestureDetector(
-                onTap: () => _load(tf),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF6F5AF6) : const Color(0xFF1E2128),
-                    borderRadius: BorderRadius.circular(999),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF141414),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              pair.label,
+                              style: const TextStyle(
+                                color: Color(0xFFE8E8E8),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF262626),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                pair.badge,
+                                style: const TextStyle(
+                                  color: Color(0xFF888888),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatPrice(last, pair),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(
+                              isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                              color: color,
+                              size: 18,
+                            ),
+                            Text(
+                              '${isUp ? '+' : ''}${change.toStringAsFixed(2)}% · $_currentTf',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Text(tf,
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                      child: CustomPaint(
+                        painter: _MarketChartPainter(
+                          series: series,
+                          progress: _progress,
+                          isUp: isUp,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    child: Row(
+                      children: _timeframes.map((tf) {
+                        final active = tf.key == _currentTf;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => _changeTimeframe(tf.key),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: active ? const Color(0xFF262626) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                tf.label,
+                                style: TextStyle(
+                                  color: active ? Colors.white : const Color(0xFF777777),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF252525),
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: GestureDetector(
+              onTap: _openPairSelector,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E8BC9),
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.repeat, color: Colors.white, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Alterar moeda',
                       style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? Colors.white : const Color(0xFF888888))),
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          ),
+        ],
       ),
-    ]);
+    );
   }
 }
 
 class _MarketChartPainter extends CustomPainter {
-  final List<double> prices;
+  final List<_MarketDataPoint> series;
+  final double progress;
   final bool isUp;
-  _MarketChartPainter({required this.prices, required this.isUp});
+  _MarketChartPainter({
+    required this.series,
+    required this.progress,
+    required this.isUp,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (prices.length < 2) return;
-    final color = isUp ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
-    final minP = prices.reduce(math.min);
-    final maxP = prices.reduce(math.max);
-    final range = (maxP - minP).abs() < 0.0001 ? 1.0 : (maxP - minP);
+    if (series.length < 2) return;
 
-    final pts = <Offset>[];
-    for (int i = 0; i < prices.length; i++) {
-      final x = size.width * i / (prices.length - 1);
-      final y = size.height - ((prices[i] - minP) / range) * size.height * 0.85 - size.height * 0.075;
-      pts.add(Offset(x, y));
+    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
+    final values = series.map((p) => p.v).toList();
+    final minV = values.reduce(math.min);
+    final maxV = values.reduce(math.max);
+    final pad = (maxV - minV) * 0.12;
+    final maxY = maxV + pad;
+    final minY = minV - pad;
+
+    final innerW = size.width - 8;
+    final innerH = size.height - 12;
+
+    Offset ptAt(int i) {
+      final norm = (values[i] - minY) / (maxY - minY);
+      final x = 4 + (innerW * i) / (values.length - 1);
+      final yFull = 6 + innerH - norm * innerH;
+      final yBase = 6 + innerH;
+      final y = yBase - (yBase - yFull) * progress;
+      return Offset(x, y);
     }
 
-    final fillPath = Path()..moveTo(pts.first.dx, size.height);
-    for (int i = 0; i < pts.length; i++) {
-      if (i == 0) {
-        fillPath.lineTo(pts[i].dx, pts[i].dy);
-      } else {
-        final cx = (pts[i - 1].dx + pts[i].dx) / 2;
-        fillPath.cubicTo(cx, pts[i - 1].dy, cx, pts[i].dy, pts[i].dx, pts[i].dy);
-      }
+    final fillPath = Path()..moveTo(4, 6 + innerH);
+    for (int i = 0; i < values.length; i++) {
+      final p = ptAt(i);
+      fillPath.lineTo(p.dx, p.dy);
     }
-    fillPath.lineTo(pts.last.dx, size.height);
+    fillPath.lineTo(4 + innerW, 6 + innerH);
     fillPath.close();
 
-    final gradient = ui.Gradient.linear(Offset(0, 0), Offset(0, size.height), [color.withOpacity(0.33), color.withOpacity(0)]);
+    final gradient = ui.Gradient.linear(
+      Offset(0, 6),
+      Offset(0, 6 + innerH),
+      [color.withOpacity(0.25), color.withOpacity(0.0)],
+    );
     canvas.drawPath(fillPath, Paint()..shader = gradient);
 
-    final linePath = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (int i = 1; i < pts.length; i++) {
-      final cx = (pts[i - 1].dx + pts[i].dx) / 2;
-      linePath.cubicTo(cx, pts[i - 1].dy, cx, pts[i].dy, pts[i].dx, pts[i].dy);
-    }
-    canvas.drawPath(linePath, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeJoin = StrokeJoin.round..strokeCap = StrokeCap.round);
+    final linePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
 
-    canvas.drawCircle(pts.last, 4.5, Paint()..color = color);
-    canvas.drawCircle(pts.last, 4.5, Paint()..color = const Color(0xFF111318)..style = PaintingStyle.stroke..strokeWidth = 2);
+    final linePath = Path();
+    for (int i = 0; i < values.length; i++) {
+      final p = ptAt(i);
+      if (i == 0) {
+        linePath.moveTo(p.dx, p.dy);
+      } else {
+        linePath.lineTo(p.dx, p.dy);
+      }
+    }
+    canvas.drawPath(linePath, linePaint);
+
+    final lastPt = ptAt(values.length - 1);
+    canvas.drawCircle(lastPt, 3.5, Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(covariant _MarketChartPainter old) => old.prices != prices;
+  bool shouldRepaint(covariant _MarketChartPainter old) {
+    return old.series != series || old.progress != progress || old.isUp != isUp;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CALENDAR (redesenhado)
+// CALENDAR (mantido, sem alterações)
 // ══════════════════════════════════════════════════════════════
 
 class AiCalendarWidget extends StatefulWidget {
@@ -1867,7 +2116,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final daysInPrev = DateTime(y, m, 0).day;
 
     final cells = <Widget>[];
-    // Dias do mês anterior
     for (int i = firstDay - 1; i >= 0; i--) {
       final day = daysInPrev - i;
       cells.add(_buildDayCell(
@@ -1879,7 +2127,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         onTap: null,
       ));
     }
-    // Dias do mês atual
     for (int d = 1; d <= daysInMonth; d++) {
       final key = _key(y, m, d);
       final isToday = DateTime(y, m, d) == DateTime(_today.year, _today.month, _today.day);
@@ -1893,7 +2140,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         onTap: () => setState(() => _selectedKey = key),
       ));
     }
-    // Dias do mês seguinte
     final total = firstDay + daysInMonth;
     final rem = total % 7 == 0 ? 0 : 7 - total % 7;
     for (int d = 1; d <= rem; d++) {
@@ -2120,7 +2366,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TIMER
+// TIMER (mantido, sem alterações)
 // ══════════════════════════════════════════════════════════════
 
 class AiTimerWidget extends StatefulWidget {
@@ -2253,7 +2499,7 @@ class _TimerRingPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MIND MAP
+// MIND MAP (mantido, sem alterações)
 // ══════════════════════════════════════════════════════════════
 
 class _MindNode {
@@ -2406,7 +2652,7 @@ class _MindMapPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MATH GRAPH
+// MATH GRAPH (mantido, sem alterações)
 // ══════════════════════════════════════════════════════════════
 
 class AiMathGraphWidget extends StatefulWidget {
@@ -2548,7 +2794,7 @@ class _MathGraphPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MAP
+// MAP (mantido, sem alterações)
 // ══════════════════════════════════════════════════════════════
 
 class AiMapWidget extends StatefulWidget {
