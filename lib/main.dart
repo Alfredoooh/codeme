@@ -17,10 +17,13 @@ import 'auth_service.dart';
 import 'authscreens.dart';
 import 'home/home.dart';
 
-// Se kCupertinoOut / kCupertinoIn não estiverem definidos noutro ficheiro,
-// descomente estas linhas:
-// const Curve kCupertinoOut = Curves.easeOut;
-// const Curve kCupertinoIn = Curves.easeIn;
+// ──────────────────────────────────────────────────────────────
+// Custom easing curves used throughout the app.
+// If these already exist in another imported file, remove these two lines.
+// ──────────────────────────────────────────────────────────────
+const Curve kCupertinoOut = Curves.easeOut;
+const Curve kCupertinoIn = Curves.easeIn;
+// ──────────────────────────────────────────────────────────────
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,26 +88,6 @@ class CraftLabApp extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // ROOT SHELL — usa flutter_slider_drawer (SliderDrawer) em vez do
 // Stack manual com AnimationController próprio.
-//
-// FIX (build falhado anteriormente): SliderDrawerState na versão
-// 3.0.2 realmente instalada NÃO expõe openDrawer()/closeDrawer() —
-// esses nomes existiam numa fase antiga da API e o README publicado
-// ainda os mostra, mas o próprio changelog do pacote regista que
-// foram substituídos por openSlider()/closeSlider() ("replace
-// closeDrawer and openDrawer to closeSlider and openSlider in
-// respectively"). O erro do compilador confirmou isto apontando
-// diretamente para flutter_slider_drawer-3.0.2/lib/src/
-// slider_drawer.dart. Corrigido abaixo nas duas ocorrências.
-//
-// FIX (sliderShadow): removido. O erro do compilador ("No named
-// parameter with the name 'sliderShadow'") aponta para a classe
-// SliderDrawer realmente instalada não aceitando esse nome, apesar
-// de o changelog do pacote mencionar um parâmetro com esse nome
-// numa fase anterior. Não foi possível confirmar, a partir das
-// fontes disponíveis nesta sessão, se foi renomeado ou movido para
-// dentro de outro objeto de configuração — por isso foi removido em
-// vez de arriscar um terceiro nome incorreto. O pacote continua a
-// desenhar a sua sombra própria por defeito.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
