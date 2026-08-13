@@ -1088,7 +1088,7 @@ class _UnifiedChartPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE WIDGET
+// CODE WIDGET (novo design)
 // ══════════════════════════════════════════════════════════════
 
 class AiCodeWidget extends StatefulWidget {
@@ -1101,308 +1101,319 @@ class AiCodeWidget extends StatefulWidget {
 
 class _AiCodeWidgetState extends State<AiCodeWidget> {
   bool _copied = false;
-  bool _expanded = false;
 
-  static const double _collapsedMaxHeight = 340;
+  String get _language {
+    return (widget.json['language'] ?? widget.json['lang'] ?? 'text').toString().toLowerCase();
+  }
+
+  String get _code {
+    return (widget.json['code'] ?? widget.json['content'] ?? widget.json['text'] ?? '').toString();
+  }
 
   bool get _isHtml {
-    final lang = (widget.json['language'] ?? widget.json['lang'] ?? '').toString().toLowerCase();
+    final lang = _language;
     return lang == 'html' || lang == 'htm';
   }
 
-  void _openPreview(BuildContext context) {
-    final code = (widget.json['code'] ?? widget.json['content'] ?? widget.json['text'] ?? '').toString();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AiCodePreviewScreen(html: code),
-    ));
+  Color _cardBg()      => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color _previewBg()   => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
+  Color _actionsBg()   => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
+  Color _primary()     => const Color(0xFF2E8BC9);
+
+  void _copyCode() {
+    Clipboard.setData(ClipboardData(text: _code));
+    setState(() => _copied = true);
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  void _downloadCode() {
+    Clipboard.setData(ClipboardData(text: _code));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Código copiado (download não implementado)')),
+    );
+  }
+
+  void _openPreview() {
+    if (_isHtml) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => AiCodePreviewScreen(html: _code),
+      ));
+    } else {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Pré-visualização'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: SingleChildScrollView(
+              child: Text(_code, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final lang = (widget.json['language'] ?? widget.json['lang'] ?? 'text').toString();
-    final code = (widget.json['code'] ?? widget.json['content'] ?? widget.json['text'] ?? '').toString();
-    final lineCount = code.replaceAll('\r\n', '\n').split('\n').length;
-
-    final bg = s.isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA);
-    final headerBg = s.isDark ? const Color(0xFF252526) : const Color(0xFFF3F3F3);
-    final border = s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
-    final headerTxt = s.isDark ? const Color(0xFFCCCCCC) : const Color(0xFF3A3A3A);
-
     return Container(
-      constraints: const BoxConstraints(maxWidth: 760),
+      constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: bg,
-        border: Border.all(color: border, width: 1),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(s.isDark ? 0.22 : 0.05), blurRadius: 18, offset: const Offset(0, 6))],
+        color: _cardBg(),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(widget.s.isDark ? 0.3 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          height: 40,
-          color: headerBg,
-          padding: const EdgeInsets.only(left: 12, right: 6),
-          child: Row(children: [
-            LanguageIcon(language: lang, size: 15),
-            const SizedBox(width: 7),
-            Text(_langDisplayName(lang),
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: headerTxt, letterSpacing: 0.1)),
-            const SizedBox(width: 8),
-            Text('· $lineCount linhas',
-                style: TextStyle(fontSize: 11, color: headerTxt.withOpacity(0.55))),
-            const Spacer(),
-            if (_isHtml)
-              _HeaderIconButton(
-                icon: 'play.svg',
-                tooltip: 'Pré-visualizar',
-                color: headerTxt,
-                onTap: () => _openPreview(context),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _previewBg(),
+                borderRadius: BorderRadius.circular(24),
               ),
-            _HeaderIconButton(
-              icon: _expanded ? 'collapse.svg' : 'expand.svg',
-              tooltip: _expanded ? 'Reduzir' : 'Expandir',
-              color: headerTxt,
-              onTap: () => setState(() => _expanded = !_expanded),
+              clipBehavior: Clip.antiAlias,
+              child: _CodeBlockView(
+                code: _code,
+                language: _language,
+                isDark: widget.s.isDark,
+              ),
             ),
-            _HeaderIconButton(
-              icon: _copied ? 'check.svg' : 'copy.svg',
-              tooltip: 'Copiar',
-              color: headerTxt,
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: code));
-                setState(() => _copied = true);
-                Future.delayed(const Duration(milliseconds: 1000), () { if (mounted) setState(() => _copied = false); });
-              },
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: _actionsBg(),
+              borderRadius: BorderRadius.circular(50),
             ),
-          ]),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _openPreview,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      decoration: BoxDecoration(
+                        color: _primary(),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AppIcon('play.svg', size: 14, color: Colors.white),
+                          const SizedBox(width: 7),
+                          Text(
+                            'Pré-visualizar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _CircularActionButton(
+                  icon: _copied ? 'check.svg' : 'copy.svg',
+                  tooltip: 'Copiar',
+                  onTap: _copyCode,
+                  primary: _primary(),
+                ),
+                const SizedBox(width: 6),
+                _CircularActionButton(
+                  icon: 'download.svg',
+                  tooltip: 'Download',
+                  onTap: _downloadCode,
+                  primary: _primary(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CodeBlockView extends StatelessWidget {
+  final String code;
+  final String language;
+  final bool isDark;
+  const _CodeBlockView({required this.code, required this.language, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = code.replaceAll('\r\n', '\n').split('\n');
+    final lineNumberColor = isDark ? const Color(0xFF444444) : const Color(0xFFAAAAAA);
+    final lineNumberBg = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFEEEEEE);
+    final borderColor = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFDDDDDD);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Números de linha (sticky left)
+        Container(
+          width: 36,
+          color: lineNumberBg,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (int i = 1; i <= lines.length; i++)
+                Text(
+                  '$i',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    height: 1.7,
+                    color: lineNumberColor,
+                  ),
+                ),
+            ],
+          ),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: kCupertinoOut,
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: _expanded ? double.infinity : _collapsedMaxHeight,
-            ),
+        // Separador vertical
+        Container(width: 1, color: borderColor),
+        // Conteúdo do código com scroll horizontal
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: SingleChildScrollView(
-              physics: _expanded ? const NeverScrollableScrollPhysics() : null,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                  child: CodeHighlightView(code: code, language: lang, isDark: s.isDark),
+              scrollDirection: Axis.vertical,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                child: RichText(
+                  text: _buildHighlightedCode(lines, language, isDark),
+                  textDirection: TextDirection.ltr,
+                  softWrap: false,
                 ),
               ),
             ),
           ),
         ),
-        if (!_expanded && lineCount > 14)
-          GestureDetector(
-            onTap: () => setState(() => _expanded = true),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: headerBg.withOpacity(0.6),
-                border: Border(top: BorderSide(color: border, width: 1)),
-              ),
-              child: Text('Mostrar tudo ($lineCount linhas)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: s.primary)),
-            ),
-          ),
-      ]),
-    );
-  }
-}
-
-String _langDisplayName(String lang) {
-  const names = {
-    'dart': 'Dart', 'js': 'JavaScript', 'javascript': 'JavaScript',
-    'ts': 'TypeScript', 'typescript': 'TypeScript', 'py': 'Python',
-    'python': 'Python', 'html': 'HTML', 'htm': 'HTML', 'css': 'CSS',
-    'json': 'JSON', 'yaml': 'YAML', 'yml': 'YAML', 'xml': 'XML',
-    'sql': 'SQL', 'sh': 'Shell', 'bash': 'Bash', 'kotlin': 'Kotlin',
-    'java': 'Java', 'c': 'C', 'cpp': 'C++', 'csharp': 'C#', 'cs': 'C#',
-    'swift': 'Swift', 'go': 'Go', 'rust': 'Rust', 'php': 'PHP',
-    'ruby': 'Ruby', 'text': 'Texto', 'plaintext': 'Texto', 'markdown': 'Markdown', 'md': 'Markdown',
-  };
-  return names[lang.toLowerCase()] ?? (lang.isEmpty ? 'Texto' : lang);
-}
-
-class _HeaderIconButton extends StatefulWidget {
-  final String icon;
-  final String tooltip;
-  final Color color;
-  final VoidCallback onTap;
-  const _HeaderIconButton({required this.icon, required this.tooltip, required this.color, required this.onTap});
-  @override
-  State<_HeaderIconButton> createState() => _HeaderIconButtonState();
-}
-
-class _HeaderIconButtonState extends State<_HeaderIconButton> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: widget.tooltip,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown:   (_) => setState(() => _h = true),
-          onTapCancel: ()  => setState(() => _h = false),
-          onTapUp:     (_) => setState(() => _h = false),
-          onTap:       widget.onTap,
-          child: Container(
-            width: 28, height: 28,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _h ? widget.color.withOpacity(0.12) : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: AppIcon(widget.icon, size: 13, color: widget.color),
-          ),
-        ),
-      );
-}
-
-// ══════════════════════════════════════════════════════════════
-// LANGUAGE ICON
-// ══════════════════════════════════════════════════════════════
-
-class LanguageIcon extends StatelessWidget {
-  final String language;
-  final double size;
-  const LanguageIcon({super.key, required this.language, this.size = 16});
-
-  static const Map<String, String> _fallbackGlyph = {
-    'dart': '🎯', 'js': 'JS', 'javascript': 'JS', 'ts': 'TS', 'typescript': 'TS',
-    'py': '🐍', 'python': '🐍', 'html': '🌐', 'htm': '🌐', 'css': '🎨',
-    'json': '{}', 'yaml': '⚙', 'yml': '⚙', 'xml': '</>', 'sql': '🗄',
-    'sh': '\$', 'bash': '\$', 'kotlin': 'K', 'java': '☕', 'c': 'C',
-    'cpp': 'C++', 'csharp': 'C#', 'cs': 'C#', 'swift': '🐦', 'go': 'Go',
-    'rust': '🦀', 'php': '🐘', 'ruby': '💎',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final glyph = _fallbackGlyph[language.toLowerCase()] ?? '#';
-    return SizedBox(
-      width: size + 2, height: size + 2,
-      child: Center(
-        child: Text(glyph, style: TextStyle(fontSize: size * 0.8, height: 1)),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// CODE HIGHLIGHT VIEW
-// ══════════════════════════════════════════════════════════════
-
-class CodeHighlightView extends StatelessWidget {
-  final String code;
-  final String language;
-  final bool isDark;
-  const CodeHighlightView({super.key, required this.code, required this.language, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    final lines = code.replaceAll('\r\n', '\n').split('\n');
-    final lineNumClr = isDark ? const Color(0xFF5A5A5A) : const Color(0xFFA0A0A0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines.asMap().entries.map((e) {
-        return IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(
-              width: 40,
-              child: Text('${e.key + 1}',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: lineNumClr)),
-            ),
-            const SizedBox(width: 14),
-            RichText(
-              text: TextSpan(
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13.5, height: 1.65),
-                children: _highlightLine(e.value, language, isDark),
-              ),
-            ),
-          ]),
-        );
-      }).toList(),
+      ],
     );
   }
 
-  static const Set<String> _keywords = {
-    'function','const','let','var','return','if','else','for','while','do',
-    'switch','case','break','continue','class','extends','implements','import',
-    'export','from','async','await','new','this','try','catch','finally','throw',
-    'true','false','null','nil','none','def','lambda','yield','and','or','not',
-    'public','private','protected','static','final','void','override','abstract',
-    'interface','enum','struct','typedef','namespace','using','package','module',
-    'select','insert','update','delete','create','table','where','join','on','as',
-    'required','late','mixin','extension','factory','get','set','super','is','in',
-  };
-  static const Set<String> _types = {
-    'int','float','double','string','bool','List','Map','Set','String','Int',
-    'Double','Bool','Widget','BuildContext','void','var','dynamic','Object',
-    'Future','Stream','num','Array','any','unknown','Optional',
-  };
-
-  static List<TextSpan> _highlightLine(String line, String lang, bool isDark) {
-    final kwColor   = isDark ? const Color(0xFFC586C0) : const Color(0xFFAF00DB);
-    final typeColor = isDark ? const Color(0xFF4EC9B0) : const Color(0xFF267F99);
-    final strColor  = isDark ? const Color(0xFFCE9178) : const Color(0xFFA31515);
-    final numColor  = isDark ? const Color(0xFFB5CEA8) : const Color(0xFF098658);
-    final cmtColor  = isDark ? const Color(0xFF6A9955) : const Color(0xFF008000);
-    final fnColor   = isDark ? const Color(0xFFDCDCAA) : const Color(0xFF795E26);
-    final propColor = isDark ? const Color(0xFF9CDCFE) : const Color(0xFF001080);
-    final punctColor= isDark ? const Color(0xFFD4D4D4) : const Color(0xFF383A42);
-    final base      = isDark ? const Color(0xFFD4D4D4) : const Color(0xFF383A42);
-
+  TextSpan _buildHighlightedCode(List<String> lines, String lang, bool isDark) {
     final spans = <TextSpan>[];
+    for (int i = 0; i < lines.length; i++) {
+      final lineSpans = _highlightLine(lines[i], lang, isDark);
+      spans.addAll(lineSpans);
+      if (i < lines.length - 1) {
+        spans.add(TextSpan(
+          text: '\n',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 11,
+            height: 1.7,
+            color: isDark ? const Color(0xFFD4D4D4) : const Color(0xFF1A1A1A),
+          ),
+        ));
+      }
+    }
+    return TextSpan(children: spans);
+  }
+
+  List<TextSpan> _highlightLine(String line, String lang, bool isDark) {
+    // Cores adaptadas do design (tema escuro) e equivalentes claros
+    final baseColor = isDark ? const Color(0xFFD4D4D4) : const Color(0xFF1A1A1A);
+    final tagColor = isDark ? const Color(0xFF569CD6) : const Color(0xFF0000FF);
+    final attrColor = isDark ? const Color(0xFF9CDCFE) : const Color(0xFF0451A5);
+    final valColor = isDark ? const Color(0xFFCE9178) : const Color(0xFFA31515);
+    final metaColor = isDark ? const Color(0xFF808080) : const Color(0xFF008000);
+    final classColor = isDark ? const Color(0xFF4EC9B0) : const Color(0xFF267F99);
+    final numColor = isDark ? const Color(0xFFB5CEA8) : const Color(0xFF098658);
+    final punctColor = isDark ? const Color(0xFFD4D4D4) : const Color(0xFF383A42);
+
     final tokenRe = RegExp(
       r'''("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`|//.*|#.*|/\*[\s\S]*?\*/|<!--[\s\S]*?-->|\b\d+(\.\d+)?\b|[A-Za-z_][A-Za-z0-9_]*(?=\()|[A-Za-z_][A-Za-z0-9_]*|[{}()\[\];:,.<>=+\-*/%!&|^~?]''',
     );
+    final spans = <TextSpan>[];
     int last = 0;
     for (final m in tokenRe.allMatches(line)) {
-      if (m.start > last) spans.add(TextSpan(text: line.substring(last, m.start), style: TextStyle(color: base)));
+      if (m.start > last) {
+        spans.add(TextSpan(
+          text: line.substring(last, m.start),
+          style: TextStyle(color: baseColor),
+        ));
+      }
       final tok = m.group(0)!;
-      Color c = base;
+      Color c = baseColor;
       FontWeight w = FontWeight.normal;
       FontStyle fs = FontStyle.normal;
 
       if (tok.startsWith('"') || tok.startsWith("'") || tok.startsWith('`')) {
-        c = strColor;
+        c = valColor;
       } else if (tok.startsWith('//') || tok.startsWith('#') || tok.startsWith('/*') || tok.startsWith('<!--')) {
-        c = cmtColor; fs = FontStyle.italic;
+        c = metaColor; fs = FontStyle.italic;
       } else if (RegExp(r'^\d').hasMatch(tok)) {
         c = numColor;
-      } else if (_keywords.contains(tok)) {
-        c = kwColor; w = FontWeight.w600;
-      } else if (_types.contains(tok)) {
-        c = typeColor;
-      } else if (RegExp(r'^[A-Z]').hasMatch(tok) && RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(tok)) {
-        c = typeColor;
-      } else if (RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(tok) && line.substring(m.end).trimLeft().startsWith('(')) {
-        c = fnColor;
+      } else if (_isHtmlTag(lang, tok)) {
+        c = tagColor;
+      } else if (RegExp(r'^[A-Z]').hasMatch(tok) || RegExp(r'^[a-z_][A-Za-z0-9_]*$').hasMatch(tok) && lang == 'html' && _isHtmlAttribute(tok)) {
+        c = attrColor;
+      } else if (RegExp(r'^[A-Z]').hasMatch(tok) || RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$').hasMatch(tok) && lang == 'html' && _isHtmlClass(tok)) {
+        c = classColor;
       } else if (RegExp(r'^[{}()\[\];:,.<>=+\-*/%!&|^~?]$').hasMatch(tok)) {
         c = punctColor;
-      } else if (RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(tok)) {
-        c = propColor;
       }
-      spans.add(TextSpan(text: tok, style: TextStyle(color: c, fontWeight: w, fontStyle: fs)));
+      spans.add(TextSpan(
+        text: tok,
+        style: TextStyle(color: c, fontWeight: w, fontStyle: fs),
+      ));
       last = m.end;
     }
-    if (last < line.length) spans.add(TextSpan(text: line.substring(last), style: TextStyle(color: base)));
+    if (last < line.length) {
+      spans.add(TextSpan(
+        text: line.substring(last),
+        style: TextStyle(color: baseColor),
+      ));
+    }
     return spans;
+  }
+
+  bool _isHtmlTag(String lang, String token) {
+    if (lang != 'html' && lang != 'htm' && lang != 'xml' && lang != 'svg') return false;
+    return token.startsWith('<') || token.endsWith('>') || token.startsWith('</');
+  }
+
+  bool _isHtmlAttribute(String token) {
+    // Heurística: atributos geralmente são palavras seguidas de = ou dentro de tag
+    return token.contains('=') || token.endsWith('=');
+  }
+
+  bool _isHtmlClass(String token) {
+    // Em HTML, classes aparecem como valores de class, mas também seletores CSS
+    return token.startsWith('.') || token.startsWith('#');
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE PREVIEW SCREEN
+// CODE PREVIEW SCREEN (inalterado)
 // ══════════════════════════════════════════════════════════════
 
 class AiCodePreviewScreen extends StatelessWidget {
@@ -1431,463 +1442,92 @@ class AiCodePreviewScreen extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET
+// TIMER (novo design - cronómetro com anel)
 // ══════════════════════════════════════════════════════════════
 
-class AiMarketWidget extends StatefulWidget {
+class AiTimerWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
-  const AiMarketWidget({super.key, required this.json, required this.s});
-  @override State<AiMarketWidget> createState() => _AiMarketWidgetState();
-}
-
-class _MarketData {
-  final double price;
-  final double change;
-  final List<double> prices;
-  final String name;
-  final String symbol;
-  const _MarketData({required this.price, required this.change, required this.prices, required this.name, required this.symbol});
-}
-
-class _AiMarketWidgetState extends State<AiMarketWidget> {
-  bool _loading = true;
-  String? _error;
-  _MarketData? _data;
-  String _tf = '1D';
-  bool _fullscreen = false;
-
-  static const Map<String, ({int days, int points, double vol})> _tfCfg = {
-    '1D': (days: 1, points: 96, vol: 0.003),
-    '1S': (days: 7, points: 168, vol: 0.005),
-    '1M': (days: 30, points: 120, vol: 0.008),
-    '3M': (days: 90, points: 90, vol: 0.010),
-    '1A': (days: 365, points: 120, vol: 0.015),
-  };
-
-  static const Map<String, String> _cryptoIds = {
-    'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'BNB': 'binancecoin',
-    'XRP': 'ripple', 'ADA': 'cardano', 'DOGE': 'dogecoin', 'AVAX': 'avalanche-2',
-  };
-
+  const AiTimerWidget({super.key, required this.json, required this.s});
   @override
-  void initState() { super.initState(); _load(_tf); }
-
-  List<double> _simHist(double price, int points, double vol) {
-    final rnd = math.Random();
-    final out = <double>[];
-    var p = price * (0.85 + rnd.nextDouble() * 0.1);
-    for (int i = 0; i < points; i++) {
-      p += (rnd.nextDouble() - 0.48) * price * vol;
-      p = math.max(p, price * 0.5);
-      out.add(p);
-    }
-    out.add(price);
-    return out;
-  }
-
-  Future<void> _load(String tf) async {
-    setState(() { _loading = true; _error = null; });
-    final type = (widget.json['type'] ?? 'forex').toString();
-    final symbol = (widget.json['symbol'] ?? 'USDEUR').toString();
-    final name = (widget.json['name'] ?? symbol).toString();
-    final cfg = _tfCfg[tf]!;
-    try {
-      _MarketData data;
-      if (type == 'forex') {
-        final base = symbol.substring(0, math.min(3, symbol.length)).toUpperCase();
-        final quote = symbol.length >= 6 ? symbol.substring(3, 6).toUpperCase() : 'USD';
-        final res = await http.get(Uri.parse('https://open.er-api.com/v6/latest/$base')).timeout(const Duration(seconds: 10));
-        final d = jsonDecode(res.body);
-        final rates = d['rates'] as Map<String, dynamic>?;
-        final price = (rates?[quote] as num?)?.toDouble() ?? (rates?['USD'] as num?)?.toDouble() ?? 1.0;
-        final prices = _simHist(price, cfg.points, 0.002);
-        data = _MarketData(price: price, change: ((price - prices.first) / prices.first) * 100, prices: prices, name: '$base/$quote', symbol: '$base/$quote');
-      } else if (type == 'crypto') {
-        final sym = symbol.toUpperCase();
-        final priceRes = await http.get(Uri.parse('https://api.coinbase.com/v2/prices/$sym-USD/spot')).timeout(const Duration(seconds: 10));
-        final priceJson = jsonDecode(priceRes.body);
-        final price = double.parse(priceJson['data']['amount'].toString());
-        List<double> prices;
-        try {
-          final id = _cryptoIds[sym];
-          final hRes = await http.get(Uri.parse('https://api.coingecko.com/api/v3/coins/$id/market_chart?vs_currency=usd&days=${cfg.days}&precision=2')).timeout(const Duration(seconds: 10));
-          final hJson = jsonDecode(hRes.body);
-          final rawPrices = (hJson['prices'] as List?)?.map((p) => (p[1] as num).toDouble()).toList() ?? [];
-          if (rawPrices.isEmpty) throw Exception('no history');
-          prices = rawPrices;
-        } catch (_) {
-          prices = _simHist(price, cfg.points, cfg.vol);
-        }
-        data = _MarketData(price: price, change: ((price - prices.first) / prices.first) * 100, prices: prices, name: name, symbol: sym);
-      } else {
-        final rnd = math.Random();
-        final price = 100 + rnd.nextDouble() * 50;
-        final prices = _simHist(price, cfg.points, cfg.vol);
-        data = _MarketData(price: price, change: ((price - prices.first) / prices.first) * 100, prices: prices, name: name, symbol: symbol);
-      }
-      if (mounted) setState(() { _data = data; _loading = false; _tf = tf; });
-    } catch (e) {
-      if (mounted) setState(() { _error = 'Erro: $e'; _loading = false; });
-    }
-  }
-
-  String _fmtPrice(double p, String type) {
-    if (type == 'forex') return p.toStringAsFixed(4);
-    if (p >= 1000) return '\$${p.toStringAsFixed(2)}';
-    if (p >= 1) return '\$${p.toStringAsFixed(2)}';
-    return '\$${p.toStringAsFixed(6)}';
-  }
-
-  void _toggleFullscreen() => setState(() => _fullscreen = !_fullscreen);
-
-  @override
-  Widget build(BuildContext context) {
-    final type = (widget.json['type'] ?? 'forex').toString();
-    const bg = Color(0xFF111318);
-    final s = widget.s;
-
-    final card = Container(
-      constraints: BoxConstraints(maxWidth: _fullscreen ? double.infinity : 420),
-      margin: EdgeInsets.symmetric(vertical: _fullscreen ? 0 : 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(_fullscreen ? 0 : 10),
-        boxShadow: _fullscreen ? null : [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 32, offset: const Offset(0, 8))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Expanded(
-          child: _loading
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6F5AF6)))),
-                )
-              : _error != null
-                  ? Padding(padding: const EdgeInsets.all(24), child: Text(_error!, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13)))
-                  : SingleChildScrollView(child: _buildLoaded(context, type)),
-        ),
-        _WidgetActionBar(s: AppColorScheme(true), actions: [
-          _WidgetAction(
-            icon: _fullscreen ? 'fullscreen_exit.svg' : 'fullscreen.svg',
-            label: _fullscreen ? 'Sair de ecrã inteiro' : 'Ecrã inteiro',
-            primary: true,
-            onTap: _toggleFullscreen,
-          ),
-        ]),
-      ]),
-    );
-
-    if (!_fullscreen) return card;
-
-    return Container(
-      color: Colors.black,
-      width: double.infinity,
-      height: MediaQuery.of(context).size.height,
-      child: SafeArea(child: card),
-    );
-  }
-
-  Widget _buildLoaded(BuildContext context, String type) {
-    final d = _data!;
-    final isUp = d.change >= 0;
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-        child: Row(children: [
-          Container(
-            width: 44, height: 44,
-            decoration: const BoxDecoration(color: Color(0xFF1E2128), shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Text(d.symbol.substring(0, math.min(2, d.symbol.length)).toUpperCase(),
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(d.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
-              const SizedBox(height: 2),
-              Text('${d.symbol} · ${type.toUpperCase()}', style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
-            ]),
-          ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(_fmtPrice(d.price, type), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: isUp ? const Color(0xFF0D2E1A) : const Color(0xFF2E0D0D), borderRadius: BorderRadius.circular(4)),
-              child: Text('${isUp ? '▲ +' : '▼ '}${d.change.abs().toStringAsFixed(2)}%',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: isUp ? const Color(0xFF22C55E) : const Color(0xFFEF4444))),
-            ),
-          ]),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-        child: SizedBox(
-          height: _fullscreen ? 320 : 150,
-          child: CustomPaint(painter: _MarketChartPainter(prices: d.prices, isUp: isUp), child: const SizedBox.expand()),
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: _tfCfg.keys.map((tf) {
-            final selected = tf == _tf;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: GestureDetector(
-                onTap: () => _load(tf),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF6F5AF6) : const Color(0xFF1E2128),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(tf,
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? Colors.white : const Color(0xFF888888))),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    ]);
-  }
+  State<AiTimerWidget> createState() => _AiTimerWidgetState();
 }
 
-class _MarketChartPainter extends CustomPainter {
-  final List<double> prices;
-  final bool isUp;
-  _MarketChartPainter({required this.prices, required this.isUp});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (prices.length < 2) return;
-    final color = isUp ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
-    final minP = prices.reduce(math.min);
-    final maxP = prices.reduce(math.max);
-    final range = (maxP - minP).abs() < 0.0001 ? 1.0 : (maxP - minP);
-
-    final pts = <Offset>[];
-    for (int i = 0; i < prices.length; i++) {
-      final x = size.width * i / (prices.length - 1);
-      final y = size.height - ((prices[i] - minP) / range) * size.height * 0.85 - size.height * 0.075;
-      pts.add(Offset(x, y));
-    }
-
-    final fillPath = Path()..moveTo(pts.first.dx, size.height);
-    for (int i = 0; i < pts.length; i++) {
-      if (i == 0) {
-        fillPath.lineTo(pts[i].dx, pts[i].dy);
-      } else {
-        final cx = (pts[i - 1].dx + pts[i].dx) / 2;
-        fillPath.cubicTo(cx, pts[i - 1].dy, cx, pts[i].dy, pts[i].dx, pts[i].dy);
-      }
-    }
-    fillPath.lineTo(pts.last.dx, size.height);
-    fillPath.close();
-
-    final gradient = ui.Gradient.linear(Offset(0, 0), Offset(0, size.height), [color.withOpacity(0.33), color.withOpacity(0)]);
-    canvas.drawPath(fillPath, Paint()..shader = gradient);
-
-    final linePath = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (int i = 1; i < pts.length; i++) {
-      final cx = (pts[i - 1].dx + pts[i].dx) / 2;
-      linePath.cubicTo(cx, pts[i - 1].dy, cx, pts[i].dy, pts[i].dx, pts[i].dy);
-    }
-    canvas.drawPath(linePath, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeJoin = StrokeJoin.round..strokeCap = StrokeCap.round);
-
-    canvas.drawCircle(pts.last, 4.5, Paint()..color = color);
-    canvas.drawCircle(pts.last, 4.5, Paint()..color = const Color(0xFF111318)..style = PaintingStyle.stroke..strokeWidth = 2);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MarketChartPainter old) => old.prices != prices;
-}
-
-// ══════════════════════════════════════════════════════════════
-// CALENDAR (redesenhado)
-// ══════════════════════════════════════════════════════════════
-
-class AiCalendarWidget extends StatefulWidget {
-  final Map<String, dynamic> json;
-  final AppColorScheme s;
-  const AiCalendarWidget({super.key, required this.json, required this.s});
-  @override State<AiCalendarWidget> createState() => _AiCalendarWidgetState();
-}
-
-class _AiCalendarWidgetState extends State<AiCalendarWidget> {
-  static const _months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  static const _weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-
-  late DateTime _current;
-  late DateTime _today;
-  late String _selectedKey;
-  late Map<String, List<({String name, String time, Color color})>> _events;
-
-  String _key(int y, int m, int d) => '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}';
+class _AiTimerWidgetState extends State<AiTimerWidget> {
+  final Stopwatch _stopwatch = Stopwatch();
+  Timer? _ticker;
+  bool _running = false;
 
   @override
   void initState() {
     super.initState();
-    _today = DateTime.now();
-    _current = DateTime(_today.year, _today.month, 1);
-    _selectedKey = _key(_today.year, _today.month, _today.day);
-    _events = {};
-    final rawEvents = (widget.json['events'] as List?) ?? const [];
-    for (final e in rawEvents) {
-      final d = e as Map;
-      final date = (d['date'] ?? '').toString();
-      _events.putIfAbsent(date, () => []).add((
-        name: (d['name'] ?? d['title'] ?? '').toString(),
-        time: (d['time'] ?? '').toString(),
-        color: _parseColor(d['color']) ?? const Color(0xFF6F5AF6),
-      ));
-    }
-  }
-
-  Color _cardBg()          => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-  Color _previewBg()       => widget.s.isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF8F8F8);
-  Color _monthTextColor()  => widget.s.isDark ? Colors.white : Colors.black87;
-  Color _navBtnBg()        => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
-  Color _navIconColor()    => widget.s.isDark ? const Color(0xFFAAAAAA) : Colors.black54;
-  Color _weekdayColor()    => widget.s.isDark ? const Color(0xFF555555) : Colors.black45;
-  Color _dayNumColor()     => widget.s.isDark ? const Color(0xFFCCCCCC) : Colors.black87;
-  Color _otherMonthColor() => widget.s.isDark ? const Color(0xFF3A3A3A) : Colors.black26;
-  Color _selectedBg()      => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
-  Color _actionsBg()       => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
-  Color _accent()          => const Color(0xFF2E8BC9);
-
-  void _openNewEventSheet() {
-    final s = widget.s;
-    final nameCtrl = TextEditingController();
-    final timeCtrl = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: SheetGrabber(s: s)),
-              Text('Novo evento · $_selectedKey',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-              const SizedBox(height: 14),
-              TextField(
-                controller: nameCtrl,
-                style: TextStyle(color: s.onSurface),
-                decoration: InputDecoration(
-                  hintText: 'Nome do evento',
-                  hintStyle: TextStyle(color: s.onSurfaceVariant),
-                  filled: true, fillColor: s.hover,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: timeCtrl,
-                style: TextStyle(color: s.onSurface),
-                decoration: InputDecoration(
-                  hintText: 'Hora (ex: 14:00)',
-                  hintStyle: TextStyle(color: s.onSurfaceVariant),
-                  filled: true, fillColor: s.hover,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () {
-                  if (nameCtrl.text.trim().isEmpty) return;
-                  setState(() {
-                    _events.putIfAbsent(_selectedKey, () => []).add((
-                      name: nameCtrl.text.trim(),
-                      time: timeCtrl.text.trim(),
-                      color: const Color(0xFF6F5AF6),
-                    ));
-                  });
-                  Navigator.pop(ctx);
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Adicionar', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    _ticker = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (_running) {
+        setState(() {});
+      }
+    });
   }
 
   @override
+  void dispose() {
+    _ticker?.cancel();
+    _stopwatch.stop();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() {
+      if (_running) {
+        _stopwatch.stop();
+        _running = false;
+      } else {
+        _stopwatch.start();
+        _running = true;
+      }
+    });
+  }
+
+  void _reset() {
+    setState(() {
+      _stopwatch.reset();
+      if (_running) {
+        _stopwatch.start(); // continua a contar se estava em execução
+      }
+    });
+  }
+
+  String _formatMain(int elapsedMs) {
+    final totalSeconds = elapsedMs ~/ 1000;
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String _formatCentis(int elapsedMs) {
+    final centis = (elapsedMs % 1000) ~/ 10;
+    return '.${centis.toString().padLeft(2, '0')}';
+  }
+
+  double _ringProgress(int elapsedMs) {
+    // Progresso dentro de um minuto (0..1)
+    return (elapsedMs % 60000) / 60000;
+  }
+
+  Color _cardBg()    => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color _previewBg() => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
+  Color _actionsBg() => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
+  Color _primary()   => const Color(0xFF2E8BC9);
+  Color _runningPrimary() => const Color(0xFF4EC994);
+
+  @override
   Widget build(BuildContext context) {
-    final y = _current.year, m = _current.month;
-    final firstDay = DateTime(y, m, 1).weekday % 7; // 0 = Dom
-    final daysInMonth = DateTime(y, m + 1, 0).day;
-    final daysInPrev = DateTime(y, m, 0).day;
-
-    final cells = <Widget>[];
-    // Dias do mês anterior
-    for (int i = firstDay - 1; i >= 0; i--) {
-      final day = daysInPrev - i;
-      cells.add(_buildDayCell(
-        label: day.toString(),
-        isOtherMonth: true,
-        isToday: false,
-        isSelected: false,
-        eventColors: const [],
-        onTap: null,
-      ));
-    }
-    // Dias do mês atual
-    for (int d = 1; d <= daysInMonth; d++) {
-      final key = _key(y, m, d);
-      final isToday = DateTime(y, m, d) == DateTime(_today.year, _today.month, _today.day);
-      final dayEvents = _events[key] ?? const [];
-      cells.add(_buildDayCell(
-        label: d.toString(),
-        isOtherMonth: false,
-        isToday: isToday,
-        isSelected: key == _selectedKey,
-        eventColors: dayEvents.map((e) => e.color).toList(),
-        onTap: () => setState(() => _selectedKey = key),
-      ));
-    }
-    // Dias do mês seguinte
-    final total = firstDay + daysInMonth;
-    final rem = total % 7 == 0 ? 0 : 7 - total % 7;
-    for (int d = 1; d <= rem; d++) {
-      cells.add(_buildDayCell(
-        label: d.toString(),
-        isOtherMonth: true,
-        isToday: false,
-        isSelected: false,
-        eventColors: const [],
-        onTap: null,
-      ));
-    }
-
-    final rows = <List<Widget>>[];
-    for (int i = 0; i < cells.length; i += 7) {
-      rows.add(cells.sublist(i, math.min(i + 7, cells.length)));
-    }
+    final elapsedMs = _stopwatch.elapsedMilliseconds;
+    final progress = _ringProgress(elapsedMs);
+    final runningColor = _running ? _runningPrimary() : _primary();
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
@@ -1914,71 +1554,49 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                 color: _previewBg(),
                 borderRadius: BorderRadius.circular(24),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${_months[m - 1]} $y',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: _monthTextColor(),
-                            letterSpacing: 0.2,
-                          ),
+              child: Center(
+                child: SizedBox(
+                  width: 168,
+                  height: 168,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(168, 168),
+                        painter: _TimerRingPainter(
+                          progress: progress,
+                          trackColor: widget.s.isDark ? const Color(0xFF232323) : const Color(0xFFDDDDDD),
+                          progressColor: runningColor,
+                          strokeWidth: 14,
                         ),
-                        Row(
-                          children: [
-                            _buildNavButton(
-                              icon: 'chevron_left.svg',
-                              onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1)),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildNavButton(
-                              icon: 'chevron_right.svg',
-                              onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      children: _weekdays.map((w) => Expanded(
-                        child: Center(
-                          child: Text(
-                            w,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _weekdayColor(),
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      )).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Column(
-                        children: rows.map((row) => Expanded(
-                          child: Row(
-                            children: row.map((cell) => Expanded(child: cell)).toList(),
-                          ),
-                        )).toList(),
                       ),
-                    ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _formatMain(elapsedMs),
+                            style: TextStyle(
+                              color: widget.s.isDark ? Colors.white : Colors.black87,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: [ui.FontFeature.tabularFigures()],
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          Text(
+                            _formatCentis(elapsedMs),
+                            style: TextStyle(
+                              color: widget.s.isDark ? const Color(0xFF555555) : const Color(0xFF888888),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              fontFeatures: [ui.FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1989,244 +1607,109 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
               color: _actionsBg(),
               borderRadius: BorderRadius.circular(50),
             ),
-            child: GestureDetector(
-              onTap: _openNewEventSheet,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: _accent(),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppIcon('add.svg', size: 14, color: Colors.white),
-                    const SizedBox(width: 7),
-                    Text(
-                      'Novo evento',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _toggle,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      decoration: BoxDecoration(
+                        color: runningColor,
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AppIcon(
+                            _running ? 'pause.svg' : 'play.svg',
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            _running ? 'Pausar' : 'Iniciar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavButton({required String icon, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: _navBtnBg(),
-          shape: BoxShape.circle,
-        ),
-        child: AppIcon(icon, size: 12, color: _navIconColor()),
-      ),
-    );
-  }
-
-  Widget _buildDayCell({
-    required String label,
-    required bool isOtherMonth,
-    required bool isToday,
-    required bool isSelected,
-    required List<Color> eventColors,
-    required VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isToday
-                  ? _accent()
-                  : isSelected
-                      ? _selectedBg()
-                      : Colors.transparent,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
-                color: isToday
-                    ? Colors.white
-                    : isOtherMonth
-                        ? _otherMonthColor()
-                        : _dayNumColor(),
-              ),
-            ),
-          ),
-          if (eventColors.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Column(
-                children: eventColors.take(2).map((c) => Container(
-                  width: 4,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 1),
-                  decoration: BoxDecoration(
-                    color: c,
-                    shape: BoxShape.circle,
                   ),
-                )).toList(),
-              ),
+                ),
+                const SizedBox(width: 6),
+                // Botão circular de reset
+                GestureDetector(
+                  onTap: _reset,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: widget.s.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD),
+                      shape: BoxShape.circle,
+                    ),
+                    child: AppIcon('refresh.svg', size: 16, color: Colors.white),
+                  ),
+                ),
+              ],
             ),
+          ),
         ],
       ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// TIMER
-// ══════════════════════════════════════════════════════════════
-
-class AiTimerWidget extends StatefulWidget {
-  final Map<String, dynamic> json;
-  final AppColorScheme s;
-  const AiTimerWidget({super.key, required this.json, required this.s});
-  @override State<AiTimerWidget> createState() => _AiTimerWidgetState();
-}
-
-class _AiTimerWidgetState extends State<AiTimerWidget> {
-  late int _totalSeconds;
-  late int _remaining;
-  Timer? _timer;
-  bool _running = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _totalSeconds = (widget.json['seconds'] is num) ? (widget.json['seconds'] as num).toInt() : 300;
-    _remaining = _totalSeconds;
-  }
-
-  @override
-  void dispose() { _timer?.cancel(); super.dispose(); }
-
-  void _toggle() {
-    if (_running) {
-      _timer?.cancel();
-      setState(() => _running = false);
-    } else {
-      setState(() => _running = true);
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (_remaining <= 0) {
-          _timer?.cancel();
-          setState(() => _running = false);
-          return;
-        }
-        setState(() => _remaining--);
-      });
-    }
-  }
-
-  void _reset() {
-    _timer?.cancel();
-    setState(() { _remaining = _totalSeconds; _running = false; });
-  }
-
-  String get _label => (widget.json['label'] ?? '').toString();
-
-  String get _formatted {
-    final m = (_remaining ~/ 60).toString().padLeft(2, '0');
-    final sec = (_remaining % 60).toString().padLeft(2, '0');
-    return '$m:$sec';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final progress = _totalSeconds > 0 ? (_remaining / _totalSeconds) : 0.0;
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 320),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: s.isDark ? const Color(0xFF1B1B1B) : Colors.white,
-        border: Border.all(color: s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0), width: 1.5),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-          child: Column(children: [
-            if (_label.isNotEmpty) ...[
-              Text(_label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurfaceVariant)),
-              const SizedBox(height: 10),
-            ],
-            SizedBox(
-              width: 140, height: 140,
-              child: Stack(alignment: Alignment.center, children: [
-                CustomPaint(
-                  size: const Size(140, 140),
-                  painter: _TimerRingPainter(progress: progress, isDark: s.isDark),
-                ),
-                Text(_formatted, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: s.onSurface, letterSpacing: -0.5)),
-              ]),
-            ),
-          ]),
-        ),
-        _WidgetActionBar(s: s, actions: [
-          _WidgetAction(
-            icon: _running ? 'pause.svg' : 'play.svg',
-            label: _running ? 'Pausar' : 'Iniciar',
-            primary: true,
-            onTap: _toggle,
-          ),
-          _WidgetAction(icon: 'refresh.svg', label: 'Reiniciar', onTap: _reset),
-        ]),
-      ]),
     );
   }
 }
 
 class _TimerRingPainter extends CustomPainter {
   final double progress;
-  final bool isDark;
-  _TimerRingPainter({required this.progress, required this.isDark});
+  final Color trackColor;
+  final Color progressColor;
+  final double strokeWidth;
+  _TimerRingPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.progressColor,
+    required this.strokeWidth,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 6;
-    final trackColor = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5EA);
-    canvas.drawCircle(center, radius, Paint()..color = trackColor..style = PaintingStyle.stroke..strokeWidth = 8);
+    final radius = (size.width - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    // Trilha
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // Progresso
+    final progressPaint = Paint()
+      ..color = progressColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
+      rect,
       -math.pi / 2,
       2 * math.pi * progress,
       false,
-      Paint()
-        ..color = const Color(0xFF6F5AF6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round,
+      progressPaint,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _TimerRingPainter old) => old.progress != progress;
+  bool shouldRepaint(covariant _TimerRingPainter old) {
+    return old.progress != progress ||
+        old.trackColor != trackColor ||
+        old.progressColor != progressColor;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2246,7 +1729,8 @@ class AiMindMapWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMindMapWidget({super.key, required this.json, required this.s});
-  @override State<AiMindMapWidget> createState() => _AiMindMapWidgetState();
+  @override
+  State<AiMindMapWidget> createState() => _AiMindMapWidgetState();
 }
 
 class _AiMindMapWidgetState extends State<AiMindMapWidget> {
@@ -2390,7 +1874,8 @@ class AiMathGraphWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMathGraphWidget({super.key, required this.json, required this.s});
-  @override State<AiMathGraphWidget> createState() => _AiMathGraphWidgetState();
+  @override
+  State<AiMathGraphWidget> createState() => _AiMathGraphWidgetState();
 }
 
 class _EquationSolution {
@@ -2532,7 +2017,8 @@ class AiMapWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMapWidget({super.key, required this.json, required this.s});
-  @override State<AiMapWidget> createState() => _AiMapWidgetState();
+  @override
+  State<AiMapWidget> createState() => _AiMapWidgetState();
 }
 
 class _AiMapWidgetState extends State<AiMapWidget> {
@@ -2605,7 +2091,8 @@ class _AiMapWidgetState extends State<AiMapWidget> {
 class AiSmallDotsLoader extends StatefulWidget {
   final Color color;
   const AiSmallDotsLoader({super.key, required this.color});
-  @override State<AiSmallDotsLoader> createState() => _AiSmallDotsLoaderState();
+  @override
+  State<AiSmallDotsLoader> createState() => _AiSmallDotsLoaderState();
 }
 
 class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader> with SingleTickerProviderStateMixin {
@@ -2615,7 +2102,8 @@ class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader> with SingleTicker
     super.initState();
     _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat();
   }
-  @override void dispose() { _c.dispose(); super.dispose(); }
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
