@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_slider_drawer/flutter_slider_drawer.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -164,15 +165,18 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — Material puro. Slide, largura, clip dos cantos e barrier
-// são geridos pelo Stack manual em main.dart (RootShell). Este
-// widget fica sempre montado na árvore, mesmo fechado — só desliza
-// para fora da tela — nunca é destruído/recriado ao reabrir.
+// DRAWER — agora renderizado como o `slider` do SliderDrawer
+// (flutter_slider_drawer). Todo o conteúdo visual (ícones, tamanhos,
+// pills, tiles, popups) é o mesmo de antes — só o mecanismo de
+// fecho mudou: onClose() deixou de existir como callback próprio;
+// em vez disso, este widget recebe o GlobalKey<SliderDrawerState> do
+// RootShell e chama drawerKey.currentState?.closeDrawer() diretamente
+// em cada ação que antes fechava o drawer.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
-  final VoidCallback onClose;
+  final GlobalKey<SliderDrawerState> drawerKey;
   final VoidCallback onSettings;
   final VoidCallback onGoHome;
   final AppTab currentTab;
@@ -184,7 +188,7 @@ class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
     required this.s,
-    required this.onClose,
+    required this.drawerKey,
     required this.onSettings,
     required this.onGoHome,
     required this.currentTab,
@@ -235,8 +239,10 @@ class _AppDrawerState extends State<AppDrawer> {
     }
   }
 
+  void _closeDrawer() => widget.drawerKey.currentState?.closeDrawer();
+
   void _openSearch(BuildContext context) {
-    widget.onClose();
+    _closeDrawer();
     Navigator.of(context).push(CupertinoPageRoute(
       builder: (_) => ChatSearchScreen(
         s: widget.s,
@@ -248,13 +254,13 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _goHome() {
-    widget.onClose();
+    _closeDrawer();
     widget.onGoHome();
   }
 
   void _openConversation(ConversationItem item) {
     widget.onOpenConversation?.call(item.id);
-    widget.onClose();
+    _closeDrawer();
   }
 
   void _openConvPopup(BuildContext context, GlobalKey anchorKey, ConversationItem item) {

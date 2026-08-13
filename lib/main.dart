@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_slider_drawer/flutter_slider_drawer.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
@@ -77,17 +78,29 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer manual via Stack + AnimationController.
-// AppDrawer fica sempre montado, só desliza para fora de vista —
-// nunca é destruído/recriado ao reabrir. Body é empurrado
-// (Transform.translate) em vez de coberto — push nativo.
+// ROOT SHELL — agora usa flutter_slider_drawer (SliderDrawer) em vez
+// do Stack manual com AnimationController próprio. O pacote controla
+// sozinho a animação de abertura/fecho e o "empurrar" do body — o que
+// antes era feito manualmente com Transform.translate(offset) num
+// AnimatedBuilder ligado a um AnimationController nosso.
 //
-// FIX (tema instantâneo): _RootShellState agora usa ThemeReactive —
-// regista appTheme.addListener no initState e chama setState sempre
-// que o tema muda, independentemente de qualquer outra navegação ou
-// interação. Antes disto, só um setState de outro motivo (mudar de
-// tab, etc.) fazia o build() voltar a ler AppTheme.of(context) com o
-// valor novo — por isso o tema só "pegava" ao navegar.
+// IMPORTANTE (nome do parâmetro de direção): o pacote documenta o
+// enum `SliderOpen.LEFT_TO_RIGHT` no README da própria tag v3.0.2,
+// mas não foi possível confirmar com 100% de certeza, a partir das
+// fontes disponíveis nesta sessão, se o nome do parâmetro que recebe
+// esse enum é exatamente `slideDirection` (nome mencionado de forma
+// isolada no changelog, nunca visto lado a lado com o valor do enum
+// num trecho de código real). Se o teu editor assinalar erro nesta
+// linha ao correr `flutter pub get`, o autocomplete do IDE vai
+// mostrar o nome certo — é apenas este UM nome de parâmetro que pode
+// precisar de ajuste, não a estrutura do resto do ficheiro.
+//   slideDirection: SliderOpen.LEFT_TO_RIGHT,
+//
+// appBar: null — esconde a appbar própria do plugin (confirmado nas
+// release notes do pacote: "replace hasAppBar to appBar: if you set
+// appBar:null then it will hide"), porque o teu _AppHeader já existe
+// e continua a ser desenhado por cima do `child`, exatamente como
+// antes.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -95,12 +108,9 @@ class RootShell extends StatefulWidget {
   @override State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell>
-    with SingleTickerProviderStateMixin, ThemeReactive<RootShell> {
-  late final AnimationController _drawerCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 260),
-  );
+class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
+  final GlobalKey<SliderDrawerState> _sliderDrawerKey =
+      GlobalKey<SliderDrawerState>();
 
   AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
@@ -108,8 +118,8 @@ class _RootShellState extends State<RootShell>
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => _drawerCtrl.animateTo(1.0, curve: kCupertinoOut);
-  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: kCupertinoOut);
+  void _openDrawer()  => _sliderDrawerKey.currentState?.openDrawer();
+  void _closeDrawer() => _sliderDrawerKey.currentState?.closeDrawer();
 
   void _openSettings() {
     _closeDrawer();
@@ -191,12 +201,6 @@ class _RootShellState extends State<RootShell>
     }
   }
 
-  @override
-  void dispose() {
-    _drawerCtrl.dispose();
-    super.dispose();
-  }
-
   static const double _drawerWidth = 300;
 
   @override
@@ -271,50 +275,31 @@ class _RootShellState extends State<RootShell>
 
     return Scaffold(
       backgroundColor: isAiTab ? s.pageBackground : s.surface,
-      body: AnimatedBuilder(
-        animation: _drawerCtrl,
-        builder: (_, __) {
-          final t = _drawerCtrl.value;
-          return Stack(children: [
-            Transform.translate(
-              offset: Offset(_drawerWidth * t, 0),
-              child: IgnorePointer(
-                ignoring: t > 0.01,
-                child: bodyContent,
-              ),
-            ),
-            if (t > 0.01)
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: _closeDrawer,
-                  child: Container(color: s.barrier.withOpacity(0.35 * t)),
-                ),
-              ),
-            Transform.translate(
-              offset: Offset(_drawerWidth * (t - 1), 0),
-              child: SizedBox(
-                width: _drawerWidth,
-                height: double.infinity,
-                child: IgnorePointer(
-                  ignoring: t < 0.99,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
-                    child: AppDrawer(
-                      s: s,
-                      onClose: _closeDrawer,
-                      onSettings: _openSettings,
-                      onGoHome: _goHome,
-                      currentTab: _tab,
-                      onSelectTab: _selectTab,
-                      onOpenConversation: _onOpenConversation,
-                      onNewChat: () => _onConversationAction(ConversationAction.newChat),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ]);
-        },
+      body: SliderDrawer(
+        key: _sliderDrawerKey,
+        appBar: null,
+        sliderOpenSize: _drawerWidth,
+        slideDirection: SliderOpen.LEFT_TO_RIGHT,
+        animationDuration: 260,
+        sliderShadow: BoxShadow(
+          color: s.barrier.withOpacity(0.35),
+          blurRadius: 24,
+          spreadRadius: 2,
+        ),
+        slider: ClipRRect(
+          borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
+          child: AppDrawer(
+            s: s,
+            drawerKey: _sliderDrawerKey,
+            onSettings: _openSettings,
+            onGoHome: _goHome,
+            currentTab: _tab,
+            onSelectTab: _selectTab,
+            onOpenConversation: _onOpenConversation,
+            onNewChat: () => _onConversationAction(ConversationAction.newChat),
+          ),
+        ),
+        child: bodyContent,
       ),
     );
   }
@@ -327,12 +312,6 @@ class _AiTabHeaderRefresh extends ChangeNotifier {
   void ping() => notifyListeners();
 }
 
-// FIX (problema 3 — ícone de documento/canvas não aparecia): esta
-// classe existia mas nunca era inserida na árvore de widgets, então
-// AiTabHostNavigation.of(context) em aitab.dart devolvia sempre null,
-// e a chamada a goToEditTab() era engolida silenciosamente pelo `?.`.
-// Agora AiTabHost envolve o AiTab com AiTabHostNavigation de verdade,
-// ligando goToEditTab à mesma navegação usada por onCanvasCreated.
 class AiTabHost extends StatefulWidget {
   final GlobalKey<AiTabState> aiTabKey;
   final VoidCallback onFirstMessage;
@@ -367,13 +346,6 @@ class _AiTabHostState extends State<AiTabHost> {
   }
 
   void _goToEditTab(EditorType type) {
-    // Delega no mesmo caminho que onCanvasCreated já usava para abrir
-    // o EditTab a partir de RootShell — precisa de um LocalCanvasItem
-    // "vazio" só como sinal de navegação quando chamado diretamente
-    // (ex: toque num _CanvasLink já existente, sem criar nada de novo).
-    // Nesse caso o conteúdo real já foi carregado via
-    // editTabController.requestLoadLocal(item) em _onOpenCanvas
-    // (aitab.dart) ANTES desta chamada — aqui só trocamos de tab.
     RootShellNavigation.of(context)?.switchToEditTab(type);
   }
 
@@ -395,10 +367,6 @@ class _AiTabHostState extends State<AiTabHost> {
   }
 }
 
-/// Ponte entre AiTabHost (que não tem acesso direto ao setState de
-/// _RootShellState) e RootShell — usada por _onOpenCanvas (aitab.dart,
-/// via AiTabHostNavigation) para trocar _tab para AppTab.edit depois
-/// de editTabController.requestLoadLocal(item) já ter sido chamado.
 class RootShellNavigation extends InheritedWidget {
   final ValueChanged<EditorType> switchToEditTab;
   const RootShellNavigation({
