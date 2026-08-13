@@ -36,6 +36,14 @@
 // adicionar uma dependência nova ou uma pasta de assets nova, o que
 // não foi pedido nem confirmado nesta sessão — mexer nisso agora
 // seria inventar uma decisão de design não solicitada.
+//
+// CORREÇÕES DE COMPILAÇÃO (build real falhou, confirmado no log):
+// 1) '$' sem escape dentro de strings com aspas simples ('sh': '$')
+//    é interpretado por Dart como início de interpolação — corrigido
+//    para '\$' nas entradas 'sh' e 'bash' de _fallbackGlyph.
+// 2) 'Object' aparecia duas vezes na mesma literal `const Set<String>
+//    _types` — Dart avalia Set const em tempo de compilação e
+//    rejeita elementos duplicados; removida a segunda ocorrência.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -686,7 +694,7 @@ class LanguageIcon extends StatelessWidget {
     'dart': '🎯', 'js': 'JS', 'javascript': 'JS', 'ts': 'TS', 'typescript': 'TS',
     'py': '🐍', 'python': '🐍', 'html': '🌐', 'htm': '🌐', 'css': '🎨',
     'json': '{}', 'yaml': '⚙', 'yml': '⚙', 'xml': '</>', 'sql': '🗄',
-    'sh': '$', 'bash': '$', 'kotlin': 'K', 'java': '☕', 'c': 'C',
+    'sh': '\$', 'bash': '\$', 'kotlin': 'K', 'java': '☕', 'c': 'C',
     'cpp': 'C++', 'csharp': 'C#', 'cs': 'C#', 'swift': '🐦', 'go': 'Go',
     'rust': '🦀', 'php': '🐘', 'ruby': '💎',
   };
@@ -783,7 +791,7 @@ class CodeHighlightView extends StatelessWidget {
   static const Set<String> _types = {
     'int','float','double','string','bool','List','Map','Set','String','Int',
     'Double','Bool','Widget','BuildContext','void','var','dynamic','Object',
-    'Future','Stream','num','Array','Object','any','unknown','Optional',
+    'Future','Stream','num','Array','any','unknown','Optional',
   };
 
   static List<TextSpan> _highlightLine(String line, String lang, bool isDark) {
