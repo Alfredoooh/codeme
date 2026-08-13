@@ -116,28 +116,9 @@ AiWidgetParseResult parseAiWidgetBlocks(String raw) {
 /// streaming), um bloco ```widget_x``` aberto mas ainda não fechado.
 /// Usado para decidir se devemos mostrar o pill "A criar..." em vez
 /// de tentar renderizar JSON incompleto.
-///
-/// IMPORTANTE (fix do bug relatado): esta função devolve true APENAS
-/// enquanto existe, literalmente neste instante do texto acumulado,
-/// um marcador ```widget_x aberto sem o ``` de fecho correspondente.
-/// Assim que esse ``` de fecho chega no streaming, a próxima chamada
-/// devolve false imediatamente — o shimmer do pill em aitab.dart é
-/// inteiramente pilotado por este booleano (via _detectOpeningLabel),
-/// por isso não há necessidade de nenhum debounce ou temporizador
-/// aqui: um único bloco aberto → true; bloco fechado → false; texto
-/// normal a seguir ao fecho → streaming normal continua a aparecer
-/// no ecrã como texto, nunca escondido. O comportamento de "ligar e
-/// desligar o pill por cada bloco, individualmente, sem esconder o
-/// texto entretanto" já está correto nesta função — o problema
-/// relatado (tudo escondido) estava nalguma lógica adicional em
-/// aitab.dart que tratava _creatingLabel como "sticky" após o
-/// primeiro bloco; ver nota em aitab.dart no prompt de continuação.
 bool hasOpenWidgetBlock(String raw) {
   final opens = RegExp(r'```widget_[a-z]+').allMatches(raw).length;
   final closesTotal = '```'.allMatches(raw).length;
-  // Cada bloco widget consome 2 marcadores ``` (abertura+fecho). Se o
-  // total de ``` no texto for ímpar relativamente ao número de aberturas
-  // widget_*, há um bloco widget em aberto NESTE MOMENTO.
   return opens > 0 && closesTotal % 2 == 1;
 }
 
@@ -149,8 +130,8 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
   switch (block.id) {
     case 'widget_table':    return buildAiTableFromWidgetJson(block.json, s);
     case 'widget_code':     return AiCodeWidget(json: block.json, s: s);
-    case 'widget_bar':      return AiBarChartWidget(json: block.json, s: s);
-    case 'widget_pie':      return AiPieChartWidget(json: block.json, s: s);
+    case 'widget_bar':      return AiChartWidget(json: block.json, s: s, defaultType: 'bar');
+    case 'widget_pie':      return AiChartWidget(json: block.json, s: s, defaultType: 'pie');
     case 'widget_market':   return AiMarketWidget(json: block.json, s: s);
     case 'widget_calendar': return AiCalendarWidget(json: block.json, s: s);
     case 'widget_timer':    return AiTimerWidget(json: block.json, s: s);
@@ -162,11 +143,7 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// WIDGET ACTION BAR — rodapé de ações reutilizável, usado pelos
-// widgets "container" (mindmap, market, calendar, timer). Visual
-// consistente: fundo translúcido leve, ícones + labels curtos,
-// separador fino acima. Cada widget monta a sua própria lista de
-// ações (1 a 3 botões) e passa aqui.
+// WIDGET ACTION BAR
 // ══════════════════════════════════════════════════════════════
 
 class _WidgetAction {
@@ -212,7 +189,8 @@ class _WidgetActionButton extends StatefulWidget {
   final AppColorScheme s;
   final _WidgetAction action;
   const _WidgetActionButton({required this.s, required this.action});
-  @override State<_WidgetActionButton> createState() => _WidgetActionButtonState();
+  @override
+  State<_WidgetActionButton> createState() => _WidgetActionButtonState();
 }
 
 class _WidgetActionButtonState extends State<_WidgetActionButton> {
@@ -253,257 +231,872 @@ class _WidgetActionButtonState extends State<_WidgetActionButton> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// BAR CHART
+// UNIFIED CHART WIDGET
 // ══════════════════════════════════════════════════════════════
 
-class AiBarChartWidget extends StatefulWidget {
+class AiChartWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
-  const AiBarChartWidget({super.key, required this.json, required this.s});
-  @override State<AiBarChartWidget> createState() => _AiBarChartWidgetState();
+  final String? defaultType; // 'bar' | 'line' | 'area' | 'pie'
+  const AiChartWidget({super.key, required this.json, required this.s, this.defaultType});
+  @override
+  State<AiChartWidget> createState() => _AiChartWidgetState();
 }
 
-class _AiBarChartWidgetState extends State<AiBarChartWidget> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
+class _ChartDataItem {
+  String label;
+  double value;
+  Color color;
+  _ChartDataItem(this.label, this.value, this.color);
+}
 
-  static const _defaultColors = [
-    Color(0xFF6F5AF6), Color(0xFFE74C3C), Color(0xFF27AE60), Color(0xFFF39C12),
-    Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFEC4899), Color(0xFF8B5CF6),
+class _AiChartWidgetState extends State<AiChartWidget>
+    with SingleTickerProviderStateMixin {
+  static const _palette = [
+    Color(0xFF2E8BC9), Color(0xFFE05E5E), Color(0xFF4EC994),
+    Color(0xFFF0A500), Color(0xFFC77DFF), Color(0xFF5ECBE0),
+    Color(0xFFE0785E), Color(0xFF8ECC4E),
   ];
+
+  late List<_ChartDataItem> _data;
+  late String _title;
+  late String _chartType;
+  late AnimationController _animController;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..forward();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..forward();
+    _parseInitialData();
+    _initChartType();
   }
 
   @override
-  void dispose() { _c.dispose(); super.dispose(); }
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _parseInitialData() {
+    final raw = (widget.json['data'] ?? widget.json['slices'] ?? widget.json['bars'])
+        as List? ??
+        const [];
+    _data = raw.asMap().entries.map((e) {
+      final d = e.value as Map;
+      return _ChartDataItem(
+        (d['label'] ?? '?').toString(),
+        (d['value'] is num) ? (d['value'] as num).toDouble() : double.tryParse(d['value'].toString()) ?? 0,
+        _parseColor(d['color']) ?? _palette[e.key % _palette.length],
+      );
+    }).toList();
+    _title = (widget.json['title'] ?? 'Dados').toString();
+  }
+
+  void _initChartType() {
+    if (widget.defaultType != null) {
+      _chartType = widget.defaultType!;
+      return;
+    }
+    final t = (widget.json['type'] ?? '').toString().toLowerCase();
+    if (['bar', 'line', 'area', 'pie'].contains(t)) {
+      _chartType = t;
+    } else {
+      _chartType = 'bar';
+    }
+  }
+
+  Color _cardBg()        => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color _previewBg()     => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
+  Color _titleColor()    => widget.s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A);
+  Color _legendText()    => widget.s.isDark ? const Color(0xFF999999) : const Color(0xFF666666);
+  Color _actionsBg()     => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
+  Color _primary()       => const Color(0xFF2E8BC9);
+
+  Future<void> _openOptions() async {
+    final result = await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ChartOptionsSheet(
+        initialType: _chartType,
+        initialTitle: _title,
+        initialData: List<_ChartDataItem>.from(_data.map((d) => _ChartDataItem(d.label, d.value, d.color))),
+        isDark: widget.s.isDark,
+      ),
+    );
+
+    if (result != null && result is Map) {
+      setState(() {
+        _chartType = result['type'] as String;
+        _title = result['title'] as String;
+        _data = (result['data'] as List).cast<_ChartDataItem>();
+        _animController.forward(from: 0);
+      });
+    }
+  }
+
+  void _copyData() {
+    final lines = _data.map((d) => '${d.label}: ${d.value}').join('\n');
+    Clipboard.setData(ClipboardData(text: '$_title\n$lines'));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Dados copiados!')),
+    );
+  }
+
+  void _downloadChart() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Download em breve')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final raw = (widget.json['data'] ?? widget.json['bars']) as List? ?? const [];
-    final items = raw.asMap().entries.map((e) {
-      final d = e.value as Map;
-      return (
-        label: (d['label'] ?? '?').toString(),
-        value: (d['value'] is num) ? (d['value'] as num).toDouble() : double.tryParse(d['value'].toString()) ?? 0,
-        color: _parseColor(d['color']) ?? _defaultColors[e.key % _defaultColors.length],
-        unit: (d['unit'] ?? '').toString(),
-      );
-    }).toList();
-
-    final maxVal = items.isEmpty ? 1.0 : items.map((e) => e.value).reduce(math.max);
-
     return Container(
-      constraints: const BoxConstraints(maxWidth: 500),
+      constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(children: [
-        SizedBox(
-          height: 220,
-          child: AnimatedBuilder(
-            animation: _c,
-            builder: (_, __) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _cardBg(),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(widget.s.isDark ? 0.3 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _previewBg(),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
                 children: [
-                  for (final item in items) ...[
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text('${item.value.toStringAsFixed(item.value == item.value.roundToDouble() ? 0 : 1)}${item.unit}',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: s.onSurface)),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            height: 150,
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: FractionallySizedBox(
-                                heightFactor: (maxVal > 0 ? (item.value / maxVal) : 0) * Curves.easeOut.transform(_c.value),
-                                child: Container(
-                                  constraints: const BoxConstraints(maxWidth: 48),
-                                  decoration: BoxDecoration(
-                                    color: item.color,
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                    boxShadow: [BoxShadow(color: item.color.withOpacity(0.25), blurRadius: 14, offset: const Offset(0, 4))],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(item.label,
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
-                        ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _title,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _titleColor(),
+                        ),
                       ),
                     ),
-                    if (item != items.last) const SizedBox(width: 10),
-                  ],
+                  ),
+                  Expanded(
+                    child: AnimatedBuilder(
+                      animation: _animController,
+                      builder: (_, __) => CustomPaint(
+                        painter: _UnifiedChartPainter(
+                          data: _data,
+                          chartType: _chartType,
+                          isDark: widget.s.isDark,
+                          progress: Curves.easeOutCubic.transform(_animController.value),
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      alignment: WrapAlignment.start,
+                      children: _data.asMap().entries.map((e) {
+                        final item = e.value;
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: item.color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              item.label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _legendText(),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 12, runSpacing: 6, alignment: WrapAlignment.center,
-          children: items
-              .map((item) => Row(mainAxisSize: MainAxisSize.min, children: [
-                    Container(width: 12, height: 12, decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(2))),
-                    const SizedBox(width: 6),
-                    Text('${item.label} (${item.value.toStringAsFixed(item.value == item.value.roundToDouble() ? 0 : 1)})',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
-                  ]))
-              .toList(),
-        ),
-      ]),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: _actionsBg(),
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _openOptions,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      decoration: BoxDecoration(
+                        color: _primary(),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AppIcon('sliders.svg', size: 14, color: Colors.white),
+                          const SizedBox(width: 7),
+                          Text(
+                            'Opções',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _CircularActionButton(
+                  icon: 'copy.svg',
+                  tooltip: 'Copiar',
+                  onTap: _copyData,
+                  primary: _primary(),
+                ),
+                const SizedBox(width: 6),
+                _CircularActionButton(
+                  icon: 'download.svg',
+                  tooltip: 'Download',
+                  onTap: _downloadChart,
+                  primary: _primary(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-Color? _parseColor(dynamic v) {
-  if (v == null) return null;
-  final str = v.toString().replaceAll('#', '');
-  if (str.length == 6) return Color(int.parse('FF$str', radix: 16));
-  if (str.length == 8) return Color(int.parse(str, radix: 16));
-  return null;
+class _CircularActionButton extends StatelessWidget {
+  final String icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final Color primary;
+  const _CircularActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    required this.primary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: primary,
+            shape: BoxShape.circle,
+          ),
+          child: AppIcon(icon, size: 15, color: Colors.white),
+        ),
+      ),
+    );
+  }
 }
 
-// ══════════════════════════════════════════════════════════════
-// PIE CHART
-// ══════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────
+// MODAL DE OPÇÕES DO GRÁFICO
+// ────────────────────────────────────────────────────────────
 
-class AiPieChartWidget extends StatefulWidget {
-  final Map<String, dynamic> json;
-  final AppColorScheme s;
-  const AiPieChartWidget({super.key, required this.json, required this.s});
-  @override State<AiPieChartWidget> createState() => _AiPieChartWidgetState();
+class _ChartOptionsSheet extends StatefulWidget {
+  final String initialType;
+  final String initialTitle;
+  final List<_ChartDataItem> initialData;
+  final bool isDark;
+  const _ChartOptionsSheet({
+    required this.initialType,
+    required this.initialTitle,
+    required this.initialData,
+    required this.isDark,
+  });
+
+  @override
+  State<_ChartOptionsSheet> createState() => _ChartOptionsSheetState();
 }
 
-class _AiPieChartWidgetState extends State<AiPieChartWidget> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-  static const _defaultColors = [
-    Color(0xFF2F80ED), Color(0xFFE74C3C), Color(0xFF27AE60), Color(0xFFF39C12),
-    Color(0xFF9B59B6), Color(0xFF1ABC9C), Color(0xFFE67E22), Color(0xFF34495E),
+class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
+  late String _draftType;
+  late TextEditingController _titleController;
+  late List<_ChartDataItem> _draftData;
+
+  final List<({String key, String icon})> _chartTypes = [
+    (key: 'bar', icon: 'chart_bar.svg'),
+    (key: 'line', icon: 'chart_line.svg'),
+    (key: 'area', icon: 'chart_area.svg'),
+    (key: 'pie', icon: 'chart_pie.svg'),
+  ];
+
+  static const _colorPalette = [
+    Color(0xFF2E8BC9), Color(0xFFE05E5E), Color(0xFF4EC994),
+    Color(0xFFF0A500), Color(0xFFC77DFF), Color(0xFF5ECBE0),
+    Color(0xFFE0785E), Color(0xFF8ECC4E),
   ];
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+    _draftType = widget.initialType;
+    _titleController = TextEditingController(text: widget.initialTitle);
+    _draftData = List<_ChartDataItem>.from(
+        widget.initialData.map((d) => _ChartDataItem(d.label, d.value, d.color)));
   }
 
   @override
-  void dispose() { _c.dispose(); super.dispose(); }
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Color _inputBg()      => widget.isDark ? const Color(0xFF262626) : const Color(0xFFF5F5F5);
+  Color _inputBorder()  => widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD);
+  Color _inputText()    => widget.isDark ? const Color(0xFFEEEEEE) : const Color(0xFF1A1A1A);
+  Color _label()        => widget.isDark ? const Color(0xFF888888) : const Color(0xFF777777);
+  Color _chipInactiveBg() => widget.isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE);
+  Color _chipInactiveBorder() => widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD);
+  Color _chipInactiveText() => widget.isDark ? const Color(0xFF888888) : const Color(0xFF666666);
+  Color _sheetBg()      => widget.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color _primary()      => const Color(0xFF2E8BC9);
+
+  Future<void> _pickColor(int index) async {
+    final selected = await showModalBottomSheet<Color>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _sheetBg(),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _label(),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Escolher cor', style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _colorPalette.map((c) => GestureDetector(
+                onTap: () => Navigator.pop(ctx, c),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: c,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              )).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() {
+        _draftData[index].color = selected;
+      });
+    }
+  }
+
+  void _addRow() {
+    setState(() {
+      _draftData.add(_ChartDataItem('Novo', 10, _colorPalette[_draftData.length % _colorPalette.length]));
+    });
+  }
+
+  void _removeRow(int index) {
+    setState(() {
+      _draftData.removeAt(index);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final raw = (widget.json['data'] ?? widget.json['slices']) as List? ?? const [];
-    final items = raw.asMap().entries.map((e) {
-      final d = e.value as Map;
-      return (
-        label: (d['label'] ?? '?').toString(),
-        value: (d['value'] is num) ? (d['value'] as num).toDouble() : double.tryParse(d['value'].toString()) ?? 0,
-        color: _parseColor(d['color']) ?? _defaultColors[e.key % _defaultColors.length],
-      );
-    }).toList();
-    final total = items.fold<double>(0, (s, e) => s + e.value).clamp(0.0001, double.infinity);
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 480),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: AnimatedBuilder(
-            animation: _c,
-            builder: (_, __) => CustomPaint(
-              painter: _PiePainter(items: items, total: total, progress: Curves.easeOutCubic.transform(_c.value), textColor: Colors.white),
-              child: const SizedBox.expand(),
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+        decoration: BoxDecoration(
+          color: _sheetBg(),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _label(),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 12, runSpacing: 6, alignment: WrapAlignment.center,
-          children: items
-              .map((item) => Row(mainAxisSize: MainAxisSize.min, children: [
-                    Container(width: 12, height: 12, decoration: BoxDecoration(color: item.color, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Text('Opções do gráfico',
+                style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            Text('Tipo de gráfico',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            Row(
+              children: _chartTypes.map((t) {
+                final active = _draftType == t.key;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _draftType = t.key),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: active ? _primary() : _chipInactiveBg(),
+                        border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: AppIcon(t.icon, size: 17, color: active ? Colors.white : _chipInactiveText()),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
+            Text('Título',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _titleController,
+              style: TextStyle(color: _inputText(), fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: _inputBg(),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _inputBorder()),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _inputBorder()),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _primary()),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Valores',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _draftData.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => _pickColor(index),
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: item.color,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: TextEditingController(text: item.label),
+                              onChanged: (v) => item.label = v,
+                              style: TextStyle(color: _inputText(), fontSize: 13),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: _inputBg(),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _primary()),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 64,
+                            child: TextField(
+                              controller: TextEditingController(text: item.value.toString()),
+                              onChanged: (v) => item.value = double.tryParse(v) ?? 0,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(color: _inputText(), fontSize: 13),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: _inputBg(),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _primary()),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => _removeRow(index),
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _chipInactiveBg(),
+                              ),
+                              child: AppIcon('close.svg', size: 12, color: _chipInactiveText()),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _addRow,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: _chipInactiveBorder(), width: 1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon('add.svg', size: 12, color: _label()),
                     const SizedBox(width: 6),
-                    Text('${item.label} (${item.value.toStringAsFixed(item.value == item.value.roundToDouble() ? 0 : 1)})',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
-                  ]))
-              .toList(),
+                    Text('Adicionar valor',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _label())),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _chipInactiveBg(),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _chipInactiveBorder()),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Cancelar',
+                          style: TextStyle(color: _chipInactiveText(), fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context, {
+                        'type': _draftType,
+                        'title': _titleController.text.trim().isEmpty ? 'Dados' : _titleController.text.trim(),
+                        'data': _draftData,
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _primary(),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Aplicar',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      ]),
+      ),
     );
   }
 }
 
-class _PiePainter extends CustomPainter {
-  final List<({String label, double value, Color color})> items;
-  final double total;
+// ────────────────────────────────────────────────────────────
+// PAINTER UNIFICADO
+// ────────────────────────────────────────────────────────────
+
+class _UnifiedChartPainter extends CustomPainter {
+  final List<_ChartDataItem> data;
+  final String chartType; // 'bar' | 'line' | 'area' | 'pie'
+  final bool isDark;
   final double progress;
-  final Color textColor;
-  _PiePainter({required this.items, required this.total, required this.progress, required this.textColor});
+
+  _UnifiedChartPainter({
+    required this.data,
+    required this.chartType,
+    required this.isDark,
+    required this.progress,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 * 0.9;
-    var startAngle = -math.pi / 2;
-    for (final item in items) {
-      final sweep = (item.value / total) * 2 * math.pi * progress;
-      final paint = Paint()..color = item.color..style = PaintingStyle.fill;
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), startAngle, sweep, true, paint);
-      if (progress > 0.85) {
-        final mid = startAngle + sweep / 2;
-        final tr = radius * 0.6;
-        final pos = center + Offset(math.cos(mid) * tr, math.sin(mid) * tr);
-        final pct = (item.value / total * 100).toStringAsFixed(1) + '%';
-        final tp = TextPainter(
-          text: TextSpan(text: pct, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
-      }
-      startAngle += sweep;
+    if (data.isEmpty) return;
+    switch (chartType) {
+      case 'bar':
+        _drawBar(canvas, size);
+        break;
+      case 'line':
+        _drawLine(canvas, size, filled: false);
+        break;
+      case 'area':
+        _drawLine(canvas, size, filled: true);
+        break;
+      case 'pie':
+        _drawPie(canvas, size);
+        break;
     }
   }
 
+  void _drawBar(Canvas canvas, Size size) {
+    const padBottom = 22.0, padTop = 10.0, padSide = 6.0;
+    final maxVal = data.map((d) => d.value).reduce(math.max);
+    final innerW = size.width - padSide * 2;
+    final innerH = size.height - padBottom - padTop;
+    final gap = 10.0;
+    final barW = (innerW - gap * (data.length - 1)) / data.length;
+
+    for (int i = 0; i < data.length; i++) {
+      final d = data[i];
+      final color = d.color;
+      final barH = (d.value / maxVal) * innerH * progress;
+      final x = padSide + i * (barW + gap);
+      final y = size.height - padBottom - barH;
+      final r = math.min(6.0, barW / 2);
+
+      final paint = Paint()..color = color;
+      final rect = RRect.fromRectAndCorners(
+        Rect.fromLTWH(x, y, barW, barH),
+        topLeft: Radius.circular(r),
+        topRight: Radius.circular(r),
+      );
+      canvas.drawRRect(rect, paint);
+
+      final tp = TextPainter(
+        text: TextSpan(
+          text: d.label,
+          style: TextStyle(color: isDark ? const Color(0xFF777777) : const Color(0xFF888888), fontSize: 10),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 7));
+    }
+  }
+
+  void _drawLine(Canvas canvas, Size size, {required bool filled}) {
+    const padBottom = 22.0, padTop = 14.0, padSide = 10.0;
+    final maxVal = data.map((d) => d.value).reduce(math.max);
+    final minVal = math.min(0.0, data.map((d) => d.value).reduce(math.min));
+    final innerW = size.width - padSide * 2;
+    final innerH = size.height - padBottom - padTop;
+    final stepX = data.length > 1 ? innerW / (data.length - 1) : 0;
+
+    Offset ptAt(int i) {
+      final d = data[i];
+      final norm = (d.value - minVal) / (maxVal - minVal).abs().clamp(0.0001, double.infinity);
+      final x = padSide + stepX * i;
+      final yFull = padTop + innerH - norm * innerH;
+      final yBase = padTop + innerH;
+      final y = yBase - (yBase - yFull) * progress;
+      return Offset(x, y);
+    }
+
+    final linePaint = Paint()
+      ..color = data.first.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    if (filled) {
+      final fillPath = Path()..moveTo(padSide, padTop + innerH);
+      for (int i = 0; i < data.length; i++) {
+        fillPath.lineTo(ptAt(i).dx, ptAt(i).dy);
+      }
+      fillPath.lineTo(padSide + innerW, padTop + innerH);
+      fillPath.close();
+      final gradient = ui.Gradient.linear(
+        Offset(0, padTop),
+        Offset(0, padTop + innerH),
+        [data.first.color.withOpacity(0.33), data.first.color.withOpacity(0.05)],
+      );
+      canvas.drawPath(fillPath, Paint()..shader = gradient);
+    }
+
+    final linePath = Path();
+    for (int i = 0; i < data.length; i++) {
+      final p = ptAt(i);
+      if (i == 0) {
+        linePath.moveTo(p.dx, p.dy);
+      } else {
+        linePath.lineTo(p.dx, p.dy);
+      }
+    }
+    canvas.drawPath(linePath, linePaint);
+
+    for (int i = 0; i < data.length; i++) {
+      final p = ptAt(i);
+      canvas.drawCircle(p, 4, Paint()..color = data.first.color);
+      canvas.drawCircle(p, 4, Paint()..color = isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5)..style = PaintingStyle.stroke..strokeWidth = 2);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: data[i].label,
+          style: TextStyle(color: isDark ? const Color(0xFF777777) : const Color(0xFF888888), fontSize: 10),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(p.dx - tp.width / 2, size.height - 7));
+    }
+  }
+
+  void _drawPie(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2 - 4);
+    final radius = math.min(size.width, size.height) / 2 - 14;
+    final total = data.fold<double>(0, (sum, d) => sum + math.max(d.value, 0));
+    final safeTotal = total.clamp(0.0001, double.infinity);
+
+    var startAngle = -math.pi / 2;
+    for (final d in data) {
+      final slice = (math.max(d.value, 0) / safeTotal) * 2 * math.pi * progress;
+      final endAngle = startAngle + slice;
+      final paint = Paint()..color = d.color;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        slice,
+        true,
+        paint,
+      );
+      startAngle = endAngle;
+    }
+
+    canvas.drawCircle(center, radius * 0.55, Paint()..color = isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5));
+    final tp = TextPainter(
+      text: TextSpan(
+        text: total.round().toString(),
+        style: TextStyle(
+          color: isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A),
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
+  }
+
   @override
-  bool shouldRepaint(covariant _PiePainter old) => old.progress != progress;
+  bool shouldRepaint(covariant _UnifiedChartPainter old) {
+    return old.data != data || old.chartType != chartType || old.progress != progress;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE WIDGET — reformulado por completo.
-//
-// Agora sempre embrulhado em card com cabeçalho: ícone da linguagem
-// (via package:programming_language_icons, ver pubspec no prompt de
-// continuação) + nome da linguagem + botão expandir + botão preview
-// (só visível quando lang é html/htm — abre AiCodePreviewScreen que
-// renderiza o HTML real via InAppWebView) + botão copiar (ícone bem
-// mais pequeno que antes, 14px em vez do tamanho antigo).
-//
-// Highlight de sintaxe: tokenizer manual substituído por
-// package:flutter_highlight (motor highlight.js portado), que dá
-// highlight multi-cor real (chaves, operadores, tipos, funções,
-// etc.) em vez das ~4 cores do regex anterior. Tema escolhido:
-// 'atom-one-dark' no modo escuro e 'atom-one-light' no modo claro,
-// que são os mais próximos visualmente do VS Code default pedido.
+// CODE WIDGET
 // ══════════════════════════════════════════════════════════════
 
 class AiCodeWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiCodeWidget({super.key, required this.json, required this.s});
-  @override State<AiCodeWidget> createState() => _AiCodeWidgetState();
+  @override
+  State<AiCodeWidget> createState() => _AiCodeWidgetState();
 }
 
 class _AiCodeWidgetState extends State<AiCodeWidget> {
@@ -645,7 +1238,8 @@ class _HeaderIconButton extends StatefulWidget {
   final Color color;
   final VoidCallback onTap;
   const _HeaderIconButton({required this.icon, required this.tooltip, required this.color, required this.onTap});
-  @override State<_HeaderIconButton> createState() => _HeaderIconButtonState();
+  @override
+  State<_HeaderIconButton> createState() => _HeaderIconButtonState();
 }
 
 class _HeaderIconButtonState extends State<_HeaderIconButton> {
@@ -674,15 +1268,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LANGUAGE ICON — wrapper fino sobre a dependência de ícones de
-// linguagens de programação. NOTA PARA A PRÓXIMA SESSÃO: este
-// ficheiro assume a dependência `programming_language_icons` (ver
-// pubspec.yaml no prompt de continuação), que expõe
-// `ProgrammingLanguageIcon(language: 'dart')` como widget. Se essa
-// dependência não existir/quebrar no pub.dev no momento da
-// implementação real, a próxima sessão deve trocar apenas o corpo
-// desta classe — o resto do ficheiro não depende do pacote
-// diretamente, só desta wrapper.
+// LANGUAGE ICON
 // ══════════════════════════════════════════════════════════════
 
 class LanguageIcon extends StatelessWidget {
@@ -701,12 +1287,6 @@ class LanguageIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO(próxima sessão): substituir por
-    //   ProgrammingLanguageIcon(language: language, size: size)
-    // da dependência programming_language_icons assim que adicionada
-    // ao pubspec.yaml. Mantido como fallback textual funcional aqui
-    // para que este ficheiro compile de forma independente enquanto
-    // a dependência não é confirmada/adicionada.
     final glyph = _fallbackGlyph[language.toLowerCase()] ?? '#';
     return SizedBox(
       width: size + 2, height: size + 2,
@@ -718,30 +1298,7 @@ class LanguageIcon extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE HIGHLIGHT VIEW — motor de highlight multi-cor. NOTA PARA A
-// PRÓXIMA SESSÃO: assume package:flutter_highlight +
-// package:highlight (ver pubspec no prompt de continuação). Implementação
-// real fica:
-//
-//   import 'package:flutter_highlight/flutter_highlight.dart';
-//   import 'package:flutter_highlight/themes/atom-one-dark.dart';
-//   import 'package:flutter_highlight/themes/atom-one-light.dart';
-//   ...
-//   HighlightView(
-//     code,
-//     language: _normalizeLangForHighlight(language),
-//     theme: isDark ? atomOneDarkTheme : atomOneLightTheme,
-//     padding: EdgeInsets.zero,
-//     textStyle: const TextStyle(fontFamily: 'monospace', fontSize: 13.5, height: 1.6),
-//   )
-//
-// Por agora (para este ficheiro compilar isoladamente sem a
-// dependência ainda confirmada no pubspec), mantém-se um tokenizer
-// manual bastante mais rico que o anterior (cobre mais categorias:
-// keywords, tipos, strings, números, comentários, funções chamadas,
-// operadores, pontuação) como fallback visualmente já muito próximo
-// do resultado final, para que o output não regrida enquanto a
-// dependência real não é adicionada.
+// CODE HIGHLIGHT VIEW
 // ══════════════════════════════════════════════════════════════
 
 class CodeHighlightView extends StatelessWidget {
@@ -845,16 +1402,7 @@ class CodeHighlightView extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CODE PREVIEW SCREEN — abre o HTML de um bloco ```html``` real,
-// renderizado numa WebView de ecrã inteiro.
-//
-// ATUALIZAÇÃO (preview real): o Placeholder de texto foi substituído
-// pela InAppWebView real, carregando o HTML diretamente do parâmetro
-// `html` recebido (o próprio código do bloco), via
-// InAppWebViewInitialData — não é um ficheiro de asset, é conteúdo
-// dinâmico gerado pela IA, por isso initialData é o mecanismo certo
-// aqui (diferente do preview do DocumentWidgetCard em aitab.dart,
-// que carrega ficheiros de asset fixos via initialFile).
+// CODE PREVIEW SCREEN
 // ══════════════════════════════════════════════════════════════
 
 class AiCodePreviewScreen extends StatelessWidget {
@@ -1163,18 +1711,7 @@ class _MarketChartPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CALENDAR — ganhou rodapé de ações: "Novo evento" (abre um mini
-// formulário inline — data pré-preenchida com o dia selecionado —
-// que adiciona um evento local ao estado do widget; não persiste
-// para fora do widget porque o calendário é conteúdo gerado pela
-// IA dentro da conversa, não uma integração com um calendário real
-// — se a app tiver um calendário real integrado, a próxima sessão
-// pode ligar este botão a esse serviço via callback opcional).
-// ══════════════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════════════
-// CALENDAR — redesenhado conforme o design fornecido (card 100%).
-// Suporta tema claro/escuro via AppColorScheme.
+// CALENDAR (redesenhado)
 // ══════════════════════════════════════════════════════════════
 
 class AiCalendarWidget extends StatefulWidget {
@@ -1214,7 +1751,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     }
   }
 
-  // Cores adaptativas (tema escuro/claro)
   Color _cardBg()          => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
   Color _previewBg()       => widget.s.isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF8F8F8);
   Color _monthTextColor()  => widget.s.isDark ? Colors.white : Colors.black87;
@@ -1225,7 +1761,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
   Color _otherMonthColor() => widget.s.isDark ? const Color(0xFF3A3A3A) : Colors.black26;
   Color _selectedBg()      => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
   Color _actionsBg()       => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
-  Color _accent()          => const Color(0xFF2E8BC9); // azul do design (mantido nos dois temas)
+  Color _accent()          => const Color(0xFF2E8BC9);
 
   void _openNewEventSheet() {
     final s = widget.s;
@@ -1302,14 +1838,11 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-
     final y = _current.year, m = _current.month;
-    final firstDay = DateTime(y, m, 1).weekday % 7; // 0 = Dom, 6 = Sáb
+    final firstDay = DateTime(y, m, 1).weekday % 7; // 0 = Dom
     final daysInMonth = DateTime(y, m + 1, 0).day;
     final daysInPrev = DateTime(y, m, 0).day;
 
-    // Lista de widgets para cada célula (incluindo vazios)
     final cells = <Widget>[];
     // Dias do mês anterior
     for (int i = firstDay - 1; i >= 0; i--) {
@@ -1337,7 +1870,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         onTap: () => setState(() => _selectedKey = key),
       ));
     }
-    // Dias do mês seguinte para completar a grelha
+    // Dias do mês seguinte
     final total = firstDay + daysInMonth;
     final rem = total % 7 == 0 ? 0 : 7 - total % 7;
     for (int d = 1; d <= rem; d++) {
@@ -1351,7 +1884,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       ));
     }
 
-    // Dividir em linhas de 7
     final rows = <List<Widget>>[];
     for (int i = 0; i < cells.length; i += 7) {
       rows.add(cells.sublist(i, math.min(i + 7, cells.length)));
@@ -1366,7 +1898,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(s.isDark ? 0.3 : 0.08),
+            color: Colors.black.withOpacity(widget.s.isDark ? 0.3 : 0.08),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -1375,7 +1907,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Preview do calendário (aspect ratio 4:3) ──
           AspectRatio(
             aspectRatio: 4 / 3,
             child: Container(
@@ -1386,7 +1917,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  // Cabeçalho do mês
                   Container(
                     padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
                     child: Row(
@@ -1417,7 +1947,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                       ],
                     ),
                   ),
-                  // Dias da semana
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Row(
@@ -1437,10 +1966,9 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  // Grelha de dias (preenche o restante)
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Column(
                         children: rows.map((row) => Expanded(
                           child: Row(
@@ -1455,7 +1983,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             ),
           ),
           const SizedBox(height: 10),
-          // ── Ações (botão único em pílula) ──
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
@@ -1494,7 +2021,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     );
   }
 
-  // Botão circular de navegação (mês anterior/ seguinte)
   Widget _buildNavButton({required String icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -1510,7 +2036,6 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     );
   }
 
-  // Célula de dia (número + dots de eventos)
   Widget _buildDayCell({
     required String label,
     required bool isOtherMonth,
@@ -1519,57 +2044,53 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     required List<Color> eventColors,
     required VoidCallback? onTap,
   }) {
-    final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSelected ? _selectedBg() : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            // Número do dia
-            Container(
-              width: 24,
-              height: 24,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: isToday ? _accent() : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
-                  color: isToday
-                      ? Colors.white
-                      : isOtherMonth
-                          ? _otherMonthColor()
-                          : _dayNumColor(),
-                ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isToday
+                  ? _accent()
+                  : isSelected
+                      ? _selectedBg()
+                      : Colors.transparent,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
+                color: isToday
+                    ? Colors.white
+                    : isOtherMonth
+                        ? _otherMonthColor()
+                        : _dayNumColor(),
               ),
             ),
-            // Dots de eventos (máx 2)
-            if (eventColors.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Column(
-                  children: eventColors.take(2).map((c) => Container(
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 1),
-                    decoration: BoxDecoration(
-                      color: c,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  )).toList(),
-                ),
+          ),
+          if (eventColors.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Column(
+                children: eventColors.take(2).map((c) => Container(
+                  width: 4,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 1),
+                  decoration: BoxDecoration(
+                    color: c,
+                    shape: BoxShape.circle,
+                  ),
+                )).toList(),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
