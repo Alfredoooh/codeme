@@ -17,7 +17,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_platform_interface.dart'
+    show WebUri;
 import 'colors.dart';
 import 'aiwidgets.dart';
 import 'widgets.dart';
@@ -1525,10 +1526,10 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF161616),
         borderRadius: BorderRadius.circular(22),
-        clipBehavior: Clip.antiAlias,
       ),
       child: Stack(
         children: [
@@ -1948,7 +1949,7 @@ class AiCodePreviewScreen extends StatelessWidget {
         initialData: InAppWebViewInitialData(
           data: code,
           mimeType: 'text/html',
-          baseUrl: 'about:blank',
+          baseUrl: WebUri('about:blank'),
         ),
         initialSettings: InAppWebViewSettings(
           javaScriptEnabled: true,
