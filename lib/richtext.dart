@@ -977,19 +977,31 @@ class _RichTextBlockParser {
       }
 
       final quoteMatch = RegExp(r'^>\s?(.*)$').firstMatch(trimmed);
-      if (quoteMatch != null) {
-        flushTable();
-        widgets.add(Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.only(left: 12),
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: s.outline, width: 3)),
+if (quoteMatch != null) {
+  flushTable();
+  widgets.add(
+    IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 3,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: s.outline,
+              borderRadius: BorderRadius.circular(2), // pontas curvas
+            ),
           ),
-          child: _formattedText(quoteMatch.group(1)!, s),
-        ));
-        i++;
-        continue;
-      }
+          Expanded(
+            child: _formattedText(quoteMatch.group(1)!, s),
+          ),
+        ],
+      ),
+    ),
+  );
+  i++;
+  continue;
+}
 
       final indentMatch = RegExp(r'^(\s*)').firstMatch(line)!;
       final indentLevel = (indentMatch.group(1)!.length / 2).floor().clamp(0, 4);
