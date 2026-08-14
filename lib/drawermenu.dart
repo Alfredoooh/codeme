@@ -3,7 +3,6 @@
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_slider_drawer/flutter_slider_drawer.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -165,19 +164,23 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — renderizado como o `slider` do SliderDrawer
-// (flutter_slider_drawer). Recebe o GlobalKey<SliderDrawerState> do
-// RootShell e chama drawerKey.currentState?.closeSlider() em cada
-// ação que fecha o drawer.
+// DRAWER — renderizado dentro do painel deslizante em main.dart
+// (implementação nativa com Stack/AnimatedPositioned, sem pacote
+// externo). Recebe um VoidCallback onClose do RootShell e chama-o
+// em cada ação que deve fechar o drawer.
 //
-// FIX: closeSlider() em vez de closeDrawer() — ver nota detalhada
-// em main.dart sobre a divergência entre o README publicado e a API
-// real da versão 3.0.2 instalada, confirmada pelo erro do compilador.
+// FIX: drawerKey (GlobalKey<SliderDrawerState>) removido e
+// substituído por onClose (VoidCallback) — o pacote
+// flutter_slider_drawer foi removido do projeto por falhas
+// repetidas de build relacionadas com a API do enum/classe
+// SlideDirection na v3.0.2 (ver nota detalhada em main.dart). O
+// drawer passou a ser controlado diretamente pelo estado do
+// RootShell.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
-  final GlobalKey<SliderDrawerState> drawerKey;
+  final VoidCallback onClose;
   final VoidCallback onSettings;
   final VoidCallback onGoHome;
   final AppTab currentTab;
@@ -189,7 +192,7 @@ class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
     required this.s,
-    required this.drawerKey,
+    required this.onClose,
     required this.onSettings,
     required this.onGoHome,
     required this.currentTab,
@@ -240,7 +243,7 @@ class _AppDrawerState extends State<AppDrawer> {
     }
   }
 
-  void _closeDrawer() => widget.drawerKey.currentState?.closeSlider();
+  void _closeDrawer() => widget.onClose();
 
   void _openSearch(BuildContext context) {
     _closeDrawer();
