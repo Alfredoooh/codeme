@@ -2532,11 +2532,12 @@ class _GeneratingProcessCard extends StatefulWidget {
   final String iconAsset;
 
   const _GeneratingProcessCard({
-    required this.s,
-    required this.label,
-    required this.partialContent,
-    this.iconAsset = 'tools.svg',
-  });
+  super.key,   // ← adicionar esta linha
+  required this.s,
+  required this.label,
+  required this.partialContent,
+  this.iconAsset = 'tools.svg',
+});
 
   @override
   State<_GeneratingProcessCard> createState() => _GeneratingProcessCardState();
