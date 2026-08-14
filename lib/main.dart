@@ -78,36 +78,25 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — usa flutter_slider_drawer (SliderDrawer) em vez do
-// Stack manual com AnimationController próprio.
+// ROOT SHELL — usa flutter_slider_drawer (SliderDrawer).
 //
-// FIX (openDrawer/closeDrawer): SliderDrawerState na versão 3.0.2
-// realmente instalada NÃO expõe openDrawer()/closeDrawer() — esses
-// nomes existiam numa fase antiga da API e o README publicado ainda
-// os mostra, mas o próprio changelog do pacote regista que foram
-// substituídos por openSlider()/closeSlider(). Já corrigido nas
-// duas ocorrências abaixo (_openDrawer / _closeDrawer).
+// FIX (openDrawer/closeDrawer → openSlider/closeSlider): confirmado
+// pelo changelog oficial do pacote. Já aplicado abaixo.
 //
-// FIX (slideDirection): o valor correto é o enum SliderOpen (ex.:
-// SliderOpen.LEFT_TO_RIGHT), confirmado no README oficial do
-// pacote. O nome que MUDOU foi o do parâmetro — de sliderOpen: para
-// slideDirection: — não o nome do enum em si, que continua
-// SliderOpen. Duas tentativas anteriores erraram isto: primeiro
-// deixando o enum inexistente SliderOpen sem estar definido no
-// escopo certo, depois trocando para o enum errado SlideDirection
-// (que não existe no pacote). Confirmado por fim via changelog e
-// README oficiais do pacote — fica assim:
-// slideDirection: SliderOpen.LEFT_TO_RIGHT
+// FIX (slideDirection): o enum correto é SlideDirection, NÃO
+// SliderOpen. Confirmado pela API reference oficial do pacote no
+// pub.dev (a biblioteca flutter_slider_drawer.dart exporta apenas
+// as classes SliderDrawerState e SlideDirection; a assinatura real
+// do construtor é "SlideDirection slideDirection = 
+// SlideDirection.LEFT_TO_RIGHT"). O nome SliderOpen, usado numa
+// correção anterior deste ficheiro, veio de um README de fork
+// desatualizado (thedoubler/Flutter_slider_drawer) e não existe no
+// pacote NikhilVadoliya/flutter_slider_drawer publicado no pub.dev,
+// que é o que está de facto no pubspec.yaml. Corrigido abaixo.
 //
-// FIX (sliderShadow): removido. O erro do compilador ("No named
-// parameter with the name 'sliderShadow'") aponta para a classe
-// SliderDrawer realmente instalada não aceitando esse nome, apesar
-// de o changelog do pacote mencionar um parâmetro com esse nome
-// numa fase anterior. Não foi possível confirmar, a partir das
-// fontes disponíveis nesta sessão, se foi renomeado ou movido para
-// dentro de outro objeto de configuração — por isso foi removido em
-// vez de arriscar um terceiro nome incorreto. O pacote continua a
-// desenhar a sua sombra própria por defeito.
+// FIX (sliderShadow): removido — parâmetro não existe na classe
+// SliderDrawer real instalada. O pacote desenha sombra própria por
+// defeito.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -286,7 +275,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
         key: _sliderDrawerKey,
         appBar: null,
         sliderOpenSize: _drawerWidth,
-        slideDirection: SliderOpen.LEFT_TO_RIGHT,
+        slideDirection: SlideDirection.LEFT_TO_RIGHT,
         animationDuration: 260,
         slider: ClipRRect(
           borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
