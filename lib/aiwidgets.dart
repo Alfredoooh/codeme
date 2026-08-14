@@ -2797,72 +2797,398 @@ class _MathGraphPainter extends CustomPainter {
 // MAP (mantido, sem alterações)
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// MAP (redesenhado — estilo card do HTML)
+// ══════════════════════════════════════════════════════════════
+
 class AiMapWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMapWidget({super.key, required this.json, required this.s});
-  @override State<AiMapWidget> createState() => _AiMapWidgetState();
+  @override
+  State<AiMapWidget> createState() => _AiMapWidgetState();
 }
 
-class _AiMapWidgetState extends State<AiMapWidget> {
+class _AiMapWidgetState extends State<AiMapWidget>
+    with SingleTickerProviderStateMixin {
   late final MapController _mapController;
+
+  // Coordenadas e zoom iniciais, a partir do JSON gerado pela IA
+  late double _lat;
+  late double _lng;
+  late double _zoom;
+  late String _name;
+
+  // Controlador da barra de pesquisa
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  // Animação do marcador pulsante
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnim;
+
+  bool _locating = false;
+  bool _searching = false;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _lat = (widget.json['lat'] is num) ? (widget.json['lat'] as num).toDouble() : 38.7223;
+    _lng = (widget.json['lng'] is num) ? (widget.json['lng'] as num).toDouble() : -9.1393;
+    _zoom = (widget.json['zoom'] is num) ? (widget.json['zoom'] as num).toDouble() : 13.0;
+    _name = (widget.json['name'] ?? 'Localização').toString();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.8, end: 1.4).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // ----- Cores adaptadas ao tema -----
+  Color get _cardBg => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color get _previewBg => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
+  Color get _actionsBg => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
+  Color get _badgeBg => widget.s.isDark
+      ? Colors.black.withOpacity(0.8)
+      : Colors.white.withOpacity(0.85);
+  Color get _badgeText => widget.s.isDark ? const Color(0xFFEEEEEE) : const Color(0xFF1A1A1A);
+  Color get _searchText => widget.s.isDark ? const Color(0xFFEEEEEE) : const Color(0xFF1A1A1A);
+  Color get _searchHint => widget.s.isDark ? const Color(0xFF777777) : const Color(0xFF999999);
+  Color get _recenterBg => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+  Color get _recenterIcon => widget.s.isDark ? const Color(0xFFDDDDDD) : const Color(0xFF444444);
+
+  String get _tileUrl => widget.s.isDark
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+  // ----- Geolocalização -----
+  Future<void> _locateUser() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      _lat = position.latitude;
+      _lng = position.longitude;
+      _zoom = 15.0;
+      _name = 'A sua localização';
+      _mapController.move(ll.LatLng(_lat, _lng), _zoom);
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não foi possível obter a localização.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  // ----- Pesquisa por morada (Nominatim) -----
+  Future<void> _search() async {
+    final query = _searchCtrl.text.trim();
+    if (query.isEmpty || _searching) return;
+
+    setState(() => _searching = true);
+    try {
+      final uri = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${Uri.encodeComponent(query)}');
+      final res = await http.get(uri);
+      if (res.statusCode != 200) throw Exception('Erro na pesquisa');
+
+      final list = jsonDecode(res.body) as List;
+      if (list.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Local não encontrado.')),
+          );
+        }
+        return;
+      }
+
+      final first = list.first as Map<String, dynamic>;
+      final lat = double.parse(first['lat'].toString());
+      final lon = double.parse(first['lon'].toString());
+      final displayName = (first['display_name'] as String? ?? query)
+          .split(',')
+          .take(2)
+          .join(',');
+
+      _lat = lat;
+      _lng = lon;
+      _zoom = 14.0;
+      _name = displayName;
+
+      _mapController.move(ll.LatLng(lat, lon), _zoom);
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro na pesquisa.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final lat = (widget.json['lat'] is num) ? (widget.json['lat'] as num).toDouble() : 38.7223;
-    final lng = (widget.json['lng'] is num) ? (widget.json['lng'] as num).toDouble() : -9.1393;
-    final zoom = (widget.json['zoom'] is num) ? (widget.json['zoom'] as num).toDouble() : 12.0;
-    final name = (widget.json['name'] ?? '').toString();
-
     return Container(
-      constraints: const BoxConstraints(maxWidth: 480),
+      constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0), width: 1.5),
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(s.isDark ? 0.3 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        SizedBox(
-          height: 240,
-          child: Stack(children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(initialCenter: ll.LatLng(lat, lng), initialZoom: zoom),
-              children: [
-                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.nexa.app'),
-                MarkerLayer(markers: [
-                  Marker(
-                    point: ll.LatLng(lat, lng),
-                    width: 36, height: 36,
-                    child: const Icon(Icons.location_pin, color: Color(0xFFE74C3C), size: 36),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ----- Área do mapa com badge e botão recentrar -----
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _previewBg,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: ll.LatLng(_lat, _lng),
+                      initialZoom: _zoom,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: _tileUrl,
+                        userAgentPackageName: 'com.nexa.app',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: ll.LatLng(_lat, _lng),
+                            width: 36,
+                            height: 36,
+                            child: _PulsingMapMarker(
+                              animation: _pulseAnim,
+                              color: s.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ]),
+                  // Badge de localização (topo esquerdo)
+                  Positioned(
+                    top: 12,
+                    left: 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _badgeBg,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AppIcon(
+                            'location.svg', // ou um ícone de localização adequado
+                            color: s.primary,
+                            size: 13,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _name,
+                            style: TextStyle(
+                              color: _badgeText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Botão recentrar (canto inferior direito)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: _locateUser,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _recenterBg,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: _locating
+                              ? SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: s.primary,
+                                  ),
+                                )
+                              : AppIcon(
+                                  'locate.svg', // ícone de crosshair
+                                  color: _recenterIcon,
+                                  size: 15,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // ----- Barra de ações: pesquisa -----
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: _actionsBg,
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    style: TextStyle(color: _searchText, fontSize: 14),
+                    cursorColor: s.primary,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: 'Procurar morada ou local…',
+                      hintStyle: TextStyle(color: _searchHint, fontSize: 14),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    onSubmitted: (_) => _search(),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: _search,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: s.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: _searching
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: s.onPrimary,
+                              ),
+                            )
+                          : AppIcon(
+                              'search.svg',
+                              color: s.onPrimary,
+                              size: 15,
+                            ),
+                    ),
+                  ),
+                ),
               ],
             ),
-            if (name.isNotEmpty)
-              Positioned(
-                left: 10, bottom: 10,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Marcador pulsante (efeito tipo Leaflet divIcon)
+class _PulsingMapMarker extends StatelessWidget {
+  final Animation<double> animation;
+  final Color color;
+  const _PulsingMapMarker({required this.animation, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (_, child) {
+        final ringScale = animation.value;
+        return SizedBox(
+          width: 36,
+          height: 36,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Anel pulsante
+              Transform.scale(
+                scale: ringScale,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.65), borderRadius: BorderRadius.circular(8)),
-                  child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.35),
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-          ]),
-        ),
-        _WidgetActionBar(s: s, actions: [
-          _WidgetAction(icon: 'zoom_in.svg', label: 'Ampliar', onTap: () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1)),
-          _WidgetAction(icon: 'zoom_out.svg', label: 'Reduzir', onTap: () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1)),
-        ]),
-      ]),
+              // Núcleo
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
