@@ -58,21 +58,6 @@ extension AiModelX on AiModel {
 
 // ══════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
-//
-// ATUALIZAÇÃO (sheets e slides reais): removida a secção que
-// proibia explicitamente a IA de gerar sheet/slide. Adicionadas
-// instruções completas com exemplo de payload JSON para cada um dos
-// dois novos tipos, no MESMO formato que sheets.html/slides.html já
-// consomem via window.editorApi.setContent(json) — ver
-// _scanForCanvasItems mais abaixo, que agora aceita os 3 kinds sem
-// bloqueio, e showCanvasSheet/DocumentWidgetCard, que já sabem
-// distinguir o kind pelo LocalCanvasItem.kind.
-//
-// ATUALIZAÇÃO (HTML rico / imagens via link): instrução explícita de
-// que <img src="https://..."> com URLs reais é permitido e desejável
-// dentro do payload de doc, e que o HTML pode conter qualquer
-// elemento que uma página web normal suporta (gráficos via
-// data-ai-chart, como já estava documentado).
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
@@ -291,14 +276,6 @@ final RegExp _kExplicitCanvasRe = RegExp(
 /// (``` de qualquer linguagem, incluindo widget_*) nunca são tocados
 /// aqui — ficam no texto para RichAiText tratar (código normal ou
 /// widget interativo).
-///
-/// ATUALIZAÇÃO (sheets e slides reais): o bloqueio anterior que
-/// descartava silenciosamente 'sheet' e 'slide' foi REMOVIDO. Os 4
-/// kinds seguem agora exatamente o mesmo caminho — a IA já está
-/// instruída (kAiSystemPrompt) a gerar o JSON correto para cada um,
-/// e o consumidor final (sheets.html/slides.html via
-/// window.editorApi.setContentFromAi, ver notas em edittab.dart no
-/// prompt de continuação) já sabe interpretar esse JSON.
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
   final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
@@ -323,11 +300,7 @@ _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACHED FILES — anexos de uma mensagem ainda não enviada. Bloco D:
-// substitui o comportamento antigo de _onAttachFiles/_onAttachPhotos
-// (que só invocavam o picker e descartavam o resultado) por estado
-// real, guardado em AiTabState._attachedFiles, com bytes prontos para
-// seguir no payload da mensagem quando o utilizador enviar.
+// ATTACHED FILES — anexos de uma mensagem ainda não enviada.
 // ══════════════════════════════════════════════════════════════
 
 class AttachedFile {
@@ -342,10 +315,7 @@ class AttachedFile {
     required this.bytes,
   });
 
-  /// Codificação base64 pronta a incluir num payload JSON. O formato
-  /// exato do campo em que isto entra (attachments em ChatMessage,
-  /// ver mais abaixo) é uma estrutura razoável, não confirmada contra
-  /// worker.js — ver nota no prompt.
+  /// Codificação base64 pronta a incluir num payload JSON.
   String get base64Data => base64Encode(bytes);
 }
 
@@ -989,67 +959,15 @@ class _MenuSwitchRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DOCUMENT WIDGET CARD — card universal para doc/sheet/slide criados
-// pela IA. Substitui o antigo _CanvasLink (link de texto azul
-// sublinhado) por um card completo: preview no topo + barra de ações
-// por baixo, tal como a imagem de referência (botão pill azul "Abrir
-// direto no editor" + botão circular de download, dentro de um
-// container cinza que varia com o tema via s.downloadButtonBg).
-//
-// ATUALIZAÇÃO (preview real + export real): a área de preview passa
-// a ser uma InAppWebView não-interativa, carregando o mesmo HTML de
-// assets/editor/*.html que o editor real usa, com ?preview=1 (ver
-// _kPreviewAsset abaixo — confirmado contra docs.html/sheets.html/
-// slides.html reais: os três leem `params.get('preview') === '1'` e
-// aplicam a classe preview-mode, que desativa contenteditable/scroll/
-// seleção do lado do próprio HTML). whiteboard.html NÃO tem esse
-// mecanismo (confirmado: não existe a palavra "preview" no ficheiro)
-// — a não-interatividade dele é garantida inteiramente do lado
-// Flutter via IgnorePointer, que também é aplicado aos outros 3 kinds
-// como camada extra de segurança (o WebView nunca deve roubar gestos
-// do card, mesmo que o JS de preview falhe por algum motivo).
-//
-// Efeito stack (só para doc, só quando o documento tem mais de uma
-// página): docs.html expõe o número de páginas indiretamente através
-// do próprio formato de getContent()/setContent(), que junta as
-// páginas com o separador literal '<div class="page-break-marker">
-// </div>' (confirmado nas linhas reais de docs.html). Como o HTML não
-// expõe nenhuma função editorApi para consultar a contagem de
-// páginas diretamente, a contagem é feita aqui no lado Dart a partir
-// de item.content, usando o mesmo separador — é o mesmo contrato que
-// o próprio docs.html usa internamente, não uma suposição nova.
-//
-// NOTA DE HONESTIDADE (InAppWebViewSettings): as propriedades usadas
-// abaixo para desativar scroll/zoom do WebView em modo preview
-// (disableVerticalScroll, disableHorizontalScroll, supportZoom) são
-// nomes estáveis e amplamente documentados da API pública do pacote
-// flutter_inappwebview há várias versões, mas não foi possível
-// confirmá-los especificamente contra a versão ^6.1.5 fixada no
-// pubspec.yaml neste ambiente (sem acesso à documentação do pacote
-// nem à rede). As restantes propriedades usadas aqui
-// (transparentBackground, javaScriptEnabled, allowFileAccessFrom-
-// FileURLs, useHybridComposition) estão confirmadas por já serem
-// usadas exatamente assim em edittab.dart real. Se o build falhar
-// nalguma destas três, o nome exato terá de ser confirmado contra
-// a documentação da versão instalada.
+// DOCUMENT WIDGET CARD
 // ══════════════════════════════════════════════════════════════
 
-/// Devolve o caminho de asset do HTML certo para o preview do kind,
-/// já com o parâmetro ?preview=1 confirmado nos 3 HTML que o suportam
-/// (docs, sheets, slides). whiteboard.html não tem esse mecanismo —
-/// devolve o htmlAsset normal, sem query string, e a não-
-/// interatividade fica inteiramente a cargo do IgnorePointer Flutter.
 String _previewHtmlAsset(LocalCanvasKind kind) {
   final base = kind.editorType.htmlAsset;
   if (kind == LocalCanvasKind.whiteboard) return base;
   return '$base?preview=1';
 }
 
-/// Conta o número de "páginas" de um documento doc a partir do mesmo
-/// separador literal que docs.html usa em getContent()/setContent()
-/// ('<div class="page-break-marker"></div>'). Para sheet/slide/
-/// whiteboard isto não se aplica (devolve sempre 1) — só doc tem o
-/// conceito de páginas múltiplas neste editor.
 int _docPageCount(LocalCanvasItem item) {
   if (item.kind != LocalCanvasKind.doc) return 1;
   const marker = '<div class="page-break-marker"></div>';
@@ -1073,9 +991,6 @@ class DocumentWidgetCard extends StatefulWidget {
 }
 
 class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
-  /// Formato atualmente a exportar (null = nenhum em curso). Usado
-  /// para mostrar um pequeno spinner inline na opção tocada dentro do
-  /// bottom sheet de download, enquanto a exportação real corre.
   String? _exportingFormat;
 
   InAppWebViewController? _previewController;
@@ -1167,11 +1082,6 @@ class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
     );
   }
 
-  /// Chamada real ao ExportService (lib/exportservice.dart), que já
-  /// existe e implementa export() para pdf/png/docx/xlsx/pptx a
-  /// partir de um LocalCanvasItem. Em caso de erro (rede, formato de
-  /// conteúdo inesperado, etc.) mostra um SnackBar com a mensagem em
-  /// vez de deixar a app presa a "a exportar" indefinidamente.
   Future<void> _exportAs(BuildContext context, String format) async {
     try {
       final bytes = await ExportService.export(item: widget.item, format: format);
@@ -1193,18 +1103,12 @@ class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
           .replaceAll('\n', '\\n');
       ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
     } else if (item.kind == LocalCanvasKind.sheet || item.kind == LocalCanvasKind.slide) {
-      // setContentFromAi faz JSON.parse(json) internamente em
-      // sheets.html/slides.html — espera uma string, exatamente como
-      // setContent. O escaping usado é o mesmo de _injectCanvas em
-      // edittab.dart, só troca o nome da função JS chamada.
       final escaped = item.content
           .replaceAll('\\', '\\\\')
           .replaceAll("'", "\\'")
           .replaceAll('\n', '\\n');
       ctrl.evaluateJavascript(source: "editorApi.setContentFromAi('$escaped')");
     } else {
-      // whiteboard: setContent(json) também faz JSON.parse
-      // internamente (confirmado em whiteboard.html real).
       final escaped = item.content
           .replaceAll('\\', '\\\\')
           .replaceAll("'", "\\'")
@@ -1241,9 +1145,6 @@ class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
                 fit: StackFit.expand,
                 alignment: Alignment.center,
                 children: [
-                  // Folhas de sombra atrás, só quando há mais de uma
-                  // página — dão o efeito de stack de documento sem
-                  // simular nada dentro da WebView.
                   if (showStack)
                     Positioned(
                       top: 14, left: 10, right: -6, bottom: -6,
@@ -1294,10 +1195,6 @@ class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
                       ),
                     ),
                   ),
-                  // Ícone/label do tipo, sobreposto discretamente no
-                  // canto: mantém a identificação visual imediata do
-                  // tipo de documento mesmo com o preview real por
-                  // baixo, sem cobrir o conteúdo do preview.
                   Positioned(
                     right: showStack ? 20 : 8,
                     bottom: showStack ? 20 : 8,
@@ -1411,9 +1308,14 @@ class _DownloadOptionRowState extends State<_DownloadOptionRow> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAM ELEMENTS — usados por _parseStreamingContent (partilhado
-// entre esta parte do ficheiro e mais abaixo, onde _StreamingBubble
-// consome a lista produzida).
+// STREAM ELEMENTS
+//
+// _StreamOpenBlock carrega o conteúdo bruto já recebido do bloco
+// ainda aberto (rawContent) e um "kind" (canvas ou widget). É isto
+// que _ProcessPill mostra por dentro enquanto o processo está ativo:
+// o próprio conteúdo (HTML ou JSON) tal como está a chegar da API,
+// sem nenhuma palavra-a-palavra simulada — cresce a cada
+// ChatTokenEvent, exatamente ao ritmo a que a stream chega.
 // ══════════════════════════════════════════════════════════════
 
 sealed class _StreamElement {}
@@ -1423,20 +1325,39 @@ class _StreamText extends _StreamElement {
   _StreamText(this.text);
 }
 
+enum _OpenBlockKind { canvas, widget }
+
 class _StreamOpenBlock extends _StreamElement {
+  final String id;
+  final _OpenBlockKind kind;
   final String label;
-  _StreamOpenBlock(this.label);
+  final String rawContent;
+  _StreamOpenBlock({
+    required this.id,
+    required this.kind,
+    required this.label,
+    required this.rawContent,
+  });
 }
 
 class _StreamClosedCanvas extends _StreamElement {
+  final String processId;
   final LocalCanvasItem item;
-  _StreamClosedCanvas(this.item);
+  _StreamClosedCanvas(this.processId, this.item);
 }
 
 class _StreamClosedWidget extends _StreamElement {
+  final String processId;
   final AiWidgetBlock block;
-  _StreamClosedWidget(this.block);
+  _StreamClosedWidget(this.processId, this.block);
 }
+
+String _canvasProcessLabel(String kindStr) => switch (kindStr) {
+      'sheet' => 'A criar folha de cálculo',
+      'slide' => 'A criar apresentação',
+      'whiteboard' => 'A criar quadro branco',
+      _ => 'A criar documento',
+    };
 
 List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
   final elements = <_StreamElement>[];
@@ -1456,43 +1377,84 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
     if (i < markerMatches.length) {
       final idx = int.parse(markerMatches[i].group(1)!);
       if (idx < widgetParse.blocks.length) {
-        elements.add(_StreamClosedWidget(widgetParse.blocks[idx]));
+        elements.add(_StreamClosedWidget('wb_$idx', widgetParse.blocks[idx]));
       }
     }
   }
 
   for (final item in canvasScan.items) {
-    elements.add(_StreamClosedCanvas(item));
+    elements.add(_StreamClosedCanvas('cv_${item.id}', item));
   }
 
-  final openLabel = _detectOpeningLabel(raw);
-  if (openLabel != null) {
-    elements.add(_StreamOpenBlock(openLabel));
+  final openBlock = _detectOpeningBlock(raw);
+  if (openBlock != null) {
+    elements.add(openBlock);
   }
 
   return elements;
 }
 
-String? _detectOpeningLabel(String text) {
+/// Regex que casa a abertura de um bloco widget ainda por fechar:
+/// ```widget_x\n(conteúdo até ao fim do texto, sem ``` de fecho)
+final RegExp _kOpenWidgetBlockRe = RegExp(
+  r'```(widget_[a-z]+)\s*\n([\s\S]*)$',
+);
+
+/// Deteta se a stream termina no meio de um bloco especial ainda por
+/// fechar — [[canvas:...]] (doc/sheet/slide/whiteboard) ou um bloco
+/// ```widget_*```. Quando encontra um, devolve um _StreamOpenBlock
+/// com o conteúdo bruto já recebido desse bloco, para mostrar dentro
+/// do processo em streaming real.
+///
+/// Para canvas: usa a regex existente + o separador "||", tal como
+/// antes.
+///
+/// Para widget: aiwidgets.dart só expõe hasOpenWidgetBlock(raw) →
+/// bool (confirmado no ficheiro real — não existe findOpenWidgetBlock
+/// nem nada com .startIndex/.rawContent, isso foi engano meu numa
+/// resposta anterior). Por isso a extração do conteúdo bruto do
+/// bloco widget aberto é feita aqui, com _kOpenWidgetBlockRe, sobre o
+/// mesmo `raw` que já temos disponível — não precisa de tocar em
+/// aiwidgets.dart. hasOpenWidgetBlock continua a ser usado como
+/// confirmação booleana antes de gastar a regex mais pesada.
+_StreamOpenBlock? _detectOpeningBlock(String text) {
   final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
   if (canvasOpenMatch.isNotEmpty) {
-    final closesAfter = text.substring(canvasOpenMatch.last.start).contains(']]');
-    if (!closesAfter) {
-      final kindStr = canvasOpenMatch.last.group(1)!;
-      return switch (kindStr) {
-        'sheet' => 'A criar folha de cálculo...',
-        'slide' => 'A criar apresentação...',
-        'whiteboard' => 'A criar quadro branco...',
-        _ => 'A criar documento...',
-      };
+    final lastOpen = canvasOpenMatch.last;
+    final tail = text.substring(lastOpen.start);
+    if (!tail.contains(']]')) {
+      final kindStr = lastOpen.group(1)!;
+      final sepIdx = tail.indexOf('||');
+      final raw = sepIdx == -1 ? '' : tail.substring(sepIdx + 2);
+      return _StreamOpenBlock(
+        id: 'openblock_${lastOpen.start}',
+        kind: _OpenBlockKind.canvas,
+        label: _canvasProcessLabel(kindStr),
+        rawContent: raw,
+      );
     }
   }
+
   if (hasOpenWidgetBlock(text)) {
-    return 'A criar widget...';
+    final m = _kOpenWidgetBlockRe.firstMatch(text);
+    final raw = m != null ? m.group(2) ?? '' : '';
+    return _StreamOpenBlock(
+      id: 'openblock_widget_${text.length}',
+      kind: _OpenBlockKind.widget,
+      label: 'A criar widget',
+      rawContent: raw,
+    );
   }
+
   if (_endsWithPartialMarker(text)) {
-    return 'A criar...';
+    return _StreamOpenBlock(
+      id: 'openblock_partial_${text.length}',
+      kind: _OpenBlockKind.widget,
+      label: 'A criar',
+      rawContent: '',
+    );
   }
+
   return null;
 }
 
@@ -1537,10 +1499,6 @@ class AiTab extends StatefulWidget {
   final VoidCallback? onExternalActionConsumed;
   final ValueChanged<bool>? onHasMessagesChanged;
   final VoidCallback? onHeaderStateChanged;
-  /// Chamado sempre que um documento (canvas) novo é criado pela IA
-  /// nesta conversa — o RootShell usa isto para abrir automaticamente
-  /// o EditTab já a mostrar esse documento, sem o utilizador ter de
-  /// clicar em mais nada.
   final ValueChanged<LocalCanvasItem>? onCanvasCreated;
   const AiTab({
     super.key,
@@ -1572,9 +1530,6 @@ class AiTabState extends State<AiTab> {
   EditorType? _attachedTool;
   int      _canvasIdSeq  = 0;
 
-  /// Ficheiros/fotos anexados à mensagem que ainda não foi enviada.
-  /// Bloco D: substitui o comportamento antigo (picker chamado e
-  /// resultado descartado) por estado real que segue no payload.
   final List<AttachedFile> _attachedFiles = [];
   int _attachedFileIdSeq = 0;
 
@@ -1667,10 +1622,6 @@ class AiTabState extends State<AiTab> {
     return prompt;
   }
 
-  /// Reenvia uma mensagem exatamente como se o utilizador a tivesse
-  /// escrito e tocado em enviar — usado pela pill de sugestão que
-  /// aparece no fim de uma resposta da IA (item pedido: ao tocar na
-  /// sugestão, essa mesma mensagem é enviada, não apenas copiada).
   void sendSuggestedMessage(String text) {
     if (text.trim().isEmpty || _sending) return;
     _ctrl.text = text;
@@ -1682,13 +1633,6 @@ class AiTabState extends State<AiTab> {
     if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
     final isFirst = _msgs.isEmpty;
 
-    // NOTA (Bloco D, item 4 — payload de anexos): o formato exato que
-    // worker.js espera para receber conteúdo de ficheiro dentro de uma
-    // mensagem não foi confirmado (worker.js não foi partilhado nesta
-    // linha de trabalho). A estrutura abaixo (attachments como lista
-    // de {name, mimeType, base64}) é uma suposição razoável, não uma
-    // confirmação — ChatMessage/streamChat têm de ser revistos assim
-    // que o formato real do backend for conhecido.
     final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
     final userMsg = ChatMessage(
       role: 'user',
@@ -1742,8 +1686,6 @@ class AiTabState extends State<AiTab> {
         if (!mounted) return;
         switch (event) {
           case ChatTitleEvent(title: final title):
-            // Título já vem pronto do worker embutido na stream — usa-o
-            // de imediato para nomear a conversa, sem chamada HTTP extra.
             if (!_incognito) {
               _applyGeneratedTitle(title);
             }
@@ -1772,13 +1714,9 @@ class AiTabState extends State<AiTab> {
             _notifyHeader();
             _scrollToEnd();
             _persistConversation();
-            // Fallback: se por algum motivo o worker não injetou
-            // generatedTitle nesta resposta, gera título à moda antiga.
             if (isFirst && _conversationId == null) {
               _generateTitleInBackground(t);
             }
-            // Documento criado nesta resposta: abre-o automaticamente
-            // no EditTab, sem o utilizador ter de tocar em nada.
             if (scan.items.isNotEmpty) {
               widget.onCanvasCreated?.call(scan.items.last);
             }
@@ -1819,9 +1757,6 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  /// Aplica um título já pronto (vindo de ChatTitleEvent) à conversa
-  /// atual, criando-a no backend se ainda não existir ou atualizando-a
-  /// se já existir. Substitui o antigo fluxo de generateTitle() HTTP.
   Future<void> _applyGeneratedTitle(String title) async {
     final token = authController.token;
     if (token == null) return;
@@ -1852,17 +1787,13 @@ class AiTabState extends State<AiTab> {
     }
   }
 
-  /// Fallback: só é chamado se a stream não tiver injetado
-  /// generatedTitle nesta resposta (worker não devolveu o campo por
-  /// algum motivo). Mantém o comportamento antigo como rede de
-  /// segurança para nunca deixar "Nova conversa" por título.
   Future<void> _generateTitleInBackground(String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
     final title = await AiApiService.generateTitle(token, firstMessage);
     if (!mounted) return;
     if (_incognito) return;
-    if (_conversationId != null) return; // já foi criada via ChatTitleEvent
+    if (_conversationId != null) return;
     final created = await ConversationsApiService.create(
       token,
       title: title,
@@ -1920,16 +1851,13 @@ class AiTabState extends State<AiTab> {
     setState(() => _model = model);
   }
 
-  /// Bloco D, item "anexos com conteúdo real": o picker já não
-  /// descarta o resultado — cada ficheiro escolhido vira um
-  /// AttachedFile com bytes lidos, guardado em _attachedFiles.
   void _onAttachFiles() async {
     final result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
     if (result == null || result.files.isEmpty) return;
     final newFiles = <AttachedFile>[];
     for (final f in result.files) {
       final bytes = f.bytes;
-      if (bytes == null) continue; // withData:true deve garantir bytes, mas defende-se de qualquer forma
+      if (bytes == null) continue;
       newFiles.add(AttachedFile(
         id: _nextAttachedFileId(),
         name: f.name,
@@ -2041,7 +1969,6 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  /// Abre o EditTab já carregado com o documento clicado.
   void _onOpenCanvas(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
     AiTabHostNavigation.of(context)?.goToEditTab(item.kind.editorType);
@@ -2555,11 +2482,7 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING BUBBLE — reescrita para consumir a lista de
-// _StreamElement produzida por _parseStreamingContent. Cada elemento
-// vira o widget certo: texto normal (RichAiText), pill de bloco em
-// aberto (shimmer), ou o resultado final já pronto (DocumentWidgetCard
-// / widget renderizado) — nunca esconde o resto do conteúdo.
+// STREAMING BUBBLE
 // ══════════════════════════════════════════════════════════════
 
 class _StreamingBubble extends StatelessWidget {
@@ -2610,23 +2533,63 @@ class _StreamingBubble extends StatelessWidget {
             onEnableWidgets: onEnableWidgets,
             onSuggestionTap: onSuggestionTap,
           ));
-        case _StreamOpenBlock(:final label):
+        case _StreamOpenBlock(:final id, :final kind, :final label, :final rawContent):
           anyContent = true;
           children.add(Padding(
+            key: ValueKey(id),
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: _CanvasCreatingPill(s: s, label: label),
+            child: _ProcessPill(
+              key: ValueKey(id),
+              s: s,
+              kind: kind,
+              activeLabel: label,
+              rawContent: rawContent,
+              streaming: true,
+            ),
           ));
-        case _StreamClosedCanvas(:final item):
+        case _StreamClosedCanvas(:final processId, :final item):
           anyContent = true;
           children.add(Padding(
+            key: ValueKey(processId),
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ProcessPill(
+                  key: ValueKey(processId),
+                  s: s,
+                  kind: _OpenBlockKind.canvas,
+                  activeLabel: _canvasProcessLabel(item.kind.name),
+                  rawContent: item.content,
+                  streaming: false,
+                ),
+                const SizedBox(height: 6),
+                DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
+              ],
+            ),
           ));
-        case _StreamClosedWidget(:final block):
+        case _StreamClosedWidget(:final processId, :final block):
           anyContent = true;
           children.add(Padding(
+            key: ValueKey(processId),
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: buildAiWidget(block, s),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ProcessPill(
+                  key: ValueKey(processId),
+                  s: s,
+                  kind: _OpenBlockKind.widget,
+                  activeLabel: 'A criar widget',
+                  rawContent: jsonEncode(block.json),
+                  streaming: false,
+                ),
+                const SizedBox(height: 6),
+                buildAiWidget(block, s),
+              ],
+            ),
           ));
       }
     }
@@ -2649,83 +2612,231 @@ class _StreamingBubble extends StatelessWidget {
   }
 }
 
-/// Pill "A criar..." — ícone tools.svg + texto com shimmer contínuo.
-/// ATUALIZAÇÃO (fix do streaming): este pill já não é um estado
-/// binário que decide se o resto da bolha aparece — é agora só mais
-/// um elemento inline na lista de _StreamElement, colocado exatamente
-/// no ponto do texto onde o bloco especial está a ser escrito.
-/// Enquanto o bloco correspondente não fecha, este pill continua a
-/// aparecer (com shimmer) nessa mesma posição a cada rebuild; assim
-/// que fecha, _parseStreamingContent deixa de produzir um
-/// _StreamOpenBlock naquele ponto e passa a produzir o resultado
-/// final (_StreamClosedCanvas / _StreamClosedWidget) — o shimmer
-/// para de vez, sem intervenção adicional.
-class _CanvasCreatingPill extends StatelessWidget {
+/// Ícone dado por kind de processo — canvas usa tools.svg, widget
+/// usa widgets.svg (ambos assets já existentes na pasta svg do
+/// projeto, confirmado pelo utilizador).
+String _processIconAsset(_OpenBlockKind kind) => switch (kind) {
+      _OpenBlockKind.canvas => 'tools.svg',
+      _OpenBlockKind.widget => 'widgets.svg',
+    };
+
+/// ══════════════════════════════════════════════════════════════
+/// PROCESS PILL — processo genérico usado tanto para canvas (doc,
+/// sheet, slide, whiteboard) como para widgets.
+///
+/// Comportamento (replicado do protótipo HTML validado):
+/// - Ícone + label, ambos com shimmer sincronizado enquanto
+///   streaming=true (ShaderMask com o MESMO AnimationController a
+///   pintar ícone e texto).
+/// - Cronómetro em tempo real ("Xs"), atualizado a cada 250ms
+///   enquanto streaming=true — conta desde o primeiro build deste
+///   pill (id estável via ValueKey no StreamingBubble garante que
+///   não reinicia a cada rebuild causado por novos tokens).
+/// - Tocar na pill alterna aberto/fechado A QUALQUER MOMENTO — mesmo
+///   enquanto streaming=true. Isto não afeta o streaming nem o
+///   cronómetro, só mostra/oculta o corpo com rawContent.
+/// - Corpo: mostra rawContent tal como chega (streaming real, sem
+///   qualquer palavra-a-palavra simulada).
+/// - Quando streaming passa a false, o pill deixa de ter shimmer,
+///   mostra "Kind · Xs" com o tempo final, e colapsa automaticamente.
+/// - chevron_down.svg: fechado aponta para baixo (0 turns), aberto
+///   roda 180° (0.5 turns) — comportamento padrão de um chevron
+///   "down" que se torna "up" ao expandir, igual a qualquer
+///   accordion/collapsible normal.
+/// ══════════════════════════════════════════════════════════════
+class _ProcessPill extends StatefulWidget {
   final AppColorScheme s;
-  final String label;
-  const _CanvasCreatingPill({required this.s, required this.label});
+  final _OpenBlockKind kind;
+  final String activeLabel;
+  final String rawContent;
+  final bool streaming;
+  const _ProcessPill({
+    super.key,
+    required this.s,
+    required this.kind,
+    required this.activeLabel,
+    required this.rawContent,
+    required this.streaming,
+  });
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppIcon('tools.svg', color: s.primary, size: 15),
-          const SizedBox(width: 8),
-          _ShimmerText(
-            text: label,
-            baseColor: s.primary,
-            highlightColor: s.isDark ? Colors.white : Colors.white,
-          ),
-        ],
-      );
+  State<_ProcessPill> createState() => _ProcessPillState();
 }
 
-/// Texto com efeito shimmer.
-class _ShimmerText extends StatefulWidget {
-  final String text;
-  final Color baseColor;
-  final Color highlightColor;
-  const _ShimmerText({required this.text, required this.baseColor, required this.highlightColor});
-  @override State<_ShimmerText> createState() => _ShimmerTextState();
-}
+class _ProcessPillState extends State<_ProcessPill>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmerCtrl;
+  late final DateTime _startTime;
+  Timer? _tickTimer;
+  int _elapsedSeconds = 0;
+  bool _expanded = true;
+  bool _wasStreaming = true;
 
-class _ShimmerTextState extends State<_ShimmerText> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+    _startTime = DateTime.now();
+    _wasStreaming = widget.streaming;
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    if (widget.streaming) {
+      _shimmerCtrl.repeat();
+      _startTicking();
+    } else {
+      _expanded = false; // já fechado, começa colapsado
+    }
   }
+
+  void _startTicking() {
+    _tickTimer?.cancel();
+    _tickTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!mounted) return;
+      setState(() {
+        _elapsedSeconds = DateTime.now().difference(_startTime).inSeconds;
+      });
+    });
+  }
+
   @override
-  void dispose() { _c.dispose(); super.dispose(); }
+  void didUpdateWidget(covariant _ProcessPill old) {
+    super.didUpdateWidget(old);
+    if (_wasStreaming && !widget.streaming) {
+      _wasStreaming = false;
+      _shimmerCtrl.stop();
+      _tickTimer?.cancel();
+      _elapsedSeconds = DateTime.now().difference(_startTime).inSeconds.clamp(1, 1 << 30);
+      setState(() => _expanded = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _shimmerCtrl.dispose();
+    _tickTimer?.cancel();
+    super.dispose();
+  }
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+
+  String get _collapsedLabel {
+    final doneVerb = switch (widget.kind) {
+      _OpenBlockKind.canvas => widget.activeLabel.replaceFirst('A criar', 'Criou'),
+      _OpenBlockKind.widget => 'Criou widget',
+    };
+    return '$doneVerb · ${_elapsedSeconds}s';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, child) {
-        final t = _c.value;
-        return ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: [widget.baseColor, widget.highlightColor, widget.baseColor],
-              stops: const [0.35, 0.5, 0.65],
-              begin: Alignment(-1.0 - 2 * (1 - t), 0),
-              end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
-              tileMode: TileMode.clamp,
-            ).createShader(bounds);
-          },
-          child: child,
-        );
-      },
-      child: Text(
-        widget.text,
-        style: TextStyle(
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
-          color: widget.baseColor,
-        ),
+    final s = widget.s;
+    final iconAsset = _processIconAsset(widget.kind);
+    final baseColor = s.onSurfaceVariant;
+    final highlightColor = s.isDark ? Colors.white : s.onSurface;
+
+    final row = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggle,
+      child: Row(
+        children: [
+          AnimatedBuilder(
+            animation: _shimmerCtrl,
+            builder: (_, child) {
+              if (!widget.streaming) return child!;
+              final t = _shimmerCtrl.value;
+              return ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [baseColor, highlightColor, baseColor],
+                  stops: const [0.35, 0.5, 0.65],
+                  begin: Alignment(-1.0 - 2 * (1 - t), 0),
+                  end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
+                  tileMode: TileMode.clamp,
+                ).createShader(bounds),
+                child: child,
+              );
+            },
+            child: AppIcon(iconAsset, color: baseColor, size: 16),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: AnimatedBuilder(
+              animation: _shimmerCtrl,
+              builder: (_, child) {
+                if (!widget.streaming) return child!;
+                final t = _shimmerCtrl.value;
+                return ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: [baseColor, highlightColor, baseColor],
+                    stops: const [0.35, 0.5, 0.65],
+                    begin: Alignment(-1.0 - 2 * (1 - t), 0),
+                    end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
+                    tileMode: TileMode.clamp,
+                  ).createShader(bounds),
+                  child: child,
+                );
+              },
+              child: Text(
+                widget.streaming ? widget.activeLabel : _collapsedLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: baseColor,
+                ),
+              ),
+            ),
+          ),
+          if (widget.streaming) ...[
+            const SizedBox(width: 6),
+            Text('${_elapsedSeconds}s',
+                style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant.withOpacity(0.7))),
+          ],
+          const SizedBox(width: 4),
+          AnimatedRotation(
+            turns: _expanded ? 0.5 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: AppIcon('chevron_down.svg', color: s.onSurfaceVariant, size: 13),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 340),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          row,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: kCupertinoOut,
+            alignment: Alignment.topLeft,
+            child: !_expanded || widget.rawContent.trim().isEmpty
+                ? const SizedBox(width: double.infinity, height: 0)
+                : Padding(
+                    padding: const EdgeInsets.only(left: 24, top: 6, bottom: 2),
+                    child: Container(
+                      constraints: const BoxConstraints(maxHeight: 260),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          widget.rawContent,
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11.5,
+                            height: 1.5,
+                            color: s.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
