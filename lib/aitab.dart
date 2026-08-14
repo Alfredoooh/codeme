@@ -965,8 +965,8 @@ class SimpleCanvasCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final item = widget.item;
+    final s = this.s;
+    final item = this.item;
 
     return GestureDetector(
       onTap: onTap,
