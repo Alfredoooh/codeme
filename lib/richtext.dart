@@ -18,6 +18,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart'; // ← necessária
+import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import 'package:highlight/languages/all.dart' as highlight_languages;
 import 'colors.dart';
 import 'aiwidgets.dart';
 import 'widgets.dart';
@@ -1514,6 +1517,7 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
   @override
   Widget build(BuildContext context) {
+    // Estilo base do texto (será usado apenas para fallback)
     final baseStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 14.5,
@@ -1521,41 +1525,45 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
       color: const Color(0xFFE8E8E8),
     );
 
-    final codeSpans = _highlightCode(widget.code, widget.language, baseStyle);
+    // Use flutter_highlight para o código inline
+    final highlightedCode = HighlightView(
+      widget.code,
+      language: widget.language,
+      theme: atomOneDarkTheme,
+      padding: const EdgeInsets.fromLTRB(18, 48, 18, 20),
+      textStyle: const TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 14.5,
+        height: 1.7,
+        color: Color(0xFFE8E8E8),
+      ),
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(32), // ← mais curvo
       ),
       child: Stack(
         children: [
-          _buildCodeBody(codeSpans, baseStyle),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 420), // ← altura reduzida
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: highlightedCode,
+              ),
+            ),
+          ),
           Positioned(
             top: 12,
             right: 12,
             child: _buildActions(),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCodeBody(List<TextSpan> spans, TextStyle baseStyle) {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 500),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.vertical,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(18, 48, 18, 20),
-          child: SelectableText.rich(
-            TextSpan(style: baseStyle, children: spans),
-            textAlign: TextAlign.left,
-          ),
-        ),
       ),
     );
   }
@@ -1570,15 +1578,17 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (_canPreview) ...[
+            _ActionButton(
+              svgIcon: 'play.svg', // ← SVG dos assets
+              color: const Color(0xFF9A9A9A),
+              backgroundColor: const Color(0xFF2C2C2C),
+              onTap: _openPreview,
+            ),
+            const SizedBox(width: 4),
+          ],
           _ActionButton(
-            icon: Icons.play_arrow_rounded,
-            color: _canPreview ? const Color(0xFF9A9A9A) : const Color(0xFF555555),
-            backgroundColor: const Color(0xFF2C2C2C),
-            onTap: _canPreview ? _openPreview : null,
-          ),
-          const SizedBox(width: 4),
-          _ActionButton(
-            icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
+            svgIcon: _copied ? 'check.svg' : 'copy.svg', // ← SVG
             color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
             backgroundColor: const Color(0xFF2C2C2C),
             onTap: _copy,
@@ -1590,13 +1600,13 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 }
 
 class _ActionButton extends StatefulWidget {
-  final IconData icon;
+  final String svgIcon; // agora usa SVG
   final Color color;
   final Color backgroundColor;
   final VoidCallback? onTap;
 
   const _ActionButton({
-    required this.icon,
+    required this.svgIcon,
     required this.color,
     required this.backgroundColor,
     this.onTap,
@@ -1624,8 +1634,8 @@ class _ActionButtonState extends State<_ActionButton> {
           color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
           borderRadius: BorderRadius.circular(9999),
         ),
-        child: Icon(
-          widget.icon,
+        child: AppIcon(
+          widget.svgIcon,
           size: 17,
           color: widget.color,
         ),
@@ -1915,7 +1925,7 @@ List<_TokenPattern> _patternsForLanguage(String language) {
 // TELA DE PREVIEW SEPARADA
 // ══════════════════════════════════════════════════════════════
 
-class AiCodePreviewScreen extends StatelessWidget {
+class AiCodePreviewScreen extends StatefulWidget {
   final String code;
   final String language;
   final AppColorScheme s;
@@ -1928,6 +1938,13 @@ class AiCodePreviewScreen extends StatelessWidget {
   });
 
   @override
+  State<AiCodePreviewScreen> createState() => _AiCodePreviewScreenState();
+}
+
+class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
+  int _selectedTab = 0; // 0 = código, 1 = prévia
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
@@ -1936,26 +1953,137 @@ class AiCodePreviewScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          language.isEmpty ? 'Preview' : 'Preview · $language',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          widget.language.isEmpty ? 'Preview' : 'Preview · ${widget.language}',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w400, // ← mais fino
+            letterSpacing: 0.3,
+          ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: AppIcon('arrow_back.svg', size: 20, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-      ),
-      body: InAppWebView(
-        initialData: InAppWebViewInitialData(
-          data: code,
-          mimeType: 'text/html',
-          baseUrl: WebUri('about:blank'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _buildIosSegmentedTabs(),
+          ),
         ),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          supportZoom: false,
-          transparentBackground: false,
-          allowFileAccessFromFileURLs: true,
-          allowUniversalAccessFromFileURLs: true,
+      ),
+      body: IndexedStack(
+        index: _selectedTab,
+        children: [
+          _buildCodeTab(),
+          _buildPreviewTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIosSegmentedTabs() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(30), // totalmente curvo
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _IosTabButton(
+              label: 'Código',
+              selected: _selectedTab == 0,
+              onTap: () => setState(() => _selectedTab = 0),
+            ),
+          ),
+          Expanded(
+            child: _IosTabButton(
+              label: 'Prévia',
+              selected: _selectedTab == 1,
+              onTap: () => setState(() => _selectedTab = 1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCodeTab() {
+    return Container(
+      color: const Color(0xFF161616),
+      child: HighlightView(
+        widget.code,
+        language: widget.language,
+        theme: atomOneDarkTheme,
+        padding: const EdgeInsets.all(16),
+        textStyle: const TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 14,
+          height: 1.7,
+          color: Color(0xFFE8E8E8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewTab() {
+    return InAppWebView(
+      initialData: InAppWebViewInitialData(
+        data: widget.code,
+        mimeType: 'text/html',
+        baseUrl: WebUri('about:blank'),
+      ),
+      initialSettings: InAppWebViewSettings(
+        javaScriptEnabled: true,
+        supportZoom: false,
+        transparentBackground: false,
+        allowFileAccessFromFileURLs: true,
+        allowUniversalAccessFromFileURLs: true,
+      ),
+    );
+  }
+}
+
+class _IosTabButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _IosTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF2E8BC9) : Colors.transparent,
+          borderRadius: BorderRadius.circular(26),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: selected ? Colors.white : const Color(0xFF8E8E93),
+          ),
         ),
       ),
     );
