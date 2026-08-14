@@ -77,8 +77,19 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer implementado nativamente com Stack +
-// AnimatedContainer, SEM o pacote flutter_slider_drawer.
+// ROOT SHELL — drawer estilo "push": o drawer fica sempre fixo por
+// baixo, a ocupar a largura _drawerWidth encostado à esquerda; é o
+// conteúdo principal (bodyContent) que desliza para a direita quando
+// abre, revelando o drawer que já lá estava — nunca o drawer que se
+// move para dentro do ecrã. Sem o pacote flutter_slider_drawer.
+//
+// FIX (alinhamento): a versão anterior tinha o drawer dentro de um
+// AnimatedPositioned que também animava a sua própria posição
+// (left: -_drawerWidth → 0), ao mesmo tempo que o conteúdo também
+// animava via transform. As duas animações concorrentes causavam o
+// desalinhamento visto no ecrã (drawer a aparecer fora da área
+// revelada). Agora o drawer fica num Positioned estático (sempre em
+// left:0, sempre montado), e só o conteúdo acima dele anima.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -179,8 +190,9 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
     }
   }
 
-  static const double _drawerWidth = 300;
-  static const Duration _drawerAnim = Duration(milliseconds: 260);
+  static const double _drawerWidth = 280;
+  static const Duration _drawerAnim = Duration(milliseconds: 380);
+  static const Curve _drawerCurve = Curves.easeOutQuint;
 
   @override
   Widget build(BuildContext context) {
@@ -209,7 +221,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
                   return _AppHeader(
                     s: s,
                     title: _tabTitle,
-                    onMenu: _openDrawer,
+                    onMenu: _toggleDrawer,
                     transparent: true,
                     headerBackground: s.pageBackground,
                     trailing: AiConversationMenuButton(
@@ -232,7 +244,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
             _AppHeader(
               s: s,
               title: _tabTitle,
-              onMenu: _openDrawer,
+              onMenu: _toggleDrawer,
               transparent: false,
               headerBackground: s.surface,
               trailing: _tab == AppTab.edit
@@ -253,62 +265,74 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
           ]);
 
     return Scaffold(
-      backgroundColor: isAiTab ? s.pageBackground : s.surface,
+      backgroundColor: s.surface,
       body: Stack(
         children: [
+          // Drawer — sempre montado, sempre fixo na mesma posição
+          // por baixo do conteúdo. Nunca se move; é revelado quando
+          // o conteúdo por cima desliza para a direita.
+          Positioned(
+            top: 0, bottom: 0, left: 0,
+            width: _drawerWidth,
+            child: Material(
+              color: s.surface,
+              child: AppDrawer(
+                s: s,
+                onClose: _closeDrawer,
+                onSettings: _openSettings,
+                onGoHome: _goHome,
+                currentTab: _tab,
+                onSelectTab: _selectTab,
+                onOpenConversation: _onOpenConversation,
+                onNewChat: () =>
+                    _onConversationAction(ConversationAction.newChat),
+              ),
+            ),
+          ),
+          // Conteúdo principal — desliza inteiro para a direita numa
+          // só peça (sombra própria incluída), revelando o drawer por
+          // baixo. Curva mais suave e ligeiramente mais longa para a
+          // sensação premium pedida.
           AnimatedContainer(
             duration: _drawerAnim,
-            curve: Curves.easeOutCubic,
+            curve: _drawerCurve,
             transform: Matrix4.translationValues(
               _drawerOpen ? _drawerWidth : 0, 0, 0,
             ),
-            child: AbsorbPointer(
-              absorbing: _drawerOpen,
-              child: bodyContent,
+            decoration: BoxDecoration(
+              boxShadow: _drawerOpen
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 24,
+                        offset: const Offset(-4, 0),
+                      ),
+                    ]
+                  : const [],
             ),
-          ),
-          if (_drawerOpen)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _closeDrawer,
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedOpacity(
-                  duration: _drawerAnim,
-                  opacity: _drawerOpen ? 1 : 0,
-                  child: Container(color: Colors.black.withOpacity(0.25)),
-                ),
-              ),
-            ),
-          AnimatedPositioned(
-            duration: _drawerAnim,
-            curve: Curves.easeOutCubic,
-            top: 0, bottom: 0,
-            left: _drawerOpen ? 0 : -_drawerWidth,
-            width: _drawerWidth,
             child: GestureDetector(
               onHorizontalDragUpdate: (d) {
-                if (d.delta.dx < -6) _closeDrawer();
+                if (_drawerOpen && d.delta.dx < -6) _closeDrawer();
               },
-              child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.horizontal(right: Radius.circular(24)),
-                child: Material(
-                  color: s.surface,
-                  child: AppDrawer(
-                    s: s,
-                    onClose: _closeDrawer,
-                    onSettings: _openSettings,
-                    onGoHome: _goHome,
-                    currentTab: _tab,
-                    onSelectTab: _selectTab,
-                    onOpenConversation: _onOpenConversation,
-                    onNewChat: () =>
-                        _onConversationAction(ConversationAction.newChat),
-                  ),
-                ),
+              behavior: HitTestBehavior.deferToChild,
+              child: AbsorbPointer(
+                absorbing: _drawerOpen,
+                child: bodyContent,
               ),
             ),
           ),
+          // Área tocável sobre o conteúdo deslocado, quando o drawer
+          // está aberto — toque em qualquer ponto do conteúdo
+          // (agora revelado ao lado) fecha o drawer.
+          if (_drawerOpen)
+            Positioned(
+              top: 0, bottom: 0,
+              left: _drawerWidth, right: 0,
+              child: GestureDetector(
+                onTap: _closeDrawer,
+                behavior: HitTestBehavior.translucent,
+              ),
+            ),
         ],
       ),
     );
