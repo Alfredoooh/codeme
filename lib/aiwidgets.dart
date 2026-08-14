@@ -2337,43 +2337,42 @@ class _MindMapNodeWidget extends StatelessWidget {
   const _MindMapNodeWidget({required this.node, required this.s});
 
   @override
-  Widget build(BuildContext context) {
-    final isRoot = node.isRoot;
-    final bgColor = node.color;
-    final textColor = isRoot
-        ? const Color(0xFF4A3B00)
-        : Colors.white;
-    final fontSize = isRoot ? 15.0 : 12.0;
-    final padding = isRoot
-        ? const EdgeInsets.symmetric(horizontal: 26, vertical: 14)
-        : const EdgeInsets.symmetric(horizontal: 18, vertical: 10);
-    final borderRadius = isRoot ? 14.0 : 20.0;
+Widget build(BuildContext context) {
+  final isRoot = node.isRoot;
+  final bgColor = node.color;
+  final textColor = isRoot
+      ? const Color(0xFF4A3B00)
+      : Colors.white;
+  final fontSize = isRoot ? 15.0 : 12.0;
+  final padding = isRoot
+      ? const EdgeInsets.symmetric(horizontal: 26, vertical: 14)
+      : const EdgeInsets.symmetric(horizontal: 18, vertical: 10);
+  final borderRadius = isRoot ? 14.0 : 20.0;
 
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Text(
-        node.label,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          color: textColor,
-          whiteSpace: true, // não quebrar linha
+  return Container(
+    padding: padding,
+    decoration: BoxDecoration(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(borderRadius),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 5,
+          offset: const Offset(0, 2),
         ),
-        overflow: TextOverflow.visible,
+      ],
+    ),
+    child: Text(
+      node.label,
+      softWrap: false, // ← impede a quebra de linha
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w700,
+        color: textColor,
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _MindMapPainter extends CustomPainter {
