@@ -7,7 +7,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
@@ -949,348 +948,77 @@ class _MenuSwitchRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DOCUMENT WIDGET CARD
+// SIMPLE CANVAS CARD (substitui o DocumentWidgetCard)
 // ══════════════════════════════════════════════════════════════
 
-String _previewHtmlAsset(LocalCanvasKind kind) {
-  final base = kind.editorType.htmlAsset;
-  if (kind == LocalCanvasKind.whiteboard) return base;
-  return '$base?preview=1';
-}
-
-int _docPageCount(LocalCanvasItem item) {
-  if (item.kind != LocalCanvasKind.doc) return 1;
-  const marker = '<div class="page-break-marker"></div>';
-  if (item.content.isEmpty) return 1;
-  return item.content.split(marker).length;
-}
-
-class DocumentWidgetCard extends StatefulWidget {
+class SimpleCanvasCard extends StatelessWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
-  final VoidCallback onOpenEditor;
-  const DocumentWidgetCard({
+  final VoidCallback onTap;
+
+  const SimpleCanvasCard({
     super.key,
     required this.s,
     required this.item,
-    required this.onOpenEditor,
-  });
-
-  @override
-  State<DocumentWidgetCard> createState() => _DocumentWidgetCardState();
-}
-
-class _DocumentWidgetCardState extends State<DocumentWidgetCard> {
-  String? _exportingFormat;
-
-  InAppWebViewController? _previewController;
-
-  List<({String id, String label, String icon})> get _downloadOptions {
-    switch (widget.item.kind) {
-      case LocalCanvasKind.doc:
-        return const [
-          (id: 'docx', label: 'Baixar como .docx', icon: 'description_outlined.svg'),
-          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
-          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
-        ];
-      case LocalCanvasKind.sheet:
-        return const [
-          (id: 'xlsx', label: 'Baixar como .xlsx', icon: 'table_chart.svg'),
-          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
-          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
-        ];
-      case LocalCanvasKind.slide:
-        return const [
-          (id: 'pptx', label: 'Baixar como .pptx', icon: 'slideshow.svg'),
-          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
-          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
-        ];
-      case LocalCanvasKind.whiteboard:
-        return const [
-          (id: 'png', label: 'Baixar como imagem (PNG)', icon: 'image.svg'),
-          (id: 'pdf', label: 'Baixar como PDF', icon: 'picture_as_pdf.svg'),
-        ];
-    }
-  }
-
-  void _openDownloadSheet() {
-    final s = widget.s;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Material(
-          type: MaterialType.transparency,
-          child: SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: SheetGrabber(s: s)),
-                  Row(children: [
-                    AppIcon('download.svg', color: s.onSurface, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Baixar "${widget.item.title}"',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 10),
-                  for (final opt in _downloadOptions)
-                    _DownloadOptionRow(
-                      s: s,
-                      label: opt.label,
-                      icon: opt.icon,
-                      loading: _exportingFormat == opt.id,
-                      onTap: _exportingFormat != null
-                          ? null
-                          : () async {
-                              setModalState(() => _exportingFormat = opt.id);
-                              await _exportAs(context, opt.id);
-                              setModalState(() => _exportingFormat = null);
-                            },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _exportAs(BuildContext context, String format) async {
-    try {
-      final bytes = await ExportService.export(item: widget.item, format: format);
-      await ExportService.shareBytes(bytes, filename: '${widget.item.title}.$format');
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível exportar: $e')),
-      );
-    }
-  }
-
-  void _injectPreviewContent(InAppWebViewController ctrl) {
-    final item = widget.item;
-    if (item.kind == LocalCanvasKind.doc) {
-      final escaped = item.content
-          .replaceAll('\\', '\\\\')
-          .replaceAll("'", "\\'")
-          .replaceAll('\n', '\\n');
-      ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
-    } else if (item.kind == LocalCanvasKind.sheet || item.kind == LocalCanvasKind.slide) {
-      final escaped = item.content
-          .replaceAll('\\', '\\\\')
-          .replaceAll("'", "\\'")
-          .replaceAll('\n', '\\n');
-      ctrl.evaluateJavascript(source: "editorApi.setContentFromAi('$escaped')");
-    } else {
-      final escaped = item.content
-          .replaceAll('\\', '\\\\')
-          .replaceAll("'", "\\'")
-          .replaceAll('\n', '\\n');
-      ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final item = widget.item;
-    final pageCount = _docPageCount(item);
-    final showStack = item.kind == LocalCanvasKind.doc && pageCount > 1;
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 340),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: s.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        GestureDetector(
-          onTap: widget.onOpenEditor,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: Container(
-              width: double.infinity,
-              color: s.previewBackdrop,
-              child: Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.center,
-                children: [
-                  if (showStack)
-                    Positioned(
-                      top: 14, left: 10, right: -6, bottom: -6,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: s.cardBackground,
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: s.cardShadow,
-                        ),
-                      ),
-                    ),
-                  if (showStack)
-                    Positioned(
-                      top: 7, left: 5, right: -3, bottom: -3,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: s.cardBackground,
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: s.cardShadow,
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    top: showStack ? 0 : 0,
-                    left: showStack ? 0 : 0,
-                    right: showStack ? 12 : 0,
-                    bottom: showStack ? 12 : 0,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: IgnorePointer(
-                        child: InAppWebView(
-                          initialFile: _previewHtmlAsset(item.kind),
-                          initialSettings: InAppWebViewSettings(
-                            transparentBackground: true,
-                            javaScriptEnabled: true,
-                            allowFileAccessFromFileURLs: true,
-                            allowUniversalAccessFromFileURLs: true,
-                            useHybridComposition: true,
-                            disableVerticalScroll: true,
-                            disableHorizontalScroll: true,
-                            supportZoom: false,
-                          ),
-                          onWebViewCreated: (c) {
-                            _previewController = c;
-                          },
-                          onLoadStop: (c, _) => _injectPreviewContent(c),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: showStack ? 20 : 8,
-                    bottom: showStack ? 20 : 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: s.cardBackground.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          EditorTypeIcon(item.kind.editorType.svgAsset, size: 13),
-                          const SizedBox(width: 4),
-                          Text(item.kind.shortLabel,
-                              style: TextStyle(fontSize: 10, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(10),
-          color: s.downloadButtonBg,
-          child: Row(children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: widget.onOpenEditor,
-                child: Container(
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Abrir direto no editor',
-                      style: TextStyle(color: s.onPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _openDownloadSheet,
-              child: Container(
-                width: 40, height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle),
-                child: AppIcon('download.svg', color: s.onSurface, size: 18),
-              ),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
-
-class _DownloadOptionRow extends StatefulWidget {
-  final AppColorScheme s;
-  final String label;
-  final String icon;
-  final bool loading;
-  final VoidCallback? onTap;
-  const _DownloadOptionRow({
-    required this.s,
-    required this.label,
-    required this.icon,
-    required this.loading,
     required this.onTap,
   });
-  @override State<_DownloadOptionRow> createState() => _DownloadOptionRowState();
-}
 
-class _DownloadOptionRowState extends State<_DownloadOptionRow> {
-  bool _h = false;
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
+    final item = widget.item;
+
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   widget.onTap == null ? null : (_) => setState(() => _h = true),
-      onTapCancel: widget.onTap == null ? null : ()  => setState(() => _h = false),
-      onTapUp:     widget.onTap == null ? null : (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: Opacity(
-        opacity: widget.onTap == null && !widget.loading ? 0.4 : 1.0,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: _h ? s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(children: [
-            if (widget.loading)
-              SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: s.primary))
-            else
-              AppIcon(widget.icon, size: 18, color: s.onSurface),
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: s.cardShadow,
+          border: Border.all(color: s.outline.withOpacity(0.08)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: EditorTypeIcon(item.kind.editorType.svgAsset, size: 20),
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(widget.label,
-                  style: TextStyle(fontSize: 14, color: s.onSurface, fontWeight: FontWeight.w500)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.kind.shortLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: s.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ]),
+            AppIcon('chevron_right.svg', color: s.onSurfaceVariant, size: 16),
+          ],
         ),
       ),
     );
@@ -2341,7 +2069,7 @@ class _AssistantBubble extends StatelessWidget {
                 ),
               for (final item in canvases) ...[
                 const SizedBox(height: 8),
-                DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
+                SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
               ],
               const SizedBox(height: 6),
               _AssistantActionBar(
@@ -2477,20 +2205,19 @@ class _StreamingBubble extends StatelessWidget {
           ));
         case _StreamOpenBlock(:final label, :final partialContent):
           anyContent = true;
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: _GeneratingProcessCard(
-              key: const ValueKey('active_process'),
-              s: s,
-              label: label,
-              partialContent: partialContent,
-            ),
+          children.add(_StreamingMarkdownCard(
+            s: s,
+            label: label,
+            partialContent: partialContent,
+            widgetsEnabled: widgetsEnabled,
+            onEnableWidgets: onEnableWidgets,
+            onSuggestionTap: onSuggestionTap,
           ));
         case _StreamClosedCanvas(:final item):
           anyContent = true;
           children.add(Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
+            child: SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
           ));
         case _StreamClosedWidget(:final block):
           anyContent = true;
@@ -2519,264 +2246,107 @@ class _StreamingBubble extends StatelessWidget {
   }
 }
 
-class _GeneratingProcessCard extends StatefulWidget {
+// ══════════════════════════════════════════════════════════════
+// STREAMING MARKDOWN CARD (substitui _GeneratingProcessCard)
+// ══════════════════════════════════════════════════════════════
+
+class _StreamingMarkdownCard extends StatefulWidget {
   final AppColorScheme s;
   final String label;
   final String partialContent;
-  final String iconAsset;
+  final bool widgetsEnabled;
+  final VoidCallback onEnableWidgets;
+  final ValueChanged<String> onSuggestionTap;
 
-  const _GeneratingProcessCard({
+  const _StreamingMarkdownCard({
     super.key,
     required this.s,
     required this.label,
     required this.partialContent,
-    this.iconAsset = 'tools.svg',
+    required this.widgetsEnabled,
+    required this.onEnableWidgets,
+    required this.onSuggestionTap,
   });
 
   @override
-  State<_GeneratingProcessCard> createState() => _GeneratingProcessCardState();
+  State<_StreamingMarkdownCard> createState() => _StreamingMarkdownCardState();
 }
 
-class _GeneratingProcessCardState extends State<_GeneratingProcessCard>
-    with SingleTickerProviderStateMixin {
+class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
   bool _expanded = true;
-  final Stopwatch _stopwatch = Stopwatch();
-  Timer? _timer;
-  int _elapsedSeconds = 0;
-
-  late final AnimationController _shimmerController;
-
-  @override
-  void initState() {
-    super.initState();
-    _stopwatch.start();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (!mounted) return;
-      setState(() => _elapsedSeconds = _stopwatch.elapsed.inSeconds);
-    });
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _shimmerController.dispose();
-    _stopwatch.stop();
-    super.dispose();
-  }
-
-  void _toggleExpanded() {
-    setState(() => _expanded = !_expanded);
-  }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final primary = s.primary;
-    final highlight = s.isDark ? Colors.white : Colors.white;
+    final content = widget.partialContent.trim();
+
+    if (content.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            AiSmallDotsLoader(color: s.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Text(
+              widget.label,
+              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: s.hover.withOpacity(0.6),
+        color: s.hover.withOpacity(0.4),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: s.outline.withOpacity(0.4)),
+        border: Border.all(color: s.outline.withOpacity(0.2)),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggleExpanded,
+            onTap: () => setState(() => _expanded = !_expanded),
             child: Row(
               children: [
-                _ShimmerIcon(
-                  asset: widget.iconAsset,
-                  size: 16,
-                  baseColor: primary,
-                  highlightColor: highlight,
-                ),
+                AiSmallDotsLoader(color: s.primary),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _ShimmerText(
-                    text: widget.label,
-                    baseColor: primary,
-                    highlightColor: highlight,
+                  child: Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurfaceVariant,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${_elapsedSeconds}s',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: s.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 4),
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: AppIcon(
-                    'chevron_down.svg',
-                    size: 14,
-                    color: s.onSurfaceVariant,
-                  ),
+                  child: AppIcon('chevron_down.svg', size: 14, color: s.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: s.cardBackground.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  widget.partialContent,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: s.onSurfaceVariant,
-                    fontFamily: 'monospace',
-                  ),
-                ),
+              child: RichAiText(
+                text: content,
+                s: s,
+                widgetsEnabled: widget.widgetsEnabled,
+                onEnableWidgets: widget.onEnableWidgets,
+                onSuggestionTap: widget.onSuggestionTap,
               ),
             ),
-            crossFadeState: _expanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 200),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ShimmerIcon extends StatefulWidget {
-  final String asset;
-  final double size;
-  final Color baseColor;
-  final Color highlightColor;
-
-  const _ShimmerIcon({
-    required this.asset,
-    required this.size,
-    required this.baseColor,
-    required this.highlightColor,
-  });
-
-  @override
-  State<_ShimmerIcon> createState() => _ShimmerIconState();
-}
-
-class _ShimmerIconState extends State<_ShimmerIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) {
-        final t = _controller.value;
-        return ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: [
-                widget.baseColor,
-                widget.highlightColor,
-                widget.baseColor,
-              ],
-              stops: const [0.35, 0.5, 0.65],
-              begin: Alignment(-1.0 - 2 * (1 - t), 0),
-              end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
-              tileMode: TileMode.clamp,
-            ).createShader(bounds);
-          },
-          child: AppIcon(
-            widget.asset,
-            size: widget.size,
-            color: widget.baseColor,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ShimmerText extends StatefulWidget {
-  final String text;
-  final Color baseColor;
-  final Color highlightColor;
-  const _ShimmerText({required this.text, required this.baseColor, required this.highlightColor});
-  @override State<_ShimmerText> createState() => _ShimmerTextState();
-}
-
-class _ShimmerTextState extends State<_ShimmerText> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
-  }
-  @override
-  void dispose() { _c.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, child) {
-        final t = _c.value;
-        return ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              colors: [widget.baseColor, widget.highlightColor, widget.baseColor],
-              stops: const [0.35, 0.5, 0.65],
-              begin: Alignment(-1.0 - 2 * (1 - t), 0),
-              end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
-              tileMode: TileMode.clamp,
-            ).createShader(bounds);
-          },
-          child: child,
-        );
-      },
-      child: Text(
-        widget.text,
-        style: TextStyle(
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
-          color: widget.baseColor,
-        ),
       ),
     );
   }
