@@ -52,8 +52,6 @@ extension AiModelX on AiModel {
         AiModel.deepseekPro:       ApiProvider.deepseekPro,
         AiModel.deepseekReasoning: ApiProvider.deepseekReasoning,
       }[this]!;
-
-  bool get think => this == AiModel.deepseekReasoning;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1626,7 +1624,6 @@ class AiTabState extends State<AiTab> {
       token: token,
       messages: _msgs,
       provider: _model.provider,
-      think: _model.think,
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
     ).listen(
@@ -1713,7 +1710,6 @@ class AiTabState extends State<AiTab> {
         token,
         title: title,
         messages: _msgs,
-        canvases: const [],
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
@@ -1746,7 +1742,6 @@ class AiTabState extends State<AiTab> {
       token,
       title: title,
       messages: _msgs,
-      canvases: const [],
     );
     if (created != null && created['id'] != null) {
       _conversationId = created['id'].toString();
@@ -1763,7 +1758,6 @@ class AiTabState extends State<AiTab> {
         token,
         title: 'Nova conversa',
         messages: _msgs,
-        canvases: const [],
       );
       if (created != null && created['id'] != null) {
         _conversationId = created['id'].toString();
@@ -1771,7 +1765,7 @@ class AiTabState extends State<AiTab> {
       }
     } else {
       await ConversationsApiService.update(token, _conversationId!,
-          messages: _msgs, canvases: const []);
+          messages: _msgs);
       final existing = conversationsController.items
           .where((c) => c.id == _conversationId)
           .toList();
@@ -2532,12 +2526,12 @@ class _GeneratingProcessCard extends StatefulWidget {
   final String iconAsset;
 
   const _GeneratingProcessCard({
-  super.key,   // ← adicionar esta linha
-  required this.s,
-  required this.label,
-  required this.partialContent,
-  this.iconAsset = 'tools.svg',
-});
+    super.key,
+    required this.s,
+    required this.label,
+    required this.partialContent,
+    this.iconAsset = 'tools.svg',
+  });
 
   @override
   State<_GeneratingProcessCard> createState() => _GeneratingProcessCardState();

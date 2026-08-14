@@ -9,46 +9,29 @@ const String kApiBase = 'https://ipc.alfredopjonas.workers.dev';
 
 // ── Providers reais suportados pelo worker. O backend é DeepSeek —
 //    os 3 modelos (flash/pro/reasoning) são todos provider "deepseek",
-//    diferenciados pelo campo deepseekModel. groqFast/groqVersatile e
-//    gemini ficam mantidos porque podem ainda ser usados por outras
-//    partes do app (ex: edição de documento) mesmo que o chat principal
-//    já não os use como escolha do seletor de modelos.
-//    ⚠️ AJUSTAR: os valores 'deepseek-flash' / 'deepseek-pro' /
-//    'deepseek-reasoning' abaixo são placeholders — trocar pelos nomes
-//    de modelo exatos que o worker.js espera no campo "model" quando
-//    provider == "deepseek".
-enum ApiProvider { gemini, groqFast, groqVersatile, deepseekFlash, deepseekPro, deepseekReasoning }
+//    diferenciados pelo campo model. gemini/groq foram removidos
+//    porque o chat principal já não os usa.
+enum ApiProvider { deepseekFlash, deepseekPro, deepseekReasoning }
 
 class ProviderConfig {
-  final String provider; // "gemini" | "groq" | "deepseek"
-  final String? groqModel;
-  final String? deepseekModel;
-  const ProviderConfig(this.provider, {this.groqModel, this.deepseekModel});
+  final String provider; // será sempre "deepseek"
+  final String deepseekModel;
+  const ProviderConfig(this.provider, {required this.deepseekModel});
 }
 
 const Map<ApiProvider, ProviderConfig> kProviderMap = {
-  ApiProvider.gemini:            ProviderConfig('gemini'),
-  ApiProvider.groqFast:          ProviderConfig('groq', groqModel: 'llama-3.1-8b-instant'),
-  ApiProvider.groqVersatile:     ProviderConfig('groq', groqModel: 'llama-3.3-70b-versatile'),
-  // ⚠️ AJUSTAR nomes de modelo conforme o worker.js real.
-  ApiProvider.deepseekFlash:      ProviderConfig('deepseek', deepseekModel: 'deepseek-flash'),
-  ApiProvider.deepseekPro:        ProviderConfig('deepseek', deepseekModel: 'deepseek-pro'),
-  ApiProvider.deepseekReasoning:  ProviderConfig('deepseek', deepseekModel: 'deepseek-reasoning'),
+  ApiProvider.deepseekFlash:     ProviderConfig('deepseek', deepseekModel: 'flash'),
+  ApiProvider.deepseekPro:       ProviderConfig('deepseek', deepseekModel: 'pro'),
+  ApiProvider.deepseekReasoning: ProviderConfig('deepseek', deepseekModel: 'reasoning'),
 };
 
-// ⚠️ FORMATO NÃO CONFIRMADO CONTRA worker.js (ver Bloco D, item
-// "anexos com conteúdo real"): cada entrada de `attachments` segue a
-// estrutura {name, mimeType, base64}, escolhida em aitab.dart quando
-// o ficheiro é anexado. Este campo só é incluído no JSON da mensagem
-// quando não está vazio — mensagens sem anexos ficam com o payload
-// exatamente igual ao de antes. Quando o worker.js for partilhado,
-// pode ser preciso mudar esta chave (ex: para "files", ou para um
-// formato de content blocks tipo Anthropic) — o ponto de mudança é
-// só este toJson()/fromJson(), não é preciso tocar em aitab.dart.
+// ══════════════════════════════════════════════════════════════
+// MENSAGEM DE CHAT
+// ══════════════════════════════════════════════════════════════
 class ChatMessage {
   final String role; // "user" | "assistant"
   final String content;
-  final List<Map<String, dynamic>>? attachments;
+  final List<Map<String, dynamic>>? attachments; // enviado, mas worker ignora
   const ChatMessage({required this.role, required this.content, this.attachments});
 
   Map<String, dynamic> toJson() => {
@@ -91,10 +74,6 @@ class ChatThinkEvent extends ChatStreamEvent {
   ChatThinkEvent(this.text);
 }
 
-/// Emitido quando a stream traz o título gerado automaticamente pelo
-/// worker (campo generatedTitle na primeira linha SSE). Consumido por
-/// aitab.dart para renomear a conversa de imediato, sem chamada HTTP
-/// separada a /ai/title.
 class ChatTitleEvent extends ChatStreamEvent {
   final String title;
   ChatTitleEvent(this.title);
@@ -113,22 +92,8 @@ class ChatErrorEvent extends ChatStreamEvent {
 class ChatCreditsExhaustedEvent extends ChatStreamEvent {}
 
 // ══════════════════════════════════════════════════════════════
-// CANVAS — documentos/folhas/slides que a IA cria durante o chat.
-// A IA sinaliza a criação com um bloco especial no texto da resposta:
-//   [[canvas:doc:Título||conteúdo em html ou texto]]
-//   [[canvas:sheet:Título||json da folha]]
-//   [[canvas:slide:Título||json das slides]]
-// O parser abaixo extrai esses blocos, monta CanvasItem, e devolve o
-// texto "limpo" (sem o bloco cru) para mostrar na bolha de chat.
-//
-// NOTA: a IA só pode gerar "doc" — sheet/slide continuam suportados
-// no wire format (podem ter sido criados por outra via no passado ou
-// vir de dados antigos), mas CanvasParser não os bloqueia aqui; o
-// bloqueio de geração pela IA vive em aitab.dart (kAiSystemPrompt já
-// não os menciona) e em _scanForCanvasItems (descarta sheet/slide
-// vindos da IA antes de chegarem a virar LocalCanvasItem).
+// CANVAS
 // ══════════════════════════════════════════════════════════════
-
 enum CanvasKind { doc, sheet, slide, whiteboard }
 
 extension CanvasKindX on CanvasKind {
@@ -153,7 +118,7 @@ class CanvasItem {
   final String id;
   final CanvasKind kind;
   final String title;
-  final String content; // html (doc) / json (sheet, slide, whiteboard)
+  final String content;
   final int createdAt;
 
   const CanvasItem({
@@ -220,8 +185,6 @@ class CanvasParser {
     return CanvasParseResult(cleaned, items);
   }
 
-  /// Deteta se um bloco de canvas está a meio de streaming (aberto mas
-  /// ainda não fechado) para mostrar o indicador "A criar documento...".
   static bool hasOpenBlock(String raw) {
     final openIdx = raw.lastIndexOf('[[canvas:');
     if (openIdx == -1) return false;
@@ -245,14 +208,8 @@ class CanvasParser {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROJECTS — espelha exatamente o modelo do worker (proj:<userId>:<id>
-// + projidx:<userId>). Um ProjectNode pode ser project (raiz),
-// folder (subpasta) ou file (documento dentro de uma pasta/projeto).
-// A árvore inteira do utilizador vem "achatada" numa única chamada e
-// é reconstruída localmente via parentId — exatamente como o backend
-// já a guarda.
+// PROJECTS
 // ══════════════════════════════════════════════════════════════
-
 enum ProjectNodeType { project, folder, file }
 
 extension ProjectNodeTypeX on ProjectNodeType {
@@ -272,67 +229,62 @@ extension ProjectNodeTypeX on ProjectNodeType {
 }
 
 enum ProjectFileKind {
-  chat, pdf, docx, xlsx, pptx, doc, sheet, slide, whiteboard, code, other,
+  chat, pdf, docx, xlsx, pptx, doc, sheet, slide, code, other,
 }
 
 extension ProjectFileKindX on ProjectFileKind {
   String get wire => const {
-        ProjectFileKind.chat:       'chat',
-        ProjectFileKind.pdf:        'pdf',
-        ProjectFileKind.docx:       'docx',
-        ProjectFileKind.xlsx:       'xlsx',
-        ProjectFileKind.pptx:       'pptx',
-        ProjectFileKind.doc:        'doc',
-        ProjectFileKind.sheet:      'sheet',
-        ProjectFileKind.slide:      'slide',
-        ProjectFileKind.whiteboard: 'whiteboard',
-        ProjectFileKind.code:       'code',
-        ProjectFileKind.other:      'other',
+        ProjectFileKind.chat:  'chat',
+        ProjectFileKind.pdf:   'pdf',
+        ProjectFileKind.docx:  'docx',
+        ProjectFileKind.xlsx:  'xlsx',
+        ProjectFileKind.pptx:  'pptx',
+        ProjectFileKind.doc:   'doc',
+        ProjectFileKind.sheet: 'sheet',
+        ProjectFileKind.slide: 'slide',
+        ProjectFileKind.code:  'code',
+        ProjectFileKind.other: 'other',
       }[this]!;
 
   static ProjectFileKind fromWire(String? tag) {
     switch (tag) {
-      case 'chat':       return ProjectFileKind.chat;
-      case 'pdf':        return ProjectFileKind.pdf;
-      case 'docx':       return ProjectFileKind.docx;
-      case 'xlsx':       return ProjectFileKind.xlsx;
-      case 'pptx':       return ProjectFileKind.pptx;
-      case 'doc':        return ProjectFileKind.doc;
-      case 'sheet':      return ProjectFileKind.sheet;
-      case 'slide':      return ProjectFileKind.slide;
-      case 'whiteboard': return ProjectFileKind.whiteboard;
-      case 'code':       return ProjectFileKind.code;
-      default:           return ProjectFileKind.other;
+      case 'chat':   return ProjectFileKind.chat;
+      case 'pdf':    return ProjectFileKind.pdf;
+      case 'docx':   return ProjectFileKind.docx;
+      case 'xlsx':   return ProjectFileKind.xlsx;
+      case 'pptx':   return ProjectFileKind.pptx;
+      case 'doc':    return ProjectFileKind.doc;
+      case 'sheet':  return ProjectFileKind.sheet;
+      case 'slide':  return ProjectFileKind.slide;
+      case 'code':   return ProjectFileKind.code;
+      default:       return ProjectFileKind.other;
     }
   }
 
-  /// Ícone SVG associado (vive em assets/icons/svg/).
   String get svgAsset => const {
-        ProjectFileKind.chat:       'ai_tab.svg',
-        ProjectFileKind.pdf:        'doc.png',
-        ProjectFileKind.docx:       'doc.png',
-        ProjectFileKind.xlsx:       'sheet.png',
-        ProjectFileKind.pptx:       'slide.png',
-        ProjectFileKind.doc:        'doc.png',
-        ProjectFileKind.sheet:      'sheet.png',
-        ProjectFileKind.slide:      'slide.png',
-        ProjectFileKind.whiteboard: 'whiteboard.png',
-        ProjectFileKind.code:       'doc.png',
-        ProjectFileKind.other:      'doc.png',
+        ProjectFileKind.chat:   'ai_tab.svg',
+        ProjectFileKind.pdf:    'doc.png',
+        ProjectFileKind.docx:   'doc.png',
+        ProjectFileKind.xlsx:   'sheet.png',
+        ProjectFileKind.pptx:   'slide.png',
+        ProjectFileKind.doc:    'doc.png',
+        ProjectFileKind.sheet:  'sheet.png',
+        ProjectFileKind.slide:  'slide.png',
+        ProjectFileKind.code:   'doc.png',
+        ProjectFileKind.other:  'doc.png',
       }[this]!;
 
   String get label => const {
-        ProjectFileKind.chat:       'Conversa',
-        ProjectFileKind.pdf:        'PDF',
-        ProjectFileKind.docx:       'Word',
-        ProjectFileKind.xlsx:       'Excel',
-        ProjectFileKind.pptx:       'PowerPoint',
-        ProjectFileKind.doc:        'Documento',
-        ProjectFileKind.sheet:      'Folha de cálculo',
-        ProjectFileKind.slide:      'Apresentação',
-        ProjectFileKind.whiteboard: 'Quadro branco',
-        ProjectFileKind.code:       'Código',
-        ProjectFileKind.other:      'Ficheiro',
+        ProjectFileKind.chat:   'Conversa',
+        ProjectFileKind.pdf:    'PDF',
+        ProjectFileKind.docx:   'Word',
+        ProjectFileKind.xlsx:   'Excel',
+        ProjectFileKind.pptx:   'PowerPoint',
+        ProjectFileKind.doc:    'Documento',
+        ProjectFileKind.sheet:  'Folha de cálculo',
+        ProjectFileKind.slide:  'Apresentação',
+        ProjectFileKind.code:   'Código',
+        ProjectFileKind.other:  'Ficheiro',
       }[this]!;
 }
 
@@ -341,10 +293,10 @@ class ProjectNode {
   final String? parentId;
   final ProjectNodeType type;
   final String name;
-  final ProjectFileKind? fileKind; // só relevante quando type == file
-  final String? conversationId;   // quando fileKind == chat
-  final String? content;          // ficheiros pequenos gerados pela IA (html/json)
-  final String? fileData;         // base64, uploads reais (pdf/docx/etc)
+  final ProjectFileKind? fileKind;
+  final String? conversationId;
+  final String? content;
+  final String? fileData;
   final String? mimeType;
   final int createdAt;
   final int updatedAt;
@@ -403,7 +355,6 @@ class ProjectNode {
 // ══════════════════════════════════════════════════════════════
 // AUTH API
 // ══════════════════════════════════════════════════════════════
-
 class AuthApiService {
   static Future<Map<String, dynamic>> login(String email, String password) async {
     final res = await http.post(
@@ -500,7 +451,6 @@ class AuthApiService {
 // ══════════════════════════════════════════════════════════════
 // PROFILE / USER API
 // ══════════════════════════════════════════════════════════════
-
 class ProfileApiService {
   static Future<Map<String, dynamic>> getMe(String token) async {
     final res = await http.get(
@@ -570,7 +520,6 @@ class ProfileApiService {
 // ══════════════════════════════════════════════════════════════
 // CREDITS API
 // ══════════════════════════════════════════════════════════════
-
 class CreditsApiService {
   static Future<Map<String, dynamic>?> getBalance(String token) async {
     try {
@@ -602,7 +551,6 @@ class CreditsApiService {
 // ══════════════════════════════════════════════════════════════
 // CONVERSATIONS API
 // ══════════════════════════════════════════════════════════════
-
 class ConversationsApiService {
   static Future<List<Map<String, dynamic>>> list(String token, {bool archived = false}) async {
     try {
@@ -625,7 +573,6 @@ class ConversationsApiService {
     required String title,
     List<ChatMessage> messages = const [],
     String? model,
-    List<CanvasItem> canvases = const [],
   }) async {
     try {
       final res = await http.post(
@@ -635,7 +582,6 @@ class ConversationsApiService {
           'title': title,
           'messages': messages.map((m) => m.toJson()).toList(),
           if (model != null) 'model': model,
-          'canvases': canvases.map((c) => c.toJson()).toList(),
         }),
       );
       if (res.statusCode < 200 || res.statusCode >= 300) return null;
@@ -663,13 +609,11 @@ class ConversationsApiService {
     String id, {
     String? title,
     List<ChatMessage>? messages,
-    List<CanvasItem>? canvases,
   }) async {
     try {
       final body = <String, dynamic>{};
       if (title != null) body['title'] = title;
       if (messages != null) body['messages'] = messages.map((m) => m.toJson()).toList();
-      if (canvases != null) body['canvases'] = canvases.map((c) => c.toJson()).toList();
       await http.put(
         Uri.parse('$kApiBase/conversations/$id'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
@@ -678,9 +622,6 @@ class ConversationsApiService {
     } catch (_) {}
   }
 
-  /// Renomeia o título de uma conversa a partir do app — usado tanto
-  /// pela geração automática (primeira mensagem) como pela edição
-  /// manual do utilizador. Devolve true em caso de sucesso.
   static Future<bool> rename(String token, String id, String title) async {
     try {
       final res = await http.put(
@@ -750,11 +691,8 @@ class ConversationsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROJECTS API — CRUD de nós (project/folder/file), sempre isolado
-// por utilizador no backend via token. list() devolve a árvore
-// achatada inteira; o cliente reconstrói localmente via parentId.
+// PROJECTS API
 // ══════════════════════════════════════════════════════════════
-
 class ProjectsApiService {
   static Future<List<ProjectNode>> list(String token) async {
     try {
@@ -847,23 +785,14 @@ class ProjectsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CHAT API — streaming SSE real, formato OpenAI-like (DeepSeek)
-// como formato PRINCIPAL, com fallback para o formato Gemini
-// (candidates[].content.parts[].text) caso o worker ainda sirva
-// alguma rota nesse shape. O worker injeta na PRIMEIRA linha SSE
-// um campo generatedTitle com o título já gerado automaticamente
-// para a conversa — extraído aqui e emitido como ChatTitleEvent
-// antes de qualquer ChatTokenEvent.
+// AI CHAT API
 // ══════════════════════════════════════════════════════════════
-
 class AiApiService {
-  /// Faz stream do chat via SSE.
   static Stream<ChatStreamEvent> streamChat({
     required String token,
     required List<ChatMessage> messages,
     required ApiProvider provider,
     String language = 'pt',
-    bool think = false,
     String? systemPrompt,
   }) async* {
     final cfg = kProviderMap[provider]!;
@@ -878,10 +807,8 @@ class AiApiService {
         'messages': messages.map((m) => m.toJson()).toList(),
         'stream': true,
         'language': language,
-        'think': think,
         'provider': cfg.provider,
-        if (cfg.groqModel != null) 'model': cfg.groqModel,
-        if (cfg.deepseekModel != null) 'model': cfg.deepseekModel,
+        'model': cfg.deepseekModel,
         if (systemPrompt != null && systemPrompt.trim().isNotEmpty) 'systemPrompt': systemPrompt,
       });
 
@@ -923,9 +850,6 @@ class AiApiService {
             final decoded = jsonDecode(raw);
             if (decoded is! Map) continue;
 
-            // ── Título automático — vem embutido na primeira linha
-            // útil da stream (campo generatedTitle), independente do
-            // formato do resto do payload. Emitido uma única vez.
             if (!titleEmitted) {
               final titleRaw = decoded['generatedTitle']?.toString();
               if (titleRaw != null && titleRaw.trim().isNotEmpty) {
@@ -934,8 +858,6 @@ class AiApiService {
               }
             }
 
-            // ── Formato PRINCIPAL: OpenAI-like / DeepSeek / Groq
-            // (choices[].delta.content). ──────────────────────────
             final choices = decoded['choices'];
             bool handledAsChoices = false;
             if (choices is List && choices.isNotEmpty) {
@@ -943,8 +865,7 @@ class AiApiService {
               final delta = choice is Map ? choice['delta'] : null;
               if (delta is Map) {
                 final deltaContent = delta['content']?.toString();
-                final deltaThink = delta['reasoning_content']?.toString() ??
-                    delta['reasoning']?.toString();
+                final deltaThink = delta['reasoning_content']?.toString() ?? delta['reasoning']?.toString();
                 if (deltaThink != null && deltaThink.isNotEmpty) {
                   yield ChatThinkEvent(deltaThink);
                   handledAsChoices = true;
@@ -963,10 +884,7 @@ class AiApiService {
               if (handledAsChoices) continue;
             }
 
-            // ── Formato FALLBACK: Gemini
-            // (candidates[].content.parts[].text). Mantido para
-            // compatibilidade caso o worker ainda sirva alguma rota
-            // neste shape. ─────────────────────────────────────────
+            // Fallback Gemini (mantido para compatibilidade)
             final candidates = decoded['candidates'];
             if (candidates is List && candidates.isNotEmpty) {
               final first = candidates[0];
@@ -992,7 +910,7 @@ class AiApiService {
               }
             }
           } catch (_) {
-            // linha SSE não-JSON — ignora e continua
+            // ignora linha não-JSON
           }
         }
       }
@@ -1005,13 +923,11 @@ class AiApiService {
     }
   }
 
-  /// Chat não-streaming (usado como fallback caso o stream falhe).
   static Future<Map<String, dynamic>> chatOnce({
     required String token,
     required List<ChatMessage> messages,
     required ApiProvider provider,
     String language = 'pt',
-    bool think = false,
     String? systemPrompt,
   }) async {
     final cfg = kProviderMap[provider]!;
@@ -1022,10 +938,8 @@ class AiApiService {
         'messages': messages.map((m) => m.toJson()).toList(),
         'stream': false,
         'language': language,
-        'think': think,
         'provider': cfg.provider,
-        if (cfg.groqModel != null) 'model': cfg.groqModel,
-        if (cfg.deepseekModel != null) 'model': cfg.deepseekModel,
+        'model': cfg.deepseekModel,
         if (systemPrompt != null && systemPrompt.trim().isNotEmpty) 'systemPrompt': systemPrompt,
       }),
     );
@@ -1037,11 +951,6 @@ class AiApiService {
     return data;
   }
 
-  /// Ainda existe e continua funcional (chamada HTTP separada a
-  /// /ai/title), mas deixou de ser chamado no fluxo principal do
-  /// AiTab._send() — o título agora chega embutido na própria stream
-  /// via ChatTitleEvent. Mantido para quem ainda dependa dele
-  /// diretamente (ex: renomear manualmente sem re-enviar mensagem).
   static Future<String> generateTitle(String token, String message, {String language = 'pt'}) async {
     try {
       final res = await http.post(
@@ -1076,15 +985,11 @@ class AiApiService {
     return data['summary']?.toString() ?? '';
   }
 
-  /// Edição de documento assistida por IA — usado pelo FAB de sparkles
-  /// no EditTab. Devolve APENAS o conteúdo atualizado do documento
-  /// (mesmo formato do original), sem texto explicativo à volta, para
-  /// poupar tokens e permitir substituição direta no editor.
   static Future<String> editDocument({
     required String token,
     required String currentContent,
     required String instruction,
-    required String docType, // "doc" | "sheet" | "slide" | "whiteboard"
+    required String docType,
     String? selection,
   }) async {
     final res = await http.post(
