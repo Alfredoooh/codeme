@@ -19,7 +19,6 @@ dependencies:
   geolocator: any
   http: any
   flutter_highlight: ^0.7.0
-  highlight: ^0.7.0
   shared_preferences: any
   clipboard: ^0.1.3
   math_expressions: ^2.6.0
