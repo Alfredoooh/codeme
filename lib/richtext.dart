@@ -1,58 +1,17 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/richtext.dart
+// ══════════════════════════════════════════════════════════════
 //
-// _AiTable deixou de ser privada: agora é a ÚNICA implementação de
-// tabela usada em toda a app — tanto para tabelas markdown normais
-// (| col | col |) como para blocos ```widget_table``` vindos da IA.
-// buildAiTableFromWidgetJson() é o adaptador que aiwidgets.dart usa
-// para construir _AiTable a partir do JSON {headers, rows}.
-//
-// Tabela: colunas usam IntrinsicColumnWidth() e vivem dentro de um
-// SingleChildScrollView horizontal — a tabela cresce ao tamanho real
-// do conteúdo e desliza lateralmente quando ultrapassa a largura do
-// ecrã, em vez de forçar o texto a partir/juntar-se (bug anterior
-// causado por FlexColumnWidth()).
-//
-// Admonitions (> [!NOTE] título / [!TIP] / [!IMPORTANT] / [!WARNING]
-// / [!CAUTION]): bloco de nota/aviso ao estilo GitHub. ATUALIZAÇÃO
-// (pedido explícito: "tem que ser 100% como a imagem 3"): removida a
-// borda lateral colorida + fundo cinza/hover que existia antes. Novo
-// visual, replicando exatamente a imagem de referência:
-//   - moldura retangular completa (as 4 bordas), cor de borda única,
-//     cantos 100% retos (BorderRadius.zero), sem sombra
-//   - SEM barra lateral colorida — a categorização por tipo (nota/
-//     dica/importante/aviso/cuidado) passa a ser expressa apenas
-//     pelo ícone + cor do ícone/título, nunca por uma borda ou fundo
-//     colorido
-//   - cabeçalho: ícone outline pequeno + label (ex: "Note") em cinza
-//     médio, peso normal (não bold) — igual à imagem 3
-//   - fundo do card: neutro, sempre a cor de superfície do tema
-//     (nunca fixo a um cinza claro só de light mode — no dark mode
-//     usa a superfície escura correspondente)
-//   - corpo: texto normal do tema, cor neutra
-// A cor de categorização (azul=nota, verde=dica, roxo=importante,
-// laranja=aviso, vermelho=cuidado) aparece SÓ no ícone — nunca em
-// bordas, fundos ou no texto do corpo.
-//
-// ── ATUALIZAÇÃO (Code block markdown melhorado) ──────────────────
-// O caminho de code block dentro de texto markdown normal (```dart
-// fora de qualquer widget_x, quando widgetsEnabled=false OU quando
-// widgetsEnabled=true mas o bloco não é um widget_*) agora usa
-// SEMPRE AiCodeWidget (o card novo definido em aiwidgets.dart, com
-// cabeçalho, ícone de linguagem, highlight multi-cor, expand e
-// preview). Isto substitui o antigo caminho que tinha o seu próprio
-// mini-renderer de código dentro de _parseStructural. Não há
-// duplicação: ambos os caminhos (o "bloco de código markdown normal"
-// pedido explicitamente para se manter, e o "card quando o widget
-// está ativo") agora convergem no MESMO widget visual (AiCodeWidget)
-// — a diferença entre os dois modos do pedido do utilizador não é
-// visual, é apenas ONDE o bloco aparece relativamente ao resto do
-// texto, que já era assim antes (inline na sequência do texto). Isto
-// significa que o code block fica sempre bonito, quer widgets esteja
-// ligado ou desligado — o que corresponde ao pedido "melhora bastante
-// o bloco de código em markdown", já que antes ficavam DOIS
-// renderers diferentes (um jeitoso só quando era um widget_code
-// explícito, outro tosco para ```dart normal dentro de texto).
+// Parser de rich text melhorado — suporta:
+//   • Markdown (negrito, itálico, riscado, código inline, links)
+//   • Tabelas markdown e widgets de tabela
+//   • Blocos de código com card completo
+//   • Admonitions (> [!NOTE], [!TIP], etc.)
+//   • Matemática LaTeX-like: frações, raízes, super/subscritos,
+//     símbolos, letras gregas, operadores, setas, etc.
+//   • Comandos LaTeX adicionais: \text, \mathbf, \mathcal, etc.
+//   • Emojis shortcodes
+//   • Widgets inline (quando ativados)
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -82,35 +41,75 @@ const Map<String, String> kGreekLetters = {
 };
 
 const Map<String, String> kMathSymbols = {
+  // Operadores binários
   r'\times': '×', r'\div': '÷', r'\pm': '±', r'\mp': '∓',
-  r'\cdot': '·', r'\ast': '∗', r'\star': '⋆',
+  r'\cdot': '·', r'\ast': '∗', r'\star': '⋆', r'\circ': '∘',
+  r'\bullet': '•', r'\oplus': '⊕', r'\otimes': '⊗', r'\ominus': '⊖',
+  r'\odot': '⊙', r'\oslash': '⊘', r'\uplus': '⊎',
+  // Relações
   r'\leq': '≤', r'\le': '≤', r'\geq': '≥', r'\ge': '≥',
   r'\neq': '≠', r'\ne': '≠', r'\approx': '≈', r'\equiv': '≡',
   r'\sim': '∼', r'\simeq': '≃', r'\cong': '≅', r'\propto': '∝',
-  r'\ll': '≪', r'\gg': '≫',
+  r'\ll': '≪', r'\gg': '≫', r'\prec': '≺', r'\succ': '≻',
+  r'\preceq': '≼', r'\succeq': '≽', r'\subset': '⊂', r'\subseteq': '⊆',
+  r'\supset': '⊃', r'\supseteq': '⊇', r'\in': '∈', r'\notin': '∉',
+  r'\ni': '∋', r'\not\ni': '∌', r'\mid': '∣', r'\nmid': '∤',
+  r'\parallel': '∥', r'\nparallel': '∦', r'\perp': '⊥',
+  // Setas
   r'\rightarrow': '→', r'\to': '→', r'\leftarrow': '←',
   r'\leftrightarrow': '↔', r'\Rightarrow': '⇒', r'\Leftarrow': '⇐',
   r'\Leftrightarrow': '⇔', r'\mapsto': '↦', r'\uparrow': '↑',
   r'\downarrow': '↓', r'\nearrow': '↗', r'\searrow': '↘',
-  r'\in': '∈', r'\notin': '∉', r'\ni': '∋', r'\subset': '⊂',
-  r'\subseteq': '⊆', r'\supset': '⊃', r'\supseteq': '⊇',
-  r'\cup': '∪', r'\cap': '∩', r'\setminus': '∖',
-  r'\emptyset': '∅', r'\varnothing': '∅',
+  r'\swarrow': '↙', r'\nwarrow': '↖', r'\longrightarrow': '⟶',
+  r'\longleftarrow': '⟵', r'\longleftrightarrow': '⟷',
+  r'\Longrightarrow': '⟹', r'\Longleftarrow': '⟸',
+  r'\Longleftrightarrow': '⟺', r'\hookrightarrow': '↪',
+  r'\hookleftarrow': '↩', r'\rightharpoonup': '⇀',
+  r'\rightharpoondown': '⇁', r'\leftharpoonup': '↼',
+  r'\leftharpoondown': '↽',
+  // Lógica
   r'\forall': '∀', r'\exists': '∃', r'\nexists': '∄',
   r'\neg': '¬', r'\lnot': '¬', r'\land': '∧', r'\wedge': '∧',
-  r'\lor': '∨', r'\vee': '∨', r'\oplus': '⊕', r'\otimes': '⊗',
-  r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇',
+  r'\lor': '∨', r'\vee': '∨', r'\top': '⊤', r'\bot': '⊥',
+  // Conjuntos
+  r'\emptyset': '∅', r'\varnothing': '∅', r'\cup': '∪', r'\cap': '∩',
+  r'\setminus': '∖', r'\complement': '∁',
+  // Análise
+  r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇', r'\hbar': 'ℏ',
+  r'\ell': 'ℓ', r'\imath': 'ı', r'\jmath': 'ȷ',
+  // Integrais e somatórios
   r'\int': '∫', r'\iint': '∬', r'\iiint': '∭', r'\oint': '∮',
   r'\sum': '∑', r'\prod': '∏', r'\coprod': '∐',
-  r'\lim': 'lim', r'\limsup': 'lim sup', r'\liminf': 'lim inf',
-  r'\sqrt': '√',
+  // Misc
+  r'\angle': '∠', r'\measuredangle': '∡', r'\sphericalangle': '∢',
+  r'\degree': '°', r'\prime': '′', r'\backprime': '‵',
+  r'\therefore': '∴', r'\because': '∵', r'\cdots': '⋯',
+  r'\ldots': '…', r'\vdots': '⋮', r'\ddots': '⋱', r'\iddots': '⋰',
+  r'\implies': '⟹', r'\impliedby': '⟸', r'\iff': '⟺',
+  // Conjuntos numéricos
   r'\mathbb{R}': 'ℝ', r'\mathbb{N}': 'ℕ', r'\mathbb{Z}': 'ℤ',
-  r'\mathbb{Q}': 'ℚ', r'\mathbb{C}': 'ℂ',
-  r'\ldots': '…', r'\cdots': '⋯', r'\vdots': '⋮', r'\ddots': '⋱',
-  r'\angle': '∠', r'\perp': '⊥', r'\parallel': '∥',
-  r'\degree': '°', r'\prime': '′',
-  r'\implies': '⟹', r'\iff': '⟺',
-  r'\hbar': 'ℏ', r'\ell': 'ℓ',
+  r'\mathbb{Q}': 'ℚ', r'\mathbb{C}': 'ℂ', r'\mathbb{H}': 'ℍ',
+  r'\mathbb{O}': '𝕆',
+  // Delimitadores
+  r'\lvert': '|', r'\rvert': '|', r'\lVert': '‖', r'\rVert': '‖',
+  r'\langle': '⟨', r'\rangle': '⟩', r'\lceil': '⌈', r'\rceil': '⌉',
+  r'\lfloor': '⌊', r'\rfloor': '⌋', r'\lbrace': '{', r'\rbrace': '}',
+  // Acentos e marcas
+  r'\hat': '', r'\bar': '', r'\vec': '', r'\dot': '', r'\ddot': '',
+  r'\tilde': '', r'\overline': '', r'\underline': '', r'\boxed': '',
+  // Outros
+  r'\square': '□', r'\blacksquare': '■', r'\triangle': '△',
+  r'\bigtriangleup': '△', r'\bigtriangledown': '▽', r'\lozenge': '◊',
+  r'\diamond': '◆', r'\clubsuit': '♣', r'\diamondsuit': '♦',
+  r'\heartsuit': '♥', r'\spadesuit': '♠',
+};
+
+// Mapas para comandos LaTeX que envolvem formatação e não apenas substituição
+const Set<String> kMathFormattingCommands = {
+  r'\text', r'\mathrm', r'\mathbf', r'\mathit', r'\mathsf', r'\mathtt',
+  r'\mathcal', r'\mathbb', r'\mathfrak', r'\mathscr', r'\operatorname',
+  r'\overrightarrow', r'\overleftarrow', r'\overline', r'\underline',
+  r'\boxed', r'\color', r'\textcolor',
 };
 
 const Map<String, String> kSuperscriptDigits = {
@@ -124,7 +123,9 @@ const Map<String, String> kSubscriptDigits = {
   '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
   '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
   '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎',
-  'a': 'ₐ', 'e': 'ₑ', 'o': 'ₒ', 'x': 'ₓ',
+  'a': 'ₐ', 'e': 'ₑ', 'o': 'ₒ', 'x': 'ₓ', 'h': 'ₕ',
+  'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'p': 'ₚ',
+  's': 'ₛ', 't': 'ₜ',
 };
 
 String? _toSuperscriptUnicode(String s) {
@@ -148,7 +149,7 @@ String? _toSubscriptUnicode(String s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EMOJI SHORTCODES
+// EMOJI SHORTCODES — expandido
 // ══════════════════════════════════════════════════════════════
 
 const Map<String, String> kEmojiShortcodes = {
@@ -166,10 +167,32 @@ const Map<String, String> kEmojiShortcodes = {
   ':calendar:': '📅', ':clock:': '🕐', ':mag:': '🔍',
   ':email:': '📧', ':phone:': '📱', ':computer:': '💻',
   ':link:': '🔗', ':pushpin:': '📌', ':white_check_mark:': '✅',
+  ':coffee:': '☕', ':beer:': '🍺', ':wine:': '🍷', ':pizza:': '🍕',
+  ':apple:': '🍎', ':banana:': '🍌', ':grapes:': '🍇', ':watermelon:': '🍉',
+  ':sunny:': '☀️', ':cloud:': '☁️', ':rain:': '🌧️', ':snow:': '❄️',
+  ':dog:': '🐶', ':cat:': '🐱', ':mouse:': '🐭', ':rabbit:': '🐰',
+  ':fox:': '🦊', ':bear:': '🐻', ':panda:': '🐼', ':lion:': '🦁',
+  ':tiger:': '🐯', ':monkey:': '🐵', ':chicken:': '🐔', ':penguin:': '🐧',
+  ':bird:': '🐦', ':fish:': '🐟', ':dolphin:': '🐬', ':whale:': '🐳',
+  ':octopus:': '🐙', ':bee:': '🐝', ':butterfly:': '🦋', ':snail:': '🐌',
+  ':earth_africa:': '🌍', ':earth_americas:': '🌎', ':earth_asia:': '🌏',
+  ':moon:': '🌙', ':crescent_moon:': '🌙', ':new_moon:': '🌑',
+  ':full_moon:': '🌕', ':star2:': '🌟', ':dizzy:': '💫',
+  ':boom:': '💥', ':collision:': '💥', ':exclamation:': '❗',
+  ':question:': '❓', ':grey_exclamation:': '❕', ':grey_question:': '❔',
+  ':anger:': '💢', ':sweat_drops:': '💦', ':dash:': '💨',
+  ':ok_hand:': '👌', ':raised_hands:': '🙌', ':punch:': '👊',
+  ':v:': '✌️', ':metal:': '🤘', ':call_me_hand:': '🤙',
+  ':handshake:': '🤝', ':crossed_fingers:': '🤞', ':fingers_crossed:': '🤞',
+  ':brain:': '🧠', ':lungs:': '🫁', ':heartbeat:': '💓',
+  ':dna:': '🧬', ':microbe:': '🦠', ':pill:': '💊',
+  ':syringe:': '💉', ':stethoscope:': '🩺', ':thermometer:': '🌡️',
+  ':mask:': '😷', ':sneezing_face:': '🤧', ':sick:': '🤒',
+  ':bandage:': '🩹', ':ambulance:': '🚑', ':hospital:': '🏥',
 };
 
 // ══════════════════════════════════════════════════════════════
-// PARSER DE EXPRESSÕES MATEMÁTICAS (LaTeX-like)
+// PARSER DE EXPRESSÕES MATEMÁTICAS (LaTeX-like) — reforçado
 // ══════════════════════════════════════════════════════════════
 
 sealed class _MathAtom {}
@@ -190,6 +213,47 @@ class _MathSqrt extends _MathAtom {
   final String content;
   final String? index;
   _MathSqrt(this.content, {this.index});
+}
+
+class _MathOverline extends _MathAtom {
+  final String content;
+  _MathOverline(this.content);
+}
+
+class _MathUnderline extends _MathAtom {
+  final String content;
+  _MathUnderline(this.content);
+}
+
+class _MathBoxed extends _MathAtom {
+  final String content;
+  _MathBoxed(this.content);
+}
+
+class _MathColor extends _MathAtom {
+  final String color;
+  final String content;
+  _MathColor(this.color, this.content);
+}
+
+class _MathAccent extends _MathAtom {
+  final String accent;
+  final String content;
+  _MathAccent(this.accent, this.content);
+}
+
+class _MathArrow extends _MathAtom {
+  final String direction;
+  final String content;
+  _MathArrow(this.direction, this.content);
+}
+
+String _stripOuterBraces(String s) {
+  s = s.trim();
+  if (s.startsWith('{') && s.endsWith('}')) {
+    return s.substring(1, s.length - 1).trim();
+  }
+  return s;
 }
 
 String _substituteKnownTokens(String expr) {
@@ -239,32 +303,205 @@ String _resolveSuperSubscripts(String expr) {
   return result;
 }
 
+String _resolveFormattingCommands(String expr) {
+  var result = expr;
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\text\{([^{}]+)\}'),
+    (m) => '\u0002TXT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathrm\{([^{}]+)\}'),
+    (m) => '\u0002TXT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathbf\{([^{}]+)\}'),
+    (m) => '\u0002BF{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathit\{([^{}]+)\}'),
+    (m) => '\u0002IT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathsf\{([^{}]+)\}'),
+    (m) => '\u0002SF{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathtt\{([^{}]+)\}'),
+    (m) => '\u0002TT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathcal\{([^{}]+)\}'),
+    (m) => '\u0002IT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathbb\{([^{}]+)\}'),
+    (m) => '\u0002BF{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathfrak\{([^{}]+)\}'),
+    (m) => '\u0002IT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\mathscr\{([^{}]+)\}'),
+    (m) => '\u0002IT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\operatorname\{([^{}]+)\}'),
+    (m) => '\u0002TXT{${m.group(1)}}\u0002',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\overrightarrow\{([^{}]+)\}'),
+    (m) => '\u0003OVER{${m.group(1)}}\u0003',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\overleftarrow\{([^{}]+)\}'),
+    (m) => '\u0003UNDER{${m.group(1)}}\u0003',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\overline\{([^{}]+)\}'),
+    (m) => '\u0004OVERLINE{${m.group(1)}}\u0004',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\underline\{([^{}]+)\}'),
+    (m) => '\u0004UNDERLINE{${m.group(1)}}\u0004',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\boxed\{([^{}]+)\}'),
+    (m) => '\u0005BOXED{${m.group(1)}}\u0005',
+  );
+
+  result = result.replaceAllMapped(
+    RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{$1}{$2}\u0006',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{$1}{$2}\u0006',
+  );
+
+  for (final acc in ['hat', 'bar', 'vec', 'dot', 'ddot', 'tilde']) {
+    result = result.replaceAllMapped(
+      RegExp(r'\\' + acc + r'\{([^{}]+)\}'),
+      (m) => '\u0007ACC{$acc}{${m.group(1)}}\u0007',
+    );
+  }
+
+  return result;
+}
+
 List<_MathAtom> _parseMathExpression(String raw) {
   var expr = _substituteKnownTokens(raw);
   expr = _resolveSuperSubscripts(expr);
+  expr = _resolveFormattingCommands(expr);
 
   final atoms = <_MathAtom>[];
   final combinedPattern = RegExp(
-    r'\\frac\{([^{}]+)\}\{([^{}]+)\}|\\sqrt(\[([^\]]+)\])?\{([^{}]+)\}',
+    r'\\frac\{([^{}]+)\}\{([^{}]+)\}'
+    r'|\\sqrt(\[([^\]]+)\])?\{([^{}]+)\}'
+    r'|\u0004OVERLINE\{([^{}]+)\}\u0004'
+    r'|\u0004UNDERLINE\{([^{}]+)\}\u0004'
+    r'|\u0005BOXED\{([^{}]+)\}\u0005'
+    r'|\u0006COLOR\{([^{}]+)\}\{([^{}]+)\}\u0006'
+    r'|\u0007ACC\{([^{}]+)\}\{([^{}]+)\}\u0007'
+    r'|\u0003OVER\{([^{}]+)\}\u0003'
+    r'|\u0003UNDER\{([^{}]+)\}\u0003',
   );
 
   int last = 0;
   for (final m in combinedPattern.allMatches(expr)) {
     if (m.start > last) {
-      atoms.add(_MathText(expr.substring(last, m.start)));
+      atoms.addAll(_parsePlainMathText(expr.substring(last, m.start)));
     }
-    if (m.group(1) != null) {
+    final match = m.group(0)!;
+    if (match.startsWith(r'\frac')) {
       atoms.add(_MathFraction(m.group(1)!, m.group(2)!));
-    } else {
+    } else if (match.startsWith(r'\sqrt')) {
       atoms.add(_MathSqrt(m.group(5)!, index: m.group(4)));
+    } else if (match.startsWith('\u0004OVERLINE')) {
+      atoms.add(_MathOverline(m.group(6)!));
+    } else if (match.startsWith('\u0004UNDERLINE')) {
+      atoms.add(_MathUnderline(m.group(7)!));
+    } else if (match.startsWith('\u0005BOXED')) {
+      atoms.add(_MathBoxed(m.group(8)!));
+    } else if (match.startsWith('\u0006COLOR')) {
+      atoms.add(_MathColor(m.group(9)!, m.group(10)!));
+    } else if (match.startsWith('\u0007ACC')) {
+      atoms.add(_MathAccent(m.group(11)!, m.group(12)!));
+    } else if (match.startsWith('\u0003OVER')) {
+      atoms.add(_MathArrow('over', m.group(13)!));
+    } else if (match.startsWith('\u0003UNDER')) {
+      atoms.add(_MathArrow('under', m.group(14)!));
     }
     last = m.end;
   }
   if (last < expr.length) {
-    atoms.add(_MathText(expr.substring(last)));
+    atoms.addAll(_parsePlainMathText(expr.substring(last)));
   }
   return atoms;
 }
+
+List<_MathAtom> _parsePlainMathText(String text) {
+  if (text.isEmpty) return const [];
+  final atoms = <_MathAtom>[];
+
+  final pattern = RegExp(
+    r'\u0002(?:TXT|BF|IT|SF|TT)\{([^{}]+)\}\u0002'
+  );
+  int last = 0;
+  for (final m in pattern.allMatches(text)) {
+    if (m.start > last) {
+      final plain = text.substring(last, m.start);
+      if (plain.isNotEmpty) atoms.add(_MathText(plain));
+    }
+    final type = m.group(0)!.substring(1, m.group(0)!.indexOf('{') - 1);
+    final content = m.group(1)!;
+    switch (type) {
+      case 'TXT':
+        atoms.add(_MathText(content, italic: false));
+        break;
+      case 'BF':
+        atoms.add(_MathText(content, italic: true));
+        break;
+      case 'IT':
+        atoms.add(_MathText(content, italic: true));
+        break;
+      case 'SF':
+        atoms.add(_MathText(content, italic: false));
+        break;
+      case 'TT':
+        atoms.add(_MathText(content, italic: false));
+        break;
+      default:
+        atoms.add(_MathText(content));
+    }
+    last = m.end;
+  }
+  if (last < text.length) {
+    final remaining = text.substring(last);
+    if (remaining.isNotEmpty) atoms.add(_MathText(remaining));
+  }
+  return atoms;
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDERIZAÇÃO DE ÁTOMOS MATEMÁTICOS
+// ══════════════════════════════════════════════════════════════
 
 List<InlineSpan> _renderMathTextWithMarkers(String text, TextStyle baseStyle) {
   final spans = <InlineSpan>[];
@@ -319,10 +556,13 @@ class MathInline extends StatelessWidget {
     final rowChildren = <Widget>[];
     for (final atom in atoms) {
       switch (atom) {
-        case _MathText(:final text):
+        case _MathText(:final text, :final italic):
           if (text.isEmpty) continue;
+          final style = baseStyle.copyWith(
+            fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+          );
           rowChildren.add(RichText(
-            text: TextSpan(children: _renderMathTextWithMarkers(text, baseStyle)),
+            text: TextSpan(children: _renderMathTextWithMarkers(text, style)),
           ));
         case _MathFraction(:final numerator, :final denominator):
           rowChildren.add(Padding(
@@ -368,6 +608,40 @@ class MathInline extends StatelessWidget {
               ],
             ),
           ));
+        case _MathOverline(:final content):
+          rowChildren.add(Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(content, style: baseStyle),
+                Container(height: 1.2, width: content.length * baseFontSize * 0.56, color: s.onSurface),
+              ],
+            ),
+          ));
+        case _MathUnderline(:final content):
+          rowChildren.add(Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(content, style: baseStyle.copyWith(decoration: TextDecoration.underline)),
+          ));
+        case _MathBoxed(:final content):
+          rowChildren.add(Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border.all(color: s.onSurface, width: 1),
+              borderRadius: BorderRadius.zero,
+            ),
+            child: Text(content, style: baseStyle),
+          ));
+        case _MathColor(:final color, :final content):
+          rowChildren.add(Text(
+            content,
+            style: baseStyle.copyWith(color: _parseColor(color, s)),
+          ));
+        case _MathAccent(:final accent, :final content):
+          rowChildren.add(_buildAccent(accent, content, baseStyle));
+        case _MathArrow(:final direction, :final content):
+          rowChildren.add(_buildArrow(direction, content, baseStyle));
       }
     }
 
@@ -391,6 +665,94 @@ class MathInline extends StatelessWidget {
         child: Center(child: content),
       ),
     );
+  }
+
+  Widget _buildAccent(String accent, String content, TextStyle baseStyle) {
+    switch (accent) {
+      case 'hat':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('^', style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.7)),
+            Text(content, style: baseStyle),
+          ],
+        );
+      case 'bar':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: content.length * baseStyle.fontSize! * 0.55, height: 1, color: baseStyle.color),
+            Text(content, style: baseStyle),
+          ],
+        );
+      case 'vec':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('→', style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.7)),
+            Text(content, style: baseStyle),
+          ],
+        );
+      case 'dot':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('˙', style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.8)),
+            Text(content, style: baseStyle),
+          ],
+        );
+      case 'ddot':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('¨', style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.7)),
+            Text(content, style: baseStyle),
+          ],
+        );
+      case 'tilde':
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('~', style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.7)),
+            Text(content, style: baseStyle),
+          ],
+        );
+      default:
+        return Text(content, style: baseStyle);
+    }
+  }
+
+  Widget _buildArrow(String direction, String content, TextStyle baseStyle) {
+    final arrow = direction == 'over' ? '⟶' : '⟵';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (direction == 'over') ...[
+          Text(arrow, style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.8)),
+          Text(content, style: baseStyle),
+        ] else ...[
+          Text(content, style: baseStyle),
+          Text(arrow, style: baseStyle.copyWith(fontSize: baseStyle.fontSize! * 0.8)),
+        ],
+      ],
+    );
+  }
+
+  Color _parseColor(String colorName, AppColorScheme s) {
+    switch (colorName.toLowerCase()) {
+      case 'red': return const Color(0xFFEF4444);
+      case 'green': return const Color(0xFF22C55E);
+      case 'blue': return const Color(0xFF3B82F6);
+      case 'yellow': return const Color(0xFFF59E0B);
+      case 'orange': return const Color(0xFFF97316);
+      case 'purple': return const Color(0xFF8B5CF6);
+      case 'pink': return const Color(0xFFEC4899);
+      case 'cyan': return const Color(0xFF06B6D4);
+      case 'white': return Colors.white;
+      case 'black': return Colors.black;
+      case 'gray': case 'grey': return const Color(0xFF9CA3AF);
+      default: return s.onSurface;
+    }
   }
 
   double _estimateFracWidth(String num, String den, double fontSize) {
@@ -422,10 +784,7 @@ MathBlockParseResult _extractMathBlocks(String raw) {
 
 // ══════════════════════════════════════════════════════════════
 // ADMONITIONS — > [!NOTE] título / [!TIP] / [!IMPORTANT] /
-// [!WARNING] / [!CAUTION]. Visual replicado 1:1 da imagem de
-// referência: moldura completa (4 bordas retas, sem cantos
-// arredondados, sem sombra, sem barra lateral colorida, sem fundo
-// diferenciado). A cor de categorização vive SÓ no ícone.
+// [!WARNING] / [!CAUTION]
 // ══════════════════════════════════════════════════════════════
 
 enum _AdmonitionKind { note, tip, important, warning, caution }
@@ -472,12 +831,7 @@ class _AdmonitionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = _admonitionStyle(data.kind);
     final title = data.title.trim().isEmpty ? style.defaultLabel : data.title.trim();
-    // Borda: uma única cor neutra dependente do tema (nunca a cor de
-    // categorização) — exatamente como a imagem de referência, que
-    // usa a mesma borda escura em todos os tipos de admonition.
     final borderColor = s.isDark ? const Color(0xFF3A3A3A) : const Color(0xFF1B1B1B);
-    // Label do cabeçalho: cinza médio, peso normal — nunca bold, nunca
-    // a cor de categorização (só o ícone leva a cor).
     final labelColor = s.onSurfaceVariant;
 
     return Container(
@@ -708,10 +1062,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Admonition: "> [!TIPO] título" seguido, opcionalmente, de mais
-      // linhas começadas por ">" que formam o corpo. Verificado ANTES
-      // do blockquote genérico, para não cair no tratamento normal de
-      // ">" simples.
       final admonitionHeaderMatch =
           RegExp(r'^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$', caseSensitive: false)
               .firstMatch(trimmed);
@@ -826,16 +1176,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // Code block markdown normal (```dart, ```python, ```html, etc).
-      // ATUALIZAÇÃO: em vez do antigo buildAiWidget(widget_code) básico,
-      // usa-se diretamente AiCodeWidget — o MESMO card completo com
-      // cabeçalho, ícone de linguagem, highlight multi-cor, botão
-      // expandir e botão de preview (quando lang=html) que é usado
-      // pelo bloco ```widget_code``` explícito. Isto garante que TODO
-      // code block markdown na app fica com o visual novo, mesmo fora
-      // do modo "widgets ativos" — exatamente como pedido ("mantém
-      // aquele bloco de código em markdown" + "melhora bastante o
-      // bloco de código em markdown").
       if (trimmed.startsWith('```')) {
         final lang = trimmed.substring(3).trim();
         final codeLines = <String>[];
@@ -870,8 +1210,6 @@ class _RichTextBlockParser {
   }
 
   static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 14.5}) {
-    // Cor de links/texto inline permanece SEMPRE neutra (cinza) —
-    // nunca azul, nunca qualquer outra cor, independentemente do tema.
     final linkColor = s.isDark ? const Color(0xFFE0E0E0) : const Color(0xFF3A3A3A);
 
     var processed = raw;
@@ -959,16 +1297,7 @@ class _RichTextBlockParser {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TABELA — implementação única, usada por tabelas markdown normais
-// (via _parseStructural acima) e por blocos ```widget_table``` (via
-// buildAiTableFromWidgetJson abaixo, chamada de aiwidgets.dart).
-//
-// Colunas usam IntrinsicColumnWidth() em vez de FlexColumnWidth() —
-// a tabela cresce para o tamanho real do conteúdo em vez de ser
-// forçada a dividir a largura disponível. A Table inteira vive
-// dentro de um SingleChildScrollView horizontal, para deslizar
-// lateralmente quando a largura total ultrapassa o ecrã. Bordas
-// retas (BorderRadius.zero).
+// TABELA — implementação única
 // ══════════════════════════════════════════════════════════════
 
 class _AiTable extends StatelessWidget {
@@ -1028,11 +1357,6 @@ class _AiTable extends StatelessWidget {
   }
 }
 
-/// Adaptador: constrói _AiTable a partir do JSON cru de um bloco
-/// ```widget_table``` ({ "headers": [...], "rows": [[...]] }).
-/// Chamado por aiwidgets.dart em buildAiWidget() — é o único ponto
-/// de contacto entre o dispatcher de widgets e a tabela real, que
-/// vive aqui e não em aiwidgets.dart.
 Widget buildAiTableFromWidgetJson(Map<String, dynamic> json, AppColorScheme s) {
   final headers = (json['headers'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
   final bodyRows = (json['rows'] as List?)

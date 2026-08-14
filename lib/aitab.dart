@@ -238,8 +238,6 @@ extension LocalCanvasKindX on LocalCanvasKind {
     }
   }
 
-  /// Rótulo curto usado no preview do DocumentWidgetCard e no popup
-  /// de download, para identificar o tipo de ficheiro ao utilizador.
   String get shortLabel => const {
         LocalCanvasKind.doc:        'Documento',
         LocalCanvasKind.sheet:      'Folha de cálculo',
@@ -252,7 +250,7 @@ class LocalCanvasItem {
   final String id;
   final LocalCanvasKind kind;
   final String title;
-  final String content; // HTML para doc; JSON cru para sheet/slide/whiteboard
+  final String content;
   const LocalCanvasItem({
     required this.id,
     required this.kind,
@@ -271,11 +269,6 @@ final RegExp _kExplicitCanvasRe = RegExp(
   r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
 );
 
-/// Extrai blocos [[canvas:...]] explícitos, para os 4 kinds
-/// suportados (doc, sheet, slide, whiteboard). Blocos de código
-/// (``` de qualquer linguagem, incluindo widget_*) nunca são tocados
-/// aqui — ficam no texto para RichAiText tratar (código normal ou
-/// widget interativo).
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
   final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
@@ -300,7 +293,7 @@ _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACHED FILES — anexos de uma mensagem ainda não enviada.
+// ATTACHED FILES
 // ══════════════════════════════════════════════════════════════
 
 class AttachedFile {
@@ -315,7 +308,6 @@ class AttachedFile {
     required this.bytes,
   });
 
-  /// Codificação base64 pronta a incluir num payload JSON.
   String get base64Data => base64Encode(bytes);
 }
 
@@ -1309,13 +1301,6 @@ class _DownloadOptionRowState extends State<_DownloadOptionRow> {
 
 // ══════════════════════════════════════════════════════════════
 // STREAM ELEMENTS
-//
-// _StreamOpenBlock carrega o conteúdo bruto já recebido do bloco
-// ainda aberto (rawContent) e um "kind" (canvas ou widget). É isto
-// que _ProcessPill mostra por dentro enquanto o processo está ativo:
-// o próprio conteúdo (HTML ou JSON) tal como está a chegar da API,
-// sem nenhuma palavra-a-palavra simulada — cresce a cada
-// ChatTokenEvent, exatamente ao ritmo a que a stream chega.
 // ══════════════════════════════════════════════════════════════
 
 sealed class _StreamElement {}
@@ -1325,39 +1310,27 @@ class _StreamText extends _StreamElement {
   _StreamText(this.text);
 }
 
-enum _OpenBlockKind { canvas, widget }
-
 class _StreamOpenBlock extends _StreamElement {
-  final String id;
-  final _OpenBlockKind kind;
   final String label;
-  final String rawContent;
-  _StreamOpenBlock({
-    required this.id,
-    required this.kind,
-    required this.label,
-    required this.rawContent,
-  });
+  final String partialContent;
+  _StreamOpenBlock(this.label, this.partialContent);
 }
 
 class _StreamClosedCanvas extends _StreamElement {
-  final String processId;
   final LocalCanvasItem item;
-  _StreamClosedCanvas(this.processId, this.item);
+  _StreamClosedCanvas(this.item);
 }
 
 class _StreamClosedWidget extends _StreamElement {
-  final String processId;
   final AiWidgetBlock block;
-  _StreamClosedWidget(this.processId, this.block);
+  _StreamClosedWidget(this.block);
 }
 
-String _canvasProcessLabel(String kindStr) => switch (kindStr) {
-      'sheet' => 'A criar folha de cálculo',
-      'slide' => 'A criar apresentação',
-      'whiteboard' => 'A criar quadro branco',
-      _ => 'A criar documento',
-    };
+class _OpenBlockInfo {
+  final String label;
+  final String partialContent;
+  const _OpenBlockInfo(this.label, this.partialContent);
+}
 
 List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
   final elements = <_StreamElement>[];
@@ -1377,82 +1350,57 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
     if (i < markerMatches.length) {
       final idx = int.parse(markerMatches[i].group(1)!);
       if (idx < widgetParse.blocks.length) {
-        elements.add(_StreamClosedWidget('wb_$idx', widgetParse.blocks[idx]));
+        elements.add(_StreamClosedWidget(widgetParse.blocks[idx]));
       }
     }
   }
 
   for (final item in canvasScan.items) {
-    elements.add(_StreamClosedCanvas('cv_${item.id}', item));
+    elements.add(_StreamClosedCanvas(item));
   }
 
-  final openBlock = _detectOpeningBlock(raw);
-  if (openBlock != null) {
-    elements.add(openBlock);
+  final openInfo = _detectOpenBlockInfo(raw);
+  if (openInfo != null) {
+    elements.add(_StreamOpenBlock(openInfo.label, openInfo.partialContent));
   }
 
   return elements;
 }
 
-/// Regex que casa a abertura de um bloco widget ainda por fechar:
-/// ```widget_x\n(conteúdo até ao fim do texto, sem ``` de fecho)
-final RegExp _kOpenWidgetBlockRe = RegExp(
-  r'```(widget_[a-z]+)\s*\n([\s\S]*)$',
-);
-
-/// Deteta se a stream termina no meio de um bloco especial ainda por
-/// fechar — [[canvas:...]] (doc/sheet/slide/whiteboard) ou um bloco
-/// ```widget_*```. Quando encontra um, devolve um _StreamOpenBlock
-/// com o conteúdo bruto já recebido desse bloco, para mostrar dentro
-/// do processo em streaming real.
-///
-/// Para canvas: usa a regex existente + o separador "||", tal como
-/// antes.
-///
-/// Para widget: aiwidgets.dart só expõe hasOpenWidgetBlock(raw) →
-/// bool (confirmado no ficheiro real — não existe findOpenWidgetBlock
-/// nem nada com .startIndex/.rawContent, isso foi engano meu numa
-/// resposta anterior). Por isso a extração do conteúdo bruto do
-/// bloco widget aberto é feita aqui, com _kOpenWidgetBlockRe, sobre o
-/// mesmo `raw` que já temos disponível — não precisa de tocar em
-/// aiwidgets.dart. hasOpenWidgetBlock continua a ser usado como
-/// confirmação booleana antes de gastar a regex mais pesada.
-_StreamOpenBlock? _detectOpeningBlock(String text) {
+_OpenBlockInfo? _detectOpenBlockInfo(String text) {
   final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
   if (canvasOpenMatch.isNotEmpty) {
-    final lastOpen = canvasOpenMatch.last;
-    final tail = text.substring(lastOpen.start);
-    if (!tail.contains(']]')) {
-      final kindStr = lastOpen.group(1)!;
-      final sepIdx = tail.indexOf('||');
-      final raw = sepIdx == -1 ? '' : tail.substring(sepIdx + 2);
-      return _StreamOpenBlock(
-        id: 'openblock_${lastOpen.start}',
-        kind: _OpenBlockKind.canvas,
-        label: _canvasProcessLabel(kindStr),
-        rawContent: raw,
-      );
+    final last = canvasOpenMatch.last;
+    final afterLast = text.substring(last.start);
+    final closesAfter = afterLast.contains(']]');
+    if (!closesAfter) {
+      final kindStr = last.group(1)!;
+      final label = switch (kindStr) {
+        'sheet' => 'A criar folha de cálculo...',
+        'slide' => 'A criar apresentação...',
+        'whiteboard' => 'A criar quadro branco...',
+        _ => 'A criar documento...',
+      };
+      final markerEnd = text.indexOf('||', last.start);
+      final partial = markerEnd >= 0 ? text.substring(markerEnd + 2) : '';
+      return _OpenBlockInfo(label, partial);
     }
   }
 
-  if (hasOpenWidgetBlock(text)) {
-    final m = _kOpenWidgetBlockRe.firstMatch(text);
-    final raw = m != null ? m.group(2) ?? '' : '';
-    return _StreamOpenBlock(
-      id: 'openblock_widget_${text.length}',
-      kind: _OpenBlockKind.widget,
-      label: 'A criar widget',
-      rawContent: raw,
-    );
+  final widgetOpen = RegExp(r'```widget_').allMatches(text).toList();
+  if (widgetOpen.isNotEmpty) {
+    final last = widgetOpen.last;
+    final afterLast = text.substring(last.start);
+    final closesAfter = afterLast.contains('```');
+    if (!closesAfter) {
+      final newlineIdx = text.indexOf('\n', last.start);
+      final partial = newlineIdx >= 0 ? text.substring(newlineIdx + 1) : '';
+      return const _OpenBlockInfo('A criar widget...', partial);
+    }
   }
 
   if (_endsWithPartialMarker(text)) {
-    return _StreamOpenBlock(
-      id: 'openblock_partial_${text.length}',
-      kind: _OpenBlockKind.widget,
-      label: 'A criar',
-      rawContent: '',
-    );
+    return const _OpenBlockInfo('A criar...', '');
   }
 
   return null;
@@ -2533,63 +2481,28 @@ class _StreamingBubble extends StatelessWidget {
             onEnableWidgets: onEnableWidgets,
             onSuggestionTap: onSuggestionTap,
           ));
-        case _StreamOpenBlock(:final id, :final kind, :final label, :final rawContent):
+        case _StreamOpenBlock(:final label, :final partialContent):
           anyContent = true;
           children.add(Padding(
-            key: ValueKey(id),
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: _ProcessPill(
-              key: ValueKey(id),
+            child: _GeneratingProcessCard(
+              key: const ValueKey('active_process'),
               s: s,
-              kind: kind,
-              activeLabel: label,
-              rawContent: rawContent,
-              streaming: true,
+              label: label,
+              partialContent: partialContent,
             ),
           ));
-        case _StreamClosedCanvas(:final processId, :final item):
+        case _StreamClosedCanvas(:final item):
           anyContent = true;
           children.add(Padding(
-            key: ValueKey(processId),
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ProcessPill(
-                  key: ValueKey(processId),
-                  s: s,
-                  kind: _OpenBlockKind.canvas,
-                  activeLabel: _canvasProcessLabel(item.kind.name),
-                  rawContent: item.content,
-                  streaming: false,
-                ),
-                const SizedBox(height: 6),
-                DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
-              ],
-            ),
+            child: DocumentWidgetCard(s: s, item: item, onOpenEditor: () => onOpenCanvas(item)),
           ));
-        case _StreamClosedWidget(:final processId, :final block):
+        case _StreamClosedWidget(:final block):
           anyContent = true;
           children.add(Padding(
-            key: ValueKey(processId),
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ProcessPill(
-                  key: ValueKey(processId),
-                  s: s,
-                  kind: _OpenBlockKind.widget,
-                  activeLabel: 'A criar widget',
-                  rawContent: jsonEncode(block.json),
-                  streaming: false,
-                ),
-                const SizedBox(height: 6),
-                buildAiWidget(block, s),
-              ],
-            ),
+            child: buildAiWidget(block, s),
           ));
       }
     }
@@ -2612,231 +2525,263 @@ class _StreamingBubble extends StatelessWidget {
   }
 }
 
-/// Ícone dado por kind de processo — canvas usa tools.svg, widget
-/// usa widgets.svg (ambos assets já existentes na pasta svg do
-/// projeto, confirmado pelo utilizador).
-String _processIconAsset(_OpenBlockKind kind) => switch (kind) {
-      _OpenBlockKind.canvas => 'tools.svg',
-      _OpenBlockKind.widget => 'widgets.svg',
-    };
-
-/// ══════════════════════════════════════════════════════════════
-/// PROCESS PILL — processo genérico usado tanto para canvas (doc,
-/// sheet, slide, whiteboard) como para widgets.
-///
-/// Comportamento (replicado do protótipo HTML validado):
-/// - Ícone + label, ambos com shimmer sincronizado enquanto
-///   streaming=true (ShaderMask com o MESMO AnimationController a
-///   pintar ícone e texto).
-/// - Cronómetro em tempo real ("Xs"), atualizado a cada 250ms
-///   enquanto streaming=true — conta desde o primeiro build deste
-///   pill (id estável via ValueKey no StreamingBubble garante que
-///   não reinicia a cada rebuild causado por novos tokens).
-/// - Tocar na pill alterna aberto/fechado A QUALQUER MOMENTO — mesmo
-///   enquanto streaming=true. Isto não afeta o streaming nem o
-///   cronómetro, só mostra/oculta o corpo com rawContent.
-/// - Corpo: mostra rawContent tal como chega (streaming real, sem
-///   qualquer palavra-a-palavra simulada).
-/// - Quando streaming passa a false, o pill deixa de ter shimmer,
-///   mostra "Kind · Xs" com o tempo final, e colapsa automaticamente.
-/// - chevron_down.svg: fechado aponta para baixo (0 turns), aberto
-///   roda 180° (0.5 turns) — comportamento padrão de um chevron
-///   "down" que se torna "up" ao expandir, igual a qualquer
-///   accordion/collapsible normal.
-/// ══════════════════════════════════════════════════════════════
-class _ProcessPill extends StatefulWidget {
+class _GeneratingProcessCard extends StatefulWidget {
   final AppColorScheme s;
-  final _OpenBlockKind kind;
-  final String activeLabel;
-  final String rawContent;
-  final bool streaming;
-  const _ProcessPill({
-    super.key,
+  final String label;
+  final String partialContent;
+  final String iconAsset;
+
+  const _GeneratingProcessCard({
     required this.s,
-    required this.kind,
-    required this.activeLabel,
-    required this.rawContent,
-    required this.streaming,
+    required this.label,
+    required this.partialContent,
+    this.iconAsset = 'tools.svg',
   });
 
   @override
-  State<_ProcessPill> createState() => _ProcessPillState();
+  State<_GeneratingProcessCard> createState() => _GeneratingProcessCardState();
 }
 
-class _ProcessPillState extends State<_ProcessPill>
+class _GeneratingProcessCardState extends State<_GeneratingProcessCard>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _shimmerCtrl;
-  late final DateTime _startTime;
-  Timer? _tickTimer;
-  int _elapsedSeconds = 0;
   bool _expanded = true;
-  bool _wasStreaming = true;
+  final Stopwatch _stopwatch = Stopwatch();
+  Timer? _timer;
+  int _elapsedSeconds = 0;
+
+  late final AnimationController _shimmerController;
 
   @override
   void initState() {
     super.initState();
-    _startTime = DateTime.now();
-    _wasStreaming = widget.streaming;
-    _shimmerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
-    if (widget.streaming) {
-      _shimmerCtrl.repeat();
-      _startTicking();
-    } else {
-      _expanded = false; // já fechado, começa colapsado
-    }
-  }
-
-  void _startTicking() {
-    _tickTimer?.cancel();
-    _tickTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+    _stopwatch.start();
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (!mounted) return;
-      setState(() {
-        _elapsedSeconds = DateTime.now().difference(_startTime).inSeconds;
-      });
+      setState(() => _elapsedSeconds = _stopwatch.elapsed.inSeconds);
     });
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProcessPill old) {
-    super.didUpdateWidget(old);
-    if (_wasStreaming && !widget.streaming) {
-      _wasStreaming = false;
-      _shimmerCtrl.stop();
-      _tickTimer?.cancel();
-      _elapsedSeconds = DateTime.now().difference(_startTime).inSeconds.clamp(1, 1 << 30);
-      setState(() => _expanded = false);
-    }
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _shimmerCtrl.dispose();
-    _tickTimer?.cancel();
+    _timer?.cancel();
+    _shimmerController.dispose();
+    _stopwatch.stop();
     super.dispose();
   }
 
-  void _toggle() => setState(() => _expanded = !_expanded);
-
-  String get _collapsedLabel {
-    final doneVerb = switch (widget.kind) {
-      _OpenBlockKind.canvas => widget.activeLabel.replaceFirst('A criar', 'Criou'),
-      _OpenBlockKind.widget => 'Criou widget',
-    };
-    return '$doneVerb · ${_elapsedSeconds}s';
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final iconAsset = _processIconAsset(widget.kind);
-    final baseColor = s.onSurfaceVariant;
-    final highlightColor = s.isDark ? Colors.white : s.onSurface;
+    final primary = s.primary;
+    final highlight = s.isDark ? Colors.white : Colors.white;
 
-    final row = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _toggle,
-      child: Row(
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: s.hover.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: s.outline.withOpacity(0.4)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AnimatedBuilder(
-            animation: _shimmerCtrl,
-            builder: (_, child) {
-              if (!widget.streaming) return child!;
-              final t = _shimmerCtrl.value;
-              return ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (bounds) => LinearGradient(
-                  colors: [baseColor, highlightColor, baseColor],
-                  stops: const [0.35, 0.5, 0.65],
-                  begin: Alignment(-1.0 - 2 * (1 - t), 0),
-                  end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
-                  tileMode: TileMode.clamp,
-                ).createShader(bounds),
-                child: child,
-              );
-            },
-            child: AppIcon(iconAsset, color: baseColor, size: 16),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggleExpanded,
+            child: Row(
+              children: [
+                _ShimmerIcon(
+                  asset: widget.iconAsset,
+                  size: 16,
+                  baseColor: primary,
+                  highlightColor: highlight,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ShimmerText(
+                    text: widget.label,
+                    baseColor: primary,
+                    highlightColor: highlight,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${_elapsedSeconds}s',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: s.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: AppIcon(
+                    'chevron_down.svg',
+                    size: 14,
+                    color: s.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: AnimatedBuilder(
-              animation: _shimmerCtrl,
-              builder: (_, child) {
-                if (!widget.streaming) return child!;
-                final t = _shimmerCtrl.value;
-                return ShaderMask(
-                  blendMode: BlendMode.srcIn,
-                  shaderCallback: (bounds) => LinearGradient(
-                    colors: [baseColor, highlightColor, baseColor],
-                    stops: const [0.35, 0.5, 0.65],
-                    begin: Alignment(-1.0 - 2 * (1 - t), 0),
-                    end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
-                    tileMode: TileMode.clamp,
-                  ).createShader(bounds),
-                  child: child,
-                );
-              },
-              child: Text(
-                widget.streaming ? widget.activeLabel : _collapsedLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: baseColor,
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: s.cardBackground.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  widget.partialContent,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.5,
+                    color: s.onSurfaceVariant,
+                    fontFamily: 'monospace',
+                  ),
                 ),
               ),
             ),
-          ),
-          if (widget.streaming) ...[
-            const SizedBox(width: 6),
-            Text('${_elapsedSeconds}s',
-                style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant.withOpacity(0.7))),
-          ],
-          const SizedBox(width: 4),
-          AnimatedRotation(
-            turns: _expanded ? 0.5 : 0.0,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 200),
-            child: AppIcon('chevron_down.svg', color: s.onSurfaceVariant, size: 13),
           ),
         ],
       ),
     );
+  }
+}
 
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 340),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          row,
-          AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: kCupertinoOut,
-            alignment: Alignment.topLeft,
-            child: !_expanded || widget.rawContent.trim().isEmpty
-                ? const SizedBox(width: double.infinity, height: 0)
-                : Padding(
-                    padding: const EdgeInsets.only(left: 24, top: 6, bottom: 2),
-                    child: Container(
-                      constraints: const BoxConstraints(maxHeight: 260),
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          widget.rawContent,
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11.5,
-                            height: 1.5,
-                            color: s.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+class _ShimmerIcon extends StatefulWidget {
+  final String asset;
+  final double size;
+  final Color baseColor;
+  final Color highlightColor;
+
+  const _ShimmerIcon({
+    required this.asset,
+    required this.size,
+    required this.baseColor,
+    required this.highlightColor,
+  });
+
+  @override
+  State<_ShimmerIcon> createState() => _ShimmerIconState();
+}
+
+class _ShimmerIconState extends State<_ShimmerIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        final t = _controller.value;
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              colors: [
+                widget.baseColor,
+                widget.highlightColor,
+                widget.baseColor,
+              ],
+              stops: const [0.35, 0.5, 0.65],
+              begin: Alignment(-1.0 - 2 * (1 - t), 0),
+              end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
+              tileMode: TileMode.clamp,
+            ).createShader(bounds);
+          },
+          child: AppIcon(
+            widget.asset,
+            size: widget.size,
+            color: widget.baseColor,
           ),
-        ],
+        );
+      },
+    );
+  }
+}
+
+class _ShimmerText extends StatefulWidget {
+  final String text;
+  final Color baseColor;
+  final Color highlightColor;
+  const _ShimmerText({required this.text, required this.baseColor, required this.highlightColor});
+  @override State<_ShimmerText> createState() => _ShimmerTextState();
+}
+
+class _ShimmerTextState extends State<_ShimmerText> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+  }
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) {
+        final t = _c.value;
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              colors: [widget.baseColor, widget.highlightColor, widget.baseColor],
+              stops: const [0.35, 0.5, 0.65],
+              begin: Alignment(-1.0 - 2 * (1 - t), 0),
+              end: Alignment(1.0 - 2 * (1 - t) + 2, 0),
+              tileMode: TileMode.clamp,
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: Text(
+        widget.text,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: widget.baseColor,
+        ),
       ),
     );
   }
