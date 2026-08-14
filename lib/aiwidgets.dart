@@ -57,6 +57,7 @@ import 'package:math_expressions/math_expressions.dart' as me;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:ui' as ui;
 import 'colors.dart';
 import 'widgets.dart';
@@ -304,17 +305,19 @@ class _AiChartWidgetState extends State<AiChartWidget>
   }
 
   void _parseInitialData() {
-    final raw = (widget.json['data'] ?? widget.json['slices'] ?? widget.json['bars'])
-        as List? ??
-        const [];
-    _data = raw.asMap().entries.map((e) {
-      final d = e.value as Map;
-      return _ChartDataItem(
-        (d['label'] ?? '?').toString(),
-        (d['value'] is num) ? (d['value'] as num).toDouble() : double.tryParse(d['value'].toString()) ?? 0,
-        _parseColor(d['color']) ?? _palette[e.key % _palette.length],
-      );
-    }).toList();
+    final raw = widget.json['data'] ?? widget.json['slices'] ?? widget.json['bars'];
+    if (raw is List) {
+      _data = raw.asMap().entries.map((e) {
+        final d = e.value as Map;
+        return _ChartDataItem(
+          (d['label'] ?? '?').toString(),
+          (d['value'] is num) ? (d['value'] as num).toDouble() : double.tryParse(d['value'].toString()) ?? 0,
+          _parseColor(d['color']) ?? _palette[e.key % _palette.length],
+        );
+      }).toList();
+    } else {
+      _data = const [];
+    }
     _title = (widget.json['title'] ?? 'Dados').toString();
   }
 
@@ -585,6 +588,8 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
   late String _draftType;
   late TextEditingController _titleController;
   late List<_ChartDataItem> _draftData;
+  late List<TextEditingController> _labelControllers;
+  late List<TextEditingController> _valueControllers;
 
   final List<({String key, String icon})> _chartTypes = [
     (key: 'bar', icon: 'chart_bar.svg'),
@@ -606,11 +611,15 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
     _titleController = TextEditingController(text: widget.initialTitle);
     _draftData = List<_ChartDataItem>.from(
         widget.initialData.map((d) => _ChartDataItem(d.label, d.value, d.color)));
+    _labelControllers = _draftData.map((d) => TextEditingController(text: d.label)).toList();
+    _valueControllers = _draftData.map((d) => TextEditingController(text: d.value.toString())).toList();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    for (final c in _labelControllers) c.dispose();
+    for (final c in _valueControllers) c.dispose();
     super.dispose();
   }
 
@@ -679,13 +688,20 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
 
   void _addRow() {
     setState(() {
-      _draftData.add(_ChartDataItem('Novo', 10, _colorPalette[_draftData.length % _colorPalette.length]));
+      final newItem = _ChartDataItem('Novo', 10, _colorPalette[_draftData.length % _colorPalette.length]);
+      _draftData.add(newItem);
+      _labelControllers.add(TextEditingController(text: 'Novo'));
+      _valueControllers.add(TextEditingController(text: '10'));
     });
   }
 
   void _removeRow(int index) {
     setState(() {
       _draftData.removeAt(index);
+      _labelControllers[index].dispose();
+      _valueControllers[index].dispose();
+      _labelControllers.removeAt(index);
+      _valueControllers.removeAt(index);
     });
   }
 
@@ -792,7 +808,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: TextField(
-                              controller: TextEditingController(text: item.label),
+                              controller: _labelControllers[index],
                               onChanged: (v) => item.label = v,
                               style: TextStyle(color: _inputText(), fontSize: 13),
                               decoration: InputDecoration(
@@ -817,7 +833,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           SizedBox(
                             width: 64,
                             child: TextField(
-                              controller: TextEditingController(text: item.value.toString()),
+                              controller: _valueControllers[index],
                               onChanged: (v) => item.value = double.tryParse(v) ?? 0,
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.right,
@@ -1596,28 +1612,28 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   }
 
   List<_MarketDataPoint> _getSeries(String pairKey, String tfKey) {
-  final cacheKey = '${pairKey}_$tfKey';
-  if (_seriesCache.containsKey(cacheKey)) return _seriesCache[cacheKey]!;
+    final cacheKey = '${pairKey}_$tfKey';
+    if (_seriesCache.containsKey(cacheKey)) return _seriesCache[cacheKey]!;
 
-  final pair = _pairs.firstWhere((p) => p.key == pairKey);
-  final tf = _timeframes.firstWhere((t) => t.key == tfKey);
-  final rand = math.Random(_hashKey(cacheKey));
+    final pair = _pairs.firstWhere((p) => p.key == pairKey);
+    final tf = _timeframes.firstWhere((t) => t.key == tfKey);
+    final rand = math.Random(_hashKey(cacheKey));
 
-  final points = <_MarketDataPoint>[];
-  double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
-  final now = DateTime.now().millisecondsSinceEpoch;
-  final stepMs = tf.key == '1D' ? 60 * 60 * 1000 : 
-                  tf.key == '1W' ? 24 * 60 * 60 * 1000 :
-                  tf.key == '1M' ? 24 * 60 * 60 * 1000 :
-                  30 * 24 * 60 * 60 * 1000;
+    final points = <_MarketDataPoint>[];
+    double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final stepMs = tf.key == '1D' ? 60 * 60 * 1000 : 
+                    tf.key == '1W' ? 24 * 60 * 60 * 1000 :
+                    tf.key == '1M' ? 24 * 60 * 60 * 1000 :
+                    30 * 24 * 60 * 60 * 1000;
 
-  for (int i = tf.points; i >= 0; i--) {
-    price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
-    points.add(_MarketDataPoint((now - i * stepMs).toDouble(), price));
+    for (int i = tf.points; i >= 0; i--) {
+      price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
+      points.add(_MarketDataPoint((now - i * stepMs).toDouble(), price));
+    }
+    _seriesCache[cacheKey] = points;
+    return points;
   }
-  _seriesCache[cacheKey] = points;
-  return points;
-}
 
   int _hashKey(String str) {
     int h = 0;
@@ -2652,8 +2668,56 @@ class _MindMapPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MATH GRAPH (mantido, sem alterações)
+// MATH GRAPH (novo — todos os tipos, sliders, animação, modal)
 // ══════════════════════════════════════════════════════════════
+
+class _ParamDef {
+  final String key;
+  final String symbol;
+  final double min;
+  final double max;
+  final double step;
+  final double defaultValue;
+  const _ParamDef(this.key, this.symbol, this.min, this.max, this.step, this.defaultValue);
+}
+
+class _MathFunctionDef {
+  final String key;
+  final String label;
+  final Color color;
+  final List<_ParamDef> params;
+  final String Function(Map<String, double> p) eq;
+  final double Function(double x, Map<String, double> p) fn;
+  final List<double>? Function(Map<String, double> p)? roots;
+  final double? Function(Map<String, double> p)? asymptoteX;
+  final double? Function(Map<String, double> p)? excludeAt;
+  final double? Function(Map<String, double> p)? markerX;
+  final double? Function(Map<String, double> p)? markerY;
+  final bool isParametric;
+  final double Function(double t, Map<String, double> p)? parametricX;
+  final double Function(double t, Map<String, double> p)? parametricY;
+  final List<double> domain;
+  final List<double> range;
+
+  const _MathFunctionDef({
+    required this.key,
+    required this.label,
+    required this.color,
+    required this.params,
+    required this.eq,
+    required this.fn,
+    required this.domain,
+    required this.range,
+    this.roots,
+    this.asymptoteX,
+    this.excludeAt,
+    this.markerX,
+    this.markerY,
+    this.isParametric = false,
+    this.parametricX,
+    this.parametricY,
+  });
+}
 
 class AiMathGraphWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -2662,140 +2726,975 @@ class AiMathGraphWidget extends StatefulWidget {
   @override State<AiMathGraphWidget> createState() => _AiMathGraphWidgetState();
 }
 
-class _EquationSolution {
-  final double x, y;
-  const _EquationSolution(this.x, this.y);
-}
-
 class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
-  late double _xMin, _xMax;
-  double _scale = 1.0;
-  Offset _pan = Offset.zero;
+  late Map<String, _MathFunctionDef> _functionDefs;
+  late String _currentType;
+  late Map<String, double> _params;
+
+  Timer? _animTimer;
+  bool _animating = false;
+  double _animDir = 1;
 
   @override
   void initState() {
     super.initState();
-    _xMin = (widget.json['xMin'] is num) ? (widget.json['xMin'] as num).toDouble() : -10;
-    _xMax = (widget.json['xMax'] is num) ? (widget.json['xMax'] as num).toDouble() : 10;
+    _buildFunctionDefs();
+    final typeFromJson = (widget.json['type'] ?? widget.json['function'] ?? '').toString().toLowerCase();
+    _currentType = _functionDefs.containsKey(typeFromJson) ? typeFromJson : 'quadratic';
+    _params = _defaultParams(_currentType);
   }
 
-  List<Offset>? _evaluate(String expr, double xMin, double xMax, int samples) {
-    try {
-      final parser = me.Parser();
-      final exp = parser.parse(expr);
-      final variable = me.Variable('x');
-      final points = <Offset>[];
-      for (int i = 0; i <= samples; i++) {
-        final x = xMin + (xMax - xMin) * i / samples;
-        final ctx = me.ContextModel()..bindVariable(variable, me.Number(x));
-        final y = exp.evaluate(me.EvaluationType.REAL, ctx);
-        if (y is num && y.isFinite) points.add(Offset(x, y.toDouble()));
-      }
-      return points;
-    } catch (_) {
-      return null;
+  @override
+  void dispose() {
+    _animTimer?.cancel();
+    super.dispose();
+  }
+
+  void _buildFunctionDefs() {
+    _functionDefs = {
+      'linear': _MathFunctionDef(
+        key: 'linear', label: 'Linear', color: const Color(0xFF2E8BC9),
+        params: [
+          const _ParamDef('m', 'm', -5, 5, 0.1, 1),
+          const _ParamDef('b', 'b', -8, 8, 0.5, 0),
+        ],
+        eq: (p) => 'y = ${_fmt(p['m']!)}x${_signed(p['b']!)}',
+        fn: (x, p) => p['m']! * x + p['b']!,
+        roots: (p) => p['m'] == 0 ? const [] : [-p['b']! / p['m']!],
+        domain: const [-10, 10], range: const [-9, 9],
+      ),
+      'quadratic': _MathFunctionDef(
+        key: 'quadratic', label: 'Quadrática', color: const Color(0xFFE05E5E),
+        params: [
+          const _ParamDef('a', 'a', -3, 3, 0.1, 1),
+          const _ParamDef('h', 'h', -5, 5, 0.5, 0),
+          const _ParamDef('k', 'k', -6, 6, 0.5, -2),
+        ],
+        eq: (p) => 'y = ${_fmt(p['a']!)}${_sup('2')}${_signed(p['h']! * -1)}${_signed(p['k']!)}',
+        fn: (x, p) => p['a']! * math.pow(x - p['h']!, 2).toDouble() + p['k']!,
+        roots: (p) {
+          if (p['a'] == 0) return const [];
+          final disc = -p['k']! / p['a']!;
+          if (disc < 0) return const [];
+          final d = math.sqrt(disc);
+          return disc == 0 ? [p['h']!] : [p['h']! - d, p['h']! + d];
+        },
+        domain: const [-10, 10], range: const [-9, 9],
+      ),
+      'cubic': _MathFunctionDef(
+        key: 'cubic', label: 'Cúbica', color: const Color(0xFF8ECC4E),
+        params: [
+          const _ParamDef('a', 'a', -1.5, 1.5, 0.05, 0.3),
+          const _ParamDef('h', 'h', -4, 4, 0.5, 0),
+          const _ParamDef('k', 'k', -6, 6, 0.5, 0),
+        ],
+        eq: (p) => 'y = ${_fmt(p['a']!)}${_sup('3')}${_signed(p['h']! * -1)}${_signed(p['k']!)}',
+        fn: (x, p) => p['a']! * math.pow(x - p['h']!, 3).toDouble() + p['k']!,
+        roots: (p) {
+          if (p['a'] == 0) return const [];
+          final val = -p['k']! / p['a']!;
+          final cbrt = val < 0 ? -math.pow(-val, 1 / 3).toDouble() : math.pow(val, 1 / 3).toDouble();
+          return [p['h']! + cbrt];
+        },
+        domain: const [-10, 10], range: const [-9, 9],
+      ),
+      'exponential': _MathFunctionDef(
+        key: 'exponential', label: 'Exponencial', color: const Color(0xFF2E8BC9),
+        params: [
+          const _ParamDef('b', 'b', 1.1, 4, 0.1, 2),
+          const _ParamDef('x0', 'x', -3, 3, 0.1, 1.2),
+        ],
+        eq: (p) => 'y = ${_fmt(p['b']!)}ˣ',
+        fn: (x, p) => math.pow(p['b']!, x).toDouble(),
+        markerX: (p) => p['x0']!,
+        markerY: (p) => math.pow(p['b']!, p['x0']!).toDouble(),
+        domain: const [-8, 8], range: const [-2, 9],
+      ),
+      'logarithmic': _MathFunctionDef(
+        key: 'logarithmic', label: 'Logarítmica', color: const Color(0xFF4EC994),
+        params: [
+          const _ParamDef('b', 'b', 1.1, 4, 0.1, 2),
+        ],
+        eq: (p) => 'y = log${_sub(_fmt(p['b']!))}(x)',
+        fn: (x, p) => math.log(x) / math.log(p['b']!),
+        roots: (_) => const [1],
+        domain: const [0.01, 12], range: const [-4, 5],
+      ),
+      'sine': _MathFunctionDef(
+        key: 'sine', label: 'Seno', color: const Color(0xFFF0A500),
+        params: [
+          const _ParamDef('a', 'a', 0.5, 4, 0.1, 1),
+          const _ParamDef('f', 'f', 0.2, 3, 0.1, 1),
+          const _ParamDef('p', 'φ', -3.14, 3.14, 0.1, 0),
+        ],
+        eq: (p) => 'y = ${_fmt(p['a']!)}sen(${_fmt(p['f']!)}x${_signed(p['p']!)})',
+        fn: (x, p) => p['a']! * math.sin(p['f']! * x + p['p']!),
+        roots: (p) {
+          if (p['f'] == 0) return const [];
+          final roots = <double>[];
+          for (int n = -4; n <= 4; n++) {
+            final x = (n * math.pi - p['p']!) / p['f']!;
+            if (x >= -10 && x <= 10) roots.add(x);
+          }
+          return roots;
+        },
+        domain: const [-10, 10], range: const [-5, 5],
+      ),
+      'cosine': _MathFunctionDef(
+        key: 'cosine', label: 'Cosseno', color: const Color(0xFFF0A500),
+        params: [
+          const _ParamDef('a', 'a', 0.5, 4, 0.1, 1),
+          const _ParamDef('f', 'f', 0.2, 3, 0.1, 1),
+          const _ParamDef('p', 'φ', -3.14, 3.14, 0.1, 0),
+        ],
+        eq: (p) => 'y = ${_fmt(p['a']!)}cos(${_fmt(p['f']!)}x${_signed(p['p']!)})',
+        fn: (x, p) => p['a']! * math.cos(p['f']! * x + p['p']!),
+        roots: (p) {
+          if (p['f'] == 0) return const [];
+          final roots = <double>[];
+          for (int n = -4; n <= 4; n++) {
+            final x = ((n + 0.5) * math.pi - p['p']!) / p['f']!;
+            if (x >= -10 && x <= 10) roots.add(x);
+          }
+          return roots;
+        },
+        domain: const [-10, 10], range: const [-5, 5],
+      ),
+      'absolute': _MathFunctionDef(
+        key: 'absolute', label: 'Módulo', color: const Color(0xFFC77DFF),
+        params: [
+          const _ParamDef('a', 'a', -3, 3, 0.1, 1),
+          const _ParamDef('h', 'h', -6, 6, 0.5, 0),
+          const _ParamDef('k', 'k', -6, 6, 0.5, -2),
+        ],
+        eq: (p) => 'y = ${_fmt(p['a']!)}|x${_signed(p['h']! * -1)}|${_signed(p['k']!)}',
+        fn: (x, p) => p['a']! * (x - p['h']!).abs() + p['k']!,
+        roots: (p) {
+          if (p['a'] == 0) return const [];
+          final v = -p['k']! / p['a']!;
+          if (v < 0) return const [];
+          if (v == 0) return [p['h']!];
+          return [p['h']! - v, p['h']! + v];
+        },
+        domain: const [-10, 10], range: const [-9, 9],
+      ),
+      'rational': _MathFunctionDef(
+        key: 'rational', label: 'Racional', color: const Color(0xFF5ECBE0),
+        params: [
+          const _ParamDef('a', 'a', -6, 6, 0.25, 2),
+          const _ParamDef('h', 'h', -5, 5, 0.5, 0),
+          const _ParamDef('k', 'k', -5, 5, 0.5, 0),
+        ],
+        eq: (p) => 'y = ${_fmt(p['a']!)}/(x${_signed(p['h']! * -1)})${_signed(p['k']!)}',
+        fn: (x, p) => p['a']! / (x - p['h']!) + p['k']!,
+        asymptoteX: (p) => p['h']!,
+        excludeAt: (p) => p['h']!,
+        roots: (p) {
+          if (p['k'] == 0) return const [];
+          return [-p['a']! / p['k']! + p['h']!];
+        },
+        domain: const [-10, 10], range: const [-9, 9],
+      ),
+      'circle': _MathFunctionDef(
+        key: 'circle', label: 'Círculo', color: const Color(0xFFC77DFF),
+        params: [
+          const _ParamDef('r', 'r', 1, 6, 0.25, 3),
+          const _ParamDef('cx', 'cx', -5, 5, 0.5, 0),
+          const _ParamDef('cy', 'cy', -5, 5, 0.5, 0),
+        ],
+        eq: (p) => '(x${_signed(p['cx']! * -1)})² + (y${_signed(p['cy']! * -1)})² = ${_fmt(p['r']!)}²',
+        fn: (x, p) => 0, // não usado
+        isParametric: true,
+        parametricX: (t, p) => p['cx']! + p['r']! * math.cos(t),
+        parametricY: (t, p) => p['cy']! + p['r']! * math.sin(t),
+        domain: const [-8, 8], range: const [-7, 7],
+      ),
+    };
+  }
+
+  Map<String, double> _defaultParams(String type) {
+    final def = _functionDefs[type]!;
+    final map = <String, double>{};
+    for (final param in def.params) {
+      map[param.key] = param.defaultValue;
     }
+    return map;
+  }
+
+  _MathFunctionDef get _currentDef => _functionDefs[_currentType]!;
+  String get _eqString => _currentDef.eq(_params);
+  String? get _rootsString {
+    final roots = _currentDef.roots?.call(_params) ?? const [];
+    final filtered = roots.where((r) => r.isFinite).toList();
+    if (filtered.isEmpty) return null;
+    if (filtered.length == 1) return 'raiz: x = ${_fmt(filtered.first)}';
+    final parts = filtered.map((r) => 'x = ${_fmt(r)}').join(', ');
+    return 'raízes:\n$parts';
+  }
+
+  void _updateParam(String key, double value) {
+    setState(() => _params[key] = value);
+  }
+
+  void _reset() {
+    _animTimer?.cancel();
+    _animating = false;
+    setState(() {
+      _params = _defaultParams(_currentType);
+    });
+  }
+
+  void _toggleAnimation() {
+    if (_animating) {
+      _animTimer?.cancel();
+      setState(() => _animating = false);
+      return;
+    }
+    final def = _currentDef;
+    if (def.params.isEmpty) return;
+    final firstParam = def.params.first;
+    _animDir = 1;
+    _animating = true;
+    setState(() {});
+    _animTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!mounted) return;
+      final key = firstParam.key;
+      final speed = (firstParam.max - firstParam.min) / 140;
+      final current = _params[key]!;
+      var next = current + speed * _animDir;
+      if (next >= firstParam.max) {
+        next = firstParam.max;
+        _animDir = -1;
+      } else if (next <= firstParam.min) {
+        next = firstParam.min;
+        _animDir = 1;
+      }
+      setState(() => _params[key] = next);
+    });
+  }
+
+  Future<void> _openEditSheet() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _MathTypeSheet(
+        currentType: _currentType,
+        functionDefs: _functionDefs,
+        isDark: widget.s.isDark,
+        primary: widget.s.primary,
+        onSurface: widget.s.onSurface,
+        onSurfaceVariant: widget.s.onSurfaceVariant,
+      ),
+    );
+    if (selected != null && selected != _currentType) {
+      setState(() {
+        _currentType = selected;
+        _params = _defaultParams(selected);
+      });
+    }
+  }
+
+  Widget _buildSliders() {
+    final def = _currentDef;
+    return Column(
+      children: def.params.map((param) {
+        final value = _params[param.key] ?? param.defaultValue;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                child: Center(
+                  child: Text(
+                    param.symbol,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                      fontFamily: 'Georgia',
+                      color: widget.s.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: widget.s.primary,
+                    inactiveTrackColor: widget.s.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD),
+                    thumbColor: Colors.white,
+                    overlayColor: widget.s.primary.withOpacity(0.2),
+                    trackHeight: 5,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                  ),
+                  child: Slider(
+                    value: value.clamp(param.min, param.max),
+                    min: param.min,
+                    max: param.max,
+                    divisions: ((param.max - param.min) / param.step).round().clamp(1, 1000),
+                    onChanged: (v) => _updateParam(param.key, v),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 38,
+                child: Text(
+                  _fmt(value),
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: widget.s.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildLegend() {
+    final def = _currentDef;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+      child: Row(
+        children: [
+          _LegendItem(color: def.color, label: def.label),
+          const SizedBox(width: 14),
+          _LegendItem(color: widget.s.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCCCCCC), label: 'eixos'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionBar() {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(50),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _openEditSheet,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: widget.s.primary,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.edit_rounded, size: 15, color: Colors.white),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Editar',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          _CircleActionButton(
+            icon: _animating ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            onTap: _toggleAnimation,
+            active: _animating,
+          ),
+          const SizedBox(width: 6),
+          _CircleActionButton(
+            icon: Icons.refresh_rounded,
+            onTap: _reset,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final expr = (widget.json['expression'] ?? 'x').toString();
-    final points = _evaluate(expr, _xMin, _xMax, 200);
-
     return Container(
-      constraints: const BoxConstraints(maxWidth: 560),
+      constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: s.isDark ? const Color(0xFF1B1B1B) : Colors.white,
-        border: Border.all(color: s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0), width: 1.5),
-        borderRadius: BorderRadius.circular(14),
+        color: s.isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(s.isDark ? 0.3 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-          child: Row(children: [
-            Expanded(
-              child: Text('y = $expr',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface, fontFamily: 'monospace')),
-            ),
-          ]),
-        ),
-        SizedBox(
-          height: 260,
-          child: points == null
-              ? Center(child: Text('Expressão inválida', style: TextStyle(color: s.error, fontSize: 13)))
-              : GestureDetector(
-                  onScaleUpdate: (d) {
-                    setState(() {
-                      _scale = (_scale * d.scale).clamp(0.3, 4.0);
-                      _pan += d.focalPointDelta;
-                    });
-                  },
-                  child: CustomPaint(
-                    painter: _MathGraphPainter(points: points, isDark: s.isDark, scale: _scale, pan: _pan),
-                    child: const SizedBox.expand(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Container(
+              decoration: BoxDecoration(
+                color: s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _eqString,
+                            style: TextStyle(
+                              color: s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A),
+                              fontSize: 15,
+                              fontFamily: 'Georgia',
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                        if (_rootsString != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _rootsString!,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: s.onSurfaceVariant,
+                              fontSize: 10.5,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-        ),
-        _WidgetActionBar(s: s, actions: [
-          _WidgetAction(icon: 'zoom_in.svg', label: 'Ampliar', onTap: () => setState(() => _scale = (_scale + 0.3).clamp(0.3, 4.0))),
-          _WidgetAction(icon: 'zoom_out.svg', label: 'Reduzir', onTap: () => setState(() => _scale = (_scale - 0.3).clamp(0.3, 4.0))),
-          _WidgetAction(icon: 'refresh.svg', label: 'Repor', onTap: () => setState(() { _scale = 1.0; _pan = Offset.zero; })),
-        ]),
-      ]),
+                  Expanded(
+                    child: CustomPaint(
+                      painter: _MathGraphPainter(
+                        def: _currentDef,
+                        params: _params,
+                        isDark: s.isDark,
+                        primary: s.primary,
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                  _buildLegend(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: s.isDark ? const Color(0xFF202020) : const Color(0xFFF0F0F0),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: _buildSliders(),
+          ),
+          const SizedBox(height: 10),
+          _buildActionBar(),
+        ],
+      ),
     );
   }
 }
 
-class _MathGraphPainter extends CustomPainter {
-  final List<Offset> points;
-  final bool isDark;
-  final double scale;
-  final Offset pan;
-  _MathGraphPainter({required this.points, required this.isDark, required this.scale, required this.pan});
+// ─── Botão circular para ações do math graph ───
+class _CircleActionButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool active;
+  const _CircleActionButton({
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+  });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    if (points.isEmpty) return;
-    final xs = points.map((p) => p.dx);
-    final ys = points.map((p) => p.dy);
-    final xMin = xs.reduce(math.min), xMax = xs.reduce(math.max);
-    final yMin = ys.reduce(math.min), yMax = ys.reduce(math.max);
-    final xRange = (xMax - xMin).abs() < 0.0001 ? 1.0 : (xMax - xMin);
-    final yRange = (yMax - yMin).abs() < 0.0001 ? 1.0 : (yMax - yMin);
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1F6A9E) : s.primary,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Icon(icon, size: 15, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
 
-    Offset toScreen(Offset p) {
-      final nx = (p.dx - xMin) / xRange;
-      final ny = 1 - (p.dy - yMin) / yRange;
-      return Offset(nx * size.width * scale + pan.dx, ny * size.height * scale + pan.dy);
-    }
+// ─── Item de legenda ───
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendItem({required this.color, required this.label});
 
-    final axisColor = isDark ? const Color(0xFF444444) : const Color(0xFFCCCCCC);
-    final zeroX = toScreen(const Offset(0, 0));
-    canvas.drawLine(Offset(0, zeroX.dy), Offset(size.width, zeroX.dy), Paint()..color = axisColor..strokeWidth = 1);
-    canvas.drawLine(Offset(zeroX.dx, 0), Offset(zeroX.dx, size.height), Paint()..color = axisColor..strokeWidth = 1);
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 2,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: AppTheme.of(context).onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-    final path = Path();
-    for (int i = 0; i < points.length; i++) {
-      final sp = toScreen(points[i]);
-      if (i == 0) {
-        path.moveTo(sp.dx, sp.dy);
-      } else {
-        path.lineTo(sp.dx, sp.dy);
-      }
-    }
-    canvas.drawPath(path, Paint()..color = const Color(0xFF6F5AF6)..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeJoin = StrokeJoin.round);
+// ─── Modal de seleção do tipo de função ───
+class _MathTypeSheet extends StatefulWidget {
+  final String currentType;
+  final Map<String, _MathFunctionDef> functionDefs;
+  final bool isDark;
+  final Color primary;
+  final Color onSurface;
+  final Color onSurfaceVariant;
+  const _MathTypeSheet({
+    required this.currentType,
+    required this.functionDefs,
+    required this.isDark,
+    required this.primary,
+    required this.onSurface,
+    required this.onSurfaceVariant,
+  });
+
+  @override
+  State<_MathTypeSheet> createState() => _MathTypeSheetState();
+}
+
+class _MathTypeSheetState extends State<_MathTypeSheet> {
+  late String _pendingType;
+
+  @override
+  void initState() {
+    super.initState();
+    _pendingType = widget.currentType;
   }
 
   @override
-  bool shouldRepaint(covariant _MathGraphPainter old) => true;
+  Widget build(BuildContext context) {
+    final types = widget.functionDefs.keys.toList();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: widget.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCCCCCC),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Editar gráfico',
+            style: TextStyle(
+              color: widget.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.2,
+            children: types.map((key) {
+              final def = widget.functionDefs[key]!;
+              final active = key == _pendingType;
+              return GestureDetector(
+                onTap: () => setState(() => _pendingType = key),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active ? widget.primary : (widget.isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE)),
+                    border: Border.all(
+                      color: active ? widget.primary : (widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD)),
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    def.label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: active ? Colors.white : widget.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE),
+                      border: Border.all(color: widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(color: widget.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context, _pendingType),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: widget.primary,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Aplicar',
+                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MAP (mantido, sem alterações)
-// ══════════════════════════════════════════════════════════════
+// ─── Painter do gráfico ───
+class _MathGraphPainter extends CustomPainter {
+  final _MathFunctionDef def;
+  final Map<String, double> params;
+  final bool isDark;
+  final Color primary;
+  _MathGraphPainter({
+    required this.def,
+    required this.params,
+    required this.isDark,
+    required this.primary,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width < 10 || size.height < 10) return;
+
+    const padLeft = 32.0;
+    const padRight = 12.0;
+    const padTop = 12.0;
+    const padBottom = 24.0;
+    final graphRect = Rect.fromLTRB(padLeft, padTop, size.width - padRight, size.height - padBottom);
+
+    final domain = def.domain;
+    final range = def.range;
+    final xMin = domain[0], xMax = domain[1];
+    final yMin = range[0], yMax = range[1];
+
+    Offset mapPoint(double x, double y, Rect rect) {
+      final px = rect.left + (x - xMin) / (xMax - xMin) * rect.width;
+      final py = rect.bottom - (y - yMin) / (yMax - yMin) * rect.height;
+      return Offset(px, py);
+    }
+
+    final gridColor = isDark ? const Color(0xFF252525) : const Color(0xFFE0E0E0);
+    final axisColor = isDark ? const Color(0xFF4A4A4A) : const Color(0xFF999999);
+    final labelColor = isDark ? const Color(0xFF5A5A5A) : const Color(0xFF777777);
+
+    final stepX = _niceStep(xMax - xMin, 8);
+    final stepY = _niceStep(yMax - yMin, 6);
+    final gridPaint = Paint()..color = gridColor..strokeWidth = 1;
+
+    for (double x = (xMin / stepX).ceil() * stepX; x <= xMax; x += stepX) {
+      final p = mapPoint(x, 0, graphRect);
+      canvas.drawLine(Offset(p.dx, graphRect.top), Offset(p.dx, graphRect.bottom), gridPaint);
+    }
+    for (double y = (yMin / stepY).ceil() * stepY; y <= yMax; y += stepY) {
+      final p = mapPoint(0, y, graphRect);
+      canvas.drawLine(Offset(graphRect.left, p.dy), Offset(graphRect.right, p.dy), gridPaint);
+    }
+
+    final origin = mapPoint(0, 0, graphRect);
+    final originY = origin.dy.clamp(graphRect.top, graphRect.bottom);
+    final originX = origin.dx.clamp(graphRect.left, graphRect.right);
+
+    final axisPaint = Paint()
+      ..color = axisColor
+      ..strokeWidth = 1.5;
+
+    canvas.drawLine(Offset(graphRect.left, originY), Offset(graphRect.right, originY), axisPaint);
+    final arrowX = Path()
+      ..moveTo(graphRect.right - 8, originY - 4)
+      ..lineTo(graphRect.right, originY)
+      ..lineTo(graphRect.right - 8, originY + 4);
+    canvas.drawPath(arrowX, axisPaint);
+
+    canvas.drawLine(Offset(originX, graphRect.top), Offset(originX, graphRect.bottom), axisPaint);
+    final arrowY = Path()
+      ..moveTo(originX - 4, graphRect.top + 8)
+      ..lineTo(originX, graphRect.top)
+      ..lineTo(originX + 4, graphRect.top + 8);
+    canvas.drawPath(arrowY, axisPaint);
+
+    _drawText(canvas, 'x', Offset(graphRect.right - 14, originY - 8), labelColor, fontSize: 11, fontStyle: FontStyle.italic);
+    _drawText(canvas, 'y', Offset(originX + 8, graphRect.top + 14), labelColor, fontSize: 11, fontStyle: FontStyle.italic);
+
+    _drawTicks(canvas, graphRect, stepX, stepY, originY, originX, labelColor);
+
+    final asymptoteX = def.asymptoteX?.call(params);
+    if (asymptoteX != null) {
+      final ax = mapPoint(asymptoteX, 0, graphRect).dx.clamp(graphRect.left, graphRect.right);
+      final dashPaint = Paint()
+        ..color = isDark ? const Color(0xFF555555) : const Color(0xFF999999)
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke;
+      final dashPath = Path();
+      const dashWidth = 4.0;
+      const dashGap = 4.0;
+      double y = graphRect.top;
+      while (y < graphRect.bottom) {
+        dashPath.moveTo(ax, y);
+        dashPath.lineTo(ax, math.min(y + dashWidth, graphRect.bottom));
+        y += dashWidth + dashGap;
+      }
+      canvas.drawPath(dashPath, dashPaint);
+    }
+
+    final curvePaint = Paint()
+      ..color = def.color
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    final curvePath = Path();
+    bool first = true;
+
+    if (def.isParametric) {
+      final steps = 200;
+      for (int i = 0; i <= steps; i++) {
+        final t = (i / steps) * 2 * math.pi;
+        final x = def.parametricX!(t, params);
+        final y = def.parametricY!(t, params);
+        final pt = mapPoint(x, y, graphRect);
+        if (first) {
+          curvePath.moveTo(pt.dx, pt.dy);
+          first = false;
+        } else {
+          curvePath.lineTo(pt.dx, pt.dy);
+        }
+      }
+    } else {
+      final samples = 320;
+      final excludeAt = def.excludeAt?.call(params);
+      for (int s = 0; s <= samples; s++) {
+        final x = xMin + (xMax - xMin) * (s / samples);
+        if (def.key == 'logarithmic' && x <= 0) {
+          first = true;
+          continue;
+        }
+        if (excludeAt != null && (x - excludeAt).abs() < 0.03) {
+          first = true;
+          continue;
+        }
+        final y = def.fn(x, params);
+        if (!y.isFinite || y < yMin - 4 || y > yMax + 4) {
+          first = true;
+          continue;
+        }
+        final pt = mapPoint(x, y, graphRect);
+        if (first) {
+          curvePath.moveTo(pt.dx, pt.dy);
+          first = false;
+        } else {
+          curvePath.lineTo(pt.dx, pt.dy);
+        }
+      }
+    }
+    canvas.drawPath(curvePath, curvePaint);
+
+    final roots = def.roots?.call(params) ?? const [];
+    for (final root in roots) {
+      if (!root.isFinite || root < xMin || root > xMax) continue;
+      final rp = mapPoint(root, 0, graphRect);
+      final rootPaint = Paint()..color = Colors.white;
+      canvas.drawCircle(rp, 5, rootPaint);
+      final rootStroke = Paint()
+        ..color = def.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawCircle(rp, 5, rootStroke);
+    }
+
+    final markerX = def.markerX?.call(params);
+    final markerY = def.markerY?.call(params);
+    if (markerX != null && markerY != null && markerX >= xMin && markerX <= xMax && markerY >= yMin && markerY <= yMax) {
+      final mp = mapPoint(markerX, markerY, graphRect);
+      final markerFill = Paint()..color = def.color;
+      canvas.drawCircle(mp, 6, markerFill);
+      final markerStroke = Paint()
+        ..color = isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawCircle(mp, 6, markerStroke);
+    }
+  }
+
+  void _drawTicks(Canvas canvas, Rect rect, double stepX, double stepY, double originY, double originX, Color color) {
+    final domain = def.domain;
+    final range = def.range;
+    final xMin = domain[0], xMax = domain[1];
+    final yMin = range[0], yMax = range[1];
+
+    for (double x = (xMin / stepX).ceil() * stepX; x <= xMax; x += stepX) {
+      if ((x.abs()) < stepX / 4) continue;
+      final px = rect.left + (x - xMin) / (xMax - xMin) * rect.width;
+      if (px < rect.left || px > rect.right) continue;
+      final tp = TextPainter(
+        text: TextSpan(text: _fmt(x), style: TextStyle(color: color, fontSize: 9)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(px - tp.width / 2, originY + 4));
+    }
+
+    for (double y = (yMin / stepY).ceil() * stepY; y <= yMax; y += stepY) {
+      if ((y.abs()) < stepY / 4) continue;
+      final py = rect.bottom - (y - yMin) / (yMax - yMin) * rect.height;
+      if (py < rect.top || py > rect.bottom) continue;
+      final tp = TextPainter(
+        text: TextSpan(text: _fmt(y), style: TextStyle(color: color, fontSize: 9)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(rect.left - tp.width - 6, py - tp.height / 2));
+    }
+  }
+
+  void _drawText(Canvas canvas, String text, Offset offset, Color color, {double fontSize = 11, FontStyle fontStyle = FontStyle.normal}) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: fontSize, fontStyle: fontStyle, fontFamily: 'Georgia'),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, offset);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MathGraphPainter old) {
+    return old.def != def || old.params != params || old.isDark != isDark || old.primary != primary;
+  }
+}
+
+// ─── Helpers de formatação ───
+String _fmt(double n) {
+  final r = (n * 100).round() / 100;
+  if (r == r.roundToDouble()) return r.toInt().toString();
+  return r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
+}
+
+String _signed(double n) {
+  final r = (n * 100).round() / 100;
+  if (r == 0) return '';
+  return (r > 0 ? ' + ' : ' - ') + _fmt(r.abs());
+}
+
+String _sub(String s) {
+  const map = {
+    '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+    '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '.': '.',
+  };
+  return s.split('').map((c) => map[c] ?? c).join();
+}
+
+String _sup(String s) {
+  const map = {
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+  };
+  return s.split('').map((c) => map[c] ?? c).join();
+}
+
+double _niceStep(double range, int maxTicks) {
+  if (range == 0) return 1;
+  final rough = range / maxTicks;
+  final magnitude = math.pow(10, (math.log(rough) / math.ln10).floor()).toDouble();
+  final normalized = rough / magnitude;
+  final double nice;
+  if (normalized <= 1) {
+    nice = 1.0;
+  } else if (normalized <= 2) {
+    nice = 2.0;
+  } else if (normalized <= 5) {
+    nice = 5.0;
+  } else {
+    nice = 10.0;
+  }
+  return nice * magnitude;
+}
 
 // ══════════════════════════════════════════════════════════════
 // MAP (redesenhado — estilo card do HTML)
@@ -2813,16 +3712,13 @@ class _AiMapWidgetState extends State<AiMapWidget>
     with SingleTickerProviderStateMixin {
   late final MapController _mapController;
 
-  // Coordenadas e zoom iniciais, a partir do JSON gerado pela IA
   late double _lat;
   late double _lng;
   late double _zoom;
   late String _name;
 
-  // Controlador da barra de pesquisa
   final TextEditingController _searchCtrl = TextEditingController();
 
-  // Animação do marcador pulsante
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
 
@@ -2854,7 +3750,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
     super.dispose();
   }
 
-  // ----- Cores adaptadas ao tema -----
   Color get _cardBg => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
   Color get _previewBg => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
   Color get _actionsBg => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
@@ -2871,7 +3766,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
       : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
-  // ----- Geolocalização -----
   Future<void> _locateUser() async {
     if (_locating) return;
     setState(() => _locating = true);
@@ -2900,7 +3794,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
     }
   }
 
-  // ----- Pesquisa por morada (Nominatim) -----
   Future<void> _search() async {
     final query = _searchCtrl.text.trim();
     if (query.isEmpty || _searching) return;
@@ -2969,7 +3862,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ----- Área do mapa com badge e botão recentrar -----
           AspectRatio(
             aspectRatio: 4 / 3,
             child: Container(
@@ -3009,7 +3901,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
                       ),
                     ],
                   ),
-                  // Badge de localização (topo esquerdo)
                   Positioned(
                     top: 12,
                     left: 14,
@@ -3023,7 +3914,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AppIcon(
-                            'location.svg', // ou um ícone de localização adequado
+                            'location.svg',
                             color: s.primary,
                             size: 13,
                           ),
@@ -3040,7 +3931,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
                       ),
                     ),
                   ),
-                  // Botão recentrar (canto inferior direito)
                   Positioned(
                     bottom: 12,
                     right: 12,
@@ -3071,7 +3961,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                                   ),
                                 )
                               : AppIcon(
-                                  'locate.svg', // ícone de crosshair
+                                  'locate.svg',
                                   color: _recenterIcon,
                                   size: 15,
                                 ),
@@ -3084,7 +3974,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
             ),
           ),
           const SizedBox(height: 10),
-          // ----- Barra de ações: pesquisa -----
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
@@ -3145,7 +4034,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
   }
 }
 
-// Marcador pulsante (efeito tipo Leaflet divIcon)
 class _PulsingMapMarker extends StatelessWidget {
   final Animation<double> animation;
   final Color color;
@@ -3163,7 +4051,6 @@ class _PulsingMapMarker extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Anel pulsante
               Transform.scale(
                 scale: ringScale,
                 child: Container(
@@ -3175,7 +4062,6 @@ class _PulsingMapMarker extends StatelessWidget {
                   ),
                 ),
               ),
-              // Núcleo
               Container(
                 width: 14,
                 height: 14,
