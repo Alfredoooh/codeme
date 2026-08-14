@@ -390,13 +390,13 @@ String _resolveFormattingCommands(String expr) {
   );
 
   result = result.replaceAllMapped(
-  RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
-  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
-);
-result = result.replaceAllMapped(
-  RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
-  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
-);
+    RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+  );
 
   for (final acc in ['hat', 'bar', 'vec', 'dot', 'ddot', 'tilde']) {
     result = result.replaceAllMapped(
@@ -1525,10 +1525,10 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF161616),
         borderRadius: BorderRadius.circular(22),
-        clipBehavior: Clip.antiAlias,
       ),
       child: Stack(
         children: [
@@ -1741,7 +1741,7 @@ List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
     ));
   }
 
-  final attrRegex = RegExp(r'([a-zA-Z-]+)(\s*=\s*)("([^"]*)"|\'([^\']*)\')|([a-zA-Z-]+)');
+  final attrRegex = RegExp(r"([a-zA-Z-]+)(\s*=\s*)("([^"]*)"|'([^']*)')|([a-zA-Z-]+)");
   int lastIndex = 0;
 
   for (final m in attrRegex.allMatches(rest)) {
@@ -1948,7 +1948,7 @@ class AiCodePreviewScreen extends StatelessWidget {
         initialData: InAppWebViewInitialData(
           data: code,
           mimeType: 'text/html',
-          baseUrl: 'about:blank',
+          baseUrl: WebUri('about:blank'),
         ),
         initialSettings: InAppWebViewSettings(
           javaScriptEnabled: true,
