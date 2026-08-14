@@ -34,6 +34,11 @@
 //    _types` — Dart avalia Set const em tempo de compilação e
 //    rejeita elementos duplicados; removida a segunda ocorrência.
 // 3) Função _parseColor em falta — adicionada como função top-level.
+//
+// ATUALIZAÇÃO DE SUPERFÍCIES: todas as cores de superfície dos
+// widgets agora usam o tema (s.cardBackground, s.surface, s.hover,
+// s.onSurface, s.onSurfaceVariant, s.outline, s.primary), eliminando
+// cores escuras fixas para consistência com o restante da app.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -52,7 +57,7 @@ import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
 
 // ══════════════════════════════════════════════════════════════
-// FUNÇÃO AUXILIAR _parseColor (adicionada para corrigir build)
+// FUNÇÃO AUXILIAR _parseColor
 // ══════════════════════════════════════════════════════════════
 Color? _parseColor(dynamic raw) {
   if (raw == null) return null;
@@ -62,7 +67,7 @@ Color? _parseColor(dynamic raw) {
   if (raw is String) {
     var hex = raw.trim().replaceFirst('#', '');
     if (hex.length == 6) {
-      hex = 'FF$hex'; // adiciona opacidade total
+      hex = 'FF$hex';
     }
     if (hex.length == 8) {
       final value = int.tryParse(hex, radix: 16);
@@ -71,6 +76,16 @@ Color? _parseColor(dynamic raw) {
   }
 
   return null;
+}
+
+/// Remove caracteres estranhos de texto proveniente de JSON
+String _sanitizeText(String? raw) {
+  if (raw == null) return '';
+  return raw
+      .replaceAll('\n', ' ')
+      .replaceAll('\r', '')
+      .replaceAll('\t', ' ')
+      .trim();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -124,10 +139,7 @@ AiWidgetParseResult parseAiWidgetBlocks(String raw) {
   return AiWidgetParseResult(textWithMarkers: replaced, blocks: blocks);
 }
 
-/// Deteta se `raw` contém, neste momento (possivelmente a meio do
-/// streaming), um bloco ```widget_x``` aberto mas ainda não fechado.
-/// Usado para decidir se devemos mostrar o pill "A criar..." em vez
-/// de tentar renderizar JSON incompleto.
+/// Deteta se `raw` contém um bloco ```widget_x``` aberto mas não fechado.
 bool hasOpenWidgetBlock(String raw) {
   final opens = RegExp(r'```widget_[a-z]+').allMatches(raw).length;
   final closesTotal = '```'.allMatches(raw).length;
@@ -178,7 +190,7 @@ class _WidgetActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (actions.isEmpty) return const SizedBox.shrink();
-    final border = s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5EA);
+    final border = s.outline.withOpacity(0.4);
     return Container(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: border, width: 1)),
@@ -248,7 +260,7 @@ class _WidgetActionButtonState extends State<_WidgetActionButton> {
 class AiChartWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
-  final String? defaultType; // 'bar' | 'line' | 'area' | 'pie'
+  final String? defaultType;
   const AiChartWidget({super.key, required this.json, required this.s, this.defaultType});
   @override
   State<AiChartWidget> createState() => _AiChartWidgetState();
@@ -297,7 +309,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
       _data = raw.asMap().entries.map((e) {
         final d = e.value as Map;
         return _ChartDataItem(
-          (d['label'] ?? '?').toString(),
+          _sanitizeText(d['label']),
           (d['value'] is num) ? (d['value'] as num).toDouble() : double.tryParse(d['value'].toString()) ?? 0,
           _parseColor(d['color']) ?? _palette[e.key % _palette.length],
         );
@@ -305,7 +317,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
     } else {
       _data = const [];
     }
-    _title = (widget.json['title'] ?? 'Dados').toString();
+    _title = _sanitizeText(widget.json['title']);
   }
 
   void _initChartType() {
@@ -321,12 +333,12 @@ class _AiChartWidgetState extends State<AiChartWidget>
     }
   }
 
-  Color _cardBg()        => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-  Color _previewBg()     => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
-  Color _titleColor()    => widget.s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A);
-  Color _legendText()    => widget.s.isDark ? const Color(0xFF999999) : const Color(0xFF666666);
-  Color _actionsBg()     => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
-  Color _primary()       => const Color(0xFF2E8BC9);
+  Color _cardBg()        => widget.s.cardBackground;
+  Color _previewBg()     => widget.s.surface;
+  Color _titleColor()    => widget.s.onSurface;
+  Color _legendText()    => widget.s.onSurfaceVariant;
+  Color _actionsBg()     => widget.s.hover;
+  Color _primary()       => widget.s.primary;
 
   Future<void> _openOptions() async {
     final result = await showModalBottomSheet(
@@ -338,6 +350,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
         initialTitle: _title,
         initialData: List<_ChartDataItem>.from(_data.map((d) => _ChartDataItem(d.label, d.value, d.color))),
         isDark: widget.s.isDark,
+        s: widget.s,
       ),
     );
 
@@ -374,13 +387,8 @@ class _AiChartWidgetState extends State<AiChartWidget>
       decoration: BoxDecoration(
         color: _cardBg(),
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(widget.s.isDark ? 0.3 : 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: widget.s.outline.withOpacity(0.1)),
+        boxShadow: widget.s.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -480,12 +488,12 @@ class _AiChartWidgetState extends State<AiChartWidget>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          AppIcon('sliders.svg', size: 14, color: Colors.white),
+                          AppIcon('sliders.svg', size: 14, color: widget.s.onPrimary),
                           const SizedBox(width: 7),
                           Text(
                             'Opções',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: widget.s.onPrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.1,
@@ -502,6 +510,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
                   tooltip: 'Copiar',
                   onTap: _copyData,
                   primary: _primary(),
+                  onPrimary: widget.s.onPrimary,
                 ),
                 const SizedBox(width: 6),
                 _CircularActionButton(
@@ -509,6 +518,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
                   tooltip: 'Download',
                   onTap: _downloadChart,
                   primary: _primary(),
+                  onPrimary: widget.s.onPrimary,
                 ),
               ],
             ),
@@ -524,11 +534,13 @@ class _CircularActionButton extends StatelessWidget {
   final String tooltip;
   final VoidCallback onTap;
   final Color primary;
+  final Color onPrimary;
   const _CircularActionButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
     required this.primary,
+    required this.onPrimary,
   });
 
   @override
@@ -544,7 +556,7 @@ class _CircularActionButton extends StatelessWidget {
             color: primary,
             shape: BoxShape.circle,
           ),
-          child: AppIcon(icon, size: 13, color: Colors.white),
+          child: AppIcon(icon, size: 13, color: onPrimary),
         ),
       ),
     );
@@ -560,11 +572,13 @@ class _ChartOptionsSheet extends StatefulWidget {
   final String initialTitle;
   final List<_ChartDataItem> initialData;
   final bool isDark;
+  final AppColorScheme s;
   const _ChartOptionsSheet({
     required this.initialType,
     required this.initialTitle,
     required this.initialData,
     required this.isDark,
+    required this.s,
   });
 
   @override
@@ -610,15 +624,15 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
     super.dispose();
   }
 
-  Color _inputBg()      => widget.isDark ? const Color(0xFF262626) : const Color(0xFFF5F5F5);
-  Color _inputBorder()  => widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD);
-  Color _inputText()    => widget.isDark ? const Color(0xFFEEEEEE) : const Color(0xFF1A1A1A);
-  Color _label()        => widget.isDark ? const Color(0xFF888888) : const Color(0xFF777777);
-  Color _chipInactiveBg() => widget.isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE);
-  Color _chipInactiveBorder() => widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD);
-  Color _chipInactiveText() => widget.isDark ? const Color(0xFF888888) : const Color(0xFF666666);
-  Color _sheetBg()      => widget.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-  Color _primary()      => const Color(0xFF2E8BC9);
+  Color _inputBg()      => widget.s.hover;
+  Color _inputBorder()  => widget.s.outline;
+  Color _inputText()    => widget.s.onSurface;
+  Color _label()        => widget.s.onSurfaceVariant;
+  Color _chipInactiveBg() => widget.s.hover;
+  Color _chipInactiveBorder() => widget.s.outline;
+  Color _chipInactiveText() => widget.s.onSurfaceVariant;
+  Color _sheetBg()      => widget.s.cardBackground;
+  Color _primary()      => widget.s.primary;
 
   Future<void> _pickColor(int index) async {
     final selected = await showModalBottomSheet<Color>(
@@ -737,7 +751,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                         border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: AppIcon(t.icon, size: 17, color: active ? Colors.white : _chipInactiveText()),
+                      child: AppIcon(t.icon, size: 17, color: active ? widget.s.onPrimary : _chipInactiveText()),
                     ),
                   ),
                 );
@@ -921,7 +935,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                       ),
                       alignment: Alignment.center,
                       child: Text('Aplicar',
-                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                          style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ),
@@ -940,7 +954,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
 
 class _UnifiedChartPainter extends CustomPainter {
   final List<_ChartDataItem> data;
-  final String chartType; // 'bar' | 'line' | 'area' | 'pie'
+  final String chartType;
   final bool isDark;
   final double progress;
 
@@ -997,7 +1011,7 @@ class _UnifiedChartPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: d.label,
-          style: TextStyle(color: isDark ? const Color(0xFF777777) : const Color(0xFF888888), fontSize: 10),
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 10),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -1059,11 +1073,11 @@ class _UnifiedChartPainter extends CustomPainter {
     for (int i = 0; i < data.length; i++) {
       final p = ptAt(i);
       canvas.drawCircle(p, 4, Paint()..color = data.first.color);
-      canvas.drawCircle(p, 4, Paint()..color = isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5)..style = PaintingStyle.stroke..strokeWidth = 2);
+      canvas.drawCircle(p, 4, Paint()..color = isDark ? Colors.white : Colors.white..style = PaintingStyle.stroke..strokeWidth = 2);
       final tp = TextPainter(
         text: TextSpan(
           text: data[i].label,
-          style: TextStyle(color: isDark ? const Color(0xFF777777) : const Color(0xFF888888), fontSize: 10),
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 10),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -1092,12 +1106,12 @@ class _UnifiedChartPainter extends CustomPainter {
       startAngle = endAngle;
     }
 
-    canvas.drawCircle(center, radius * 0.55, Paint()..color = isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5));
+    canvas.drawCircle(center, radius * 0.55, Paint()..color = isDark ? Colors.black : Colors.white);
     final tp = TextPainter(
       text: TextSpan(
         text: total.round().toString(),
         style: TextStyle(
-          color: isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A),
+          color: isDark ? Colors.white : Colors.black,
           fontSize: 15,
           fontWeight: FontWeight.w700,
         ),
@@ -1114,7 +1128,7 @@ class _UnifiedChartPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET WIDGET (design atualizado)
+// MARKET WIDGET
 // ══════════════════════════════════════════════════════════════
 
 class AiMarketWidget extends StatefulWidget {
@@ -1184,8 +1198,8 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
         setState(() => _progress = Curves.easeOutCubic.transform(_animController.value));
       });
     _currentTf = '1D';
-    _currentPairKey = (widget.json['symbol'] ?? 'BTCUSD').toString().toUpperCase();
-    if (!_pairs.any((p) => p.key == _currentPairKey)) {
+    _currentPairKey = _sanitizeText(widget.json['symbol']);
+    if (_currentPairKey.isEmpty || !_pairs.any((p) => p.key == _currentPairKey)) {
       _currentPairKey = 'BTCUSD';
     }
     _animController.forward(from: 0);
@@ -1257,9 +1271,9 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: widget.s.cardBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
         child: Column(
@@ -1271,15 +1285,15 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Color(0xFF3A3A3A),
+                  color: widget.s.onSurfaceVariant,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Escolher par',
-              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+              style: TextStyle(color: widget.s.onSurface, fontSize: 15, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             Flexible(
@@ -1293,15 +1307,15 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                       margin: const EdgeInsets.only(bottom: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: active ? const Color(0xFF1C3A52) : const Color(0xFF232323),
-                        border: Border.all(color: active ? const Color(0xFF2E8BC9) : Colors.transparent),
+                        color: active ? widget.s.primaryContainer.withOpacity(0.3) : widget.s.hover,
+                        border: Border.all(color: active ? widget.s.primary : widget.s.outline),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(pair.label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                          Text(pair.sub, style: const TextStyle(color: Color(0xFF777777), fontSize: 11)),
+                          Text(pair.label, style: TextStyle(color: widget.s.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
+                          Text(pair.sub, style: TextStyle(color: widget.s.onSurfaceVariant, fontSize: 11)),
                         ],
                       ),
                     ),
@@ -1333,15 +1347,10 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: widget.s.cardBackground,
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: widget.s.outline.withOpacity(0.1)),
+        boxShadow: widget.s.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1350,7 +1359,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
             aspectRatio: 4 / 3,
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF141414),
+                color: widget.s.surface,
                 borderRadius: BorderRadius.circular(24),
               ),
               clipBehavior: Clip.antiAlias,
@@ -1365,8 +1374,8 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                           children: [
                             Text(
                               pair.label,
-                              style: const TextStyle(
-                                color: Color(0xFFE8E8E8),
+                              style: TextStyle(
+                                color: widget.s.onSurface,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1375,13 +1384,13 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF262626),
+                                color: widget.s.hover,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 pair.badge,
-                                style: const TextStyle(
-                                  color: Color(0xFF888888),
+                                style: TextStyle(
+                                  color: widget.s.onSurfaceVariant,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1392,8 +1401,8 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                         const SizedBox(height: 4),
                         Text(
                           _formatPrice(last, pair),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: widget.s.onSurface,
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
@@ -1445,14 +1454,14 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                               margin: const EdgeInsets.symmetric(horizontal: 2),
                               padding: const EdgeInsets.symmetric(vertical: 6),
                               decoration: BoxDecoration(
-                                color: active ? const Color(0xFF262626) : Colors.transparent,
+                                color: active ? widget.s.hover : Colors.transparent,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               alignment: Alignment.center,
                               child: Text(
                                 tf.label,
                                 style: TextStyle(
-                                  color: active ? Colors.white : const Color(0xFF777777),
+                                  color: active ? widget.s.onSurface : widget.s.onSurfaceVariant,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -1471,7 +1480,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: const Color(0xFF252525),
+              color: widget.s.hover,
               borderRadius: BorderRadius.circular(50),
             ),
             child: GestureDetector(
@@ -1479,18 +1488,18 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E8BC9),
+                  color: widget.s.primary,
                   borderRadius: BorderRadius.circular(50),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.repeat, color: Colors.white, size: 16),
+                    Icon(Icons.repeat, color: widget.s.onPrimary, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       'Alterar moeda',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: widget.s.onPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.1,
@@ -1585,7 +1594,7 @@ class _MarketChartPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CALENDAR (mantido, sem alterações)
+// CALENDAR
 // ══════════════════════════════════════════════════════════════
 
 class AiCalendarWidget extends StatefulWidget {
@@ -1616,26 +1625,26 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final rawEvents = (widget.json['events'] as List?) ?? const [];
     for (final e in rawEvents) {
       final d = e as Map;
-      final date = (d['date'] ?? '').toString();
+      final date = _sanitizeText(d['date']);
       _events.putIfAbsent(date, () => []).add((
-        name: (d['name'] ?? d['title'] ?? '').toString(),
-        time: (d['time'] ?? '').toString(),
+        name: _sanitizeText(d['name']),
+        time: _sanitizeText(d['time']),
         color: _parseColor(d['color']) ?? const Color(0xFF6F5AF6),
       ));
     }
   }
 
-  Color _cardBg()          => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-  Color _previewBg()       => widget.s.isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF8F8F8);
-  Color _monthTextColor()  => widget.s.isDark ? Colors.white : Colors.black87;
-  Color _navBtnBg()        => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
-  Color _navIconColor()    => widget.s.isDark ? const Color(0xFFAAAAAA) : Colors.black54;
-  Color _weekdayColor()    => widget.s.isDark ? const Color(0xFF555555) : Colors.black45;
-  Color _dayNumColor()     => widget.s.isDark ? const Color(0xFFCCCCCC) : Colors.black87;
-  Color _otherMonthColor() => widget.s.isDark ? const Color(0xFF3A3A3A) : Colors.black26;
-  Color _selectedBg()      => widget.s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE);
-  Color _actionsBg()       => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
-  Color _accent()          => const Color(0xFF2E8BC9);
+  Color _cardBg()          => widget.s.cardBackground;
+  Color _previewBg()       => widget.s.surface;
+  Color _monthTextColor()  => widget.s.onSurface;
+  Color _navBtnBg()        => widget.s.hover;
+  Color _navIconColor()    => widget.s.onSurfaceVariant;
+  Color _weekdayColor()    => widget.s.onSurfaceVariant;
+  Color _dayNumColor()     => widget.s.onSurface;
+  Color _otherMonthColor() => widget.s.onSurfaceVariant.withOpacity(0.5);
+  Color _selectedBg()      => widget.s.hover;
+  Color _actionsBg()       => widget.s.hover;
+  Color _accent()          => widget.s.primary;
 
   void _openNewEventSheet() {
     final s = widget.s;
@@ -1650,7 +1659,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           decoration: BoxDecoration(
-            color: s.floatingSurface,
+            color: s.cardBackground,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
           ),
           child: Column(
@@ -1713,7 +1722,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
   @override
   Widget build(BuildContext context) {
     final y = _current.year, m = _current.month;
-    final firstDay = DateTime(y, m, 1).weekday % 7; // 0 = Dom
+    final firstDay = DateTime(y, m, 1).weekday % 7;
     final daysInMonth = DateTime(y, m + 1, 0).day;
     final daysInPrev = DateTime(y, m, 0).day;
 
@@ -1767,13 +1776,8 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       decoration: BoxDecoration(
         color: _cardBg(),
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(widget.s.isDark ? 0.3 : 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: widget.s.outline.withOpacity(0.1)),
+        boxShadow: widget.s.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1871,12 +1875,12 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppIcon('add.svg', size: 14, color: Colors.white),
+                    AppIcon('add.svg', size: 14, color: widget.s.onPrimary),
                     const SizedBox(width: 7),
                     Text(
                       'Novo evento',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: widget.s.onPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.1,
@@ -1939,7 +1943,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                 fontSize: 12,
                 fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
                 color: isToday
-                    ? Colors.white
+                    ? widget.s.onPrimary
                     : isOtherMonth
                         ? _otherMonthColor()
                         : _dayNumColor(),
@@ -1968,7 +1972,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TIMER (mantido, sem alterações)
+// TIMER
 // ══════════════════════════════════════════════════════════════
 
 class AiTimerWidget extends StatefulWidget {
@@ -2016,7 +2020,7 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
     setState(() { _remaining = _totalSeconds; _running = false; });
   }
 
-  String get _label => (widget.json['label'] ?? '').toString();
+  String get _label => _sanitizeText(widget.json['label']);
 
   String get _formatted {
     final m = (_remaining ~/ 60).toString().padLeft(2, '0');
@@ -2033,9 +2037,10 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
       constraints: const BoxConstraints(maxWidth: 320),
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: s.isDark ? const Color(0xFF1B1B1B) : Colors.white,
-        border: Border.all(color: s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0), width: 1.5),
+        color: s.cardBackground,
+        border: Border.all(color: s.outline.withOpacity(0.4), width: 1.5),
         borderRadius: BorderRadius.circular(14),
+        boxShadow: s.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(children: [
@@ -2081,7 +2086,7 @@ class _TimerRingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 - 6;
-    final trackColor = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5EA);
+    final trackColor = isDark ? Colors.white24 : Colors.black12;
     canvas.drawCircle(center, radius, Paint()..color = trackColor..style = PaintingStyle.stroke..strokeWidth = 8);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
@@ -2101,7 +2106,7 @@ class _TimerRingPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MIND MAP (mantido, sem alterações)
+// MIND MAP
 // ══════════════════════════════════════════════════════════════
 
 class _MindNode {
@@ -2128,8 +2133,8 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
   _MindNode _buildNode(Map json) {
     final childrenRaw = (json['children'] as List?) ?? const [];
     return _MindNode(
-      id: (json['id'] ?? '').toString(),
-      label: (json['label'] ?? '').toString(),
+      id: _sanitizeText(json['id']),
+      label: _sanitizeText(json['label']),
       color: _parseColor(json['color']) ?? const Color(0xFF6F5AF6),
       children: childrenRaw.whereType<Map>().map((c) => _buildNode(c)).toList(),
     );
@@ -2182,9 +2187,10 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
       constraints: const BoxConstraints(maxWidth: 560),
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: s.isDark ? const Color(0xFF1B1B1B) : Colors.white,
-        border: Border.all(color: s.isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0), width: 1.5),
+        color: s.cardBackground,
+        border: Border.all(color: s.outline.withOpacity(0.4), width: 1.5),
         borderRadius: BorderRadius.circular(14),
+        boxShadow: s.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(children: [
@@ -2254,7 +2260,7 @@ class _MindMapPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MATH GRAPH (novo — todos os tipos, sliders, animação, modal)
+// MATH GRAPH
 // ══════════════════════════════════════════════════════════════
 
 class _ParamDef {
@@ -2325,7 +2331,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
   void initState() {
     super.initState();
     _buildFunctionDefs();
-    final typeFromJson = (widget.json['type'] ?? widget.json['function'] ?? '').toString().toLowerCase();
+    final typeFromJson = _sanitizeText(widget.json['type']);
     _currentType = _functionDefs.containsKey(typeFromJson) ? typeFromJson : 'quadratic';
     _params = _defaultParams(_currentType);
   }
@@ -2489,7 +2495,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
           const _ParamDef('cy', 'cy', -5, 5, 0.5, 0),
         ],
         eq: (p) => '(x${_signed(p['cx']! * -1)})² + (y${_signed(p['cy']! * -1)})² = ${_fmt(p['r']!)}²',
-        fn: (x, p) => 0, // não usado
+        fn: (x, p) => 0,
         isParametric: true,
         parametricX: (t, p) => p['cx']! + p['r']! * math.cos(t),
         parametricY: (t, p) => p['cy']! + p['r']! * math.sin(t),
@@ -2568,9 +2574,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
         currentType: _currentType,
         functionDefs: _functionDefs,
         isDark: widget.s.isDark,
-        primary: widget.s.primary,
-        onSurface: widget.s.onSurface,
-        onSurfaceVariant: widget.s.onSurfaceVariant,
+        s: widget.s,
       ),
     );
     if (selected != null && selected != _currentType) {
@@ -2608,8 +2612,8 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     activeTrackColor: widget.s.primary,
-                    inactiveTrackColor: widget.s.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD),
-                    thumbColor: Colors.white,
+                    inactiveTrackColor: widget.s.outline,
+                    thumbColor: widget.s.onPrimary,
                     overlayColor: widget.s.primary.withOpacity(0.2),
                     trackHeight: 5,
                     thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
@@ -2650,7 +2654,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
         children: [
           _LegendItem(color: def.color, label: def.label),
           const SizedBox(width: 14),
-          _LegendItem(color: widget.s.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCCCCCC), label: 'eixos'),
+          _LegendItem(color: widget.s.outline, label: 'eixos'),
         ],
       ),
     );
@@ -2660,7 +2664,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0),
+        color: widget.s.hover,
         borderRadius: BorderRadius.circular(50),
       ),
       child: Row(
@@ -2677,12 +2681,12 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.edit_rounded, size: 15, color: Colors.white),
+                    Icon(Icons.edit_rounded, size: 15, color: widget.s.onPrimary),
                     const SizedBox(width: 7),
                     Text(
                       'Editar',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: widget.s.onPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.1,
@@ -2698,11 +2702,13 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
             icon: _animating ? Icons.pause_rounded : Icons.play_arrow_rounded,
             onTap: _toggleAnimation,
             active: _animating,
+            s: widget.s,
           ),
           const SizedBox(width: 6),
           _CircleActionButton(
             icon: Icons.refresh_rounded,
             onTap: _reset,
+            s: widget.s,
           ),
         ],
       ),
@@ -2717,15 +2723,10 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: s.isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        color: s.cardBackground,
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(s.isDark ? 0.3 : 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: s.outline.withOpacity(0.1)),
+        boxShadow: s.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2734,7 +2735,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
             aspectRatio: 4 / 3,
             child: Container(
               decoration: BoxDecoration(
-                color: s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5),
+                color: s.surface,
                 borderRadius: BorderRadius.circular(24),
               ),
               clipBehavior: Clip.antiAlias,
@@ -2751,7 +2752,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                           child: Text(
                             _eqString,
                             style: TextStyle(
-                              color: s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A),
+                              color: s.onSurface,
                               fontSize: 15,
                               fontFamily: 'Georgia',
                               fontStyle: FontStyle.italic,
@@ -2793,7 +2794,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: s.isDark ? const Color(0xFF202020) : const Color(0xFFF0F0F0),
+              color: s.hover,
               borderRadius: BorderRadius.circular(20),
             ),
             child: _buildSliders(),
@@ -2811,26 +2812,27 @@ class _CircleActionButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool active;
+  final AppColorScheme s;
   const _CircleActionButton({
     required this.icon,
     required this.onTap,
+    required this.s,
     this.active = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: active ? const Color(0xFF1F6A9E) : s.primary,
+          color: active ? s.primaryContainer : s.primary,
           shape: BoxShape.circle,
         ),
         child: Center(
-          child: Icon(icon, size: 15, color: Colors.white),
+          child: Icon(icon, size: 15, color: s.onPrimary),
         ),
       ),
     );
@@ -2874,16 +2876,12 @@ class _MathTypeSheet extends StatefulWidget {
   final String currentType;
   final Map<String, _MathFunctionDef> functionDefs;
   final bool isDark;
-  final Color primary;
-  final Color onSurface;
-  final Color onSurfaceVariant;
+  final AppColorScheme s;
   const _MathTypeSheet({
     required this.currentType,
     required this.functionDefs,
     required this.isDark,
-    required this.primary,
-    required this.onSurface,
-    required this.onSurfaceVariant,
+    required this.s,
   });
 
   @override
@@ -2905,7 +2903,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
       decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        color: widget.s.cardBackground,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -2917,7 +2915,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: widget.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCCCCCC),
+                color: widget.s.onSurfaceVariant,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -2926,7 +2924,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
           Text(
             'Editar gráfico',
             style: TextStyle(
-              color: widget.onSurface,
+              color: widget.s.onSurface,
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
@@ -2947,9 +2945,9 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: active ? widget.primary : (widget.isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE)),
+                    color: active ? widget.s.primary : widget.s.hover,
                     border: Border.all(
-                      color: active ? widget.primary : (widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD)),
+                      color: active ? widget.s.primary : widget.s.outline,
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -2958,7 +2956,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: active ? Colors.white : widget.onSurfaceVariant,
+                      color: active ? widget.s.onPrimary : widget.s.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -2975,13 +2973,13 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: widget.isDark ? const Color(0xFF262626) : const Color(0xFFEEEEEE),
-                      border: Border.all(color: widget.isDark ? const Color(0xFF333333) : const Color(0xFFDDDDDD)),
+                      color: widget.s.hover,
+                      border: Border.all(color: widget.s.outline),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
                       'Cancelar',
-                      style: TextStyle(color: widget.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: widget.s.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -2994,12 +2992,12 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: widget.primary,
+                      color: widget.s.primary,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
                       'Aplicar',
-                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -3046,9 +3044,9 @@ class _MathGraphPainter extends CustomPainter {
       return Offset(px, py);
     }
 
-    final gridColor = isDark ? const Color(0xFF252525) : const Color(0xFFE0E0E0);
-    final axisColor = isDark ? const Color(0xFF4A4A4A) : const Color(0xFF999999);
-    final labelColor = isDark ? const Color(0xFF5A5A5A) : const Color(0xFF777777);
+    final gridColor = isDark ? Colors.white12 : Colors.black12;
+    final axisColor = isDark ? Colors.white38 : Colors.black38;
+    final labelColor = isDark ? Colors.white54 : Colors.black54;
 
     final stepX = _niceStep(xMax - xMin, 8);
     final stepY = _niceStep(yMax - yMin, 6);
@@ -3094,7 +3092,7 @@ class _MathGraphPainter extends CustomPainter {
     if (asymptoteX != null) {
       final ax = mapPoint(asymptoteX, 0, graphRect).dx.clamp(graphRect.left, graphRect.right);
       final dashPaint = Paint()
-        ..color = isDark ? const Color(0xFF555555) : const Color(0xFF999999)
+        ..color = isDark ? Colors.white54 : Colors.black54
         ..strokeWidth = 1
         ..style = PaintingStyle.stroke;
       final dashPath = Path();
@@ -3182,7 +3180,7 @@ class _MathGraphPainter extends CustomPainter {
       final markerFill = Paint()..color = def.color;
       canvas.drawCircle(mp, 6, markerFill);
       final markerStroke = Paint()
-        ..color = isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5)
+        ..color = isDark ? Colors.white : Colors.black
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
       canvas.drawCircle(mp, 6, markerStroke);
@@ -3283,7 +3281,7 @@ double _niceStep(double range, int maxTicks) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MAP (redesenhado — estilo card do HTML)
+// MAP
 // ══════════════════════════════════════════════════════════════
 
 class AiMapWidget extends StatefulWidget {
@@ -3318,7 +3316,8 @@ class _AiMapWidgetState extends State<AiMapWidget>
     _lat = (widget.json['lat'] is num) ? (widget.json['lat'] as num).toDouble() : 38.7223;
     _lng = (widget.json['lng'] is num) ? (widget.json['lng'] as num).toDouble() : -9.1393;
     _zoom = (widget.json['zoom'] is num) ? (widget.json['zoom'] as num).toDouble() : 13.0;
-    _name = (widget.json['name'] ?? 'Localização').toString();
+    _name = _sanitizeText(widget.json['name']);
+    if (_name.isEmpty) _name = 'Localização';
 
     _pulseController = AnimationController(
       vsync: this,
@@ -3336,17 +3335,15 @@ class _AiMapWidgetState extends State<AiMapWidget>
     super.dispose();
   }
 
-  Color get _cardBg => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-  Color get _previewBg => widget.s.isDark ? const Color(0xFF141414) : const Color(0xFFF5F5F5);
-  Color get _actionsBg => widget.s.isDark ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
-  Color get _badgeBg => widget.s.isDark
-      ? Colors.black.withOpacity(0.8)
-      : Colors.white.withOpacity(0.85);
-  Color get _badgeText => widget.s.isDark ? const Color(0xFFEEEEEE) : const Color(0xFF1A1A1A);
-  Color get _searchText => widget.s.isDark ? const Color(0xFFEEEEEE) : const Color(0xFF1A1A1A);
-  Color get _searchHint => widget.s.isDark ? const Color(0xFF777777) : const Color(0xFF999999);
-  Color get _recenterBg => widget.s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-  Color get _recenterIcon => widget.s.isDark ? const Color(0xFFDDDDDD) : const Color(0xFF444444);
+  Color get _cardBg => widget.s.cardBackground;
+  Color get _previewBg => widget.s.surface;
+  Color get _actionsBg => widget.s.hover;
+  Color get _badgeBg => widget.s.cardBackground.withOpacity(0.9);
+  Color get _badgeText => widget.s.onSurface;
+  Color get _searchText => widget.s.onSurface;
+  Color get _searchHint => widget.s.onSurfaceVariant;
+  Color get _recenterBg => widget.s.cardBackground;
+  Color get _recenterIcon => widget.s.onSurface;
 
   String get _tileUrl => widget.s.isDark
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -3437,13 +3434,8 @@ class _AiMapWidgetState extends State<AiMapWidget>
       decoration: BoxDecoration(
         color: _cardBg,
         borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(s.isDark ? 0.3 : 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: s.outline.withOpacity(0.1)),
+        boxShadow: s.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
