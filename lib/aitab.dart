@@ -1395,7 +1395,7 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
     if (!closesAfter) {
       final newlineIdx = text.indexOf('\n', last.start);
       final partial = newlineIdx >= 0 ? text.substring(newlineIdx + 1) : '';
-      return const _OpenBlockInfo('A criar widget...', partial);
+      return _OpenBlockInfo('A criar widget...', partial);
     }
   }
 
