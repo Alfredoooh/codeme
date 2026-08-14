@@ -6,7 +6,6 @@
 //   • Markdown (negrito, itálico, riscado, código inline, links)
 //   • Tabelas markdown e widgets de tabela
 //   • Blocos de código com card completo
-//   • Admonitions (> [!NOTE], [!TIP], etc.)
 //   • Matemática LaTeX-like: frações, raízes, super/subscritos,
 //     símbolos, letras gregas, operadores, setas, etc.
 //   • Comandos LaTeX adicionais: \text, \mathbf, \mathcal, etc.
@@ -17,10 +16,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart'; // ← necessária
-import 'package:flutter_highlight/flutter_highlight.dart';
-import 'package:flutter_highlight/themes/atom-one-dark.dart';
-import 'package:highlight/languages/all.dart' as highlight_languages;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'colors.dart';
 import 'aiwidgets.dart';
 import 'widgets.dart';
@@ -393,13 +389,13 @@ String _resolveFormattingCommands(String expr) {
   );
 
   result = result.replaceAllMapped(
-  RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
-  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
-);
-result = result.replaceAllMapped(
-  RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
-  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
-);
+    RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+  );
 
   for (final acc in ['hat', 'bar', 'vec', 'dot', 'ddot', 'tilde']) {
     result = result.replaceAllMapped(
@@ -789,141 +785,6 @@ MathBlockParseResult _extractMathBlocks(String raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ADMONITIONS — > [!NOTE] título / [!TIP] / [!IMPORTANT] /
-// [!WARNING] / [!CAUTION]
-// ══════════════════════════════════════════════════════════════
-
-enum _AdmonitionKind { note, tip, important, warning, caution }
-
-class _AdmonitionData {
-  final _AdmonitionKind kind;
-  final String title;
-  final String body;
-  const _AdmonitionData({required this.kind, required this.title, required this.body});
-}
-
-_AdmonitionKind? _admonitionKindFromTag(String tag) {
-  switch (tag.toUpperCase()) {
-    case 'NOTE': return _AdmonitionKind.note;
-    case 'TIP': return _AdmonitionKind.tip;
-    case 'IMPORTANT': return _AdmonitionKind.important;
-    case 'WARNING': return _AdmonitionKind.warning;
-    case 'CAUTION': return _AdmonitionKind.caution;
-    default: return null;
-  }
-}
-
-({String icon, Color color, String defaultLabel}) _admonitionStyle(_AdmonitionKind kind) {
-  switch (kind) {
-    case _AdmonitionKind.note:
-      return (icon: 'info.svg', color: const Color(0xFF2B8FE0), defaultLabel: 'Nota');
-    case _AdmonitionKind.tip:
-      return (icon: 'bulb.svg', color: const Color(0xFF22C55E), defaultLabel: 'Dica');
-    case _AdmonitionKind.important:
-      return (icon: 'priority_high.svg', color: const Color(0xFF8B5CF6), defaultLabel: 'Importante');
-    case _AdmonitionKind.warning:
-      return (icon: 'warning.svg', color: const Color(0xFFF59E0B), defaultLabel: 'Aviso');
-    case _AdmonitionKind.caution:
-      return (icon: 'error_outline.svg', color: const Color(0xFFEF4444), defaultLabel: 'Cuidado');
-  }
-}
-
-class _AdmonitionCard extends StatelessWidget {
-  final _AdmonitionData data;
-  final AppColorScheme s;
-  const _AdmonitionCard({required this.data, required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    final style = _admonitionStyle(data.kind);
-    final title = data.title.trim().isEmpty ? style.defaultLabel : data.title.trim();
-
-    // Cores adaptadas ao tema
-    final cardBg = s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
-    final titleColor = s.isDark ? const Color(0xFF9A9A9A) : const Color(0xFF666666);
-    final textColor = s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A);
-    final iconBorderColor = s.isDark ? Colors.white38 : const Color(0xFF999999);
-    final iconTextColor = s.isDark ? Colors.white70 : const Color(0xFF999999);
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: cardBg,
-        border: Border(
-          left: BorderSide(color: style.color, width: 5),
-        ),
-        borderRadius: BorderRadius.zero, // ou BorderRadius.circular(0)
-        boxShadow: s.cardShadow, // opcional, se quiseres sombra
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Título com ícone circular
-          Row(
-            children: [
-              Container(
-                width: 16,
-                height: 16,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: iconBorderColor, width: 2),
-                ),
-                child: Text(
-                  'i', // ou usa AppIcon se preferires
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: iconTextColor,
-                    height: 1.0,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: titleColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Corpo da nota com scroll horizontal (comportamento semelhante ao HTML)
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.85,
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SelectableText.rich(
-                TextSpan(
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 16,
-                    height: 1.6,
-                  ),
-                  children: _RichTextBlockParser.inlineSpans(
-                    data.body.trim(),
-                    s,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // RICH AI TEXT
 // ══════════════════════════════════════════════════════════════
 
@@ -1112,29 +973,6 @@ class _RichTextBlockParser {
           ),
         ));
         i++;
-        continue;
-      }
-
-      final admonitionHeaderMatch =
-          RegExp(r'^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$', caseSensitive: false)
-              .firstMatch(trimmed);
-      if (admonitionHeaderMatch != null) {
-        final kind = _admonitionKindFromTag(admonitionHeaderMatch.group(1)!)!;
-        final title = admonitionHeaderMatch.group(2)!.trim();
-        final bodyLines = <String>[];
-        i++;
-        while (i < lines.length) {
-          final nextTrimmed = lines[i].trim();
-          if (!nextTrimmed.startsWith('>')) break;
-          final content = nextTrimmed.replaceFirst(RegExp(r'^>\s?'), '');
-          bodyLines.add(content);
-          i++;
-        }
-        flushTable();
-        widgets.add(_AdmonitionCard(
-          data: _AdmonitionData(kind: kind, title: title, body: bodyLines.join('\n')),
-          s: s,
-        ));
         continue;
       }
 
@@ -1564,7 +1402,6 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
   @override
   Widget build(BuildContext context) {
-    // Estilo base do texto (será usado apenas para fallback)
     final baseStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 14.5,
@@ -1572,45 +1409,41 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
       color: const Color(0xFFE8E8E8),
     );
 
-    // Use flutter_highlight para o código inline
-    final highlightedCode = HighlightView(
-      widget.code,
-      language: widget.language,
-      theme: atomOneDarkTheme,
-      padding: const EdgeInsets.fromLTRB(18, 48, 18, 20),
-      textStyle: const TextStyle(
-        fontFamily: 'monospace',
-        fontSize: 14.5,
-        height: 1.7,
-        color: Color(0xFFE8E8E8),
-      ),
-    );
+    final codeSpans = _highlightCode(widget.code, widget.language, baseStyle);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(32), // ← mais curvo
+        borderRadius: BorderRadius.circular(32),
       ),
       child: Stack(
         children: [
-          Container(
-            constraints: const BoxConstraints(maxHeight: 420), // ← altura reduzida
-            child: SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: highlightedCode,
-              ),
-            ),
-          ),
+          _buildCodeBody(codeSpans, baseStyle),
           Positioned(
             top: 12,
             right: 12,
             child: _buildActions(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCodeBody(List<TextSpan> spans, TextStyle baseStyle) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 420),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(18, 48, 18, 20),
+          child: SelectableText.rich(
+            TextSpan(style: baseStyle, children: spans),
+            textAlign: TextAlign.left,
+          ),
+        ),
       ),
     );
   }
@@ -1627,7 +1460,7 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
         children: [
           if (_canPreview) ...[
             _ActionButton(
-              svgIcon: 'play.svg', // ← SVG dos assets
+              icon: Icons.play_arrow_rounded,
               color: const Color(0xFF9A9A9A),
               backgroundColor: const Color(0xFF2C2C2C),
               onTap: _openPreview,
@@ -1635,7 +1468,7 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
             const SizedBox(width: 4),
           ],
           _ActionButton(
-            svgIcon: _copied ? 'check.svg' : 'copy.svg', // ← SVG
+            icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
             color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
             backgroundColor: const Color(0xFF2C2C2C),
             onTap: _copy,
@@ -1647,13 +1480,13 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 }
 
 class _ActionButton extends StatefulWidget {
-  final String svgIcon; // agora usa SVG
+  final IconData icon;
   final Color color;
   final Color backgroundColor;
   final VoidCallback? onTap;
 
   const _ActionButton({
-    required this.svgIcon,
+    required this.icon,
     required this.color,
     required this.backgroundColor,
     this.onTap,
@@ -1681,8 +1514,8 @@ class _ActionButtonState extends State<_ActionButton> {
           color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
           borderRadius: BorderRadius.circular(9999),
         ),
-        child: AppIcon(
-          widget.svgIcon,
+        child: Icon(
+          widget.icon,
           size: 17,
           color: widget.color,
         ),
@@ -1972,7 +1805,7 @@ List<_TokenPattern> _patternsForLanguage(String language) {
 // TELA DE PREVIEW SEPARADA
 // ══════════════════════════════════════════════════════════════
 
-class AiCodePreviewScreen extends StatefulWidget {
+class AiCodePreviewScreen extends StatelessWidget {
   final String code;
   final String language;
   final AppColorScheme s;
@@ -1985,13 +1818,6 @@ class AiCodePreviewScreen extends StatefulWidget {
   });
 
   @override
-  State<AiCodePreviewScreen> createState() => _AiCodePreviewScreenState();
-}
-
-class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
-  int _selectedTab = 0; // 0 = código, 1 = prévia
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
@@ -2000,137 +1826,26 @@ class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          widget.language.isEmpty ? 'Preview' : 'Preview · ${widget.language}',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w400, // ← mais fino
-            letterSpacing: 0.3,
-          ),
+          language.isEmpty ? 'Preview' : 'Preview · $language',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400),
         ),
         leading: IconButton(
-          icon: AppIcon('arrow_back.svg', size: 20, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: _buildIosSegmentedTabs(),
-          ),
+      ),
+      body: InAppWebView(
+        initialData: InAppWebViewInitialData(
+          data: code,
+          mimeType: 'text/html',
+          baseUrl: WebUri('about:blank'),
         ),
-      ),
-      body: IndexedStack(
-        index: _selectedTab,
-        children: [
-          _buildCodeTab(),
-          _buildPreviewTab(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIosSegmentedTabs() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(30), // totalmente curvo
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _IosTabButton(
-              label: 'Código',
-              selected: _selectedTab == 0,
-              onTap: () => setState(() => _selectedTab = 0),
-            ),
-          ),
-          Expanded(
-            child: _IosTabButton(
-              label: 'Prévia',
-              selected: _selectedTab == 1,
-              onTap: () => setState(() => _selectedTab = 1),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCodeTab() {
-    return Container(
-      color: const Color(0xFF161616),
-      child: HighlightView(
-        widget.code,
-        language: widget.language,
-        theme: atomOneDarkTheme,
-        padding: const EdgeInsets.all(16),
-        textStyle: const TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 14,
-          height: 1.7,
-          color: Color(0xFFE8E8E8),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreviewTab() {
-    return InAppWebView(
-      initialData: InAppWebViewInitialData(
-        data: widget.code,
-        mimeType: 'text/html',
-        baseUrl: WebUri('about:blank'),
-      ),
-      initialSettings: InAppWebViewSettings(
-        javaScriptEnabled: true,
-        supportZoom: false,
-        transparentBackground: false,
-        allowFileAccessFromFileURLs: true,
-        allowUniversalAccessFromFileURLs: true,
-      ),
-    );
-  }
-}
-
-class _IosTabButton extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _IosTabButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF2E8BC9) : Colors.transparent,
-          borderRadius: BorderRadius.circular(26),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: selected ? Colors.white : const Color(0xFF8E8E93),
-          ),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          supportZoom: false,
+          transparentBackground: false,
+          allowFileAccessFromFileURLs: true,
+          allowUniversalAccessFromFileURLs: true,
         ),
       ),
     );
