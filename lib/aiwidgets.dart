@@ -2106,7 +2106,7 @@ class _TimerRingPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MIND MAP
+// MIND MAP (redesenhado conforme exemplo HTML)
 // ══════════════════════════════════════════════════════════════
 
 class _MindNode {
@@ -2115,7 +2115,15 @@ class _MindNode {
   final Color color;
   final List<_MindNode> children;
   Offset position = Offset.zero;
-  _MindNode({required this.id, required this.label, required this.color, required this.children});
+  bool isRoot = false;
+  bool isRightSide = true;
+
+  _MindNode({
+    required this.id,
+    required this.label,
+    required this.color,
+    required this.children,
+  });
 }
 
 class AiMindMapWidget extends StatefulWidget {
@@ -2127,136 +2135,339 @@ class AiMindMapWidget extends StatefulWidget {
 
 class _AiMindMapWidgetState extends State<AiMindMapWidget> {
   late _MindNode _root;
-  double _scale = 1.0;
-  Offset _pan = Offset.zero;
+  final ScrollController _scrollController = ScrollController();
+  final double _canvasWidth = 2400;
+  final double _canvasHeight = 1200;
+  late List<_MindNode> _allNodes;
+  late List<(Offset, Offset, Color)> _edges;
 
-  _MindNode _buildNode(Map json) {
+  _MindNode _buildNode(Map json, {bool isRoot = false, bool isRightSide = true}) {
     final childrenRaw = (json['children'] as List?) ?? const [];
-    return _MindNode(
+    final node = _MindNode(
       id: _sanitizeText(json['id']),
       label: _sanitizeText(json['label']),
-      color: _parseColor(json['color']) ?? const Color(0xFF6F5AF6),
+      color: _parseColor(json['color']) ?? _colorForDepth(isRoot ? 0 : 1),
       children: childrenRaw.whereType<Map>().map((c) => _buildNode(c)).toList(),
     );
+    node.isRoot = isRoot;
+    node.isRightSide = isRightSide;
+    return node;
+  }
+
+  Color _colorForDepth(int depth) {
+    // Paleta semelhante ao HTML, adaptada para tema claro/escuro
+    switch (depth % 6) {
+      case 0: return const Color(0xFFFCE38A); // root
+      case 1: return const Color(0xFFC9C2F5);
+      case 2: return const Color(0xFFF7B2D9);
+      case 3: return const Color(0xFFA3E0D8);
+      case 4: return const Color(0xFFFFD39A);
+      case 5: return const Color(0xFFB7DCFE);
+      default: return const Color(0xFFCCCCCC);
+    }
+  }
+
+  void _layoutTree() {
+    _allNodes = [];
+    _edges = [];
+
+    // Coloca root no centro
+    _root.position = Offset(_canvasWidth / 2, _canvasHeight / 2);
+    _root.isRoot = true;
+    _allNodes.add(_root);
+
+    // Divide filhos em direita/esquerda
+    final children = _root.children;
+    final half = (children.length / 2).ceil();
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      final isRight = i < half;
+      child.isRightSide = isRight;
+      _layoutSubtree(child, _root, isRight, depth: 1);
+      _edges.add((_root.position, child.position, child.color));
+    }
+  }
+
+  void _layoutSubtree(_MindNode node, _MindNode parent, bool isRight, {required int depth}) {
+    final direction = isRight ? 1 : -1;
+    final offsetX = depth == 1 ? 380.0 : 280.0;
+    final offsetY = depth == 1 ? 160.0 : 70.0;
+
+    // Calcula posição baseada no pai e índice entre irmãos
+    final siblings = parent.children;
+    final index = siblings.indexOf(node);
+    final totalSiblings = siblings.length;
+    final startY = parent.position.dy - ((totalSiblings - 1) * offsetY) / 2;
+    node.position = Offset(
+      parent.position.dx + direction * offsetX,
+      startY + index * offsetY,
+    );
+    node.isRightSide = isRight;
+    _allNodes.add(node);
+
+    // Layout dos filhos
+    for (final child in node.children) {
+      child.isRightSide = isRight;
+      _layoutSubtree(child, node, isRight, depth: depth + 1);
+      _edges.add((node.position, child.position, child.color));
+    }
   }
 
   @override
   void initState() {
     super.initState();
     final treeJson = widget.json['tree'] as Map? ?? {'id': 'root', 'label': 'Tema'};
-    _root = _buildNode(treeJson);
-    _layout(_root, 0, [0]);
+    _root = _buildNode(treeJson, isRoot: true);
+    _layoutTree();
+
+    // Após o primeiro frame, centraliza a visualização no root
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        final viewport = _scrollController.position.viewportDimension;
+        _scrollController.jumpTo(
+          _root.position.dx - viewport / 2,
+        );
+      }
+    });
   }
 
-  void _layout(_MindNode node, int depth, List<double> yTracker) {
-    const dx = 160.0, dy = 70.0;
-    if (node.children.isEmpty) {
-      node.position = Offset(depth * dx, yTracker[0]);
-      yTracker[0] += dy;
-      return;
-    }
-    final startY = yTracker[0];
-    for (final child in node.children) {
-      _layout(child, depth + 1, yTracker);
-    }
-    final endY = yTracker[0] - dy;
-    node.position = Offset(depth * dx, (startY + endY) / 2);
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  void _collectEdges(_MindNode node, List<(Offset, Offset, Color)> edges) {
-    for (final child in node.children) {
-      edges.add((node.position, child.position, child.color));
-      _collectEdges(child, edges);
-    }
-  }
-
-  void _collectNodes(_MindNode node, List<_MindNode> out) {
-    out.add(node);
-    for (final c in node.children) _collectNodes(c, out);
+  void _openExpanded() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AiMindMapExpandedScreen(
+          root: _root,
+          s: widget.s,
+          canvasWidth: _canvasWidth,
+          canvasHeight: _canvasHeight,
+          edges: _edges,
+          allNodes: _allNodes,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final edges = <(Offset, Offset, Color)>[];
-    _collectEdges(_root, edges);
-    final nodes = <_MindNode>[];
-    _collectNodes(_root, nodes);
-
     return Container(
-      constraints: const BoxConstraints(maxWidth: 560),
+      constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: s.cardBackground,
-        border: Border.all(color: s.outline.withOpacity(0.4), width: 1.5),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: s.outline.withOpacity(0.1)),
         boxShadow: s.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        SizedBox(
-          height: 320,
-          child: GestureDetector(
-            onScaleUpdate: (d) {
-              setState(() {
-                _scale = (_scale * d.scale).clamp(0.5, 2.5);
-                _pan += d.focalPointDelta;
-              });
-            },
-            child: ClipRect(
-              child: Transform(
-                transform: Matrix4.identity()
-                  ..translate(_pan.dx + 40, _pan.dy + 140)
-                  ..scale(_scale),
-                child: CustomPaint(
-                  painter: _MindMapPainter(edges: edges, isDark: s.isDark),
-                  child: Stack(
-                    children: nodes.map((n) => Positioned(
-                          left: n.position.dx - 60,
-                          top: n.position.dy - 16,
-                          child: Container(
-                            constraints: const BoxConstraints(maxWidth: 120),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: n.color, borderRadius: BorderRadius.circular(8)),
-                            child: Text(n.label,
-                                maxLines: 2, overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: Stack(
+              children: [
+                // Scroll area com o mapa
+                Scrollbar(
+                  controller: _scrollController,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: _canvasWidth,
+                      height: _canvasHeight,
+                      child: Stack(
+                        children: [
+                          // Linhas de conexão
+                          CustomPaint(
+                            painter: _MindMapPainter(
+                              edges: _edges,
+                              lineColor: s.outline,
+                            ),
+                            size: Size(_canvasWidth, _canvasHeight),
                           ),
-                        )).toList(),
+                          // Nodes posicionados
+                          for (final node in _allNodes)
+                            Positioned(
+                              left: node.position.dx - 80,
+                              top: node.position.dy - 16,
+                              child: _MindMapNodeWidget(node: node, s: s),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                // Botão de expandir
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: _openExpanded,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: s.hover,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: s.outline),
+                      ),
+                      child: Icon(Icons.open_in_full, size: 14, color: s.onSurface),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MindMapNodeWidget extends StatelessWidget {
+  final _MindNode node;
+  final AppColorScheme s;
+  const _MindMapNodeWidget({required this.node, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRoot = node.isRoot;
+    final bgColor = node.color;
+    final textColor = isRoot
+        ? const Color(0xFF4A3B00)
+        : Colors.white;
+    final fontSize = isRoot ? 15.0 : 12.0;
+    final padding = isRoot
+        ? const EdgeInsets.symmetric(horizontal: 26, vertical: 14)
+        : const EdgeInsets.symmetric(horizontal: 18, vertical: 10);
+    final borderRadius = isRoot ? 14.0 : 20.0;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        node.label,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+          color: textColor,
+          whiteSpace: true, // não quebrar linha
         ),
-        _WidgetActionBar(s: s, actions: [
-          _WidgetAction(icon: 'zoom_in.svg', label: 'Ampliar', onTap: () => setState(() => _scale = (_scale + 0.2).clamp(0.5, 2.5))),
-          _WidgetAction(icon: 'zoom_out.svg', label: 'Reduzir', onTap: () => setState(() => _scale = (_scale - 0.2).clamp(0.5, 2.5))),
-          _WidgetAction(icon: 'refresh.svg', label: 'Repor', onTap: () => setState(() { _scale = 1.0; _pan = Offset.zero; })),
-        ]),
-      ]),
+        overflow: TextOverflow.visible,
+      ),
     );
   }
 }
 
 class _MindMapPainter extends CustomPainter {
   final List<(Offset, Offset, Color)> edges;
-  final bool isDark;
-  _MindMapPainter({required this.edges, required this.isDark});
+  final Color lineColor;
+  _MindMapPainter({required this.edges, required this.lineColor});
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (final (from, to, color) in edges) {
-      final paint = Paint()..color = color.withOpacity(0.5)..style = PaintingStyle.stroke..strokeWidth = 2;
+    for (final (from, to, _) in edges) {
+      final paint = Paint()
+        ..color = lineColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
       final path = Path()..moveTo(from.dx, from.dy);
-      final cx = (from.dx + to.dx) / 2;
-      path.cubicTo(cx, from.dy, cx, to.dy, to.dx, to.dy);
+      final midX = (from.dx + to.dx) / 2;
+      path.cubicTo(midX, from.dy, midX, to.dy, to.dx, to.dy);
       canvas.drawPath(path, paint);
     }
   }
 
   @override
   bool shouldRepaint(covariant _MindMapPainter old) => true;
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA EXPANDIDA DO MAPA MENTAL
+// ══════════════════════════════════════════════════════════════
+
+class AiMindMapExpandedScreen extends StatelessWidget {
+  final _MindNode root;
+  final AppColorScheme s;
+  final double canvasWidth;
+  final double canvasHeight;
+  final List<(Offset, Offset, Color)> edges;
+  final List<_MindNode> allNodes;
+
+  const AiMindMapExpandedScreen({
+    super.key,
+    required this.root,
+    required this.s,
+    required this.canvasWidth,
+    required this.canvasHeight,
+    required this.edges,
+    required this.allNodes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scrollController = ScrollController();
+    // Centralizar após a primeira frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final viewport = scrollController.position.viewportDimension;
+      scrollController.jumpTo(root.position.dx - viewport / 2);
+    });
+
+    return Scaffold(
+      backgroundColor: s.pageBackground,
+      appBar: AppBar(
+        backgroundColor: s.cardBackground,
+        foregroundColor: s.onSurface,
+        elevation: 0,
+        title: Text(
+          'Mapa mental',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: s.onSurface),
+        ),
+      ),
+      body: Scrollbar(
+        controller: scrollController,
+        child: SingleChildScrollView(
+          controller: scrollController,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: canvasWidth,
+            height: canvasHeight,
+            child: Stack(
+              children: [
+                CustomPaint(
+                  painter: _MindMapPainter(edges: edges, lineColor: s.outline),
+                  size: Size(canvasWidth, canvasHeight),
+                ),
+                for (final node in allNodes)
+                  Positioned(
+                    left: node.position.dx - 80,
+                    top: node.position.dy - 16,
+                    child: _MindMapNodeWidget(node: node, s: s),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════

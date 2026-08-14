@@ -816,7 +816,7 @@ _AdmonitionKind? _admonitionKindFromTag(String tag) {
 ({String icon, Color color, String defaultLabel}) _admonitionStyle(_AdmonitionKind kind) {
   switch (kind) {
     case _AdmonitionKind.note:
-      return (icon: 'info.svg', color: const Color(0xFF3B82F6), defaultLabel: 'Nota');
+      return (icon: 'info.svg', color: const Color(0xFF2B8FE0), defaultLabel: 'Nota');
     case _AdmonitionKind.tip:
       return (icon: 'bulb.svg', color: const Color(0xFF22C55E), defaultLabel: 'Dica');
     case _AdmonitionKind.important:
@@ -837,39 +837,86 @@ class _AdmonitionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = _admonitionStyle(data.kind);
     final title = data.title.trim().isEmpty ? style.defaultLabel : data.title.trim();
-    final borderColor = s.isDark ? const Color(0xFF3A3A3A) : const Color(0xFF1B1B1B);
-    final labelColor = s.onSurfaceVariant;
+
+    // Cores adaptadas ao tema
+    final cardBg = s.isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final titleColor = s.isDark ? const Color(0xFF9A9A9A) : const Color(0xFF666666);
+    final textColor = s.isDark ? const Color(0xFFE8E8E8) : const Color(0xFF1A1A1A);
+    final iconBorderColor = s.isDark ? Colors.white38 : const Color(0xFF999999);
+    final iconTextColor = s.isDark ? Colors.white70 : const Color(0xFF999999);
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: s.surface,
-        border: Border.all(color: borderColor, width: 1.4),
-        borderRadius: BorderRadius.zero,
+        color: cardBg,
+        border: Border(
+          left: BorderSide(color: style.color, width: 5),
+        ),
+        borderRadius: BorderRadius.zero, // ou BorderRadius.circular(0)
+        boxShadow: s.cardShadow, // opcional, se quiseres sombra
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Título com ícone circular
           Row(
             children: [
-              AppIcon(style.icon, size: 15, color: style.color),
+              Container(
+                width: 16,
+                height: 16,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: iconBorderColor, width: 2),
+                ),
+                child: Text(
+                  'i', // ou usa AppIcon se preferires
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: iconTextColor,
+                    height: 1.0,
+                  ),
+                ),
+              ),
               const SizedBox(width: 8),
-              Text(title,
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: labelColor)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: titleColor,
+                ),
+              ),
             ],
           ),
-          if (data.body.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            SelectableText.rich(
-              TextSpan(
-                style: TextStyle(color: s.onSurface, fontSize: 14.5, height: 1.55),
-                children: _RichTextBlockParser.inlineSpans(data.body.trim(), s, fontSize: 14.5),
+          const SizedBox(height: 10),
+          // Corpo da nota com scroll horizontal (comportamento semelhante ao HTML)
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.85,
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SelectableText.rich(
+                TextSpan(
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 16,
+                    height: 1.6,
+                  ),
+                  children: _RichTextBlockParser.inlineSpans(
+                    data.body.trim(),
+                    s,
+                    fontSize: 16,
+                  ),
+                ),
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
