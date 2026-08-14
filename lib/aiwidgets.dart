@@ -1130,6 +1130,10 @@ class _UnifiedChartPainter extends CustomPainter {
 // NOVO WIDGET DE CÓDIGO (design atualizado)
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// WIDGET DE CÓDIGO ATUALIZADO (estilo do exemplo HTML)
+// ══════════════════════════════════════════════════════════════
+
 class AiCodeWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
@@ -1237,21 +1241,15 @@ class _AiCodeWidgetState extends State<AiCodeWidget> {
                         color: primary,
                         borderRadius: BorderRadius.circular(50),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AppIcon('play.svg', size: 14, color: Colors.white),
-                          const SizedBox(width: 7),
-                          Text(
-                            'Pré-visualizar',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'Pré-visualizar',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
                       ),
                     ),
                   ),
@@ -1298,13 +1296,13 @@ class _CodeCircleButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 34,
-          height: 34,
+          width: 40,
+          height: 40,
           decoration: const BoxDecoration(
             color: Color(0xFF2E8BC9),
             shape: BoxShape.circle,
           ),
-          child: AppIcon(icon, size: 13, color: Colors.white),
+          child: AppIcon(icon, size: 15, color: Colors.white),
         ),
       ),
     );
@@ -1367,6 +1365,7 @@ class _StickyCodeView extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 child: RichText(
+                  softWrap: false,
                   text: TextSpan(
                     style: const TextStyle(
                       fontFamily: 'monospace',
