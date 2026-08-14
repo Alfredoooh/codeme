@@ -79,23 +79,6 @@ class CraftLabApp extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // ROOT SHELL — drawer implementado nativamente com Stack +
 // AnimatedContainer, SEM o pacote flutter_slider_drawer.
-//
-// MOTIVO DA REMOÇÃO: a versão 3.0.2 do flutter_slider_drawer
-// falhou repetidamente o build no Render por causa do enum/classe
-// SlideDirection — o compilador aceita o TIPO SlideDirection mas
-// rejeita os valores LEFT_TO_RIGHT / RIGHT_TO_LEFT / TOP_TO_BOTTOM
-// ("Member not found"). Toda a documentação pública disponível
-// (pub.dev, GitHub, changelog, mirrors) está desatualizada em
-// relação ao código realmente publicado na v3.0.2, e não foi
-// possível confirmar os nomes corretos dos valores do enum sem
-// aceder ao código-fonte do pacote diretamente. Em vez de continuar
-// a adivinhar a expensas de builds falhados no Render, o drawer foi
-// reescrito usando apenas Stack, AnimatedContainer e GestureDetector
-// — widgets nativos do Flutter, sem API de terceiros.
-//
-// COMPORTAMENTO: idêntico ao SliderDrawer original — abre da
-// esquerda para a direita, largura fixa (_drawerWidth), animação
-// suave, e suporta arrastar (swipe) para fechar.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -273,9 +256,6 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
       backgroundColor: isAiTab ? s.pageBackground : s.surface,
       body: Stack(
         children: [
-          // Conteúdo principal — desliza ligeiramente e escurece
-          // quando o drawer está aberto, como no comportamento
-          // original do SliderDrawer.
           AnimatedContainer(
             duration: _drawerAnim,
             curve: Curves.easeOutCubic,
@@ -287,8 +267,6 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
               child: bodyContent,
             ),
           ),
-          // Overlay escuro clicável para fechar o drawer ao tocar
-          // fora dele.
           if (_drawerOpen)
             Positioned.fill(
               child: GestureDetector(
@@ -301,8 +279,6 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
                 ),
               ),
             ),
-          // O próprio drawer — desliza de fora do ecrã (esquerda)
-          // para dentro.
           AnimatedPositioned(
             duration: _drawerAnim,
             curve: Curves.easeOutCubic,
@@ -320,6 +296,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
                   color: s.surface,
                   child: AppDrawer(
                     s: s,
+                    onClose: _closeDrawer,
                     onSettings: _openSettings,
                     onGoHome: _goHome,
                     currentTab: _tab,
