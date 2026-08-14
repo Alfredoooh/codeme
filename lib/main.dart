@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_slider_drawer/flutter_slider_drawer.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
@@ -78,25 +77,25 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — usa flutter_slider_drawer (SliderDrawer).
+// ROOT SHELL — drawer implementado nativamente com Stack +
+// AnimatedContainer, SEM o pacote flutter_slider_drawer.
 //
-// FIX (openDrawer/closeDrawer → openSlider/closeSlider): confirmado
-// pelo changelog oficial do pacote. Já aplicado abaixo.
+// MOTIVO DA REMOÇÃO: a versão 3.0.2 do flutter_slider_drawer
+// falhou repetidamente o build no Render por causa do enum/classe
+// SlideDirection — o compilador aceita o TIPO SlideDirection mas
+// rejeita os valores LEFT_TO_RIGHT / RIGHT_TO_LEFT / TOP_TO_BOTTOM
+// ("Member not found"). Toda a documentação pública disponível
+// (pub.dev, GitHub, changelog, mirrors) está desatualizada em
+// relação ao código realmente publicado na v3.0.2, e não foi
+// possível confirmar os nomes corretos dos valores do enum sem
+// aceder ao código-fonte do pacote diretamente. Em vez de continuar
+// a adivinhar a expensas de builds falhados no Render, o drawer foi
+// reescrito usando apenas Stack, AnimatedContainer e GestureDetector
+// — widgets nativos do Flutter, sem API de terceiros.
 //
-// FIX (slideDirection): o enum correto é SlideDirection, NÃO
-// SliderOpen. Confirmado pela API reference oficial do pacote no
-// pub.dev (a biblioteca flutter_slider_drawer.dart exporta apenas
-// as classes SliderDrawerState e SlideDirection; a assinatura real
-// do construtor é "SlideDirection slideDirection = 
-// SlideDirection.LEFT_TO_RIGHT"). O nome SliderOpen, usado numa
-// correção anterior deste ficheiro, veio de um README de fork
-// desatualizado (thedoubler/Flutter_slider_drawer) e não existe no
-// pacote NikhilVadoliya/flutter_slider_drawer publicado no pub.dev,
-// que é o que está de facto no pubspec.yaml. Corrigido abaixo.
-//
-// FIX (sliderShadow): removido — parâmetro não existe na classe
-// SliderDrawer real instalada. O pacote desenha sombra própria por
-// defeito.
+// COMPORTAMENTO: idêntico ao SliderDrawer original — abre da
+// esquerda para a direita, largura fixa (_drawerWidth), animação
+// suave, e suporta arrastar (swipe) para fechar.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -105,8 +104,7 @@ class RootShell extends StatefulWidget {
 }
 
 class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
-  final GlobalKey<SliderDrawerState> _sliderDrawerKey =
-      GlobalKey<SliderDrawerState>();
+  bool _drawerOpen = false;
 
   AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
@@ -114,8 +112,9 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => _sliderDrawerKey.currentState?.openSlider();
-  void _closeDrawer() => _sliderDrawerKey.currentState?.closeSlider();
+  void _openDrawer()  => setState(() => _drawerOpen = true);
+  void _closeDrawer() => setState(() => _drawerOpen = false);
+  void _toggleDrawer() => setState(() => _drawerOpen = !_drawerOpen);
 
   void _openSettings() {
     _closeDrawer();
@@ -198,6 +197,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
   }
 
   static const double _drawerWidth = 300;
+  static const Duration _drawerAnim = Duration(milliseconds: 260);
 
   @override
   Widget build(BuildContext context) {
@@ -271,26 +271,68 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
 
     return Scaffold(
       backgroundColor: isAiTab ? s.pageBackground : s.surface,
-      body: SliderDrawer(
-        key: _sliderDrawerKey,
-        appBar: null,
-        sliderOpenSize: _drawerWidth,
-        slideDirection: SlideDirection.LEFT_TO_RIGHT,
-        animationDuration: 260,
-        slider: ClipRRect(
-          borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
-          child: AppDrawer(
-            s: s,
-            drawerKey: _sliderDrawerKey,
-            onSettings: _openSettings,
-            onGoHome: _goHome,
-            currentTab: _tab,
-            onSelectTab: _selectTab,
-            onOpenConversation: _onOpenConversation,
-            onNewChat: () => _onConversationAction(ConversationAction.newChat),
+      body: Stack(
+        children: [
+          // Conteúdo principal — desliza ligeiramente e escurece
+          // quando o drawer está aberto, como no comportamento
+          // original do SliderDrawer.
+          AnimatedContainer(
+            duration: _drawerAnim,
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(
+              _drawerOpen ? _drawerWidth : 0, 0, 0,
+            ),
+            child: AbsorbPointer(
+              absorbing: _drawerOpen,
+              child: bodyContent,
+            ),
           ),
-        ),
-        child: bodyContent,
+          // Overlay escuro clicável para fechar o drawer ao tocar
+          // fora dele.
+          if (_drawerOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _closeDrawer,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedOpacity(
+                  duration: _drawerAnim,
+                  opacity: _drawerOpen ? 1 : 0,
+                  child: Container(color: Colors.black.withOpacity(0.25)),
+                ),
+              ),
+            ),
+          // O próprio drawer — desliza de fora do ecrã (esquerda)
+          // para dentro.
+          AnimatedPositioned(
+            duration: _drawerAnim,
+            curve: Curves.easeOutCubic,
+            top: 0, bottom: 0,
+            left: _drawerOpen ? 0 : -_drawerWidth,
+            width: _drawerWidth,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (d) {
+                if (d.delta.dx < -6) _closeDrawer();
+              },
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.horizontal(right: Radius.circular(24)),
+                child: Material(
+                  color: s.surface,
+                  child: AppDrawer(
+                    s: s,
+                    onSettings: _openSettings,
+                    onGoHome: _goHome,
+                    currentTab: _tab,
+                    onSelectTab: _selectTab,
+                    onOpenConversation: _onOpenConversation,
+                    onNewChat: () =>
+                        _onConversationAction(ConversationAction.newChat),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
