@@ -14,7 +14,10 @@
 //   • Widgets inline (quando ativados)
 // ══════════════════════════════════════════════════════════════
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'colors.dart';
 import 'aiwidgets.dart';
 import 'widgets.dart';
@@ -1187,11 +1190,9 @@ class _RichTextBlockParser {
         if (i < lines.length) i++;
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: AiCodeWidget(
-            json: {
-              'language': lang.isEmpty ? 'text' : lang,
-              'code': codeLines.join('\n'),
-            },
+          child: AiCodeBlock(
+            code: codeLines.join('\n'),
+            language: lang.isEmpty ? 'text' : lang,
             s: s,
           ),
         ));
@@ -1428,6 +1429,533 @@ class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AI CODE BLOCK — visual idêntico ao HTML fornecido
+// ══════════════════════════════════════════════════════════════
+
+class _TokenPattern {
+  final RegExp regex;
+  final Color? color;
+  final FontStyle? fontStyle;
+
+  const _TokenPattern(this.regex, {this.color, this.fontStyle});
+}
+
+const Color _tokTag = Color(0xFFFF6BB3);
+const Color _tokAttr = Color(0xFFB8E986);
+const Color _tokString = Color(0xFFD4A94E);
+const Color _tokComment = Color(0xFF7A7A7A);
+const Color _tokDoctype = Color(0xFF6CC7F5);
+const Color _tokPunct = Color(0xFF808080);
+const Color _tokKeyword = Color(0xFFFF7B72);
+const Color _tokNumber = Color(0xFF79C0FF);
+const Color _tokFunction = Color(0xFFD2A8FF);
+const Color _tokType = Color(0xFFFFA657);
+const Color _tokConstant = Color(0xFF79C0FF);
+
+class AiCodeBlock extends StatefulWidget {
+  final String code;
+  final String language;
+  final AppColorScheme s;
+
+  const AiCodeBlock({
+    super.key,
+    required this.code,
+    required this.language,
+    required this.s,
+  });
+
+  @override
+  State<AiCodeBlock> createState() => _AiCodeBlockState();
+}
+
+class _AiCodeBlockState extends State<AiCodeBlock> {
+  bool _copied = false;
+  Timer? _copiedTimer;
+
+  @override
+  void dispose() {
+    _copiedTimer?.cancel();
+    super.dispose();
+  }
+
+  bool get _canPreview {
+    final lang = widget.language.toLowerCase();
+    return lang == 'html' || lang == 'htm' || lang == 'xml' || lang == 'svg';
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.code));
+    setState(() => _copied = true);
+    _copiedTimer?.cancel();
+    _copiedTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  void _openPreview() {
+    if (!_canPreview) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AiCodePreviewScreen(
+          code: widget.code,
+          language: widget.language,
+          s: widget.s,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseStyle = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: 14.5,
+      height: 1.7,
+      color: const Color(0xFFE8E8E8),
+    );
+
+    final codeSpans = _highlightCode(widget.code, widget.language, baseStyle);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
+      ),
+      child: Stack(
+        children: [
+          _buildCodeBody(codeSpans, baseStyle),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _buildActions(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCodeBody(List<TextSpan> spans, TextStyle baseStyle) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 500),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(18, 48, 18, 20),
+          child: SelectableText.rich(
+            TextSpan(style: baseStyle, children: spans),
+            textAlign: TextAlign.left,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActions() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF232323),
+        borderRadius: BorderRadius.circular(9999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ActionButton(
+            icon: Icons.play_arrow_rounded,
+            color: _canPreview ? const Color(0xFF9A9A9A) : const Color(0xFF555555),
+            backgroundColor: const Color(0xFF2C2C2C),
+            onTap: _canPreview ? _openPreview : null,
+          ),
+          const SizedBox(width: 4),
+          _ActionButton(
+            icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
+            color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
+            backgroundColor: const Color(0xFF2C2C2C),
+            onTap: _copy,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final Color backgroundColor;
+  final VoidCallback? onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+    this.onTap,
+  });
+
+  @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.onTap == null ? null : (_) => setState(() => _hover = true),
+      onTapCancel: widget.onTap == null ? null : () => setState(() => _hover = false),
+      onTapUp: widget.onTap == null ? null : (_) => setState(() => _hover = false),
+      onTap: widget.onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Icon(
+          widget.icon,
+          size: 17,
+          color: widget.color,
+        ),
+      ),
+    );
+  }
+}
+
+List<TextSpan> _highlightCode(String code, String language, TextStyle baseStyle) {
+  final lang = language.toLowerCase();
+
+  if (lang == 'html' || lang == 'htm' || lang == 'xml' || lang == 'svg') {
+    return _highlightHtml(code, baseStyle);
+  }
+
+  final patterns = _patternsForLanguage(lang);
+  final lines = code.split('\n');
+  final spans = <TextSpan>[];
+
+  for (int i = 0; i < lines.length; i++) {
+    if (i > 0) spans.add(TextSpan(text: '\n', style: baseStyle));
+    spans.addAll(_highlightLineGeneric(lines[i], patterns, baseStyle));
+  }
+
+  return spans;
+}
+
+List<TextSpan> _highlightHtml(String code, TextStyle baseStyle) {
+  final lines = code.split('\n');
+  final spans = <TextSpan>[];
+
+  for (int i = 0; i < lines.length; i++) {
+    if (i > 0) spans.add(TextSpan(text: '\n', style: baseStyle));
+    spans.addAll(_highlightHtmlLine(lines[i], baseStyle));
+  }
+
+  return spans;
+}
+
+List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle) {
+  final spans = <TextSpan>[];
+
+  final commentMatch = RegExp(r'^(\s*)(<!--.*-->)(\s*)$').firstMatch(line);
+  if (commentMatch != null) {
+    spans.add(TextSpan(text: commentMatch.group(1), style: baseStyle));
+    spans.add(TextSpan(
+      text: commentMatch.group(2),
+      style: baseStyle.copyWith(color: _tokComment, fontStyle: FontStyle.italic),
+    ));
+    spans.add(TextSpan(text: commentMatch.group(3), style: baseStyle));
+    return spans;
+  }
+
+  final doctypeMatch = RegExp(r'^(\s*)(<!DOCTYPE[^>]*>)(\s*)$', caseSensitive: false).firstMatch(line);
+  if (doctypeMatch != null) {
+    spans.add(TextSpan(text: doctypeMatch.group(1), style: baseStyle));
+    spans.add(TextSpan(
+      text: doctypeMatch.group(2),
+      style: baseStyle.copyWith(color: _tokDoctype),
+    ));
+    spans.add(TextSpan(text: doctypeMatch.group(3), style: baseStyle));
+    return spans;
+  }
+
+  int i = 0;
+  StringBuffer buffer = StringBuffer();
+
+  while (i < line.length) {
+    if (line[i] == '<') {
+      if (buffer.isNotEmpty) {
+        spans.add(TextSpan(text: buffer.toString(), style: baseStyle));
+        buffer.clear();
+      }
+      int end = line.indexOf('>', i);
+      if (end == -1) end = line.length - 1;
+      final tagContent = line.substring(i, end + 1);
+      spans.addAll(_highlightHtmlTag(tagContent, baseStyle));
+      i = end + 1;
+    } else {
+      buffer.write(line[i]);
+      i++;
+    }
+  }
+
+  if (buffer.isNotEmpty) {
+    spans.add(TextSpan(text: buffer.toString(), style: baseStyle));
+  }
+
+  return spans;
+}
+
+List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
+  final spans = <TextSpan>[];
+  final isClosing = tag.startsWith('</');
+  final innerStart = isClosing ? 2 : 1;
+  final innerEnd = tag.endsWith('>') ? tag.length - 1 : tag.length;
+  final inner = tag.substring(innerStart, innerEnd);
+
+  final nameMatch = RegExp(r'^([a-zA-Z0-9-]+)').firstMatch(inner);
+  final tagName = nameMatch?.group(1) ?? '';
+  final restStart = nameMatch != null ? nameMatch.group(0)!.length : 0;
+  final rest = inner.substring(restStart);
+
+  spans.add(TextSpan(
+    text: isClosing ? '</' : '<',
+    style: baseStyle.copyWith(color: _tokPunct),
+  ));
+
+  if (tagName.isNotEmpty) {
+    spans.add(TextSpan(
+      text: tagName,
+      style: baseStyle.copyWith(color: _tokTag),
+    ));
+  }
+
+  final attrRegex = RegExp(r'([a-zA-Z-]+)(\s*=\s*)("([^"]*)"|\'([^\']*)\')|([a-zA-Z-]+)');
+  int lastIndex = 0;
+
+  for (final m in attrRegex.allMatches(rest)) {
+    if (m.start > lastIndex) {
+      spans.add(TextSpan(
+        text: rest.substring(lastIndex, m.start),
+        style: baseStyle.copyWith(color: _tokPunct),
+      ));
+    }
+
+    if (m.group(1) != null) {
+      spans.add(TextSpan(text: m.group(1)!, style: baseStyle.copyWith(color: _tokAttr)));
+      spans.add(TextSpan(text: m.group(2)!, style: baseStyle.copyWith(color: _tokPunct)));
+      spans.add(TextSpan(text: m.group(3)!, style: baseStyle.copyWith(color: _tokString)));
+    } else if (m.group(6) != null) {
+      spans.add(TextSpan(text: m.group(6)!, style: baseStyle.copyWith(color: _tokAttr)));
+    }
+    lastIndex = m.end;
+  }
+
+  if (lastIndex < rest.length) {
+    spans.add(TextSpan(
+      text: rest.substring(lastIndex),
+      style: baseStyle.copyWith(color: _tokPunct),
+    ));
+  }
+
+  spans.add(TextSpan(
+    text: tag.endsWith('/>') ? '/>' : '>',
+    style: baseStyle.copyWith(color: _tokPunct),
+  ));
+
+  return spans;
+}
+
+List<TextSpan> _highlightLineGeneric(String line, List<_TokenPattern> patterns, TextStyle baseStyle) {
+  final spans = <TextSpan>[];
+  int index = 0;
+
+  while (index < line.length) {
+    bool matched = false;
+
+    for (final pattern in patterns) {
+      final match = pattern.regex.matchAsPrefix(line, index);
+      if (match != null && match.group(0)!.isNotEmpty) {
+        final text = match.group(0)!;
+        spans.add(TextSpan(
+          text: text,
+          style: baseStyle.copyWith(
+            color: pattern.color,
+            fontStyle: pattern.fontStyle,
+          ),
+        ));
+        index = match.end;
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      spans.add(TextSpan(text: line[index], style: baseStyle));
+      index++;
+    }
+  }
+
+  return spans;
+}
+
+List<_TokenPattern> _patternsForLanguage(String language) {
+  switch (language) {
+    case 'dart':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:abstract|as|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|while|with|yield)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:int|double|String|bool|List|Map|Set|Object|void|dynamic|Future|Stream|Widget|BuildContext)\b'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'python':
+      return [
+        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:and|as|assert|async|await|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:int|float|str|bool|list|dict|set|tuple|object)\b'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\b(?:True|False|None)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'javascript':
+    case 'js':
+    case 'typescript':
+    case 'ts':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*|/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'`(?:\\`|[^`])*`'), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|this|typeof|instanceof|in|of|async|await|try|catch|finally|throw|import|export|from|default|static|get|set)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null|undefined)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'css':
+      return [
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'#[0-9a-fA-F]{3,8}\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b(?:a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)\b'), color: _tokTag),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'bash':
+    case 'shell':
+    case 'sh':
+      return [
+        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|export|readonly|local|return|exit|echo|printf|source)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'sql':
+      return [
+        _TokenPattern(RegExp(r'--[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|DELETE|CREATE|TABLE|ALTER|DROP|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|PRIMARY|KEY|FOREIGN|REFERENCES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|DISTINCT|COUNT|SUM|AVG|MIN|MAX)\b', caseSensitive: false), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:int|varchar|char|text|date|datetime|timestamp|decimal|float|double|boolean|bool)\b', caseSensitive: false), color: _tokType),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'markdown':
+    case 'md':
+      return [
+        _TokenPattern(RegExp(r'\[([^\]]+)\]\(([^)]+)\)'), color: _tokString),
+        _TokenPattern(RegExp(r'(\*\*|__)(.*?)\1'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'(\*|_)(.*?)\1'), color: _tokTag),
+        _TokenPattern(RegExp(r'^\s{0,3}#{1,6}\s.*$'), color: _tokType),
+        _TokenPattern(RegExp(r'^\s{0,3}>.*$'), color: _tokComment),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    default:
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*|#[^\n]*|/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA DE PREVIEW SEPARADA
+// ══════════════════════════════════════════════════════════════
+
+class AiCodePreviewScreen extends StatelessWidget {
+  final String code;
+  final String language;
+  final AppColorScheme s;
+
+  const AiCodePreviewScreen({
+    super.key,
+    required this.code,
+    required this.language,
+    required this.s,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D0D0D),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161616),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          language.isEmpty ? 'Preview' : 'Preview · $language',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: InAppWebView(
+        initialData: InAppWebViewInitialData(
+          data: code,
+          mimeType: 'text/html',
+          baseUrl: 'about:blank',
+        ),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          supportZoom: false,
+          transparentBackground: false,
+          allowFileAccessFromFileURLs: true,
+          allowUniversalAccessFromFileURLs: true,
         ),
       ),
     );
