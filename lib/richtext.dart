@@ -389,13 +389,13 @@ String _resolveFormattingCommands(String expr) {
   );
 
   result = result.replaceAllMapped(
-    RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
-    (m) => '\u0006COLOR{$1}{$2}\u0006',
-  );
-  result = result.replaceAllMapped(
-    RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
-    (m) => '\u0006COLOR{$1}{$2}\u0006',
-  );
+  RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
+  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+);
+result = result.replaceAllMapped(
+  RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
+  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+);
 
   for (final acc in ['hat', 'bar', 'vec', 'dot', 'ddot', 'tilde']) {
     result = result.replaceAllMapped(
