@@ -209,7 +209,6 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer> {
   static const List<AppTab> _navigableTabs = [
     AppTab.ai,
-    AppTab.edit,
   ];
 
   @override

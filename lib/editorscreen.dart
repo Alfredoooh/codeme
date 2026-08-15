@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/edittab.dart
+// FILE: lib/editorscreen.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -91,7 +91,7 @@ class EditTabController extends ChangeNotifier {
 final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
-// EDIT TAB — dispose explícito dos WebViews adicionado. Isto é a
+// EDITOR SCREEN — dispose explícito dos WebViews adicionado. Isto é a
 // correção real do cinza no drawer: sem chamar controller.dispose()
 // aqui, a superfície nativa Android do Hybrid Composition podia
 // sobreviver 1-2 frames depois do widget Flutter já ter sido
@@ -104,13 +104,13 @@ final EditTabController editTabController = EditTabController();
 // outra coisa por cima dela.
 // ══════════════════════════════════════════════════════════════
 
-class EditTab extends StatefulWidget {
+class EditorScreen extends StatefulWidget {
   final EditorType editorType;
-  const EditTab({super.key, required this.editorType});
-  @override State<EditTab> createState() => _EditTabState();
+  const EditorScreen({super.key, required this.editorType});
+  @override State<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditTabState extends State<EditTab> {
+class _EditorScreenState extends State<EditorScreen> {
   final Map<EditorType, InAppWebViewController?> _controllers = {
     for (final t in EditorType.values) t: null,
   };

@@ -9,7 +9,7 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
 import 'aitab.dart';
-import 'edittab.dart';
+import 'editorscreen.dart';
 import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
@@ -186,7 +186,7 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
           onCanvasCreated: _onCanvasCreated,
         );
       case AppTab.edit:
-        return EditTab(editorType: _editorType);
+        return EditorScreen(editorType: _editorType);
     }
   }
 

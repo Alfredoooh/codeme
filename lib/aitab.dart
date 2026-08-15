@@ -10,7 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
-import 'edittab.dart';
+import 'editorscreen.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'aiwidgets.dart';
@@ -1195,7 +1195,7 @@ class AiTabState extends State<AiTab> {
 
   bool     _incognito    = false;
   bool     _sending      = false;
-  bool     _widgetsEnabled = false;
+  bool     _widgetsEnabled = true;
   bool     _webSearchEnabled = false;
   String   _streamingText = '';
   String?  _streamingThink;

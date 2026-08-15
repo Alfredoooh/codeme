@@ -976,32 +976,53 @@ class _RichTextBlockParser {
         continue;
       }
 
-      final quoteMatch = RegExp(r'^>\s?(.*)$').firstMatch(trimmed);
-if (quoteMatch != null) {
-  flushTable();
-  widgets.add(
-    IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 3,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: s.outline,
-              borderRadius: BorderRadius.circular(2), // pontas curvas
+      // ─────────────────────────────────────────────────────────
+      // BLOCO DE CITAÇÃO (blockquote) — agrupa linhas ">" consecutivas
+      // e remove tags [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]
+      // ─────────────────────────────────────────────────────────
+      if (trimmed.startsWith('>')) {
+        flushTable();
+        final quoteLines = <String>[];
+        while (i < lines.length) {
+          final currentTrimmed = lines[i].trim();
+          if (!currentTrimmed.startsWith('>')) break;
+
+          // Remove o ">" e espaço opcional
+          var content = currentTrimmed.replaceFirst(RegExp(r'^>\s?'), '');
+
+          // Remove qualquer tag [![...]] se presente
+          content = content.replaceFirst(
+            RegExp(r'^\s*\[![^\]]*\]\s*'),
+            '',
+          );
+
+          quoteLines.add(content);
+          i++;
+        }
+
+        final quoteText = quoteLines.join('\n');
+        widgets.add(
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 3,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: s.outline,
+                    borderRadius: BorderRadius.circular(2), // pontas curvas
+                  ),
+                ),
+                Expanded(
+                  child: _formattedText(quoteText, s),
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: _formattedText(quoteMatch.group(1)!, s),
-          ),
-        ],
-      ),
-    ),
-  );
-  i++;
-  continue;
-}
+        );
+        continue;
+      }
 
       final indentMatch = RegExp(r'^(\s*)').firstMatch(line)!;
       final indentLevel = (indentMatch.group(1)!.length / 2).floor().clamp(0, 4);
