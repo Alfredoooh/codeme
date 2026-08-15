@@ -757,9 +757,9 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                           destructive: true,
                           onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
                         ),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
                         ),
                         _MenuActionRow(
                           s: s,
@@ -770,9 +770,9 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                               : '${widget.canvasCount} documento${widget.canvasCount == 1 ? '' : 's'} nesta conversa',
                           onTap: () { _close(); widget.onOpenCanvas(); },
                         ),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
                         ),
                         ValueListenableBuilder<bool>(
                           valueListenable: _webNotifier,
@@ -1212,6 +1212,7 @@ class AiTabState extends State<AiTab> {
   int get canvasCount => _canvases.length;
   bool get widgetsEnabled => _widgetsEnabled;
   bool get webSearchEnabled => _webSearchEnabled;
+  String? get conversationId => _conversationId;
 
   bool get _hasMessages => _msgs.isNotEmpty;
 
@@ -1358,11 +1359,6 @@ class AiTabState extends State<AiTab> {
       (event) {
         if (!mounted) return;
         switch (event) {
-          case ChatTitleEvent(title: final title):
-            if (!_incognito) {
-              _applyGeneratedTitle(title);
-            }
-            break;
           case ChatTokenEvent(text: final text):
             setState(() {
               _streamingText += text;
@@ -1386,9 +1382,10 @@ class AiTabState extends State<AiTab> {
             });
             _notifyHeader();
             _scrollToEnd();
-            _persistConversation();
-            if (isFirst && _conversationId == null) {
-              _generateTitleInBackground(t);
+            if (isFirst && _conversationId == null && !_incognito) {
+              _createConversationWithGeneratedTitle(t);
+            } else {
+              _persistConversation();
             }
             if (scan.items.isNotEmpty) {
               widget.onCanvasCreated?.call(scan.items.last);
@@ -1430,42 +1427,13 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  Future<void> _applyGeneratedTitle(String title) async {
+  Future<void> _createConversationWithGeneratedTitle(String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
-    if (_conversationId == null) {
-      final created = await ConversationsApiService.create(
-        token,
-        title: title,
-        messages: _msgs,
-      );
-      if (created != null && created['id'] != null) {
-        _conversationId = created['id'].toString();
-        conversationsController.upsertLocal(ConversationItem.fromJson(created));
-      }
-    } else {
-      await ConversationsApiService.update(token, _conversationId!, title: title);
-      final existing = conversationsController.items
-          .where((c) => c.id == _conversationId)
-          .toList();
-      conversationsController.upsertLocal(ConversationItem(
-        id: _conversationId!,
-        title: title,
-        preview: _msgs.isNotEmpty ? _msgs.last.content : '',
-        pinned: existing.isNotEmpty ? existing.first.pinned : false,
-        archived: existing.isNotEmpty ? existing.first.archived : false,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-      ));
-    }
-  }
-
-  Future<void> _generateTitleInBackground(String firstMessage) async {
-    final token = authController.token;
-    if (token == null) return;
+    if (_conversationId != null) return; // já criada entretanto, não duplicar
     final title = await AiApiService.generateTitle(token, firstMessage);
     if (!mounted) return;
-    if (_incognito) return;
-    if (_conversationId != null) return;
+    if (_incognito || _conversationId != null) return;
     final created = await ConversationsApiService.create(
       token,
       title: title,
@@ -1474,6 +1442,7 @@ class AiTabState extends State<AiTab> {
     if (created != null && created['id'] != null) {
       _conversationId = created['id'].toString();
       conversationsController.upsertLocal(ConversationItem.fromJson(created));
+      _notifyHeader();
     }
   }
 

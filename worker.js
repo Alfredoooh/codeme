@@ -946,13 +946,6 @@ async function handleAiTitle(request, env) {
 // (mantido); 'gemini' deixou de existir. O campo 'model' quando
 // provider=deepseek é uma das chaves de DEEPSEEK_MODELS: "flash"
 // (padrão), "pro", "reasoning".
-//
-// isFirstMessage: quando true, o worker gera automaticamente um
-// título real (nunca "Nova conversa") ANTES de responder ao chat,
-// devolvendo-o no campo 'generatedTitle' do payload JSON de streaming
-// (primeira linha SSE, evento especial) — cumpre o pedido de que a
-// IA "sempre que for enviada uma mensagem a primeira coisa que tem
-// de fazer é criar um título com base na primeira mensagem".
 // ══════════════════════════════════════════════════════════════
 
 async function handleAiChat(request, env) {
@@ -975,14 +968,6 @@ async function handleAiChat(request, env) {
   const customSystemPrompt = body.systemPrompt || "";
   const provider           = body.provider || "deepseek";
   const modelKey           = body.model || "flash"; // flash | pro | reasoning
-  const isFirstMessage     = !!body.isFirstMessage;
-
-  // Título automático OBRIGATÓRIO gerado ANTES do chat, na primeira
-  // mensagem — nunca bloqueante para o utilizador (roda em paralelo
-  // com a chamada de chat, não em série, para não atrasar a resposta).
-  const titlePromise = isFirstMessage
-    ? deepseekGenerateTitle(env.DEEPSEEK_API_KEY, messages[messages.length - 1]?.content || "", language)
-    : Promise.resolve(null);
 
   if (provider === "groq") {
     const groqModel = body.groqModel || "llama-3.3-70b-versatile";
@@ -990,14 +975,15 @@ async function handleAiChat(request, env) {
     if (stream) {
       const groqRes = await groqChatStream(env.GROQ_API_KEY, messages, groqModel, customSystemPrompt, language);
       if (!groqRes.ok) return error("Erro Groq API: " + await groqRes.text(), groqRes.status);
-      return streamWithOptionalTitle(groqRes.body, titlePromise);
+      return new Response(groqRes.body, {
+        headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" }),
+      });
     }
     const groqRes = await groqChat(env.GROQ_API_KEY, messages, groqModel, customSystemPrompt, language);
     if (!groqRes.ok) return error("Erro Groq API: " + await groqRes.text(), groqRes.status);
     const data    = await groqRes.json();
     const content = data.choices?.[0]?.message?.content || "";
-    const generatedTitle = await titlePromise;
-    return json({ content, reasoning: null, model: groqModel, usage: data.usage || null, generatedTitle });
+    return json({ content, reasoning: null, model: groqModel, usage: data.usage || null });
   }
 
   // provider === "deepseek" (padrão)
@@ -1010,7 +996,9 @@ async function handleAiChat(request, env) {
   }
 
   if (stream) {
-    return streamWithOptionalTitle(dsRes.body, titlePromise);
+    return new Response(dsRes.body, {
+      headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" }),
+    });
   }
 
   const data      = await dsRes.json();
@@ -1020,45 +1008,7 @@ async function handleAiChat(request, env) {
   // parte do content final — mapeado para o mesmo campo 'reasoning'
   // que o cliente já espera (equivalente ao 'thought' da Gemini).
   const reasoning = choice?.message?.reasoning_content || null;
-  const generatedTitle = await titlePromise;
-  return json({ content, reasoning, model: data.model || modelKey, usage: data.usage || null, generatedTitle });
-}
-
-/// Envolve o stream cru da DeepSeek/Groq (formato SSE já pronto,
-/// linhas "data: {...}\n\n" terminadas em "data: [DONE]\n\n") e, se
-/// houver um título a gerar em paralelo, injeta-o como PRIMEIRA linha
-/// SSE especial antes de reencaminhar o resto do stream original tal
-/// e qual — o cliente reconhece essa linha pelo campo "generatedTitle"
-/// no JSON e trata-a à parte de qualquer token de texto normal.
-function streamWithOptionalTitle(originalBody, titlePromise) {
-  const encoder = new TextEncoder();
-  const { readable, writable } = new TransformStream();
-  const writer = writable.getWriter();
-
-  (async () => {
-    try {
-      const title = await titlePromise;
-      if (title) {
-        await writer.write(encoder.encode(
-          "data: " + JSON.stringify({ generatedTitle: title }) + "\n\n"
-        ));
-      }
-      const reader = originalBody.getReader();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        await writer.write(value);
-      }
-    } catch (e) {
-      console.error("[NEXA STREAM+TITLE ERROR]", e.message);
-    } finally {
-      try { await writer.close(); } catch (_) {}
-    }
-  })();
-
-  return new Response(readable, {
-    headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" }),
-  });
+  return json({ content, reasoning, model: data.model || modelKey, usage: data.usage || null });
 }
 
 async function handleAiSummarize(request, env) {

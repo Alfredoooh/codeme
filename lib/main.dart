@@ -280,16 +280,20 @@ class _RootShellState extends State<RootShell>
             width: _drawerWidth,
             child: Material(
               color: s.surface,
-              child: AppDrawer(
-                s: s,
-                onClose: _closeDrawer,
-                onSettings: _openSettings,
-                onGoHome: _goHome,
-                currentTab: _tab,
-                onSelectTab: _selectTab,
-                onOpenConversation: _onOpenConversation,
-                onNewChat: () =>
-                    _onConversationAction(ConversationAction.newChat),
+              child: AnimatedBuilder(
+                animation: _AiTabHeaderRefresh.of(context),
+                builder: (_, __) => AppDrawer(
+                  s: s,
+                  onClose: _closeDrawer,
+                  onSettings: _openSettings,
+                  onGoHome: _goHome,
+                  currentTab: _tab,
+                  onSelectTab: _selectTab,
+                  onOpenConversation: _onOpenConversation,
+                  onNewChat: () =>
+                      _onConversationAction(ConversationAction.newChat),
+                  activeConversationId: _aiTabKey.currentState?.conversationId,
+                ),
               ),
             ),
           ),

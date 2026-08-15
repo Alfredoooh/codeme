@@ -90,7 +90,10 @@ class AppColorScheme {
 
   List<BoxShadow> get floatingShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 6))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 12, offset: const Offset(0, 3))];
+      : [
+          BoxShadow(color: Colors.black.withOpacity(0.14), blurRadius: 22, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1)),
+        ];
 
   List<BoxShadow> get navBarShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]

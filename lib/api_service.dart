@@ -74,11 +74,6 @@ class ChatThinkEvent extends ChatStreamEvent {
   ChatThinkEvent(this.text);
 }
 
-class ChatTitleEvent extends ChatStreamEvent {
-  final String title;
-  ChatTitleEvent(this.title);
-}
-
 class ChatDoneEvent extends ChatStreamEvent {
   final String fullText;
   ChatDoneEvent(this.fullText);
@@ -797,7 +792,6 @@ class AiApiService {
   }) async* {
     final cfg = kProviderMap[provider]!;
     final client = http.Client();
-    bool titleEmitted = false;
 
     try {
       final req = http.Request('POST', Uri.parse('$kApiBase/ai/chat'));
@@ -849,14 +843,6 @@ class AiApiService {
           try {
             final decoded = jsonDecode(raw);
             if (decoded is! Map) continue;
-
-            if (!titleEmitted) {
-              final titleRaw = decoded['generatedTitle']?.toString();
-              if (titleRaw != null && titleRaw.trim().isNotEmpty) {
-                titleEmitted = true;
-                yield ChatTitleEvent(titleRaw.trim());
-              }
-            }
 
             final choices = decoded['choices'];
             bool handledAsChoices = false;
