@@ -93,6 +93,7 @@ class ConversationsController extends ChangeNotifier {
     try {
       final raw = await ConversationsApiService.list(token);
       items = raw.map((j) => ConversationItem.fromJson(j)).toList();
+      _sortByRecency();
     } catch (_) {
       error = 'Não foi possível carregar as conversas';
     }
@@ -110,6 +111,7 @@ class ConversationsController extends ChangeNotifier {
       id: old.id, title: old.title, preview: old.preview,
       pinned: pinned, archived: old.archived, updatedAt: old.updatedAt,
     );
+    _sortByRecency();
     notifyListeners();
     await ConversationsApiService.pin(token, id, pinned);
   }
@@ -124,6 +126,7 @@ class ConversationsController extends ChangeNotifier {
       id: old.id, title: old.title, preview: old.preview,
       pinned: old.pinned, archived: archived, updatedAt: old.updatedAt,
     );
+    _sortByRecency();
     notifyListeners();
     await ConversationsApiService.archive(token, id, archived);
   }
@@ -138,6 +141,7 @@ class ConversationsController extends ChangeNotifier {
       id: old.id, title: newTitle, preview: old.preview,
       pinned: old.pinned, archived: old.archived, updatedAt: old.updatedAt,
     );
+    _sortByRecency();
     notifyListeners();
     await ConversationsApiService.rename(token, id, newTitle);
   }
@@ -146,18 +150,24 @@ class ConversationsController extends ChangeNotifier {
     final token = authController.token;
     if (token == null) return;
     items.removeWhere((c) => c.id == id);
+    _sortByRecency();
     notifyListeners();
     await ConversationsApiService.delete(token, id);
   }
 
   void upsertLocal(ConversationItem item) {
-    final idx = items.indexWhere((c) => c.id == item.id);
-    if (idx == -1) {
-      items.insert(0, item);
-    } else {
-      items[idx] = item;
-    }
+    items.removeWhere((c) => c.id == item.id);
+    items.insert(0, item);
+    _sortByRecency();
     notifyListeners();
+  }
+
+  void _sortByRecency() {
+    items.sort((a, b) {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
   }
 }
 
@@ -448,7 +458,13 @@ class _AppDrawerState extends State<AppDrawer> {
               onArchive: () => conversationsController.archive(item.id, true),
               onDelete: () => conversationsController.delete(item.id),
             ),
-          const SizedBox(height: 8),
+          if (others.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
+            )
+          else
+            const SizedBox(height: 8),
         ],
         for (final item in others)
           _ConvTile(
@@ -1021,6 +1037,10 @@ Future<void> showRenameSheet(
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// ACCOUNT PILL — avatar corrigido para URLs remotas e base64
+// ══════════════════════════════════════════════════════════════
+
 class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onOpenSettings;
@@ -1030,6 +1050,57 @@ class _AccountPill extends StatefulWidget {
 
 class _AccountPillState extends State<_AccountPill> {
   bool _p = false;
+
+  Uint8List? _decodeAvatar(String raw) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      // URL remoto (ex: avatar do Google/Firebase) — não é base64,
+      // não deve ser decodificado aqui. Tratado à parte via Image.network.
+      return null;
+    }
+    try {
+      final commaIdx = raw.indexOf(',');
+      final b64 = raw.startsWith('data:') && commaIdx != -1
+          ? raw.substring(commaIdx + 1)
+          : raw;
+      return base64Decode(b64);
+    } catch (_) {
+      // Base64 malformado/truncado — nunca deixar rebentar o build do
+      // drawer inteiro por causa de uma imagem de perfil inválida.
+      return null;
+    }
+  }
+
+  Widget _buildAvatarContent(
+    AppColorScheme s,
+    String? avatar,
+    String initial, {
+    required double size,
+    required double fontSize,
+  }) {
+    final fallback = Text(initial,
+        style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: fontSize));
+
+    if (avatar == null || avatar.isEmpty) return fallback;
+
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return Image.network(
+        avatar,
+        width: size, height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
+      );
+    }
+
+    final bytes = _decodeAvatar(avatar);
+    if (bytes == null) return fallback;
+    return Image.memory(
+      bytes,
+      width: size, height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1069,22 +1140,7 @@ class _AccountPillState extends State<_AccountPill> {
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                       color: s.primary, shape: BoxShape.circle),
-                  child: (avatar != null && avatar.isNotEmpty)
-                      ? Image.memory(
-                          _decodeAvatar(avatar),
-                          width: 32, height: 32,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Text(initial,
-                              style: TextStyle(
-                                  color: s.onPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14)),
-                        )
-                      : Text(initial,
-                          style: TextStyle(
-                              color: s.onPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14)),
+                  child: _buildAvatarContent(s, avatar, initial, size: 32, fontSize: 14),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1100,14 +1156,6 @@ class _AccountPillState extends State<_AccountPill> {
       ]),
     );
   }
-}
-
-Uint8List _decodeAvatar(String raw) {
-  final commaIdx = raw.indexOf(',');
-  final b64 = raw.startsWith('data:') && commaIdx != -1
-      ? raw.substring(commaIdx + 1)
-      : raw;
-  return base64Decode(b64);
 }
 
 class _AccountQuickMenuButton extends StatefulWidget {
