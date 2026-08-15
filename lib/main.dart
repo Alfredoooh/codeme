@@ -77,19 +77,10 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer estilo "push": o drawer fica sempre fixo por
-// baixo, a ocupar a largura _drawerWidth encostado à esquerda; é o
-// conteúdo principal (bodyContent) que desliza para a direita quando
-// abre, revelando o drawer que já lá estava — nunca o drawer que se
-// move para dentro do ecrã. Sem o pacote flutter_slider_drawer.
-//
-// FIX (alinhamento): a versão anterior tinha o drawer dentro de um
-// AnimatedPositioned que também animava a sua própria posição
-// (left: -_drawerWidth → 0), ao mesmo tempo que o conteúdo também
-// animava via transform. As duas animações concorrentes causavam o
-// desalinhamento visto no ecrã (drawer a aparecer fora da área
-// revelada). Agora o drawer fica num Positioned estático (sempre em
-// left:0, sempre montado), e só o conteúdo acima dele anima.
+// ROOT SHELL — drawer estilo "push" com gesto contínuo.
+// O drawer fica sempre fixo por baixo; o conteúdo principal desliza
+// para a direita conforme o dedo, com encolhimento e cantos que
+// arredondam proporcionalmente ao progresso do gesto.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -97,8 +88,15 @@ class RootShell extends StatefulWidget {
   @override State<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
-  bool _drawerOpen = false;
+class _RootShellState extends State<RootShell>
+    with ThemeReactive<RootShell>, SingleTickerProviderStateMixin {
+  late final AnimationController _drawerCtrl = AnimationController(
+    vsync: this,
+    duration: _drawerAnim,
+    value: 0.0,
+  );
+
+  bool get _drawerOpen => _drawerCtrl.value > 0.5;
 
   AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
@@ -106,9 +104,15 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => setState(() => _drawerOpen = true);
-  void _closeDrawer() => setState(() => _drawerOpen = false);
-  void _toggleDrawer() => setState(() => _drawerOpen = !_drawerOpen);
+  void _openDrawer()  => _drawerCtrl.animateTo(1.0, curve: _drawerCurve);
+  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: _drawerCurve);
+  void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
+
+  @override
+  void dispose() {
+    _drawerCtrl.dispose();
+    super.dispose();
+  }
 
   void _openSettings() {
     _closeDrawer();
@@ -191,8 +195,8 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
   }
 
   static const double _drawerWidth = 280;
-  static const Duration _drawerAnim = Duration(milliseconds: 380);
-  static const Curve _drawerCurve = Curves.easeOutQuint;
+  static const Duration _drawerAnim = Duration(milliseconds: 320);
+  static const Curve _drawerCurve = Curves.easeOutCubic;
 
   @override
   Widget build(BuildContext context) {
@@ -289,32 +293,65 @@ class _RootShellState extends State<RootShell> with ThemeReactive<RootShell> {
               ),
             ),
           ),
-          // Conteúdo principal — desliza inteiro para a direita numa
-          // só peça (sombra própria incluída), revelando o drawer por
-          // baixo. Curva mais suave e ligeiramente mais longa para a
-          // sensação premium pedida.
-          AnimatedContainer(
-            duration: _drawerAnim,
-            curve: _drawerCurve,
-            transform: Matrix4.translationValues(
-              _drawerOpen ? _drawerWidth : 0, 0, 0,
-            ),
-            decoration: BoxDecoration(
-              boxShadow: _drawerOpen
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 24,
-                        offset: const Offset(-4, 0),
-                      ),
-                    ]
-                  : const [],
-            ),
-            child: GestureDetector(
-              onHorizontalDragUpdate: (d) {
-                if (_drawerOpen && d.delta.dx < -6) _closeDrawer();
+          // Conteúdo principal — segue o dedo em tempo real durante o
+          // arraste (via _drawerCtrl.value, 0.0 a 1.0), com encolhimento
+          // progressivo e cantos que se arredondam conforme o drawer
+          // abre. AnimatedBuilder reconstrói só este bloco a cada tick
+          // do controller, seja por gesto ou por animateTo/fling.
+          GestureDetector(
+            behavior: HitTestBehavior.deferToChild,
+            onHorizontalDragStart: (_) {
+              _drawerCtrl.stop();
+            },
+            onHorizontalDragUpdate: (d) {
+              final delta = d.delta.dx / _drawerWidth;
+              _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+            },
+            onHorizontalDragEnd: (d) {
+              final velocity = d.velocity.pixelsPerSecond.dx;
+              // Fling rápido decide a direção mesmo a meio do gesto;
+              // sem fling, decide pela posição (mais de metade aberto).
+              if (velocity.abs() > 300) {
+                if (velocity > 0) {
+                  _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                } else {
+                  _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                }
+              } else if (_drawerCtrl.value > 0.5) {
+                _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+              } else {
+                _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+              }
+            },
+            child: AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (_, child) {
+                final t = _drawerCtrl.value;
+                final radius = 24.0 * t;
+                final scale = 1.0 - (0.06 * t);
+                return Transform(
+                  transform: Matrix4.identity()
+                    ..translate(_drawerWidth * t, 0.0)
+                    ..scale(scale),
+                  alignment: Alignment.center,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius),
+                      boxShadow: t > 0
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18 * t),
+                                blurRadius: 24,
+                                offset: const Offset(-4, 0),
+                              ),
+                            ]
+                          : const [],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: child,
+                  ),
+                );
               },
-              behavior: HitTestBehavior.deferToChild,
               child: AbsorbPointer(
                 absorbing: _drawerOpen,
                 child: bodyContent,

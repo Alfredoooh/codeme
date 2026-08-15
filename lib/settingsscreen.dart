@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
@@ -15,7 +16,7 @@ class SettingsScreen extends StatefulWidget {
   @override State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<SettingsScreen> {
   bool _refreshing = false;
 
   @override
@@ -145,201 +146,217 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final user = authController.user;
-    return Material(
-      type: MaterialType.transparency,
-      child: ColoredBox(
-        color: s.pageBackground,
-        child: SafeArea(
-          child: Stack(children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: 52 + 6),
-                Expanded(
-                  child: RefreshIndicator(
-                    color: s.primary,
-                    backgroundColor: s.cardBackground,
-                    onRefresh: _refreshMe,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                      children: [
-                        _ProfileHeader(s: s, user: user, loading: _refreshing),
 
-                        const SizedBox(height: 28),
+    // ══════════════════════════════════════════════════════════
+    // FIX: status bar presa. AnnotatedRegion respeita o z-order de
+    // rota e aplica o estilo ao topo da pilha, sem depender de
+    // chamadas imperativas que ficam "por baixo" desta rota nova.
+    // ══════════════════════════════════════════════════════════
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarDividerColor: Colors.transparent,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ColoredBox(
+          color: s.pageBackground,
+          child: SafeArea(
+            child: Stack(children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 52 + 6),
+                  Expanded(
+                    child: RefreshIndicator(
+                      color: s.primary,
+                      backgroundColor: s.cardBackground,
+                      onRefresh: _refreshMe,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                        children: [
+                          _ProfileHeader(s: s, user: user, loading: _refreshing),
 
-                        _SectionLabel(s: s, label: 'Aparência'),
-                        const SizedBox(height: 10),
-                        _SettingsGroup(s: s, rows: [
-                          _SettingsRow(
-                            s: s,
-                            label: 'Modo escuro',
-                            onTap: () {},
-                            trailing: AppSwitch(
-                              value: appTheme.isDark,
+                          const SizedBox(height: 28),
+
+                          _SectionLabel(s: s, label: 'Aparência'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
                               s: s,
-                              onChanged: (_) => appTheme.toggleDark(),
+                              label: 'Modo escuro',
+                              onTap: () {},
+                              trailing: AppSwitch(
+                                value: appTheme.isDark,
+                                s: s,
+                                onChanged: (_) => appTheme.toggleDark(),
+                              ),
                             ),
-                          ),
-                        ]),
+                          ]),
 
-                        const SizedBox(height: 28),
+                          const SizedBox(height: 28),
 
-                        _SectionLabel(s: s, label: 'Conta'),
-                        const SizedBox(height: 10),
-                        _SettingsGroup(s: s, rows: [
-                          _SettingsRow(
-                            s: s,
-                            label: 'Nome',
-                            onTap: () => _editName(context, s),
-                            trailing: Text('Alterar',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.primary,
-                                    fontWeight: FontWeight.w500)),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Email',
-                            onTap: () {},
-                            trailing: Text(user?.email ?? '—',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.onSurfaceVariant),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Palavra-passe',
-                            onTap: () => _editPassword(context, s),
-                            trailing: Text('Alterar',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.primary,
-                                    fontWeight: FontWeight.w500)),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Créditos',
-                            onTap: () {},
-                            trailing: Text('${user?.credits ?? 0}',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.onSurfaceVariant)),
-                          ),
-                        ]),
+                          _SectionLabel(s: s, label: 'Conta'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
+                              s: s,
+                              label: 'Nome',
+                              onTap: () => _editName(context, s),
+                              trailing: Text('Alterar',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.primary,
+                                      fontWeight: FontWeight.w500)),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Email',
+                              onTap: () {},
+                              trailing: Text(user?.email ?? '—',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Palavra-passe',
+                              onTap: () => _editPassword(context, s),
+                              trailing: Text('Alterar',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.primary,
+                                      fontWeight: FontWeight.w500)),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Créditos',
+                              onTap: () {},
+                              trailing: Text('${user?.credits ?? 0}',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant)),
+                            ),
+                          ]),
 
-                        const SizedBox(height: 28),
+                          const SizedBox(height: 28),
 
-                        _SectionLabel(s: s, label: 'Dados'),
-                        const SizedBox(height: 10),
-                        _SettingsGroup(s: s, rows: [
-                          _SettingsRow(
-                            s: s,
-                            label: 'Eliminar todas as conversas',
-                            labelColor: s.error,
-                            onTap: () => _confirmDeleteAllConversations(context, s),
-                            trailing: const SizedBox.shrink(),
-                          ),
-                        ]),
+                          _SectionLabel(s: s, label: 'Dados'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
+                              s: s,
+                              label: 'Eliminar todas as conversas',
+                              labelColor: s.error,
+                              onTap: () => _confirmDeleteAllConversations(context, s),
+                              trailing: const SizedBox.shrink(),
+                            ),
+                          ]),
 
-                        const SizedBox(height: 28),
+                          const SizedBox(height: 28),
 
-                        _SectionLabel(s: s, label: 'Sobre'),
-                        const SizedBox(height: 10),
-                        _SettingsGroup(s: s, rows: [
-                          _SettingsRow(
-                            s: s,
-                            label: 'Versão',
-                            onTap: () {},
-                            trailing: Text('1.0.0',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.onSurfaceVariant)),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Termos de serviço',
-                            onTap: () {},
-                            trailing: const SizedBox.shrink(),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Política de privacidade',
-                            onTap: () {},
-                            trailing: const SizedBox.shrink(),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Enviar feedback',
-                            onTap: () {},
-                            trailing: const SizedBox.shrink(),
-                          ),
-                          _SettingsRow(
-                            s: s,
-                            label: 'Ajuda e suporte',
-                            onTap: () {},
-                            trailing: const SizedBox.shrink(),
-                          ),
-                        ]),
+                          _SectionLabel(s: s, label: 'Sobre'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
+                              s: s,
+                              label: 'Versão',
+                              onTap: () {},
+                              trailing: Text('1.0.0',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant)),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Termos de serviço',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Política de privacidade',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Enviar feedback',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Ajuda e suporte',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                          ]),
 
-                        const SizedBox(height: 90),
+                          const SizedBox(height: 90),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
                       ],
                     ),
                   ),
+                  child: Row(children: [
+                    AppTap(
+                      onTap: () => Navigator.pop(context),
+                      s: s,
+                      child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('Definições',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: s.onSurface)),
+                  ]),
                 ),
-              ],
-            ),
-
-            Positioned(
-              top: 0, left: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      s.pageBackground,
-                      s.pageBackground.withOpacity(0.0),
-                    ],
-                  ),
-                ),
-                child: Row(children: [
-                  AppTap(
-                    onTap: () => Navigator.pop(context),
-                    s: s,
-                    child: AppIcon('back.svg', color: s.onSurface, size: 20),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('Definições',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurface)),
-                ]),
               ),
-            ),
 
-            Positioned(
-              left: 0, right: 0, bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      s.pageBackground,
-                      s.pageBackground.withOpacity(0.0),
-                    ],
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
+                    ),
                   ),
+                  child: _LogoutButton(
+                      s: s, onTap: () => _confirmLogout(context, s)),
                 ),
-                child: _LogoutButton(
-                    s: s, onTap: () => _confirmLogout(context, s)),
               ),
-            ),
-          ]),
+            ]),
+          ),
         ),
       ),
     );
