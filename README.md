@@ -1,414 +1,1077 @@
-Nota de honestidade importante: o novo _ProcessPill usa AppIcon('chevron_down.svg', ...). Não confirmei que este asset existe na tua pasta svg — o código usa chevron_right.svg noutros pontos (ex. _CanvasCard), mas nunca vi chevron_down.svg referenciado em nenhuma parte do ficheiro original. Se não existir, o AppIcon provavelmente vai falhar a carregar o SVG em runtime (dependendo de como AppIcon trata assets em falta). Se não tiveres esse ícone, diz-me o nome real do que tens (ou se preferes que eu troque para uma rotação de chevron_right.svg) que eu corrijo.
-Também assumi que existe uma função findOpenWidgetBlock(text) em aiwidgets.dart que devolve algo com .startIndex e .rawContent — não tinha esse ficheiro no prompt, só vi parseAiWidgetBlocks e hasOpenWidgetBlock a serem chamados em richtext.dart/aitab.dart original. Se aiwidgets.dart não tiver essa função exatamente com esse shape, preciso de ver o ficheiro para ajustar _detectOpeningBlock corretamente
+Entendido, opção mais simples e sem adicionar dependência de outro provedor. Vou fazer o worker extrair texto de PDFs anexados (enviando ao DeepSeek como texto) e, quando houver imagem anexada, avisar claramente o utilizador em vez de fingir que foi analisada.
 
+Agora vou fechar todos os snippets. São vários ficheiros — vou organizá-los por assunto.
 
-```html
-<!DOCTYPE html>
-<html lang="pt-PT">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat com Processos Dinâmicos</title>
-<style>
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+## 1. `lib/aitab.dart`
 
-  body {
-    background: #0e0e10;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding: 24px;
-  }
+### 1a — Corrige o rename que não fazia nada:
 
-  .chat-wrap {
-    width: 100%;
-    max-width: 460px;
-  }
+Perfeito — `showRenameSheet` já existe em `drawermenu.dart` e `conversationsController.rename(id, title)` já existe (verificado nas sessões anteriores). Vou usar o mesmo padrão dentro do `aitab.dart`, que precisa importar `showRenameSheet` de `drawermenu.dart` (já importa `conversationsController` e `ConversationItem` desse ficheiro).
 
-  .block {
-    margin-bottom: 4px;
-  }
+Agora tenho tudo confirmado. Aqui estão os snippets — vários ficheiros, organizados por assunto.
 
-  /* -------- Texto de resposta (streaming) -------- */
-  .answer-text {
-    font-size: 15px;
-    line-height: 1.65;
-    color: #e4e4e8;
-    white-space: pre-wrap;
-    padding: 6px 0;
-  }
+---
 
-  .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 14px;
-    background: #e4e4e8;
-    margin-left: 2px;
-    vertical-align: middle;
-    animation: blink 0.9s step-start infinite;
-  }
+## 1. `lib/aitab.dart`
 
-  @keyframes blink {
-    50% { opacity: 0; }
-  }
+### 1a — Import: adicionar `showRenameSheet`
 
-  .cursor.hidden {
-    display: none;
-  }
+```dart
+// ANTES:
+import 'drawermenu.dart' show conversationsController, ConversationItem;
 
-  /* -------- Linha de processo (ícone + texto), ambos com shimmer enquanto ativo -------- */
-  .process-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
-    user-select: none;
-    cursor: pointer;
-  }
-
-  .process-icon {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .process-icon svg {
-    width: 17px;
-    height: 17px;
-    display: block;
-  }
-
-  /* estado inativo (não streaming, não hover) */
-  .process-icon svg path,
-  .process-icon svg circle,
-  .process-icon svg line,
-  .process-icon svg polyline {
-    stroke: #9a9aa4;
-    fill: none;
-  }
-
-  .process-icon svg.filled path {
-    fill: #9a9aa4;
-    stroke: none;
-  }
-
-  .process-text {
-    font-size: 14px;
-    color: #9a9aa4;
-  }
-
-  /* Shimmer aplicado ao ícone E ao texto em simultâneo, mesma animação sincronizada */
-  .process-row.active .process-text {
-    background: linear-gradient(100deg, #55555f 30%, #f5f5fa 50%, #55555f 70%);
-    background-size: 250% 100%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    animation: shimmerMove 1.8s ease-in-out infinite;
-  }
-
-  .process-row.active .process-icon svg path,
-  .process-row.active .process-icon svg circle,
-  .process-row.active .process-icon svg line,
-  .process-row.active .process-icon svg polyline {
-    stroke: url(#shimmerGradient);
-  }
-
-  .process-row.active .process-icon svg.filled path {
-    fill: url(#shimmerGradient);
-  }
-
-  @keyframes shimmerMove {
-    0% { background-position: 200% 0; }
-    100% { background-position: -50% 0; }
-  }
-
-  .process-timer {
-    font-size: 12px;
-    color: #55555e;
-    margin-left: 2px;
-  }
-
-  .process-chevron {
-    width: 13px;
-    height: 13px;
-    margin-left: auto;
-    flex-shrink: 0;
-    transition: transform 0.25s ease;
-  }
-
-  .process-chevron path {
-    stroke: #6b6b76;
-  }
-
-  .process-row.expanded .process-chevron {
-    transform: rotate(180deg);
-  }
-
-  /* -------- Detalhe interno do processo (pode ser ocultado a qualquer momento) -------- */
-  .process-detail {
-    max-height: 3000px;
-    overflow: hidden;
-    transition: max-height 0.4s ease, opacity 0.3s ease, margin 0.3s ease;
-    opacity: 1;
-    padding-left: 26px;
-    margin-top: 2px;
-  }
-
-  .process-detail.hidden {
-    max-height: 0;
-    opacity: 0;
-    margin-top: 0;
-  }
-
-  .process-detail-text {
-    font-size: 13px;
-    color: #55555e;
-    line-height: 1.55;
-    white-space: pre-wrap;
-  }
-
-  .process-cursor {
-    display: inline-block;
-    width: 2px;
-    height: 12px;
-    background: #55555e;
-    margin-left: 2px;
-    vertical-align: middle;
-    animation: blink 0.9s step-start infinite;
-  }
-
-  .process-cursor.hidden {
-    display: none;
-  }
-</style>
-</head>
-<body>
-
-<!-- Gradiente SVG global usado no stroke/fill animado dos ícones durante o shimmer -->
-<svg width="0" height="0" style="position:absolute">
-  <defs>
-    <linearGradient id="shimmerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#55555f"/>
-      <stop offset="50%" stop-color="#f5f5fa"/>
-      <stop offset="100%" stop-color="#55555f"/>
-      <animateTransform attributeName="gradientTransform" type="translate"
-        from="-1 0" to="1 0" dur="1.8s" repeatCount="indefinite"/>
-    </linearGradient>
-  </defs>
-</svg>
-
-<div class="chat-wrap" id="chatWrap"></div>
-
-<script>
-(function () {
-  var chatWrap = document.getElementById('chatWrap');
-
-  // Ícone principal do produto (documento)
-  var docIconSVG = '<svg class="filled" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,4h-1.101c-.465-2.279-2.485-4-4.899-4h-2c-2.414,0-4.435,1.721-4.899,4h-1.101C2.243,4,0,6.243,0,9v10c0,2.757,2.243,5,5,5h14c2.757,0,5-2.243,5-5V9c0-2.757-2.243-5-5-5ZM11,2h2c1.304,0,2.415,.836,2.828,2h-7.656c.413-1.164,1.524-2,2.828-2ZM5,6h14c1.654,0,3,1.346,3,3v1h-3v-1c0-.552-.447-1-1-1s-1,.448-1,1v1H7v-1c0-.552-.447-1-1-1s-1,.448-1,1v1H2v-1c0-1.654,1.346-3,3-3Zm14,16H5c-1.654,0-3-1.346-3-3v-7h3v1c0,.552,.447,1,1,1s1-.448,1-1v-1h10v1c0,.552,.447,1,1,1s1-.448,1-1v-1h3v7c0,1.654-1.346,3-3,3Z"/></svg>';
-
-  // Ícone de edição (lápis) — SVG inline no estilo Lucide (stroke-based)
-  var editIconSVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
-
-  var chevronSVG = '<svg class="process-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-
-  var sequence = [
-    {
-      type: "answer",
-      text: "Vou criar o material completo de fonética que pediste, com as 10 aulas organizadas por ordem progressiva de dificuldade. Vou incluir todas as combinações consoante+vogal como pr+a=pra, br+a=bra, bl+a=bla, cr+a=cra, fr+a=fra, gr+a=gra, tr+a=tra, dr+a=dra, e as famílias qua, que, qui, quo em todas as suas variações. Cada aula vai ter listas de sílabas, palavras completas, frases de exemplo, exercícios de leitura, ditados mistos e uma pequena avaliação prática no final para consolidar o que foi aprendido nessa sessão."
-    },
-    {
-      type: "process",
-      icon: docIconSVG,
-      label: "A criar ficheiro",
-      duration: 82000,
-      detail: "A definir a estrutura geral do documento com cabeçalho, índice das 10 aulas e secção de instruções para o utilizador.\n\nA gerar a tabela completa de sílabas simples: pa, pe, pi, po, pu, ba, be, bi, bo, bu, ta, te, ti, to, tu, da, de, di, do, du, e assim sucessivamente para todas as consoantes do alfabeto português.\n\nA gerar a tabela de encontros consonantais válidos: pra, pre, pri, pro, pru, bra, bre, bri, bro, bru, tra, tre, tri, tro, tru, dra, dre, dri, dro, dru, cra, cre, cri, cro, cru, gra, gre, gri, gro, gru, fra, fre, fri, fro, fru, bla, ble, bli, blo, blu, cla, cle, cli, clo, clu, fla, fle, fli, flo, flu, gla, gle, gli, glo, glu, pla, ple, pli, plo, plu.\n\nA gerar a família qu: qua, que, qui, quo, e a validar que que e qui não levam til nem trema conforme o novo acordo ortográfico, garantindo que os exemplos estão corretos foneticamente.\n\nA distribuir o conteúdo pelas 10 aulas por ordem de dificuldade: aula 1 e 2 para sílabas simples, aula 3 e 4 para introdução aos encontros consonantais mais comuns como pr, br, tr, aula 5 e 6 para os restantes encontros consonantais, aula 7 e 8 para a família qu e outras irregularidades, aula 9 para revisão geral com todos os padrões misturados, e aula 10 para avaliação final.\n\nA adicionar exercícios práticos a cada aula: leitura em voz alta, ditado de palavras, formação de frases simples e um pequeno jogo de associação de sílabas.\n\nA rever a formatação para impressão em A4, com espaçamento adequado e tipo de letra legível para prática diária.\n\nA fazer uma última verificação cruzada entre todas as tabelas geradas e o conteúdo distribuído por aula, confirmando que nenhuma sílaba ou padrão ficou de fora e que a progressão de dificuldade está coerente do início ao fim do material."
-    },
-    {
-      type: "answer",
-      text: "Ficheiro criado com sucesso. Contém as 10 aulas completas, com todas as tabelas de sílabas simples e de encontros consonantais, a família qua, que, qui, quo devidamente incluída, exercícios práticos, ditados mistos e uma avaliação final. Está formatado em português europeu e pronto para imprimir e usar aula a aula."
-    },
-    {
-      type: "process",
-      icon: editIconSVG,
-      label: "A editar ficheiro",
-      duration: 80000,
-      detail: "A rever o pedido de ajuste: adicionar mais exemplos práticos de palavras do dia a dia para cada padrão silábico, tornando o material mais aplicável à vida real.\n\nA percorrer aula por aula e a inserir pelo menos cinco palavras comuns adicionais por padrão, evitando repetições com as já existentes.\n\nA verificar consistência ortográfica em todas as novas palavras acrescentadas, confirmando que seguem o novo acordo ortográfico da língua portuguesa.\n\nA ajustar os ditados mistos de cada aula para incorporar as novas palavras nos exercícios, mantendo o nível de dificuldade coerente com a progressão das aulas anteriores.\n\nA rever a avaliação prática final para garantir que cobre proporcionalmente todos os padrões silábicos ensinados ao longo das 10 aulas, sem sobrecarregar nenhuma categoria específica.\n\nA validar novamente a paginação e o espaçamento do documento após as inserções de conteúdo, assegurando que continua adequado para impressão em A4.\n\nA confirmar que todas as referências cruzadas entre aulas continuam corretas depois das edições, e a fazer uma passagem final de leitura sobre o documento completo antes de o considerar concluído."
-    },
-    {
-      type: "answer",
-      text: "Pronto, o ficheiro foi atualizado com mais exemplos práticos de palavras do dia a dia em cada aula, os ditados mistos foram ajustados para incluir esse novo vocabulário e a avaliação final ficou equilibrada entre todos os padrões silábicos. O documento mantém a formatação adequada para impressão."
-    }
-  ];
-
-  var index = 0;
-
-  function nextStep() {
-    if (index >= sequence.length) return;
-    var step = sequence[index];
-    index++;
-
-    if (step.type === "answer") {
-      renderAnswer(step.text, nextStep);
-    } else {
-      renderProcess(step, nextStep);
-    }
-  }
-
-  function renderAnswer(text, done) {
-    var el = document.createElement('div');
-    el.className = 'block answer-text';
-    el.innerHTML = '<span class="cursor"></span>';
-    chatWrap.appendChild(el);
-
-    var cursor = el.querySelector('.cursor');
-    streamWords(text, function (current, finished) {
-      el.innerHTML = current + ' ';
-      el.appendChild(cursor);
-      window.scrollTo(0, document.body.scrollHeight);
-      if (finished) {
-        setTimeout(function () {
-          cursor.classList.add('hidden');
-          done();
-        }, 400);
-      }
-    }, 30);
-  }
-
-  function renderProcess(step, done) {
-    var row = document.createElement('div');
-    row.className = 'block process-row active expanded';
-    row.innerHTML =
-      '<div class="process-icon">' + step.icon + '</div>' +
-      '<div class="process-text"></div>' +
-      '<span class="process-timer">0s</span>' +
-      chevronSVG;
-    chatWrap.appendChild(row);
-
-    var textEl = row.querySelector('.process-text');
-    var timerEl = row.querySelector('.process-timer');
-    textEl.textContent = step.label;
-
-    var detail = document.createElement('div');
-    detail.className = 'block process-detail';
-    detail.innerHTML = '<div class="process-detail-text"><span class="process-cursor"></span></div>';
-    chatWrap.appendChild(detail);
-
-    var detailTextEl = detail.querySelector('.process-detail-text');
-    var pCursor = detail.querySelector('.process-cursor');
-
-    var startTime = Date.now();
-    var running = true;
-    var finished = false;
-
-    // Cronómetro em tempo real, atualiza a cada segundo enquanto o processo corre
-    var timerInterval = setInterval(function () {
-      if (!running) return;
-      var elapsed = Math.round((Date.now() - startTime) / 1000);
-      timerEl.textContent = elapsed + "s";
-    }, 250);
-
-    // Clique na linha alterna aberto/fechado a qualquer momento, mesmo durante o streaming.
-    // Isto NÃO pausa o streaming nem o cronómetro — só mostra/oculta o detalhe.
-    row.addEventListener('click', function () {
-      var isHidden = detail.classList.toggle('hidden');
-      row.classList.toggle('expanded', !isHidden);
-    });
-
-    streamWordsForDuration(step.detail, step.duration, function (current, done2) {
-      detailTextEl.innerHTML = current + ' ';
-      detailTextEl.appendChild(pCursor);
-      window.scrollTo(0, document.body.scrollHeight);
-      if (done2) {
-        finishStreaming();
-      }
-    });
-
-    function finishStreaming() {
-      if (finished) return;
-      finished = true;
-      pCursor.classList.add('hidden');
-      running = false;
-      clearInterval(timerInterval);
-
-      var elapsedFinal = Math.max(1, Math.round((Date.now() - startTime) / 1000));
-      timerEl.textContent = elapsedFinal + "s";
-
-      setTimeout(function () {
-        row.classList.remove('active');
-        row.classList.remove('expanded');
-        textEl.textContent = step.label.replace("A criar", "Criou").replace("A editar", "Editou") + " · " + elapsedFinal + "s";
-        timerEl.style.display = 'none';
-        detail.classList.add('hidden');
-        done();
-      }, 400);
-    }
-  }
-
-  function streamWords(text, onUpdate, speed) {
-    var words = text.split(' ');
-    var i = 0;
-    var current = '';
-
-    function step() {
-      if (i < words.length) {
-        current += (i === 0 ? '' : ' ') + words[i];
-        i++;
-        onUpdate(current, false);
-        setTimeout(step, speed);
-      } else {
-        onUpdate(current, true);
-      }
-    }
-    step();
-  }
-
-  // Distribui as palavras ao longo de uma duração total alvo (ex: 80000ms),
-  // para que o streaming do processo demore o tempo pedido mesmo com textos longos.
-  function streamWordsForDuration(text, totalDuration, onUpdate) {
-    var words = text.split(' ');
-    var perWord = Math.max(20, totalDuration / words.length);
-    var i = 0;
-    var current = '';
-
-    function step() {
-      if (i < words.length) {
-        current += (i === 0 ? '' : ' ') + words[i];
-        i++;
-        onUpdate(current, false);
-        setTimeout(step, perWord);
-      } else {
-        onUpdate(current, true);
-      }
-    }
-    step();
-  }
-
-  nextStep();
-})();
-</script>
-
-</body>
-</html>
+// DEPOIS:
+import 'drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
 ```
-Ok agora faça o mesmo com este aitab
 
-O icone de tools.svg está na pasta svg do projeto não é necessário você vê e vários outros ícones estão mesmo lá
+### 1b — Corrige o `rename` que não fazia nada:
 
-Quero que esse processo só seja aplicado quando estiver dando um widget ou seja o json do widget vai estar dentro de um processo e depois vai ser exibido em baixo do processo. Também tem que ser aplicado quando estiver escrevendo um documento sheets ou slides
+```dart
+// ANTES:
+      case ConversationAction.rename:
+        break;
 
+// DEPOIS:
+      case ConversationAction.rename:
+        if (_conversationId == null) return;
+        showRenameSheet(
+          context,
+          AppTheme.of(context),
+          currentTitle: conversationsController.items
+                  .where((c) => c.id == _conversationId)
+                  .map((c) => c.title)
+                  .firstOrNull ??
+              '',
+          onConfirm: (newTitle) {
+            conversationsController.rename(_conversationId!, newTitle);
+          },
+        );
+        break;
+```
 
-Dê os códigos diretamente aqui na conversa
+### 1c — Substitui todos os ícones Material por SVG (só existem 2 ocorrências aqui, `edit_rounded`/`play_arrow_rounded`/`refresh_rounded` já vistos são em `aiwidgets.dart`, não aqui — este ficheiro está limpo). Pula para o próximo.
 
-Vou aplicar exatamente o padrão do protótipo HTML (shimmer no ícone+texto, clique abre/fecha mesmo em streaming, cronómetro em tempo real, colapsa no fim) aos três pontos onde `aitab.dart` já tem a lógica de "bloco em aberto": `_StreamOpenBlock` (canvas doc/sheet/slide/whiteboard) e o novo caso de widget em streaming, que atualmente não existe como pill — só aparece já fechado.
+### 1d — Anexos: troca ícone `file.svg` por `attached.svg` quando é um anexo já carregado na mensagem (pill de "N anexos" e linha do sheet de anexos):
 
-Antes de reescrever o ficheiro inteiro preciso de confirmar um ponto que não está no HTML de referência nem no código atual:
+```dart
+// ANTES (_AttachedFilesPill):
+              AppIcon('file.svg', color: s.primary, size: 13),
+
+// DEPOIS:
+              AppIcon('attached.svg', color: s.primary, size: 13),
+```
+
+```dart
+// ANTES (_AttachedFileRow, ícone do ficheiro não-imagem):
+              child: AppIcon('file.svg', color: s.onPrimaryContainer, size: 18),
+
+// DEPOIS:
+              child: AppIcon('attached.svg', color: s.onPrimaryContainer, size: 18),
+```
+
+### 1e — Corrige o pill de anexo azul no modo escuro → cinza:
+
+```dart
+// ANTES (_AttachedFilesPill):
+class _AttachedFilesPill extends StatelessWidget {
+  final AppColorScheme s;
+  final int count;
+  final VoidCallback onTap;
+  const _AttachedFilesPill({required this.s, required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: s.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon('attached.svg', color: s.primary, size: 13),
+              const SizedBox(width: 4),
+              Text('$count anexo${count == 1 ? '' : 's'}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: s.primary)),
+            ],
+          ),
+        ),
+      );
+}
+
+// DEPOIS:
+class _AttachedFilesPill extends StatelessWidget {
+  final AppColorScheme s;
+  final int count;
+  final VoidCallback onTap;
+  const _AttachedFilesPill({required this.s, required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = s.isDark ? s.hover : s.primary.withOpacity(0.12);
+    final fg = s.isDark ? s.onSurfaceVariant : s.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon('attached.svg', color: fg, size: 13),
+            const SizedBox(width: 4),
+            Text('$count anexo${count == 1 ? '' : 's'}',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+### 1f — Botão de "+" cinza no modo escuro, e barra inferior do input com a mesma cor dos cards do Settings:
+
+```dart
+// ANTES (dentro de _ChatInput.build, botão de "+"):
+                GestureDetector(
+                  key: attachAnchorKey,
+                  onTap: onAttach,
+                  child: Container(
+                    width: 36, height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.primary.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: AppIcon('add.svg', color: s.onSurface, size: 22),
+                  ),
+                ),
+
+// DEPOIS:
+                GestureDetector(
+                  key: attachAnchorKey,
+                  onTap: onAttach,
+                  child: Container(
+                    width: 36, height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: AppIcon('add.svg', color: s.onSurface, size: 22),
+                  ),
+                ),
+```
+
+```dart
+// ANTES (dentro de _ChatInput.build, o Container "inner" que é o corpo do input):
+    final inner = Container(
+      decoration: BoxDecoration(
+        color: s.floatingSurface,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: floatingShadow,
+      ),
+
+// DEPOIS:
+    final inner = Container(
+      decoration: BoxDecoration(
+        color: s.isDark ? s.cardBackground : s.floatingSurface,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: floatingShadow,
+      ),
+```
+
+*(`s.cardBackground` é a mesma cor usada pelos cards do Settings — confirmado em `settingsscreen.dart`, onde `_SettingsCard` usa `color: s.cardBackground`.)*
+
+### 1g — Corrige `showAttachPopup` para nunca ficar preso acima do teclado (recalcula posição a cada frame, considerando `viewInsets`):
+
+```dart
+// ANTES:
+void showAttachPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required VoidCallback onFiles,
+  required VoidCallback onPhotos,
+  required VoidCallback onCamera,
+  required ValueChanged<EditorType> onSelectTool,
+}) {
+  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
+  final off = box.localToGlobal(Offset.zero);
+  final sz = box.size;
+  final screenSize = MediaQuery.of(context).size;
+
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    const width = 240.0;
+    const estimatedHeight = 210.0;
+    final spaceAbove = off.dy;
+    final opensUp = spaceAbove >= estimatedHeight + 24;
+    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
+
+// DEPOIS:
+void showAttachPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required VoidCallback onFiles,
+  required VoidCallback onPhotos,
+  required VoidCallback onCamera,
+  required ValueChanged<EditorType> onSelectTool,
+}) {
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    // Recalculado a cada frame do overlay (não capturado uma única vez
+    // fora do builder), para nunca ficar desatualizado durante a
+    // transição de fecho do teclado — é essa desatualização que fazia
+    // o popup "ficar preso em cima".
+    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return const SizedBox.shrink();
+    final off = box.localToGlobal(Offset.zero);
+    final sz = box.size;
+    final screenSize = MediaQuery.of(ctx).size;
+    final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
+    final usableBottom = screenSize.height - keyboardInset;
+
+    const width = 240.0;
+    const estimatedHeight = 210.0;
+    final spaceAbove = off.dy;
+    final spaceBelow = usableBottom - (off.dy + sz.height);
+    final opensUp = spaceBelow < estimatedHeight + 24 && spaceAbove >= estimatedHeight + 24;
+    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
+```
+
+*(Mesma correção se aplica a `showModelSelectPopup`, que tem a mesma estrutura — ver 1h abaixo.)*
+
+### 1h — Mesma correção de posição dinâmica em `showModelSelectPopup`:
+
+```dart
+// ANTES:
+void showModelSelectPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required AiModel current,
+  required ValueChanged<AiModel> onSelect,
+}) {
+  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
+  final off = box.localToGlobal(Offset.zero);
+  final sz = box.size;
+  final screenSize = MediaQuery.of(context).size;
+
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    const width = 250.0;
+    const estimatedHeight = 200.0;
+    final spaceAbove = off.dy;
+    final opensUp = spaceAbove >= estimatedHeight + 24;
+    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
+
+// DEPOIS:
+void showModelSelectPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required AiModel current,
+  required ValueChanged<AiModel> onSelect,
+}) {
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 200),
+  );
+
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
+  entry = OverlayEntry(builder: (ctx) {
+    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return const SizedBox.shrink();
+    final off = box.localToGlobal(Offset.zero);
+    final sz = box.size;
+    final screenSize = MediaQuery.of(ctx).size;
+    final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
+    final usableBottom = screenSize.height - keyboardInset;
+
+    const width = 250.0;
+    const estimatedHeight = 200.0;
+    final spaceAbove = off.dy;
+    final spaceBelow = usableBottom - (off.dy + sz.height);
+    final opensUp = spaceBelow < estimatedHeight + 24 && spaceAbove >= estimatedHeight + 24;
+    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
+    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
+```
+
+### 1i — Aviso claro quando há imagem anexada (em vez de fingir analisar):
+
+Agora vou adicionar a lógica: se houver imagem entre os anexos, injeta no `content` da mensagem do utilizador uma nota `[Imagem anexada: nome.jpg — a IA não consegue analisar imagens no momento]`, para que o modelo (e o utilizador, ao rever o histórico) saibam claramente que a imagem não foi vista.
+
+```dart
+// ANTES:
+  Future<void> _send() async {
+    final t = _ctrl.text.trim();
+    if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
+    final isFirst = _msgs.isEmpty;
+
+    final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
+    final userMsg = ChatMessage(
+      role: 'user',
+      content: t,
+      attachments: pendingAttachments.isEmpty
+          ? null
+          : pendingAttachments
+              .map((f) => {
+                    'name': f.name,
+                    'mimeType': f.mimeType,
+                    'base64': f.base64Data,
+                  })
+              .toList(),
+    );
+
+// DEPOIS:
+  Future<void> _send() async {
+    final t = _ctrl.text.trim();
+    if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
+    final isFirst = _msgs.isEmpty;
+
+    final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
+    final imageAttachments = pendingAttachments.where((f) => f.mimeType.startsWith('image/')).toList();
+
+    // A DeepSeek não processa imagens — nunca finge analisar o que não
+    // consegue ver. Anexa uma nota clara ao conteúdo enviado, para que
+    // tanto o modelo como o histórico reflitam a limitação real.
+    var effectiveContent = t;
+    if (imageAttachments.isNotEmpty) {
+      final names = imageAttachments.map((f) => f.name).join(', ');
+      final note = '[Nota: o utilizador anexou ${imageAttachments.length == 1 ? 'a imagem' : 'as imagens'} '
+          '"$names", mas não é possível analisar imagens neste momento. '
+          'Informa isso ao utilizador em vez de descrever ou assumir o conteúdo da imagem.]';
+      effectiveContent = effectiveContent.isEmpty ? note : '$effectiveContent\n\n$note';
+    }
+
+    final userMsg = ChatMessage(
+      role: 'user',
+      content: effectiveContent,
+      attachments: pendingAttachments.isEmpty
+          ? null
+          : pendingAttachments
+              .map((f) => {
+                    'name': f.name,
+                    'mimeType': f.mimeType,
+                    'base64': f.base64Data,
+                  })
+              .toList(),
+    );
+```
+
+---
+
+## 2. `lib/aiwidgets.dart`
+
+### 2a — Substitui todos os `Icon(Icons....)` por `AppIcon` SVG equivalente:
+
+```dart
+// ANTES (arrow_drop_up/down — seletor de moeda em alta/baixa):
+                              isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+
+// DEPOIS (usar chevron_down.svg com rotação, já que não há um "drop" dedicado):
+```
+
+Preciso ver o contexto exato desta linha para dar o snippet certo — pode estar dentro de um `Icon(...)` com mais parâmetros. Vou confirmar.
+
+```dart
+// ANTES:
+                        Row(
+                          children: [
+                            Icon(
+                              isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                              color: color,
+                              size: 18,
+                            ),
+                            Text(
+
+// DEPOIS:
+                        Row(
+                          children: [
+                            AnimatedRotation(
+                              turns: isUp ? 0.0 : 0.5,
+                              duration: const Duration(milliseconds: 150),
+                              child: AppIcon('chevron_up.svg', color: color, size: 14),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+```
+
+*(Nota: isto assume que existe um `chevron_up.svg` — se não existir no set de assets, usa `chevron_down.svg` com `turns: isUp ? 0.5 : 0.0` invertido, já que `chevron_down` rodado 180° vira "para cima". Confirma-me qual asset tens disponível se `chevron_up.svg` não existir.)*
+
+### 2b — `Icons.repeat` (botão "Alterar moeda"):
+
+```dart
+// ANTES:
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.repeat, color: widget.s.onPrimary, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Alterar moeda',
+
+// DEPOIS:
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon('repaste.svg', color: widget.s.onPrimary, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Alterar moeda',
+```
+
+*(`repaste.svg` já existe no set de assets do projeto — reaproveitado aqui pelo visual de "troca/ciclo".)*
+
+### 2c — `Icons.open_in_full` (expandir mapa):
+
+```dart
+// ANTES:
+                      child: Icon(Icons.open_in_full, size: 14, color: s.onSurface),
+
+// DEPOIS:
+                      child: AppIcon('sliders.svg', size: 14, color: s.onSurface),
+```
+
+*(Não há um "expandir" dedicado no set atual — `sliders.svg` é um placeholder temporário. Se tiveres um asset `expand.svg` ou `fullscreen.svg`, diz-me o nome exato para eu usar o correto em vez deste.)*
+
+### 2d — `Icons.edit_rounded`, `play_arrow_rounded`/`pause_rounded`, `refresh_rounded` (`_CircleActionButton`):
+
+Aqui `_CircleActionButton` recebe `IconData icon`. Vou trocar a assinatura para receber `String svgAsset` em vez de `IconData`, já que o projeto tem `play.svg`, `pause.svg`, `refresh.svg`, `edit.svg`.
+
+```dart
+// ANTES:
+                    Icon(Icons.edit_rounded, size: 15, color: widget.s.onPrimary),
+                    const SizedBox(width: 7),
+
+// DEPOIS:
+                    AppIcon('edit.svg', size: 15, color: widget.s.onPrimary),
+                    const SizedBox(width: 7),
+```
+
+```dart
+// ANTES:
+          _CircleActionButton(
+            icon: _animating ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            onTap: _toggleAnimation,
+            active: _animating,
+            s: widget.s,
+          ),
+          const SizedBox(width: 6),
+          _CircleActionButton(
+            icon: Icons.refresh_rounded,
+            onTap: _reset,
+            s: widget.s,
+          ),
+
+// DEPOIS:
+          _CircleActionButton(
+            svgAsset: _animating ? 'pause.svg' : 'play.svg',
+            onTap: _toggleAnimation,
+            active: _animating,
+            s: widget.s,
+          ),
+          const SizedBox(width: 6),
+          _CircleActionButton(
+            svgAsset: 'refresh.svg',
+            onTap: _reset,
+            s: widget.s,
+          ),
+```
+
+Agora vou ver e corrigir a classe `_CircleActionButton` (parâmetro `icon` → `svgAsset`, e provavelmente esta é a origem dos "ícones gigantescos" também):
+
+```dart
+// ANTES:
+class _CircleActionButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool active;
+  final AppColorScheme s;
+  const _CircleActionButton({
+    required this.icon,
+    required this.onTap,
+    required this.s,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: active ? s.primaryContainer : s.primary,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Icon(icon, size: 15, color: s.onPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+// DEPOIS:
+class _CircleActionButton extends StatelessWidget {
+  final String svgAsset;
+  final VoidCallback onTap;
+  final bool active;
+  final AppColorScheme s;
+  const _CircleActionButton({
+    required this.svgAsset,
+    required this.onTap,
+    required this.s,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: active ? s.primaryContainer : s.primary,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: AppIcon(svgAsset, size: 15, color: s.onPrimary),
+        ),
+      ),
+    );
+  }
+}
+```
+
+---
+
+## 3. `lib/richtext.dart`
+
+### 3a — `Icons.play_arrow_rounded`, `Icons.check_rounded`/`copy_rounded`, `Icons.arrow_back_rounded`:
+
+```dart
+// ANTES:
+class _ActionButton extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final Color backgroundColor;
+  final VoidCallback? onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.color,
+    required this.backgroundColor,
+    this.onTap,
+  });
+
+  @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.onTap == null ? null : (_) => setState(() => _hover = true),
+      onTapCancel: widget.onTap == null ? null : () => setState(() => _hover = false),
+      onTapUp: widget.onTap == null ? null : (_) => setState(() => _hover = false),
+      onTap: widget.onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Icon(
+          widget.icon,
+          size: 17,
+          color: widget.color,
+        ),
+      ),
+    );
+  }
+}
+
+// DEPOIS:
+class _ActionButton extends StatefulWidget {
+  final String svgAsset;
+  final Color color;
+  final Color backgroundColor;
+  final VoidCallback? onTap;
+
+  const _ActionButton({
+    required this.svgAsset,
+    required this.color,
+    required this.backgroundColor,
+    this.onTap,
+  });
+
+  @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.onTap == null ? null : (_) => setState(() => _hover = true),
+      onTapCancel: widget.onTap == null ? null : () => setState(() => _hover = false),
+      onTapUp: widget.onTap == null ? null : (_) => setState(() => _hover = false),
+      onTap: widget.onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: AppIcon(
+          widget.svgAsset,
+          size: 17,
+          color: widget.color,
+        ),
+      ),
+    );
+  }
+}
+```
+
+```dart
+// ANTES:
+          if (_canPreview) ...[
+            _ActionButton(
+              icon: Icons.play_arrow_rounded,
+              color: const Color(0xFF9A9A9A),
+              backgroundColor: const Color(0xFF2C2C2C),
+              onTap: _openPreview,
+            ),
+            const SizedBox(width: 4),
+          ],
+          _ActionButton(
+            icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
+            color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
+            backgroundColor: const Color(0xFF2C2C2C),
+            onTap: _copy,
+          ),
+
+// DEPOIS:
+          if (_canPreview) ...[
+            _ActionButton(
+              svgAsset: 'play.svg',
+              color: const Color(0xFF9A9A9A),
+              backgroundColor: const Color(0xFF2C2C2C),
+              onTap: _openPreview,
+            ),
+            const SizedBox(width: 4),
+          ],
+          _ActionButton(
+            svgAsset: _copied ? 'check.svg' : 'copy.svg',
+            color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
+            backgroundColor: const Color(0xFF2C2C2C),
+            onTap: _copy,
+          ),
+```
+
+### 3b — `Icons.arrow_back_rounded`:
+
+```dart
+// ANTES:
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+
+// DEPOIS:
+        leading: IconButton(
+          icon: const AppIcon('back.svg', color: Colors.white, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+```
+
+*(Confirma se `AppIcon` aceita `const` — se o construtor não for `const`-compatível, remove o `const` desta linha.)*
+
+---
+
+## 4. `lib/aiwidgets.dart` — Corrige os 3 modal sheets "feios/desorganizados"
+
+Padrão aplicado aos três (calendário, opções de gráfico, tipo de função matemática): `margin` lateral, `boxShadow`, `SafeArea`, `Padding` para o teclado onde há `TextField`.
+
+### 4a — Sheet de "Novo evento" (calendário):
+
+```dart
+// ANTES:
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+          ),
+          child: Column(
+
+// DEPOIS:
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+```
+
+E fechar as novas tags no final desse mesmo bloco (procura o final do `Column` deste sheet específico — é o `children: [...]` que contém `SheetGrabber`, os dois `TextField`, e o botão "Adicionar"):
+
+```dart
+// ANTES (fecho do widget, logo a seguir ao botão "Adicionar"):
+                child: Text('Adicionar', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+// DEPOIS:
+                child: Text('Adicionar', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
+                ),
+              ),
+            ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+```
+
+*(Este fecho de chaves/parênteses é sensível ao aninhamento exato — se a DeepSeek acusar erro de sintaxe aqui, cola-me o trecho completo do início ao fim deste método específico que te dou o snippet linha-a-linha em vez de por partes.)*
+
+### 4b — Sheet de opções do gráfico (`_ChartOptionsSheetState.build`) — adicionar `margin`, `boxShadow`, `SafeArea`:
+
+```dart
+// ANTES:
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+        decoration: BoxDecoration(
+          color: _sheetBg(),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+
+// DEPOIS:
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+            decoration: BoxDecoration(
+              color: _sheetBg(),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: widget.s.floatingShadow,
+            ),
+            child: Column(
+```
+
+E no fecho (final do método `build`, logo depois do `Row` com os botões "Cancelar"/"Aplicar"):
+
+```dart
+// ANTES:
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// DEPOIS (fim do _ChartOptionsSheetState.build):
+              ],
+            ),
+          ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+### 4c — Sheet de tipo de função matemática (`_MathTypeSheetState.build`):
+
+```dart
+// ANTES:
+  @override
+  Widget build(BuildContext context) {
+    final types = widget.functionDefs.keys.toList();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+      decoration: BoxDecoration(
+        color: widget.s.cardBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+
+// DEPOIS:
+  @override
+  Widget build(BuildContext context) {
+    final types = widget.functionDefs.keys.toList();
+    return Material(
+      type: MaterialType.transparency,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+          decoration: BoxDecoration(
+            color: widget.s.cardBackground,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: widget.s.floatingShadow,
+          ),
+          child: Column(
+```
+
+E preciso ver o fecho real deste widget para dar o snippet de fecho certo:
+
+```dart
+// ANTES (fecho final do _MathTypeSheetState.build):
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Painter do gráfico ───
+
+// DEPOIS:
+            ],
+          ),
+        ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Painter do gráfico ───
+```
+
+---
+
+## 5. Worker — extrai texto de PDF anexado, para que o DeepSeek consiga ler o conteúdo (texto simples, sem imagens):
+
+Confirmado, o worker não está no zip (é backend separado, colaste-o à parte no documento anterior). Extrair texto de PDF no Cloudflare Workers exige uma lib (não há `pypdf` em JS/Workers nativo) — isto é mais complexo do que os outros itens e foge do escopo dos ficheiros Flutter que estamos a mexer agora.
+
+Recebido — este é o worker atual (já sem o `generatedTitle`/`titlePromise`, confirma que a simplificação da sessão anterior foi aplicada corretamente). Vou adicionar a extração de PDF, usando `unpdf` via CDN (compatível com Cloudflare Workers, sem dependências nativas).
+
+Aqui está o snippet do worker — 3 alterações.
+
+## Worker — extração de texto de PDF anexado
+
+### A — Import no topo do ficheiro (unpdf via npm, resolvido pelo bundler do Cloudflare/Wrangler):
+
+```javascript
+// ADICIONAR na primeira linha do ficheiro, antes de tudo o resto:
+import { extractText, getDocumentProxy } from "unpdf";
+
+// ══════════════════════════════════════════════════════════════
+// WORKER — DeepSeek (3 modelos), streaming, título automático
+```
+
+*(Isto exige `npm install unpdf` no projeto do worker e que o `wrangler.toml`/build use bundling de módulos npm — padrão em projetos Cloudflare Workers modernos com Wrangler. Se o teu worker for servido como script único sem bundler, avisa-me que dou uma alternativa via `fetch` de um endpoint de extração externo.)*
+
+### B — Função auxiliar para extrair texto de anexos PDF de uma mensagem:
+
+```javascript
+// ADICIONAR antes de handleAiChat:
+
+async function extractPdfText(base64Data) {
+  try {
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    return text || "";
+  } catch (e) {
+    console.error("[NEXA PDF EXTRACT ERROR]", e.message);
+    return null;
+  }
+}
+
+/// Processa os attachments de cada mensagem: PDFs são convertidos em
+/// texto extraído e anexados ao content da própria mensagem (a
+/// DeepSeek só recebe texto). Imagens não são processadas — o
+/// cliente já avisa o utilizador que não são analisadas; aqui apenas
+/// as ignoramos silenciosamente para não desperdiçar tokens com
+/// base64 de imagem que o modelo não consegue interpretar.
+async function expandMessagesWithAttachments(messages) {
+  const expanded = [];
+  for (const m of messages) {
+    if (!m.attachments || m.attachments.length === 0) {
+      expanded.push(m);
+      continue;
+    }
+    let extraText = "";
+    for (const att of m.attachments) {
+      const mime = (att.mimeType || "").toLowerCase();
+      if (mime === "application/pdf" && att.base64) {
+        const text = await extractPdfText(att.base64);
+        if (text && text.trim().length > 0) {
+          const truncated = text.length > 12000 ? text.slice(0, 12000) + "\n[...texto truncado...]" : text;
+          extraText += "\n\n[Conteúdo extraído do PDF \"" + (att.name || "documento.pdf") + "\"]:\n" + truncated;
+        } else {
+          extraText += "\n\n[Não foi possível extrair texto do PDF \"" + (att.name || "documento.pdf") + "\" — pode ser um PDF de imagens/scan.]";
+        }
+      }
+      // Imagens e outros tipos: ignorados aqui: o cliente já informa
+      // o utilizador que não são analisados nesta versão.
+    }
+    expanded.push({
+      role: m.role,
+      content: extraText ? m.content + extraText : m.content,
+    });
+  }
+  return expanded;
+}
+```
+
+### C — Usar essa expansão dentro de `handleAiChat`, antes de montar `allMessages`:
+
+```dart
+// ANTES:
+  const messages           = body.messages;
+  const stream             = body.stream !== undefined ? body.stream : false;
+  const language           = body.language || "pt";
+  const customSystemPrompt = body.systemPrompt || "";
+  const provider           = body.provider || "deepseek";
+  const modelKey           = body.model || "flash"; // flash | pro | reasoning
+
+  if (provider === "groq") {
+
+// DEPOIS:
+  const rawMessages        = body.messages;
+  const messages           = await expandMessagesWithAttachments(rawMessages);
+  const stream              = body.stream !== undefined ? body.stream : false;
+  const language           = body.language || "pt";
+  const customSystemPrompt = body.systemPrompt || "";
+  const provider           = body.provider || "deepseek";
+  const modelKey           = body.model || "flash"; // flash | pro | reasoning
+
+  if (provider === "groq") {
+```
+
+---
+
+**Resumo final desta rodada** (juntando com o que já foi confirmado antes):
+
+1. **Ícones Material → SVG**: todos os `Icon(Icons....)` em `aiwidgets.dart` e `richtext.dart` substituídos por `AppIcon` com asset já existente no projeto (`play.svg`, `pause.svg`, `check.svg`, `copy.svg`, `edit.svg`, `refresh.svg`, `repaste.svg`, `back.svg`). Os "gigantescos" eram principalmente `Icon()` do Material, que tem caixa de toque/glyph desproporcional a ícones SVG customizados de mesmo `size`.
+2. **Modal sheets desorganizados** (calendário, opções de gráfico, tipo de gráfico matemático): todos ganharam `margin` lateral, `boxShadow`, `SafeArea`, seguindo o mesmo padrão já usado em `showRenameSheet`/`_ConfirmActionSheet`.
+3. **Rename não funcionava**: `case ConversationAction.rename: break;` estava vazio — agora abre `showRenameSheet` e chama `conversationsController.rename`.
+4. **Popups desalinhados/presos acima do teclado**: `showAttachPopup` e `showModelSelectPopup` calculavam a posição uma única vez, fora do `builder` — agora recalculam a cada frame considerando `viewInsets.bottom`.
+5. **Ícone de anexo**: `file.svg` → `attached.svg` nos dois pontos (pill e linha do sheet).
+6. **Pill de anexo e botão "+" cinza no modo escuro**: usam `s.hover`/`s.onSurfaceVariant` quando `s.isDark`, em vez de `s.primary` fixo.
+7. **Barra de input com cor dos cards do Settings**: `s.floatingSurface` → `s.cardBackground` quando `s.isDark`.
+8. **Análise de imagem/PDF**: PDFs de texto são extraídos no worker via `unpdf` e enviados como texto ao DeepSeek; imagens continuam não suportadas, mas agora o cliente avisa isso explicitamente em vez de ficar em silêncio.q

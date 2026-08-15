@@ -390,11 +390,11 @@ String _resolveFormattingCommands(String expr) {
 
   result = result.replaceAllMapped(
     RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
-    (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+    (m) => '\u0006COLOR{$1}{$2}\u0006',
   );
   result = result.replaceAllMapped(
     RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
-    (m) => '\u0006COLOR{\$1}{\$2}\u0006',
+    (m) => '\u0006COLOR{$1}{$2}\u0006',
   );
 
   for (final acc in ['hat', 'bar', 'vec', 'dot', 'ddot', 'tilde']) {
@@ -1493,7 +1493,7 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
         children: [
           if (_canPreview) ...[
             _ActionButton(
-              icon: Icons.play_arrow_rounded,
+              svgAsset: 'play.svg',
               color: const Color(0xFF9A9A9A),
               backgroundColor: const Color(0xFF2C2C2C),
               onTap: _openPreview,
@@ -1501,7 +1501,7 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
             const SizedBox(width: 4),
           ],
           _ActionButton(
-            icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
+            svgAsset: _copied ? 'check.svg' : 'copy.svg',
             color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
             backgroundColor: const Color(0xFF2C2C2C),
             onTap: _copy,
@@ -1513,13 +1513,13 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 }
 
 class _ActionButton extends StatefulWidget {
-  final IconData icon;
+  final String svgAsset;
   final Color color;
   final Color backgroundColor;
   final VoidCallback? onTap;
 
   const _ActionButton({
-    required this.icon,
+    required this.svgAsset,
     required this.color,
     required this.backgroundColor,
     this.onTap,
@@ -1547,8 +1547,8 @@ class _ActionButtonState extends State<_ActionButton> {
           color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
           borderRadius: BorderRadius.circular(9999),
         ),
-        child: Icon(
-          widget.icon,
+        child: AppIcon(
+          widget.svgAsset,
           size: 17,
           color: widget.color,
         ),
@@ -1863,7 +1863,7 @@ class AiCodePreviewScreen extends StatelessWidget {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const AppIcon('back.svg', color: Colors.white, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),

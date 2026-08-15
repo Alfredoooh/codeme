@@ -16,7 +16,7 @@ import 'auth_service.dart';
 import 'aiwidgets.dart';
 import 'widgets.dart';
 import 'exportservice.dart';
-import 'drawermenu.dart' show conversationsController, ConversationItem;
+import 'drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
 
 // ══════════════════════════════════════════════════════════════
 // AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning), já
@@ -1309,9 +1309,23 @@ class AiTabState extends State<AiTab> {
     final isFirst = _msgs.isEmpty;
 
     final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
+    final imageAttachments = pendingAttachments.where((f) => f.mimeType.startsWith('image/')).toList();
+
+    // A DeepSeek não processa imagens — nunca finge analisar o que não
+    // consegue ver. Anexa uma nota clara ao conteúdo enviado, para que
+    // tanto o modelo como o histórico reflitam a limitação real.
+    var effectiveContent = t;
+    if (imageAttachments.isNotEmpty) {
+      final names = imageAttachments.map((f) => f.name).join(', ');
+      final note = '[Nota: o utilizador anexou ${imageAttachments.length == 1 ? 'a imagem' : 'as imagens'} '
+          '"$names", mas não é possível analisar imagens neste momento. '
+          'Informa isso ao utilizador em vez de descrever ou assumir o conteúdo da imagem.]';
+      effectiveContent = effectiveContent.isEmpty ? note : '$effectiveContent\n\n$note';
+    }
+
     final userMsg = ChatMessage(
       role: 'user',
-      content: t,
+      content: effectiveContent,
       attachments: pendingAttachments.isEmpty
           ? null
           : pendingAttachments
@@ -1647,6 +1661,19 @@ class AiTabState extends State<AiTab> {
         _notifyHeader();
         break;
       case ConversationAction.rename:
+        if (_conversationId == null) return;
+        showRenameSheet(
+          context,
+          AppTheme.of(context),
+          currentTitle: conversationsController.items
+                  .where((c) => c.id == _conversationId)
+                  .map((c) => c.title)
+                  .firstOrNull ??
+              '',
+          onConfirm: (newTitle) {
+            conversationsController.rename(_conversationId!, newTitle);
+          },
+        );
         break;
       case ConversationAction.delete:
         if (_conversationId != null) {
@@ -2650,7 +2677,7 @@ Future<void> showAttachedFilesSheet(
               children: [
                 Center(child: SheetGrabber(s: s)),
                 Row(children: [
-                  AppIcon('file.svg', color: s.onSurface, size: 18),
+                  AppIcon('attached.svg', color: s.onSurface, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'Anexos desta mensagem',
@@ -2730,7 +2757,7 @@ class _AttachedFileRow extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: AppIcon('file.svg', color: s.onPrimaryContainer, size: 18),
+              child: AppIcon('attached.svg', color: s.onPrimaryContainer, size: 18),
             ),
           const SizedBox(width: 10),
           Expanded(
@@ -2815,7 +2842,7 @@ class _ChatInput extends StatelessWidget {
 
     final inner = Container(
       decoration: BoxDecoration(
-        color: s.floatingSurface,
+        color: s.isDark ? s.cardBackground : s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
         boxShadow: floatingShadow,
       ),
@@ -2867,7 +2894,7 @@ class _ChatInput extends StatelessWidget {
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: s.primary.withOpacity(0.12),
+                      color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
                     child: AppIcon('add.svg', color: s.onSurface, size: 22),
@@ -3017,32 +3044,33 @@ class _AttachedFilesPill extends StatelessWidget {
   const _AttachedFilesPill({required this.s, required this.count, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: s.primary.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppIcon('file.svg', color: s.primary, size: 13),
-              const SizedBox(width: 4),
-              Text('$count anexo${count == 1 ? '' : 's'}',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: s.primary)),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final bg = s.isDark ? s.hover : s.primary.withOpacity(0.12);
+    final fg = s.isDark ? s.onSurfaceVariant : s.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
         ),
-      );
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon('attached.svg', color: fg, size: 13),
+            const SizedBox(width: 4),
+            Text('$count anexo${count == 1 ? '' : 's'}',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP
+// ATTACH POPUP (posição dinâmica com teclado)
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera }
@@ -3056,11 +3084,6 @@ void showAttachPopup(
   required VoidCallback onCamera,
   required ValueChanged<EditorType> onSelectTool,
 }) {
-  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
-  final off = box.localToGlobal(Offset.zero);
-  final sz = box.size;
-  final screenSize = MediaQuery.of(context).size;
-
   late OverlayEntry entry;
   final controller = AnimationController(
     vsync: Navigator.of(context),
@@ -3075,10 +3098,19 @@ void showAttachPopup(
   }
 
   entry = OverlayEntry(builder: (ctx) {
+    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return const SizedBox.shrink();
+    final off = box.localToGlobal(Offset.zero);
+    final sz = box.size;
+    final screenSize = MediaQuery.of(ctx).size;
+    final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
+    final usableBottom = screenSize.height - keyboardInset;
+
     const width = 240.0;
     const estimatedHeight = 210.0;
     final spaceAbove = off.dy;
-    final opensUp = spaceAbove >= estimatedHeight + 24;
+    final spaceBelow = usableBottom - (off.dy + sz.height);
+    final opensUp = spaceBelow < estimatedHeight + 24 && spaceAbove >= estimatedHeight + 24;
     final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
     final left = off.dx.clamp(12.0, screenSize.width - width - 12);
 
@@ -3438,7 +3470,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP
+// MODEL SELECT POPUP (posição dinâmica com teclado)
 // ══════════════════════════════════════════════════════════════
 
 void showModelSelectPopup(
@@ -3448,11 +3480,6 @@ void showModelSelectPopup(
   required AiModel current,
   required ValueChanged<AiModel> onSelect,
 }) {
-  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
-  final off = box.localToGlobal(Offset.zero);
-  final sz = box.size;
-  final screenSize = MediaQuery.of(context).size;
-
   late OverlayEntry entry;
   final controller = AnimationController(
     vsync: Navigator.of(context),
@@ -3467,10 +3494,19 @@ void showModelSelectPopup(
   }
 
   entry = OverlayEntry(builder: (ctx) {
+    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return const SizedBox.shrink();
+    final off = box.localToGlobal(Offset.zero);
+    final sz = box.size;
+    final screenSize = MediaQuery.of(ctx).size;
+    final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
+    final usableBottom = screenSize.height - keyboardInset;
+
     const width = 250.0;
     const estimatedHeight = 200.0;
     final spaceAbove = off.dy;
-    final opensUp = spaceAbove >= estimatedHeight + 24;
+    final spaceBelow = usableBottom - (off.dy + sz.height);
+    final opensUp = spaceBelow < estimatedHeight + 24 && spaceAbove >= estimatedHeight + 24;
     final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
     final left = off.dx.clamp(12.0, screenSize.width - width - 12);
 

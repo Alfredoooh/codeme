@@ -1,3 +1,5 @@
+import { extractText, getDocumentProxy } from "unpdf";
+
 // ══════════════════════════════════════════════════════════════
 // WORKER — DeepSeek (3 modelos), streaming, título automático
 // obrigatório, resposta com marcador de "processo" para o cliente
@@ -11,17 +13,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// DeepSeek — API OpenAI-compatible. 3 modelos reais:
-// deepseek-chat        → "V4 Flash" (padrão, mais barato)
-// deepseek-chat        → "V4 Pro" (mesmo endpoint base da DeepSeek
-//                         atualmente só expõe deepseek-chat e
-//                         deepseek-reasoner publicamente; "Pro" usa
-//                         o mesmo deepseek-chat com max_tokens maior
-//                         e temperature mais baixa para respostas
-//                         mais extensas/precisas — não existe um
-//                         terceiro nome de modelo distinto na API
-//                         pública da DeepSeek além destes dois)
-// deepseek-reasoner    → "Raciocínio" (R1, pensa passo a passo)
 const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
 
 const DEEPSEEK_MODELS = {
@@ -261,9 +252,6 @@ async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, 
 }
 
 async function deepseekGenerateTitle(apiKey, message, language) {
-  // Título automático OBRIGATÓRIO na primeira mensagem — nunca
-  // "Nova conversa", nunca a mensagem crua do utilizador. Chamada
-  // rápida e barata usando o modelo flash com poucos tokens.
   const prompt = language === "en"
     ? "Generate a short, natural title (max 6 words) that summarizes the topic of a conversation that starts with this message: \"" + message + "\". Reply with ONLY the title text, no punctuation, no quotes, no prefix like 'Title:'."
     : "Gera um titulo curto e natural (max 6 palavras) que resuma o tema de uma conversa que comeca com esta mensagem: \"" + message + "\". Responde APENAS com o texto do titulo, sem pontuacao, sem aspas, sem prefixo como 'Titulo:'.";
@@ -330,6 +318,54 @@ async function groqChatStream(apiKey, messages, model, systemPrompt, language) {
       stream: true,
     }),
   });
+}
+
+// ══════════════════════════════════════════════════════════════
+// PDF EXTRACTION (unpdf)
+// ══════════════════════════════════════════════════════════════
+
+async function extractPdfText(base64Data) {
+  try {
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    return text || "";
+  } catch (e) {
+    console.error("[NEXA PDF EXTRACT ERROR]", e.message);
+    return null;
+  }
+}
+
+async function expandMessagesWithAttachments(messages) {
+  const expanded = [];
+  for (const m of messages) {
+    if (!m.attachments || m.attachments.length === 0) {
+      expanded.push(m);
+      continue;
+    }
+    let extraText = "";
+    for (const att of m.attachments) {
+      const mime = (att.mimeType || "").toLowerCase();
+      if (mime === "application/pdf" && att.base64) {
+        const text = await extractPdfText(att.base64);
+        if (text && text.trim().length > 0) {
+          const truncated = text.length > 12000 ? text.slice(0, 12000) + "\n[...texto truncado...]" : text;
+          extraText += "\n\n[Conteúdo extraído do PDF \"" + (att.name || "documento.pdf") + "\"]:\n" + truncated;
+        } else {
+          extraText += "\n\n[Não foi possível extrair texto do PDF \"" + (att.name || "documento.pdf") + "\" — pode ser um PDF de imagens/scan.]";
+        }
+      }
+      // Imagens e outros tipos: ignorados aqui: o cliente já informa
+      // o utilizador que não são analisados nesta versão.
+    }
+    expanded.push({
+      role: m.role,
+      content: extraText ? m.content + extraText : m.content,
+    });
+  }
+  return expanded;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -941,11 +977,7 @@ async function handleAiTitle(request, env) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// /ai/chat — DeepSeek (3 modelos) ou Groq, stream ou não. O campo
-// 'provider' passa a aceitar "deepseek" (novo padrão) e "groq"
-// (mantido); 'gemini' deixou de existir. O campo 'model' quando
-// provider=deepseek é uma das chaves de DEEPSEEK_MODELS: "flash"
-// (padrão), "pro", "reasoning".
+// /ai/chat — DeepSeek (3 modelos) ou Groq, stream ou não.
 // ══════════════════════════════════════════════════════════════
 
 async function handleAiChat(request, env) {
@@ -962,7 +994,8 @@ async function handleAiChat(request, env) {
   userObj.credits = currentCredits - 1;
   await env.IPC_USERS.put("user:" + payload.id, JSON.stringify(userObj));
 
-  const messages           = body.messages;
+  const rawMessages        = body.messages;
+  const messages           = await expandMessagesWithAttachments(rawMessages);
   const stream             = body.stream !== undefined ? body.stream : false;
   const language           = body.language || "pt";
   const customSystemPrompt = body.systemPrompt || "";
@@ -1004,9 +1037,6 @@ async function handleAiChat(request, env) {
   const data      = await dsRes.json();
   const choice    = data.choices?.[0];
   const content   = choice?.message?.content || "";
-  // deepseek-reasoner devolve o raciocínio em reasoning_content, à
-  // parte do content final — mapeado para o mesmo campo 'reasoning'
-  // que o cliente já espera (equivalente ao 'thought' da Gemini).
   const reasoning = choice?.message?.reasoning_content || null;
   return json({ content, reasoning, model: data.model || modelKey, usage: data.usage || null });
 }
