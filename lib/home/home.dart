@@ -2,6 +2,7 @@
 // FILE: lib/home/home.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../templatestab.dart';
@@ -36,15 +37,10 @@ extension HomeTabX on HomeTab {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HOME SCREEN — tela principal com bottom tab bar (templates,
-// projetos, agenda). Aberta a partir do botão de home no drawer.
-// A tab inicial do APP continua a ser aitab (RootShell), esta tela é
-// apenas empurrada por cima quando o utilizador navega para "home".
+// HOME SCREEN
 // ══════════════════════════════════════════════════════════════
 
 class HomeScreen extends StatefulWidget {
-  /// Chamado quando o utilizador toca num template ou ficheiro de
-  /// projeto. A Home fecha-se e o RootShell abre o documento no editor.
   final ValueChanged<LocalCanvasItem>? onOpenDocument;
 
   const HomeScreen({super.key, this.onOpenDocument});
@@ -94,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Positioned(
           left: 0, right: 0, bottom: 0,
-          child: _HomeBottomBar(s: s, current: _tab, onSelect: _selectTab),
+          child: _HomeNavigationBar(s: s, current: _tab, onSelect: _selectTab),
         ),
       ]),
     );
@@ -102,110 +98,72 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HOME BOTTOM BAR — estilo Android nativo (Material 3 NavigationBar
-// com pill indicator), mas usando exclusivamente as cores do app
-// (s.*), nunca Colors.primary / ColorScheme do Material. No tema
-// escuro o pill NÃO usa a cor primária: usa um tom escuro elevado
-// (uma "camada" acima do fundo, não profundo), ex: s.navIndicatorBg
-// já resolve isso — cada tema define o próprio tom.
+// NAVIGATION BAR — Material 3 NavigationBar nativo. Pill indicator,
+// animação de seleção e ripple são os do próprio widget; só as
+// cores são redirecionadas para s.* via NavigationBarThemeData.
+//
+// NOTA SOBRE O ÍCONE: NavigationBar pinta o Icon() dele via
+// IconTheme (iconTheme abaixo), mas isso só funciona de facto se
+// AppIcon ler IconTheme.of(context).color internamente — a maioria
+// dos wrappers de flutter_svg não faz isso por default. Por isso
+// aqui a cor é passada EXPLICITAMENTE ao AppIcon (color: ...),
+// ignorando o IconTheme automático do NavigationBar, para garantir
+// que pinta certo independentemente da implementação do AppIcon.
+// O iconTheme no NavigationBarThemeData fica definido mesmo assim,
+// como fallback caso algum ícone interno do NavigationBar precise.
 // ══════════════════════════════════════════════════════════════
 
-class _HomeBottomBar extends StatelessWidget {
+class _HomeNavigationBar extends StatelessWidget {
   final AppColorScheme s;
   final HomeTab current;
   final ValueChanged<HomeTab> onSelect;
-  const _HomeBottomBar({required this.s, required this.current, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) => SafeArea(
-        top: false,
-        child: Container(
-          height: 64,
-          decoration: BoxDecoration(
-            color: s.navBarBg,
-            boxShadow: s.navBarShadow,
-          ),
-          child: Row(
-            children: [
-              for (final tab in HomeTab.values)
-                Expanded(
-                  child: _HomeBottomBarItem(
-                    s: s,
-                    tab: tab,
-                    selected: current == tab,
-                    onTap: () => onSelect(tab),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
-}
-
-class _HomeBottomBarItem extends StatefulWidget {
-  final AppColorScheme s;
-  final HomeTab tab;
-  final bool selected;
-  final VoidCallback onTap;
-  const _HomeBottomBarItem({
-    required this.s,
-    required this.tab,
-    required this.selected,
-    required this.onTap,
-  });
-  @override State<_HomeBottomBarItem> createState() => _HomeBottomBarItemState();
-}
-
-class _HomeBottomBarItemState extends State<_HomeBottomBarItem> {
-  bool _pressed = false;
+  const _HomeNavigationBar({required this.s, required this.current, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final sel = widget.selected;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: SizedBox(
-        height: 64,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Pill nativo Android: indicador atrás só do ícone,
-              // 32px altura, largura 56px, corner radius total (pill).
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: kCupertinoOut,
-                width: 56,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: sel
-                      ? s.navIndicatorBg
-                      : (_pressed ? s.hover : Colors.transparent),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: AppIcon(
-                  sel ? widget.tab.svgFilled : widget.tab.svg,
-                  color: sel ? s.navLabelActive : s.navIconInactive,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.tab.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? s.navLabelActive : s.navIconInactive,
-                ),
-              ),
-            ],
+    return SafeArea(
+      top: false,
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          navigationBarTheme: NavigationBarThemeData(
+            height: 64,
+            backgroundColor: s.navBarBg,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            indicatorColor: s.navIndicatorBg,
+            indicatorShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            iconTheme: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return IconThemeData(
+                color: selected ? s.navLabelActive : s.navIconInactive,
+                size: 21,
+              );
+            }),
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              final selected = states.contains(WidgetState.selected);
+              return TextStyle(
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? s.navLabelActive : s.navIconInactive,
+              );
+            }),
           ),
+        ),
+        child: NavigationBar(
+          selectedIndex: HomeTab.values.indexOf(current),
+          onDestinationSelected: (i) => onSelect(HomeTab.values[i]),
+          destinations: [
+            for (final tab in HomeTab.values)
+              NavigationDestination(
+                icon: AppIcon(tab.svg, size: 21, color: s.navIconInactive),
+                selectedIcon: AppIcon(tab.svgFilled, size: 21, color: s.navLabelActive),
+                label: tab.label,
+              ),
+          ],
         ),
       ),
     );
