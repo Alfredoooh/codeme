@@ -102,9 +102,12 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HOME BOTTOM BAR — estilo customizado, mesmo padrão de cor do
-// tab ativo do drawer (escuro não profundo no dark, branco levemente
-// azulado no light — s.navIndicatorBg / s.navLabelActive).
+// HOME BOTTOM BAR — estilo Android nativo (Material 3 NavigationBar
+// com pill indicator), mas usando exclusivamente as cores do app
+// (s.*), nunca Colors.primary / ColorScheme do Material. No tema
+// escuro o pill NÃO usa a cor primária: usa um tom escuro elevado
+// (uma "camada" acima do fundo, não profundo), ex: s.navIndicatorBg
+// já resolve isso — cada tema define o próprio tom.
 // ══════════════════════════════════════════════════════════════
 
 class _HomeBottomBar extends StatelessWidget {
@@ -117,11 +120,9 @@ class _HomeBottomBar extends StatelessWidget {
   Widget build(BuildContext context) => SafeArea(
         top: false,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          height: 64,
           decoration: BoxDecoration(
             color: s.navBarBg,
-            borderRadius: BorderRadius.circular(28),
             boxShadow: s.navBarShadow,
           ),
           child: Row(
@@ -168,32 +169,44 @@ class _HomeBottomBarItemState extends State<_HomeBottomBarItem> {
       onTapCancel: ()  => setState(() => _pressed = false),
       onTapUp:     (_) => setState(() => _pressed = false),
       onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: kCupertinoOut,
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: sel
-              ? s.navIndicatorBg
-              : (_pressed ? s.hover : Colors.transparent),
-          borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        height: 64,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pill nativo Android: indicador atrás só do ícone,
+              // 32px altura, largura 56px, corner radius total (pill).
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: kCupertinoOut,
+                width: 56,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: sel
+                      ? s.navIndicatorBg
+                      : (_pressed ? s.hover : Colors.transparent),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: AppIcon(
+                  sel ? widget.tab.svgFilled : widget.tab.svg,
+                  color: sel ? s.navLabelActive : s.navIconInactive,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.tab.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                  color: sel ? s.navLabelActive : s.navIconInactive,
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          AppIcon(
-            sel ? widget.tab.svgFilled : widget.tab.svg,
-            color: sel ? s.navLabelActive : s.navIconInactive,
-            size: 21,
-          ),
-          const SizedBox(height: 3),
-          Text(
-            widget.tab.label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-              color: sel ? s.navLabelActive : s.navIconInactive,
-            ),
-          ),
-        ]),
       ),
     );
   }
