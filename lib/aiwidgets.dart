@@ -1,46 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aiwidgets.dart
 // ══════════════════════════════════════════════════════════════
-// Widgets nativos Flutter portados 1:1 (visual e comportamento) dos
-// widgets renderizados em JS puro no chat Svelte de referência.
-// Cada widget consome um bloco de JSON vindo da IA no formato:
-//   ```widget_table
-//   { ...json... }
-//   ```
-// e é detetado por parseAiWidgetBlocks() a partir do texto bruto da
-// resposta da IA. Blocos de código normais (```dart, ```python, etc)
-// NÃO passam por aqui — vão para o sistema de Canvas em aitab.dart.
-//
-// widget_table foi REMOVIDO deste ficheiro — a tabela usada em toda
-// a app é agora _AiTable (richtext.dart), reaproveitada também para
-// blocos ```widget_table```. Ver buildAiWidget() abaixo.
-//
-// ── ATUALIZAÇÃO (Card universal de widget) ──────────────────────
-// Todos os widgets "container" (mindmap, market, calendar, timer)
-// passam a ter um rodapé de ações fixo, com botões específicos por
-// tipo, usando o novo _WidgetActionBar. O card de documento (doc/
-// sheet/slide) NÃO vive aqui — vive em aitab.dart (_DocumentWidgetCard)
-// porque precisa de LocalCanvasItem, que é definido em aitab.dart.
-// widget_code foi REMOVIDO deste ficheiro: agora os blocos de código
-// markdown são renderizados exclusivamente pelo AiCodeBlock em
-// richtext.dart, que já tem o botão de preview que navega para
-// AiCodePreviewScreen (também em richtext.dart).
-//
-// CORREÇÕES DE COMPILAÇÃO (build real falhou, confirmado no log):
-// 1) '$' sem escape dentro de strings com aspas simples ('sh': '$')
-//    é interpretado por Dart como início de interpolação — corrigido
-//    para '\$' nas entradas 'sh' e 'bash' de _fallbackGlyph.
-// 2) 'Object' aparecia duas vezes na mesma literal `const Set<String>
-//    _types` — Dart avalia Set const em tempo de compilação e
-//    rejeita elementos duplicados; removida a segunda ocorrência.
-// 3) Função _parseColor em falta — adicionada como função top-level.
-//
-// ATUALIZAÇÃO DE SUPERFÍCIES: todas as cores de superfície dos
-// widgets agora usam o tema (s.cardBackground, s.surface, s.hover,
-// s.onSurface, s.onSurfaceVariant, s.outline, s.primary), eliminando
-// cores escuras fixas para consistência com o restante da app.
-// ══════════════════════════════════════════════════════════════
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -78,7 +38,6 @@ Color? _parseColor(dynamic raw) {
   return null;
 }
 
-/// Remove caracteres estranhos de texto proveniente de JSON
 String _sanitizeText(String? raw) {
   if (raw == null) return '';
   return raw
@@ -139,7 +98,6 @@ AiWidgetParseResult parseAiWidgetBlocks(String raw) {
   return AiWidgetParseResult(textWithMarkers: replaced, blocks: blocks);
 }
 
-/// Deteta se `raw` contém um bloco ```widget_x``` aberto mas não fechado.
 bool hasOpenWidgetBlock(String raw) {
   final opens = RegExp(r'```widget_[a-z]+').allMatches(raw).length;
   final closesTotal = '```'.allMatches(raw).length;
@@ -347,7 +305,8 @@ class _AiChartWidgetState extends State<AiChartWidget>
   Future<void> _openOptions() async {
     final result = await showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ChartOptionsSheet(
+      s: widget.s,
+      child: _ChartOptionsSheet(
         initialType: _chartType,
         initialTitle: _title,
         initialData: List<_ChartDataItem>.from(_data.map((d) => _ChartDataItem(d.label, d.value, d.color))),
@@ -480,10 +439,10 @@ class _AiChartWidgetState extends State<AiChartWidget>
               children: [
                 Expanded(
                   child: FluentButton(
+                    s: widget.s,
                     label: 'Opções',
                     onTap: _openOptions,
                     style: FluentButtonStyle.primary,
-                    icon: AppIcon('sliders.svg', size: 14, color: widget.s.onPrimary),
                   ),
                 ),
                 SizedBox(width: kSpaceS),
@@ -619,7 +578,9 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
   Future<void> _pickColor(int index) async {
     final selected = await showFluentBottomSheet<Color>(
       context: context,
-      builder: (ctx) => FluentBottomSheet(
+      s: widget.s,
+      child: FluentBottomSheet(
+        s: widget.s,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,7 +609,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
               spacing: kSpaceS + kSpaceXXS,
               runSpacing: kSpaceS + kSpaceXXS,
               children: _colorPalette.map((c) => AppTap(
-                onTap: () => Navigator.pop(ctx, c),
+                onTap: () => Navigator.pop(context, c),
                 s: widget.s,
                 child: Container(
                   width: 32,
@@ -694,6 +655,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
   Widget build(BuildContext context) {
     final s = widget.s;
     return FluentBottomSheet(
+      s: s,
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -748,9 +710,10 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
             ),
             SizedBox(height: kSpaceS),
             FluentTextField(
+              s: s,
               controller: _titleController,
-              fillColor: _inputBg(),
-              borderRadius: kRadiusLarge,
+              background: _inputBg(),
+              radius: kRadiusLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
             SizedBox(height: kSpaceM),
@@ -782,10 +745,11 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                       SizedBox(width: kSpaceS),
                       Expanded(
                         child: FluentTextField(
+                          s: s,
                           controller: _labelControllers[index],
                           onChanged: (v) => item.label = v,
-                          fillColor: _inputBg(),
-                          borderRadius: kRadiusMedium,
+                          background: _inputBg(),
+                          radius: kRadiusMedium,
                           contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
                         ),
                       ),
@@ -793,12 +757,13 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                       SizedBox(
                         width: 64,
                         child: FluentTextField(
+                          s: s,
                           controller: _valueControllers[index],
                           onChanged: (v) => item.value = double.tryParse(v) ?? 0,
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.right,
-                          fillColor: _inputBg(),
-                          borderRadius: kRadiusMedium,
+                          background: _inputBg(),
+                          radius: kRadiusMedium,
                           contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
                         ),
                       ),
@@ -850,6 +815,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
               children: [
                 Expanded(
                   child: FluentButton(
+                    s: s,
                     label: 'Cancelar',
                     onTap: () => Navigator.pop(context),
                     style: FluentButtonStyle.secondary,
@@ -858,6 +824,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                 SizedBox(width: kSpaceS),
                 Expanded(
                   child: FluentButton(
+                    s: s,
                     label: 'Aplicar',
                     onTap: () {
                       Navigator.pop(context, {
@@ -1200,7 +1167,9 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   Future<void> _openPairSelector() async {
     final selected = await showFluentBottomSheet<String>(
       context: context,
-      builder: (ctx) => FluentBottomSheet(
+      s: widget.s,
+      child: FluentBottomSheet(
+        s: widget.s,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1227,9 +1196,10 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                 children: _pairs.map((pair) {
                   final active = pair.key == _currentPairKey;
                   return FluentListCard(
-                    title: pair.label,
+                    s: widget.s,
+                    label: pair.label,
                     subtitle: pair.sub,
-                    onTap: () => Navigator.pop(ctx, pair.key),
+                    onTap: () => Navigator.pop(context, pair.key),
                     selected: active,
                   );
                 }).toList(),
@@ -1400,10 +1370,10 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
             child: SizedBox(
               width: double.infinity,
               child: FluentButton(
+                s: widget.s,
                 label: 'Alterar moeda',
                 onTap: _openPairSelector,
                 style: FluentButtonStyle.primary,
-                icon: AppIcon('repaste.svg', color: widget.s.onPrimary, size: 16),
               ),
             ),
           ),
@@ -1550,7 +1520,9 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final timeCtrl = TextEditingController();
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => FluentBottomSheet(
+      s: s,
+      child: FluentBottomSheet(
+        s: s,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1561,24 +1533,27 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             ),
             SizedBox(height: kSpaceM),
             FluentTextField(
+              s: s,
               controller: nameCtrl,
-              hintText: 'Nome do evento',
-              fillColor: s.subtleFillHover,
-              borderRadius: kRadiusLarge,
+              hint: 'Nome do evento',
+              background: s.subtleFillHover,
+              radius: kRadiusLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
             SizedBox(height: kSpaceS + kSpaceXXS),
             FluentTextField(
+              s: s,
               controller: timeCtrl,
-              hintText: 'Hora (ex: 14:00)',
-              fillColor: s.subtleFillHover,
-              borderRadius: kRadiusLarge,
+              hint: 'Hora (ex: 14:00)',
+              background: s.subtleFillHover,
+              radius: kRadiusLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
             SizedBox(height: kSpaceL),
             SizedBox(
               width: double.infinity,
               child: FluentButton(
+                s: s,
                 label: 'Adicionar',
                 onTap: () {
                   if (nameCtrl.text.trim().isEmpty) return;
@@ -1589,7 +1564,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                       color: const Color(0xFF6F5AF6),
                     ));
                   });
-                  Navigator.pop(ctx);
+                  Navigator.pop(context);
                 },
                 style: FluentButtonStyle.primary,
               ),
@@ -1748,10 +1723,10 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             child: SizedBox(
               width: double.infinity,
               child: FluentButton(
+                s: widget.s,
                 label: 'Novo evento',
                 onTap: _openNewEventSheet,
                 style: FluentButtonStyle.primary,
-                icon: AppIcon('add.svg', size: 14, color: widget.s.onPrimary),
               ),
             ),
           ),
@@ -1994,7 +1969,7 @@ class _TimerRingPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MIND MAP (redesenhado conforme exemplo HTML)
+// MIND MAP
 // ══════════════════════════════════════════════════════════════
 
 class _MindNode {
@@ -2658,7 +2633,8 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
   Future<void> _openEditSheet() async {
     final selected = await showFluentBottomSheet<String>(
       context: context,
-      builder: (ctx) => _MathTypeSheet(
+      s: widget.s,
+      child: _MathTypeSheet(
         currentType: _currentType,
         functionDefs: _functionDefs,
         isDark: widget.s.isDark,
@@ -2759,10 +2735,10 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
         children: [
           Expanded(
             child: FluentButton(
+              s: widget.s,
               label: 'Editar',
               onTap: _openEditSheet,
               style: FluentButtonStyle.primary,
-              icon: AppIcon('edit.svg', size: 15, color: widget.s.onPrimary),
             ),
           ),
           SizedBox(width: kSpaceS),
@@ -2970,6 +2946,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
   Widget build(BuildContext context) {
     final types = widget.functionDefs.keys.toList();
     return FluentBottomSheet(
+      s: widget.s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3005,6 +2982,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
               final def = widget.functionDefs[key]!;
               final active = key == _pendingType;
               return FluentChip(
+                s: widget.s,
                 label: def.label,
                 selected: active,
                 onTap: () => setState(() => _pendingType = key),
@@ -3016,6 +2994,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
             children: [
               Expanded(
                 child: FluentButton(
+                  s: widget.s,
                   label: 'Cancelar',
                   onTap: () => Navigator.pop(context),
                   style: FluentButtonStyle.secondary,
@@ -3024,6 +3003,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
               SizedBox(width: kSpaceS),
               Expanded(
                 child: FluentButton(
+                  s: widget.s,
                   label: 'Aplicar',
                   onTap: () => Navigator.pop(context, _pendingType),
                   style: FluentButtonStyle.primary,
@@ -3561,7 +3541,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
                               ? FluentShimmer(
                                   width: 16,
                                   height: 16,
-                                  borderRadius: kRadiusSmall,
                                 )
                               : AppIcon(
                                   'locate.svg',
@@ -3587,10 +3566,11 @@ class _AiMapWidgetState extends State<AiMapWidget>
               children: [
                 Expanded(
                   child: FluentTextField(
+                    s: s,
                     controller: _searchCtrl,
-                    hintText: 'Procurar morada ou local…',
-                    fillColor: Colors.transparent,
-                    borderRadius: kRadiusCircle,
+                    hint: 'Procurar morada ou local…',
+                    background: Colors.transparent,
+                    radius: kRadiusCircle,
                     contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
                     onSubmitted: (_) => _search(),
                   ),
@@ -3611,7 +3591,6 @@ class _AiMapWidgetState extends State<AiMapWidget>
                           ? FluentShimmer(
                               width: 16,
                               height: 16,
-                              borderRadius: kRadiusSmall,
                             )
                           : AppIcon(
                               'search.svg',

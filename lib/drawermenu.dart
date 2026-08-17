@@ -289,12 +289,14 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
+    final s = AppTheme.of(context);
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _DeleteConversationSheet(
+      s: s,
+      child: _DeleteConversationSheet(
         title: item.title,
         onConfirm: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           conversationsController.delete(item.id);
         },
       ),
@@ -404,7 +406,6 @@ class _AppDrawerState extends State<AppDrawer> {
         child: FluentShimmer(
           width: kSpaceXL,
           height: kSpaceXL,
-          borderRadius: kRadiusSmall,
         ),
       );
     }
@@ -462,7 +463,7 @@ class _AppDrawerState extends State<AppDrawer> {
           if (others.isNotEmpty)
             Padding(
               padding: EdgeInsets.symmetric(vertical: kSpaceS, horizontal: kSpaceS),
-              child: FluentDivider(),
+              child: FluentDivider(s: s),
             )
           else
             SizedBox(height: kSpaceS),
@@ -765,6 +766,7 @@ void showConversationOptionsPopup(
               child: SizedBox(
                 width: width,
                 child: FluentPopupContainer(
+                  s: s,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -903,6 +905,7 @@ class _DeleteConversationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -920,6 +923,7 @@ class _DeleteConversationSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Cancelar',
                   onTap: () => Navigator.pop(context),
                   style: FluentButtonStyle.secondary,
@@ -928,6 +932,7 @@ class _DeleteConversationSheet extends StatelessWidget {
               SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Eliminar',
                   onTap: onConfirm,
                   style: FluentButtonStyle.destructive,
@@ -948,9 +953,11 @@ Future<void> showRenameSheet(
   String title = 'Renomear conversa',
   String hint = 'Título da conversa',
 }) {
+  final s = AppTheme.of(context);
   return showFluentBottomSheet<void>(
     context: context,
-    builder: (ctx) => _RenameSheet(
+    s: s,
+    child: _RenameSheet(
       currentTitle: currentTitle,
       onConfirm: onConfirm,
       title: title,
@@ -988,6 +995,7 @@ class _RenameSheetState extends State<_RenameSheet> {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1002,11 +1010,12 @@ class _RenameSheetState extends State<_RenameSheet> {
           ),
           SizedBox(height: kSpaceM),
           FluentTextField(
+            s: s,
             controller: _ctrl,
             autofocus: true,
-            hintText: widget.hint,
-            fillColor: s.subtleFillHover,
-            borderRadius: kRadiusXLarge,
+            hint: widget.hint,
+            background: s.subtleFillHover,
+            radius: kRadiusXLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceL,
               vertical: kSpaceM,
@@ -1020,6 +1029,7 @@ class _RenameSheetState extends State<_RenameSheet> {
           SizedBox(
             width: double.infinity,
             child: FluentButton(
+              s: s,
               label: 'Confirmar',
               onTap: () {
                 Navigator.pop(context);
@@ -1262,6 +1272,7 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
                 child: SizedBox(
                   width: 220,
                   child: FluentPopupContainer(
+                    s: s,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [

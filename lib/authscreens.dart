@@ -1,6 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/authscreens.dart
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
@@ -321,8 +318,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             message: authController.lastError!,
                           ),
                         FluentTextField(
+                          s: s,
                           controller: _emailCtrl,
-                          hintText: 'Email',
+                          hint: 'Email',
                           keyboardType: TextInputType.emailAddress,
                           errorText: _emailError,
                           textInputAction: TextInputAction.next,
@@ -330,8 +328,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         SizedBox(height: kSpaceM),
                         FluentTextField(
+                          s: s,
                           controller: _passCtrl,
-                          hintText: 'Password',
+                          hint: 'Password',
                           obscureText: _obscure,
                           errorText: _passError,
                           focusNode: _passFocus,
@@ -370,6 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         SizedBox(height: kSpaceXXXL),
                         FluentButton(
+                          s: s,
                           label: 'Iniciar sessão',
                           loading: authController.busy,
                           onTap: _submit,
@@ -544,16 +544,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             message: authController.lastError!,
                           ),
                         FluentTextField(
+                          s: s,
                           controller: _nameCtrl,
-                          hintText: 'Nome',
+                          hint: 'Nome',
                           errorText: _nameError,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _emailFocus.requestFocus(),
                         ),
                         SizedBox(height: kSpaceM),
                         FluentTextField(
+                          s: s,
                           controller: _emailCtrl,
-                          hintText: 'Email',
+                          hint: 'Email',
                           keyboardType: TextInputType.emailAddress,
                           errorText: _emailError,
                           focusNode: _emailFocus,
@@ -562,8 +564,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         SizedBox(height: kSpaceM),
                         FluentTextField(
+                          s: s,
                           controller: _passCtrl,
-                          hintText: 'Password',
+                          hint: 'Password',
                           obscureText: _obscurePass,
                           errorText: _passError,
                           focusNode: _passFocus,
@@ -582,8 +585,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         SizedBox(height: kSpaceM),
                         FluentTextField(
+                          s: s,
                           controller: _confirmCtrl,
-                          hintText: 'Confirmar password',
+                          hint: 'Confirmar password',
                           obscureText: _obscureConfirm,
                           errorText: _confirmError,
                           focusNode: _confirmFocus,
@@ -602,6 +606,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         SizedBox(height: kSpaceXXXL),
                         FluentButton(
+                          s: s,
                           label: 'Criar conta',
                           loading: authController.busy,
                           onTap: _submit,
@@ -740,8 +745,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               message: authController.lastError!,
                             ),
                           FluentTextField(
+                            s: s,
                             controller: _emailCtrl,
-                            hintText: 'Email',
+                            hint: 'Email',
                             keyboardType: TextInputType.emailAddress,
                             errorText: _emailError,
                             textInputAction: TextInputAction.done,
@@ -749,6 +755,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                           SizedBox(height: kSpaceXXXL),
                           FluentButton(
+                            s: s,
                             label: 'Enviar instruções',
                             loading: authController.busy,
                             onTap: _submit,
@@ -777,6 +784,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                           SizedBox(height: kSpaceL),
                           FluentButton(
+                            s: s,
                             label: 'Voltar ao início de sessão',
                             onTap: () =>
                                 Navigator.of(context).popUntil((r) => r.isFirst),

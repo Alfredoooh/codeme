@@ -6,21 +6,17 @@ import 'widgets.dart';
 // ══════════════════════════════════════════════════════════════
 // BASE BOTTOM SHEET
 // ══════════════════════════════════════════════════════════════
-// Adaptado para usar o design system Fluent, substituindo
-// `showModalBottomSheet` por `showFluentBottomSheet` e o
-// container manual por `FluentBottomSheet`.
 Future<T?> showCraftBottomSheet<T>({
   required BuildContext context,
   required AppColorScheme s,
   required Widget child,
   String? title,
 }) {
-  // `s` é mantido para compatibilidade de assinatura com chamadas existentes,
-  // mas não é necessário porque `showFluentBottomSheet` obtém o scheme
-  // internamente através de `AppTheme.of(context)`.
   return showFluentBottomSheet<T>(
     context: context,
-    builder: (ctx) => FluentBottomSheet(
+    s: s,
+    child: FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -31,7 +27,7 @@ Future<T?> showCraftBottomSheet<T>({
               style: TextStyle(
                 fontSize: kTypeBody,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.of(ctx).onSurface,
+                color: s.onSurface,
               ),
             ),
             SizedBox(height: kSpaceS),
@@ -47,7 +43,6 @@ Future<T?> showCraftBottomSheet<T>({
 // ══════════════════════════════════════════════════════════════
 // COLOR PICKER
 // ══════════════════════════════════════════════════════════════
-
 Future<String?> showColorPickerSheet(BuildContext context, AppColorScheme s,
     {String? label}) {
   final colors = [
@@ -91,7 +86,6 @@ Future<String?> showColorPickerSheet(BuildContext context, AppColorScheme s,
 // ══════════════════════════════════════════════════════════════
 // IMAGE PICKER
 // ══════════════════════════════════════════════════════════════
-
 Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
   return showCraftBottomSheet<void>(
     context: context,
@@ -141,22 +135,27 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) async {
   final ctrl = TextEditingController();
   await showFluentDialog<void>(
     context: context,
-    builder: (ctx) => FluentDialog(
+    s: s,
+    child: FluentDialog(
+      s: s,
       title: 'URL da imagem',
       content: FluentTextField(
+        s: s,
         controller: ctrl,
-        hintText: 'https://',
+        hint: 'https://',
         autofocus: true,
       ),
       actions: [
         FluentButton(
+          s: s,
           label: 'Cancelar',
-          onTap: () => Navigator.pop(ctx),
+          onTap: () => Navigator.pop(context),
           style: FluentButtonStyle.secondary,
         ),
         FluentButton(
+          s: s,
           label: 'Inserir',
-          onTap: () => Navigator.pop(ctx),
+          onTap: () => Navigator.pop(context),
           style: FluentButtonStyle.primary,
         ),
       ],
@@ -186,7 +185,7 @@ class _SrcOption extends StatelessWidget {
           child: Row(
             children: [
               AppIcon(icon, size: 20, color: s.primary),
-              SizedBox(width: kSpaceL - kSpaceXXS), // 14
+              SizedBox(width: kSpaceL - kSpaceXXS),
               Text(
                 label,
                 style: TextStyle(fontSize: kTypeBody, color: s.onSurface),
@@ -202,7 +201,6 @@ class _SrcOption extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // LINK SHEET
 // ══════════════════════════════════════════════════════════════
-
 Future<void> showLinkSheet(
   BuildContext context,
   AppColorScheme s,
@@ -222,21 +220,23 @@ Future<void> showLinkSheet(
       child: Column(
         children: [
           FluentTextField(
+            s: s,
             controller: urlC,
-            hintText: 'https://',
-            fillColor: s.subtleFillHover,
-            borderRadius: kRadiusLarge,
+            hint: 'https://',
+            background: s.subtleFillHover,
+            radius: kRadiusLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceM,
               vertical: kSpaceM,
             ),
           ),
-          SizedBox(height: kSpaceS + kSpaceXXS), // 10
+          SizedBox(height: kSpaceS + kSpaceXXS),
           FluentTextField(
+            s: s,
             controller: txtC,
-            hintText: 'Texto (opcional)',
-            fillColor: s.subtleFillHover,
-            borderRadius: kRadiusLarge,
+            hint: 'Texto (opcional)',
+            background: s.subtleFillHover,
+            radius: kRadiusLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceM,
               vertical: kSpaceM,
@@ -247,14 +247,16 @@ Future<void> showLinkSheet(
             children: [
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Cancelar',
                   onTap: () => Navigator.pop(context),
                   style: FluentButtonStyle.secondary,
                 ),
               ),
-              SizedBox(width: kSpaceS + kSpaceXXS), // 10
+              SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Inserir',
                   onTap: () {
                     Navigator.pop(context);

@@ -1,6 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/projectstab.dart
-// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,11 +8,6 @@ import 'api_service.dart';
 import 'projects_controller.dart';
 import 'drawermenu.dart' show showRenameSheet;
 import 'aitab.dart' show LocalCanvasItem, LocalCanvasKind;
-
-// ══════════════════════════════════════════════════════════════
-// PROJECTS TAB — grid de cards (galeria), em comunicação real com o
-// worker através de projectsController/ProjectsApiService.
-// ══════════════════════════════════════════════════════════════
 
 class ProjectsTab extends StatefulWidget {
   final ValueChanged<LocalCanvasItem>? onOpenFile;
@@ -112,6 +104,7 @@ class _ProjectsTabState extends State<ProjectsTab>
               ),
               const Spacer(),
               FluentButton(
+                s: s,
                 label: 'Novo',
                 onTap: _createProject,
                 style: FluentButtonStyle.primary,
@@ -133,7 +126,6 @@ class _ProjectsTabState extends State<ProjectsTab>
         child: FluentShimmer(
           width: kSpaceXXL,
           height: kSpaceXXL,
-          borderRadius: kRadiusSmall,
         ),
       );
     }
@@ -155,7 +147,7 @@ class _ProjectsTabState extends State<ProjectsTab>
               color: s.onSurfaceTertiary,
               size: 52,
             ),
-            SizedBox(height: kSpaceL - kSpaceXXS), // 14
+            SizedBox(height: kSpaceL - kSpaceXXS),
             Text(
               'Sem projetos ainda',
               style: TextStyle(fontSize: kTypeBodyLarge, color: s.onSurfaceVariant),
@@ -204,12 +196,15 @@ class _ProjectsTabState extends State<ProjectsTab>
   }
 
   void _confirmDelete(ProjectNode node) {
+    final s = AppTheme.of(context);
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ConfirmDeleteSheet(
+      s: s,
+      child: _ConfirmDeleteSheet(
+        s: s,
         title: node.name,
         onConfirm: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           projectsController.delete(node.id);
         },
       ),
@@ -217,7 +212,7 @@ class _ProjectsTabState extends State<ProjectsTab>
   }
 }
 
-// ── Cartão de projeto (grid da raiz) — ícone grande, contagem de itens ──
+// ── Cartão de projeto (grid da raiz) ─────────────────────────
 
 class _ProjectCard extends StatefulWidget {
   final AppColorScheme s;
@@ -240,16 +235,19 @@ class _ProjectCardState extends State<_ProjectCard> {
   bool _h = false;
 
   void _openOptions() {
+    final s = AppTheme.of(context);
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ProjectOptionsSheet(
+      s: s,
+      child: _ProjectOptionsSheet(
+        s: s,
         title: widget.node.name,
         onRename: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           widget.onRename();
         },
         onDelete: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           widget.onDelete();
         },
       ),
@@ -283,8 +281,6 @@ class _ProjectCardState extends State<_ProjectCard> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    // withOpacity usado porque não existe token específico
-                    // para esta variante translúcida do primaryContainer.
                     color: s.primaryContainer.withOpacity(0.25),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(kRadiusLarge),
@@ -301,7 +297,7 @@ class _ProjectCardState extends State<_ProjectCard> {
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   kSpaceM,
-                  kSpaceS + kSpaceXXS, // 10
+                  kSpaceS + kSpaceXXS,
                   kSpaceM,
                   kSpaceXS,
                 ),
@@ -446,19 +442,22 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
   }
 
   void _openAddMenu() {
+    final s = AppTheme.of(context);
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _AddItemSheet(
+      s: s,
+      child: _AddItemSheet(
+        s: s,
         onCreateFolder: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           _createFolder();
         },
         onCreateFile: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           _createFile();
         },
         onUpload: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           _uploadFile();
         },
       ),
@@ -477,12 +476,15 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
   }
 
   void _confirmDeleteNode(ProjectNode node) {
+    final s = AppTheme.of(context);
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ConfirmDeleteSheet(
+      s: s,
+      child: _ConfirmDeleteSheet(
+        s: s,
         title: node.name,
         onConfirm: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           projectsController.delete(node.id);
         },
       ),
@@ -542,11 +544,11 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
           child: Row(
             children: [
               FluentIconButton(
-                icon: AppIcon('back.svg', color: s.onSurface, size: 16),
-                onTap: widget.onBack,
                 s: s,
+                child: AppIcon('back.svg', color: s.onSurface, size: 16),
+                onTap: widget.onBack,
               ),
-              SizedBox(width: kSpaceS + kSpaceXXS), // 10
+              SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
                 child: Text(
                   widget.project.name,
@@ -560,6 +562,7 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
                 ),
               ),
               FluentButton(
+                s: s,
                 label: _uploading ? 'A enviar...' : 'Novo',
                 onTap: _uploading ? null : _openAddMenu,
                 style: FluentButtonStyle.primary,
@@ -644,16 +647,19 @@ class _NodeCardState extends State<_NodeCard> {
   bool _h = false;
 
   void _openOptions() {
+    final s = AppTheme.of(context);
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ProjectOptionsSheet(
+      s: s,
+      child: _ProjectOptionsSheet(
+        s: s,
         title: widget.node.name,
         onRename: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           widget.onRename();
         },
         onDelete: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           widget.onDelete();
         },
       ),
@@ -691,8 +697,6 @@ class _NodeCardState extends State<_NodeCard> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    // withOpacity usado porque não existe token específico
-                    // para esta variante translúcida do primaryContainer.
                     color: s.primaryContainer.withOpacity(0.25),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(kRadiusLarge),
@@ -711,7 +715,7 @@ class _NodeCardState extends State<_NodeCard> {
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   kSpaceM,
-                  kSpaceS + kSpaceXXS, // 10
+                  kSpaceS + kSpaceXXS,
                   kSpaceM,
                   kSpaceXS,
                 ),
@@ -767,10 +771,12 @@ class _NodeCardState extends State<_NodeCard> {
 // ── Sheets auxiliares (agora usando FluentBottomSheet e FluentListGroup) ──
 
 class _AddItemSheet extends StatelessWidget {
+  final AppColorScheme s;
   final VoidCallback onCreateFolder;
   final VoidCallback onCreateFile;
   final VoidCallback onUpload;
   const _AddItemSheet({
+    required this.s,
     required this.onCreateFolder,
     required this.onCreateFile,
     required this.onUpload,
@@ -778,23 +784,27 @@ class _AddItemSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
     return FluentBottomSheet(
+      s: s,
       child: FluentListGroup(
-        children: [
+        s: s,
+        items: [
           FluentListCard(
+            s: s,
             leading: AppIcon('folder.svg', color: s.primary, size: 18),
-            title: 'Criar pasta',
+            label: 'Criar pasta',
             onTap: onCreateFolder,
           ),
           FluentListCard(
+            s: s,
             leading: AppIcon('doc.png', color: s.primary, size: 18),
-            title: 'Criar ficheiro',
+            label: 'Criar ficheiro',
             onTap: onCreateFile,
           ),
           FluentListCard(
+            s: s,
             leading: AppIcon('file.svg', color: s.primary, size: 18),
-            title: 'Upload de ficheiro',
+            label: 'Upload de ficheiro',
             onTap: onUpload,
           ),
         ],
@@ -804,10 +814,12 @@ class _AddItemSheet extends StatelessWidget {
 }
 
 class _ProjectOptionsSheet extends StatelessWidget {
+  final AppColorScheme s;
   final String title;
   final VoidCallback onRename;
   final VoidCallback onDelete;
   const _ProjectOptionsSheet({
+    required this.s,
     required this.title,
     required this.onRename,
     required this.onDelete,
@@ -815,8 +827,8 @@ class _ProjectOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -840,16 +852,19 @@ class _ProjectOptionsSheet extends StatelessWidget {
             ),
           ),
           FluentListGroup(
-            children: [
+            s: s,
+            items: [
               FluentListCard(
+                s: s,
                 leading: AppIcon('edit.svg', color: s.onSurface, size: 18),
-                title: 'Renomear',
+                label: 'Renomear',
                 onTap: onRename,
               ),
               FluentListCard(
+                s: s,
                 leading: AppIcon('trash.svg', color: s.error, size: 18),
-                title: 'Eliminar',
-                titleColor: s.error,
+                label: 'Eliminar',
+                labelColor: s.error,
                 onTap: onDelete,
               ),
             ],
@@ -861,17 +876,19 @@ class _ProjectOptionsSheet extends StatelessWidget {
 }
 
 class _ConfirmDeleteSheet extends StatelessWidget {
+  final AppColorScheme s;
   final String title;
   final VoidCallback onConfirm;
   const _ConfirmDeleteSheet({
+    required this.s,
     required this.title,
     required this.onConfirm,
   });
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -889,14 +906,16 @@ class _ConfirmDeleteSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Cancelar',
                   onTap: () => Navigator.pop(context),
                   style: FluentButtonStyle.secondary,
                 ),
               ),
-              SizedBox(width: kSpaceS + kSpaceXXS), // 10
+              SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Eliminar',
                   onTap: onConfirm,
                   style: FluentButtonStyle.destructive,

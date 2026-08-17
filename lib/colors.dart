@@ -196,7 +196,7 @@ class AppColorScheme {
   // ─── STROKE / OUTLINE ────────────────────────────────────
 
   /// Surface Stroke — borda exterior de janelas, cards elevados
-  Color get strokeSurface        => isDark ? const Color(0xFF6C6C6C) : const Color(0xFF E5E5E5);
+  Color get strokeSurface        => isDark ? const Color(0xFF6C6C6C) : const Color(0xFFE5E5E5);
 
   /// Card Stroke — borda de cards não elevados
   Color get strokeCard           => isDark ? const Color(0x1AFFFFFF) : const Color(0x0A000000);

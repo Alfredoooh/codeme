@@ -380,30 +380,35 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
   @override
   void initState() {
     super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: kDurationNormal);
+    _ac = AnimationController(vsync: this, duration: kDurationNormal);
   }
 
   @override
-  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
+  void dispose() {
+    _ac.dispose();
+    _ov?.remove();
+    super.dispose();
+  }
 
   void toggle() => _ov == null ? open() : close();
 
   void open() {
     final box = _anchorBoxKey.currentContext!.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
-    final sz  = box.size;
+    final sz = box.size;
     _ac.forward(from: 0);
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
       final screenSize = MediaQuery.of(ctx).size;
       final desiredTop = off.dy + sz.height + 6;
-      final overflowsBottom = desiredTop + widget.estimatedHeight > screenSize.height - 24;
+      final overflowsBottom =
+          desiredTop + widget.estimatedHeight > screenSize.height - 24;
       final opensUp = overflowsBottom;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
-      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - widget.width - 12);
+      final right = (screenSize.width - off.dx - sz.width)
+          .clamp(12.0, screenSize.width - widget.width - 12);
 
       return Stack(children: [
         Positioned.fill(
@@ -426,9 +431,11 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
                   .value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kFluentDecelerate))
+                    .animate(
+                        CurvedAnimation(parent: _ac, curve: kFluentDecelerate))
                     .value,
-                alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
+                alignment:
+                    opensUp ? Alignment.bottomRight : Alignment.topRight,
                 child: child,
               ),
             ),
@@ -488,7 +495,8 @@ class _PopupRow<T> extends StatefulWidget {
   final PopupMenuEntry<T> entry;
   final VoidCallback onTap;
   const _PopupRow({required this.s, required this.entry, required this.onTap});
-  @override State<_PopupRow<T>> createState() => _PopupRowState<T>();
+  @override
+  State<_PopupRow<T>> createState() => _PopupRowState<T>();
 }
 
 class _PopupRowState<T> extends State<_PopupRow<T>> {
@@ -509,13 +517,14 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
       opacity: e.disabled ? 0.55 : 1.0,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown:   e.disabled ? null : (_) => setState(() => _h = true),
-        onTapCancel: e.disabled ? null : ()  => setState(() => _h = false),
-        onTapUp:     e.disabled ? null : (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
+        onTapDown: e.disabled ? null : (_) => setState(() => _h = true),
+        onTapCancel: e.disabled ? null : () => setState(() => _h = false),
+        onTapUp: e.disabled ? null : (_) => setState(() => _h = false),
+        onTap: widget.onTap,
         child: AnimatedContainer(
           duration: kDurationFast,
-          padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
+          padding:
+              EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
           decoration: BoxDecoration(
             color: _h && !e.disabled
                 ? s.subtleFillHover
@@ -536,13 +545,15 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
                   Text(e.label,
                       style: TextStyle(
                         fontSize: kTypeBody,
-                        fontWeight: e.selected ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight:
+                            e.selected ? FontWeight.w600 : FontWeight.w400,
                         color: color,
                       )),
                   if (e.subtitle != null) ...[
                     SizedBox(height: kSpaceXXS),
                     Text(e.subtitle!,
-                        style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
+                        style: TextStyle(
+                            fontSize: kTypeCaption, color: s.onSurfaceVariant)),
                   ],
                 ],
               ),
@@ -638,8 +649,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   @override
   void initState() {
     super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: kDurationNormal);
+    _ac = AnimationController(vsync: this, duration: kDurationNormal);
     _webNotifier = ValueNotifier(widget.webSearchEnabled);
     _widgetsNotifier = ValueNotifier(widget.widgetsEnabled);
   }
@@ -697,7 +707,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                   .value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kFluentDecelerate))
+                    .animate(
+                        CurvedAnimation(parent: _ac, curve: kFluentDecelerate))
                     .value,
                 alignment: Alignment.topRight,
                 child: child,
@@ -706,7 +717,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
             child: Material(
               type: MaterialType.transparency,
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: screenSize.height * 0.7),
+                constraints:
+                    BoxConstraints(maxHeight: screenSize.height * 0.7),
                 child: SingleChildScrollView(
                   child: Container(
                     width: width,
@@ -723,7 +735,10 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                           s: s,
                           icon: ConversationAction.newChat.svgAsset,
                           label: ConversationAction.newChat.label,
-                          onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
+                          onTap: () {
+                            _close();
+                            widget.onSelect(ConversationAction.newChat);
+                          },
                         ),
                         _MenuActionRow(
                           s: s,
@@ -740,18 +755,25 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                           s: s,
                           icon: ConversationAction.rename.svgAsset,
                           label: ConversationAction.rename.label,
-                          onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
+                          onTap: () {
+                            _close();
+                            widget.onSelect(ConversationAction.rename);
+                          },
                         ),
                         _MenuActionRow(
                           s: s,
                           icon: ConversationAction.delete.svgAsset,
                           label: ConversationAction.delete.label,
                           destructive: true,
-                          onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
+                          onTap: () {
+                            _close();
+                            widget.onSelect(ConversationAction.delete);
+                          },
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(vertical: kSpaceXS, horizontal: kSpaceS),
-                          child: FluentDivider(),
+                          padding: EdgeInsets.symmetric(
+                              vertical: kSpaceXS, horizontal: kSpaceS),
+                          child: FluentDivider(s: s),
                         ),
                         _MenuActionRow(
                           s: s,
@@ -760,11 +782,15 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                           subtitle: widget.canvasCount == 0
                               ? 'Ainda sem documentos'
                               : '${widget.canvasCount} documento${widget.canvasCount == 1 ? '' : 's'} nesta conversa',
-                          onTap: () { _close(); widget.onOpenCanvas(); },
+                          onTap: () {
+                            _close();
+                            widget.onOpenCanvas();
+                          },
                         ),
                         Padding(
-                          padding: EdgeInsets.symmetric(vertical: kSpaceXS, horizontal: kSpaceS),
-                          child: FluentDivider(),
+                          padding: EdgeInsets.symmetric(
+                              vertical: kSpaceXS, horizontal: kSpaceS),
+                          child: FluentDivider(s: s),
                         ),
                         ValueListenableBuilder<bool>(
                           valueListenable: _webNotifier,
@@ -786,7 +812,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                             s: s,
                             icon: 'widgets.svg',
                             label: 'Widgets',
-                            subtitle: enabled ? 'Gráficos, mapas e cartões' : 'Desativado',
+                            subtitle:
+                                enabled ? 'Gráficos, mapas e cartões' : 'Desativado',
                             value: enabled,
                             onChanged: (v) {
                               _widgetsNotifier.value = v;
@@ -826,7 +853,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
             child: AppTap(
               onTap: () {},
               s: widget.s,
-              child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+              child: AppIcon('more_filled.svg',
+                  color: widget.s.onSurface, size: 20),
             ),
           ),
         ),
@@ -850,7 +878,8 @@ class _MenuActionRow extends StatefulWidget {
     this.destructive = false,
     this.disabled = false,
   });
-  @override State<_MenuActionRow> createState() => _MenuActionRowState();
+  @override
+  State<_MenuActionRow> createState() => _MenuActionRowState();
 }
 
 class _MenuActionRowState extends State<_MenuActionRow> {
@@ -866,15 +895,18 @@ class _MenuActionRowState extends State<_MenuActionRow> {
       opacity: widget.disabled ? 0.55 : 1.0,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown:   widget.disabled ? null : (_) => setState(() => _h = true),
-        onTapCancel: widget.disabled ? null : ()  => setState(() => _h = false),
-        onTapUp:     widget.disabled ? null : (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
+        onTapDown: widget.disabled ? null : (_) => setState(() => _h = true),
+        onTapCancel: widget.disabled ? null : () => setState(() => _h = false),
+        onTapUp: widget.disabled ? null : (_) => setState(() => _h = false),
+        onTap: widget.onTap,
         child: AnimatedContainer(
           duration: kDurationFast,
-          padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
+          padding:
+              EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
           decoration: BoxDecoration(
-            color: _h && !widget.disabled ? widget.s.subtleFillHover : Colors.transparent,
+            color: _h && !widget.disabled
+                ? widget.s.subtleFillHover
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
           child: Row(children: [
@@ -885,11 +917,16 @@ class _MenuActionRowState extends State<_MenuActionRow> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(widget.label,
-                      style: TextStyle(fontSize: kTypeBody, color: color, fontWeight: FontWeight.w500)),
+                      style: TextStyle(
+                          fontSize: kTypeBody,
+                          color: color,
+                          fontWeight: FontWeight.w500)),
                   if (widget.subtitle != null) ...[
                     SizedBox(height: kSpaceXXS),
                     Text(widget.subtitle!,
-                        style: TextStyle(fontSize: kTypeCaption, color: widget.s.onSurfaceVariant)),
+                        style: TextStyle(
+                            fontSize: kTypeCaption,
+                            color: widget.s.onSurfaceVariant)),
                   ],
                 ],
               ),
@@ -929,9 +966,13 @@ class _MenuSwitchRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: TextStyle(fontSize: kTypeBody, fontWeight: FontWeight.w400, color: s.onSurface)),
+                  style: TextStyle(
+                      fontSize: kTypeBody,
+                      fontWeight: FontWeight.w400,
+                      color: s.onSurface)),
               Text(subtitle,
-                  style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
+                  style: TextStyle(
+                      fontSize: kTypeCaption, color: s.onSurfaceVariant)),
             ],
           ),
         ),
@@ -964,7 +1005,8 @@ class SimpleCanvasCard extends StatelessWidget {
       s: s,
       child: Container(
         margin: EdgeInsets.symmetric(vertical: kSpaceS),
-        padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
+        padding:
+            EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
         decoration: BoxDecoration(
           color: s.cardBackground,
           borderRadius: BorderRadius.circular(kRadiusLarge),
@@ -1009,7 +1051,8 @@ class SimpleCanvasCard extends StatelessWidget {
                 ],
               ),
             ),
-            AppIcon('chevron_right.svg', color: s.onSurfaceVariant, size: 16),
+            AppIcon('chevron_right.svg',
+                color: s.onSurfaceVariant, size: 16),
           ],
         ),
       ),
@@ -1050,7 +1093,8 @@ class _OpenBlockInfo {
   const _OpenBlockInfo(this.label, this.partialContent);
 }
 
-List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
+List<_StreamElement> _parseStreamingContent(
+    String raw, String Function() idGen) {
   final elements = <_StreamElement>[];
   final canvasScan = _scanForCanvasItems(raw, idGen);
 
@@ -1059,7 +1103,8 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
   remaining = widgetParse.textWithMarkers;
 
   final parts = remaining.split(RegExp(r'\u0000WB(\d+)\u0000'));
-  final markerMatches = RegExp(r'\u0000WB(\d+)\u0000').allMatches(remaining).toList();
+  final markerMatches =
+      RegExp(r'\u0000WB(\d+)\u0000').allMatches(remaining).toList();
 
   for (int i = 0; i < parts.length; i++) {
     if (parts[i].isNotEmpty) {
@@ -1086,7 +1131,8 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
 }
 
 _OpenBlockInfo? _detectOpenBlockInfo(String text) {
-  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
+  final canvasOpenMatch =
+      RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
   if (canvasOpenMatch.isNotEmpty) {
     final last = canvasOpenMatch.last;
     final afterLast = text.substring(last.start);
@@ -1176,25 +1222,26 @@ class AiTab extends StatefulWidget {
     this.onHeaderStateChanged,
     this.onCanvasCreated,
   });
-  @override State<AiTab> createState() => AiTabState();
+  @override
+  State<AiTab> createState() => AiTabState();
 }
 
 class AiTabState extends State<AiTab> {
-  final TextEditingController _ctrl   = TextEditingController();
-  final ScrollController       _scroll = ScrollController();
-  final List<ChatMessage>      _msgs  = [];
-  final List<LocalCanvasItem>  _canvases = [];
+  final TextEditingController _ctrl = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  final List<ChatMessage> _msgs = [];
+  final List<LocalCanvasItem> _canvases = [];
 
-  bool     _incognito    = false;
-  bool     _sending      = false;
-  bool     _widgetsEnabled = true;
-  bool     _webSearchEnabled = false;
-  String   _streamingText = '';
-  String?  _streamingThink;
-  String?  _conversationId;
-  AiModel  _model        = AiModel.deepseekFlash;
+  bool _incognito = false;
+  bool _sending = false;
+  bool _widgetsEnabled = true;
+  bool _webSearchEnabled = false;
+  String _streamingText = '';
+  String? _streamingThink;
+  String? _conversationId;
+  AiModel _model = AiModel.deepseekFlash;
   EditorType? _attachedTool;
-  int      _canvasIdSeq  = 0;
+  int _canvasIdSeq = 0;
 
   final List<AttachedFile> _attachedFiles = [];
   int _attachedFileIdSeq = 0;
@@ -1212,7 +1259,7 @@ class AiTabState extends State<AiTab> {
 
   final FocusNode _inputFocus = FocusNode();
   final LayerLink _attachLink = LayerLink();
-  final LayerLink _modelLink  = LayerLink();
+  final LayerLink _modelLink = LayerLink();
 
   @override
   void initState() {
@@ -1225,7 +1272,8 @@ class AiTabState extends State<AiTab> {
   @override
   void didUpdateWidget(covariant AiTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.externalAction != null && widget.externalAction != oldWidget.externalAction) {
+    if (widget.externalAction != null &&
+        widget.externalAction != oldWidget.externalAction) {
       _onConversationAction(widget.externalAction!);
       widget.onExternalActionConsumed?.call();
     }
@@ -1281,8 +1329,10 @@ class AiTabState extends State<AiTab> {
     _scrollToEnd();
   }
 
-  String _nextCanvasId() => 'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
-  String _nextAttachedFileId() => 'af_${DateTime.now().millisecondsSinceEpoch}_${_attachedFileIdSeq++}';
+  String _nextCanvasId() =>
+      'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
+  String _nextAttachedFileId() =>
+      'af_${DateTime.now().millisecondsSinceEpoch}_${_attachedFileIdSeq++}';
 
   String get _effectiveSystemPrompt {
     var prompt = kAiSystemPrompt;
@@ -1303,12 +1353,15 @@ class AiTabState extends State<AiTab> {
     final isFirst = _msgs.isEmpty;
 
     final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
-    final imageAttachments = pendingAttachments.where((f) => f.mimeType.startsWith('image/')).toList();
+    final imageAttachments = pendingAttachments
+        .where((f) => f.mimeType.startsWith('image/'))
+        .toList();
 
     var effectiveContent = t;
     if (imageAttachments.isNotEmpty) {
       final names = imageAttachments.map((f) => f.name).join(', ');
-      final note = '[Nota: o utilizador anexou ${imageAttachments.length == 1 ? 'a imagem' : 'as imagens'} '
+      final note =
+          '[Nota: o utilizador anexou ${imageAttachments.length == 1 ? 'a imagem' : 'as imagens'} '
           '"$names", mas não é possível analisar imagens neste momento. '
           'Informa isso ao utilizador em vez de descrever ou assumir o conteúdo da imagem.]';
       effectiveContent = effectiveContent.isEmpty ? note : '$effectiveContent\n\n$note';
@@ -1348,7 +1401,8 @@ class AiTabState extends State<AiTab> {
       setState(() {
         _sending = false;
         _msgs.add(const ChatMessage(
-            role: 'assistant', content: 'Sessão expirada. Volta a iniciar sessão.'));
+            role: 'assistant',
+            content: 'Sessão expirada. Volta a iniciar sessão.'));
       });
       return;
     }
@@ -1371,7 +1425,8 @@ class AiTabState extends State<AiTab> {
             _scrollToEnd();
             break;
           case ChatThinkEvent(text: final text):
-            setState(() => _streamingThink = (_streamingThink ?? '') + text);
+            setState(
+                () => _streamingThink = (_streamingThink ?? '') + text);
             break;
           case ChatDoneEvent(fullText: final fullText):
             final finalText = fullText.isNotEmpty ? fullText : _streamingText;
@@ -1401,7 +1456,8 @@ class AiTabState extends State<AiTab> {
               _sending = false;
               _streamingText = '';
               _streamingThink = null;
-              _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
+              _msgs.add(
+                  ChatMessage(role: 'assistant', content: 'Erro: $message'));
             });
             _scrollToEnd();
             break;
@@ -1412,7 +1468,8 @@ class AiTabState extends State<AiTab> {
               _streamingThink = null;
               _msgs.add(const ChatMessage(
                   role: 'assistant',
-                  content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
+                  content:
+                      'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
             });
             _scrollToEnd();
             authController.refreshBalance();
@@ -1432,7 +1489,8 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  Future<void> _createConversationWithGeneratedTitle(String firstMessage) async {
+  Future<void> _createConversationWithGeneratedTitle(
+      String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
     if (_conversationId != null) return;
@@ -1496,7 +1554,8 @@ class AiTabState extends State<AiTab> {
   }
 
   void _onAttachFiles() async {
-    final result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
+    final result =
+        await FilePicker.pickFiles(allowMultiple: true, withData: true);
     if (result == null || result.files.isEmpty) return;
     final newFiles = <AttachedFile>[];
     for (final f in result.files) {
@@ -1540,15 +1599,22 @@ class AiTabState extends State<AiTab> {
   String _guessMimeType(String name, String? extension) {
     final ext = (extension ?? name.split('.').last).toLowerCase();
     const map = {
-      'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-      'gif': 'image/gif', 'webp': 'image/webp',
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
       'pdf': 'application/pdf',
-      'txt': 'text/plain', 'md': 'text/markdown',
-      'csv': 'text/csv', 'json': 'application/json',
+      'txt': 'text/plain',
+      'md': 'text/markdown',
+      'csv': 'text/csv',
+      'json': 'application/json',
       'doc': 'application/msword',
-      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'docx':
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'xls': 'application/vnd.ms-excel',
-      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'xlsx':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };
     return map[ext] ?? 'application/octet-stream';
   }
@@ -1588,7 +1654,8 @@ class AiTabState extends State<AiTab> {
       onTranscribed: (text) {
         setState(() {
           _ctrl.text = text;
-          _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+          _ctrl.selection =
+              TextSelection.collapsed(offset: _ctrl.text.length);
         });
       },
     );
@@ -1655,7 +1722,6 @@ class AiTabState extends State<AiTab> {
         if (_conversationId == null) return;
         showRenameSheet(
           context,
-          AppTheme.of(context),
           currentTitle: conversationsController.items
                   .where((c) => c.id == _conversationId)
                   .map((c) => c.title)
@@ -1669,7 +1735,9 @@ class AiTabState extends State<AiTab> {
       case ConversationAction.delete:
         if (_conversationId != null) {
           final token = authController.token;
-          if (token != null) ConversationsApiService.delete(token, _conversationId!);
+          if (token != null) {
+            ConversationsApiService.delete(token, _conversationId!);
+          }
         }
         _streamSub?.cancel();
         setState(() {
@@ -1709,7 +1777,8 @@ class AiTabState extends State<AiTab> {
   }
 
   void _onBubbleSelectText(int index) {
-    showSelectTextSheet(context, AppTheme.of(context), text: _msgs[index].content);
+    showSelectTextSheet(context, AppTheme.of(context),
+        text: _msgs[index].content);
   }
 
   void _onAssistantThumbUp(int index) {}
@@ -1750,7 +1819,10 @@ class AiTabState extends State<AiTab> {
     final matched = <LocalCanvasItem>[];
     for (final local in scan.items) {
       final found = _canvases.firstWhere(
-        (c) => c.kind == local.kind && c.title == local.title && c.content == local.content,
+        (c) =>
+            c.kind == local.kind &&
+            c.title == local.title &&
+            c.content == local.content,
         orElse: () => local,
       );
       matched.add(found);
@@ -1782,7 +1854,8 @@ class AiTabState extends State<AiTab> {
                         itemCount: _msgs.length + (_sending ? 1 : 0),
                         itemBuilder: (_, i) {
                           if (i >= _msgs.length) {
-                            final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
+                            final elements =
+                                _parseStreamingContent(_streamingText, _nextCanvasId);
                             return _StreamingBubble(
                               s: s,
                               elements: elements,
@@ -1806,7 +1879,8 @@ class AiTabState extends State<AiTab> {
                               onSelectText: () => _onBubbleSelectText(i),
                             );
                           }
-                          final scan = _scanForCanvasItems(msg.content, () => '');
+                          final scan =
+                              _scanForCanvasItems(msg.content, () => '');
                           final msgCanvases = _canvasesForMessage(msg.content);
                           return _AssistantBubble(
                             s: s,
@@ -1845,7 +1919,9 @@ class AiTabState extends State<AiTab> {
           AnimatedContainer(
             duration: kDurationNormal,
             curve: kFluentDecelerate,
-            height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
+            height: keyboardInset > 0
+                ? keyboardInset + 8
+                : MediaQuery.of(context).padding.bottom + 8,
           ),
         ]),
       ),
@@ -1932,10 +2008,12 @@ class _Bubble extends StatefulWidget {
     required this.onDelete,
     required this.onSelectText,
   });
-  @override State<_Bubble> createState() => _BubbleState();
+  @override
+  State<_Bubble> createState() => _BubbleState();
 }
 
-class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
+class _BubbleState extends State<_Bubble>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   late final Animation<double> _scale, _op;
 
@@ -1945,13 +2023,16 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
     _c = AnimationController(vsync: this, duration: kDurationNormal);
     _scale = Tween(begin: 0.92, end: 1.0)
         .animate(CurvedAnimation(parent: _c, curve: kFluentDecelerate));
-    _op = Tween(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _c,
-            curve: const Interval(0, 0.5, curve: Curves.easeOut)));
+    _op = Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+        parent: _c, curve: const Interval(0, 0.5, curve: Curves.easeOut)));
     _c.forward();
   }
 
-  @override void dispose() { _c.dispose(); super.dispose(); }
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   void _onLongPress() {
     final box = context.findRenderObject() as RenderBox;
@@ -1991,7 +2072,8 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
           onLongPress: _onLongPress,
           child: Container(
             margin: EdgeInsets.only(bottom: kSpaceS + kSpaceXXS),
-            padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS + kSpaceXXS),
+            padding: EdgeInsets.symmetric(
+                horizontal: kSpaceL, vertical: kSpaceS + kSpaceXXS),
             constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75),
             decoration: BoxDecoration(
@@ -1999,8 +2081,8 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
               borderRadius: BorderRadius.circular(kRadiusXLarge),
               boxShadow: widget.s.cardShadow,
             ),
-            child: Text(widget.text,
-                style: TextStyle(color: textColor, fontSize: kTypeBody)),
+            child:
+                Text(widget.text, style: TextStyle(color: textColor, fontSize: kTypeBody)),
           ),
         ),
       ),
@@ -2039,7 +2121,8 @@ class _AssistantBubble extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Container(
           margin: EdgeInsets.only(bottom: kSpaceXXL),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
+          constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.92),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2053,7 +2136,8 @@ class _AssistantBubble extends StatelessWidget {
                 ),
               for (final item in canvases) ...[
                 SizedBox(height: kSpaceS),
-                SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
+                SimpleCanvasCard(
+                    s: s, item: item, onTap: () => onOpenCanvas(item)),
               ],
               SizedBox(height: kSpaceS),
               _AssistantActionBar(
@@ -2089,7 +2173,8 @@ class _AssistantActionBar extends StatelessWidget {
         children: [
           _AssistantActionIcon(s: s, asset: 'thumb_up.svg', onTap: onThumbUp),
           SizedBox(width: kSpaceXS),
-          _AssistantActionIcon(s: s, asset: 'thumb_down.svg', onTap: onThumbDown),
+          _AssistantActionIcon(
+              s: s, asset: 'thumb_down.svg', onTap: onThumbDown),
           SizedBox(width: kSpaceXS),
           _AssistantActionIcon(s: s, asset: 'copy.svg', onTap: onCopy),
           SizedBox(width: kSpaceXS),
@@ -2107,7 +2192,8 @@ class _AssistantActionIcon extends StatefulWidget {
     required this.asset,
     required this.onTap,
   });
-  @override State<_AssistantActionIcon> createState() => _AssistantActionIconState();
+  @override
+  State<_AssistantActionIcon> createState() => _AssistantActionIconState();
 }
 
 class _AssistantActionIconState extends State<_AssistantActionIcon> {
@@ -2117,13 +2203,14 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
         duration: kDurationFast,
-        width: 28, height: 28,
+        width: 28,
+        height: 28,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _h ? s.subtleFillHover : Colors.transparent,
@@ -2201,7 +2288,8 @@ class _StreamingBubble extends StatelessWidget {
           anyContent = true;
           children.add(Padding(
             padding: EdgeInsets.symmetric(vertical: kSpaceXS),
-            child: SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
+            child: SimpleCanvasCard(
+                s: s, item: item, onTap: () => onOpenCanvas(item)),
           ));
         case _StreamClosedWidget(:final block):
           anyContent = true;
@@ -2220,7 +2308,8 @@ class _StreamingBubble extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Container(
         margin: EdgeInsets.only(bottom: kSpaceXXL),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
+        constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.92),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: children,
@@ -2253,7 +2342,8 @@ class _StreamingMarkdownCard extends StatefulWidget {
   });
 
   @override
-  State<_StreamingMarkdownCard> createState() => _StreamingMarkdownCardState();
+  State<_StreamingMarkdownCard> createState() =>
+      _StreamingMarkdownCardState();
 }
 
 class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
@@ -2273,7 +2363,8 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
             SizedBox(width: kSpaceS),
             Text(
               widget.label,
-              style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
+              style:
+                  TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
             ),
           ],
         ),
@@ -2282,7 +2373,8 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
 
     return Container(
       margin: EdgeInsets.symmetric(vertical: kSpaceS),
-      padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
+      padding: EdgeInsets.symmetric(
+          horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: s.subtleFillHover.withOpacity(0.4),
         borderRadius: BorderRadius.circular(kRadiusLarge),
@@ -2310,14 +2402,17 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
                   duration: kDurationNormal,
-                  child: AppIcon('chevron_down.svg', size: 14, color: s.onSurfaceVariant),
+                  child: AppIcon('chevron_down.svg',
+                      size: 14, color: s.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           AnimatedCrossFade(
             duration: kDurationNormal,
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
               padding: EdgeInsets.only(top: kSpaceS),
@@ -2374,7 +2469,10 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
   }
 
   @override
-  void dispose() { _c.dispose(); super.dispose(); }
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   double _opacityFor(int index, double t) {
     final delay = (index * _stepDelayMs) / _cycleMs;
@@ -2396,28 +2494,30 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
         builder: (_, __) => Column(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(_rows, (r) => Padding(
-            padding: EdgeInsets.only(bottom: r == _rows - 1 ? 0 : widget.gap),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(_cols, (c) {
-                final index = r * _cols + c;
-                return Padding(
-                  padding: EdgeInsets.only(right: c == _cols - 1 ? 0 : widget.gap),
-                  child: Opacity(
-                    opacity: _opacityFor(index, _c.value),
-                    child: Container(
-                      width: widget.dotSize,
-                      height: widget.dotSize,
-                      decoration: BoxDecoration(
-                        color: widget.color,
-                        borderRadius: BorderRadius.circular(kRadiusSmall),
+                padding: EdgeInsets.only(
+                    bottom: r == _rows - 1 ? 0 : widget.gap),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(_cols, (c) {
+                    final index = r * _cols + c;
+                    return Padding(
+                      padding: EdgeInsets.only(
+                          right: c == _cols - 1 ? 0 : widget.gap),
+                      child: Opacity(
+                        opacity: _opacityFor(index, _c.value),
+                        child: Container(
+                          width: widget.dotSize,
+                          height: widget.dotSize,
+                          decoration: BoxDecoration(
+                            color: widget.color,
+                            borderRadius: BorderRadius.circular(kRadiusSmall),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          )),
+                    );
+                  }),
+                ),
+              )),
         ),
       ),
     );
@@ -2457,7 +2557,8 @@ void showMessageActionsPopup(
     final desiredTop = anchorOffset.dy - 6 - menuHeight;
     final opensUp = desiredTop >= 40;
     final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
-    final right = (screenSize.width - anchorOffset.dx - anchorSize.width).clamp(12.0, screenSize.width - 244);
+    final right = (screenSize.width - anchorOffset.dx - anchorSize.width)
+        .clamp(12.0, screenSize.width - 244);
 
     return Stack(children: [
       Positioned.fill(
@@ -2474,13 +2575,16 @@ void showMessageActionsPopup(
           animation: controller,
           builder: (_, child) => Opacity(
             opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.6, curve: Curves.easeOut))
+                    parent: controller,
+                    curve: const Interval(0, 0.6, curve: Curves.easeOut))
                 .value,
             child: Transform.scale(
               scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kFluentDecelerate))
+                  .animate(
+                      CurvedAnimation(parent: controller, curve: kFluentDecelerate))
                   .value,
-              alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
+              alignment:
+                  opensUp ? Alignment.bottomRight : Alignment.topRight,
               child: child,
             ),
           ),
@@ -2501,26 +2605,38 @@ void showMessageActionsPopup(
                     s: s,
                     icon: 'edit.svg',
                     label: 'Editar',
-                    onTap: () { close(); onEdit(); },
+                    onTap: () {
+                      close();
+                      onEdit();
+                    },
                   ),
                   _MessageActionRow(
                     s: s,
                     icon: 'copy.svg',
                     label: 'Copiar',
-                    onTap: () { close(); onCopy(); },
+                    onTap: () {
+                      close();
+                      onCopy();
+                    },
                   ),
                   _MessageActionRow(
                     s: s,
                     icon: 'text_select.svg',
                     label: 'Selecionar texto',
-                    onTap: () { close(); onSelectText(); },
+                    onTap: () {
+                      close();
+                      onSelectText();
+                    },
                   ),
                   _MessageActionRow(
                     s: s,
                     icon: 'trash.svg',
                     label: 'Eliminar',
                     destructive: true,
-                    onTap: () { close(); onDelete(); },
+                    onTap: () {
+                      close();
+                      onDelete();
+                    },
                   ),
                 ],
               ),
@@ -2548,7 +2664,8 @@ class _MessageActionRow extends StatefulWidget {
     required this.onTap,
     this.destructive = false,
   });
-  @override State<_MessageActionRow> createState() => _MessageActionRowState();
+  @override
+  State<_MessageActionRow> createState() => _MessageActionRowState();
 }
 
 class _MessageActionRowState extends State<_MessageActionRow> {
@@ -2558,13 +2675,14 @@ class _MessageActionRowState extends State<_MessageActionRow> {
     final color = widget.destructive ? widget.s.error : widget.s.onSurface;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
         duration: kDurationFast,
-        padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
+        padding:
+            EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
         decoration: BoxDecoration(
           color: _h ? widget.s.subtleFillHover : Colors.transparent,
           borderRadius: BorderRadius.circular(kRadiusCircle),
@@ -2573,7 +2691,10 @@ class _MessageActionRowState extends State<_MessageActionRow> {
           AppIcon(widget.icon, size: 18, color: color),
           SizedBox(width: kSpaceS + kSpaceXXS),
           Text(widget.label,
-              style: TextStyle(fontSize: kTypeBody, color: color, fontWeight: FontWeight.w500)),
+              style: TextStyle(
+                  fontSize: kTypeBody,
+                  color: color,
+                  fontWeight: FontWeight.w500)),
         ]),
       ),
     );
@@ -2591,7 +2712,9 @@ Future<void> showSelectTextSheet(
 }) {
   return showFluentBottomSheet<void>(
     context: context,
-    builder: (ctx) => FluentBottomSheet(
+    s: s,
+    child: FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2609,7 +2732,10 @@ Future<void> showSelectTextSheet(
             child: SingleChildScrollView(
               child: SelectableText(
                 text,
-                style: TextStyle(fontSize: kTypeBodyLarge, color: s.onSurface, height: 1.5),
+                style: TextStyle(
+                    fontSize: kTypeBodyLarge,
+                    color: s.onSurface,
+                    height: 1.5),
               ),
             ),
           ),
@@ -2631,8 +2757,10 @@ Future<void> showAttachedFilesSheet(
 }) {
   return showFluentBottomSheet<void>(
     context: context,
-    builder: (ctx) => StatefulBuilder(
+    s: s,
+    child: StatefulBuilder(
       builder: (ctx, setModalState) => FluentBottomSheet(
+        s: s,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2643,7 +2771,10 @@ Future<void> showAttachedFilesSheet(
                 SizedBox(width: kSpaceS),
                 Text(
                   'Anexos desta mensagem',
-                  style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
+                  style: TextStyle(
+                      fontSize: kTypeBodyLarge,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface),
                 ),
               ],
             ),
@@ -2654,7 +2785,8 @@ Future<void> showAttachedFilesSheet(
                 child: Center(
                   child: Text(
                     'Sem anexos.',
-                    style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+                    style: TextStyle(
+                        fontSize: kTypeBody, color: s.onSurfaceVariant),
                   ),
                 ),
               )
@@ -2689,7 +2821,8 @@ class _AttachedFileRow extends StatelessWidget {
   final AppColorScheme s;
   final AttachedFile file;
   final VoidCallback onRemove;
-  const _AttachedFileRow({required this.s, required this.file, required this.onRemove});
+  const _AttachedFileRow(
+      {required this.s, required this.file, required this.onRemove});
 
   String get _sizeLabel {
     final kb = file.bytes.length / 1024;
@@ -2710,17 +2843,20 @@ class _AttachedFileRow extends StatelessWidget {
           if (_isImage)
             ClipRRect(
               borderRadius: BorderRadius.circular(kRadiusMedium),
-              child: Image.memory(file.bytes, width: 40, height: 40, fit: BoxFit.cover),
+              child: Image.memory(file.bytes,
+                  width: 40, height: 40, fit: BoxFit.cover),
             )
           else
             Container(
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: s.primaryContainer.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(kRadiusMedium),
               ),
-              child: AppIcon('attached.svg', color: s.onPrimaryContainer, size: 18),
+              child: AppIcon('attached.svg',
+                  color: s.onPrimaryContainer, size: 18),
             ),
           SizedBox(width: kSpaceS + kSpaceXXS),
           Expanded(
@@ -2728,18 +2864,26 @@ class _AttachedFileRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(file.name,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: kTypeBody, fontWeight: FontWeight.w600, color: s.onSurface)),
-                Text(_sizeLabel, style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: kTypeBody,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface)),
+                Text(_sizeLabel,
+                    style: TextStyle(
+                        fontSize: kTypeCaption, color: s.onSurfaceVariant)),
               ],
             ),
           ),
           GestureDetector(
             onTap: onRemove,
             child: Container(
-              width: 28, height: 28,
+              width: 28,
+              height: 28,
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: s.error.withOpacity(0.12), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: s.error.withOpacity(0.12), shape: BoxShape.circle),
               child: AppIcon('close.svg', color: s.error, size: 14),
             ),
           ),
@@ -2817,14 +2961,17 @@ class _ChatInput extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
               child: Wrap(
-                spacing: 8, runSpacing: 8,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   if (attachedTool != null)
                     _AttachedToolPill(
                         s: s, type: attachedTool!, onClear: onClearTool),
                   if (attachedFilesCount > 0)
                     _AttachedFilesPill(
-                        s: s, count: attachedFilesCount, onTap: onOpenAttachedFiles),
+                        s: s,
+                        count: attachedFilesCount,
+                        onTap: onOpenAttachedFiles),
                 ],
               ),
             ),
@@ -2833,14 +2980,20 @@ class _ChatInput extends StatelessWidget {
             child: TextField(
               controller: ctrl,
               focusNode: focusNode,
-              minLines: 1, maxLines: 6,
-              style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15).copyWith(color: s.onSurface),
+              minLines: 1,
+              maxLines: 6,
+              style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15)
+                  .copyWith(color: s.onSurface),
               cursorColor: s.primary,
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                hintText: incognito ? 'Mensagem incógnita...' : 'Conversar com Claude...',
-                hintStyle: TextStyle(fontSize: 16.5, letterSpacing: 0.15, color: s.onSurfaceVariant),
+                hintText:
+                    incognito ? 'Mensagem incógnita...' : 'Conversar com Claude...',
+                hintStyle: TextStyle(
+                    fontSize: 16.5,
+                    letterSpacing: 0.15,
+                    color: s.onSurfaceVariant),
                 contentPadding: EdgeInsets.zero,
               ),
               onSubmitted: (_) => onSend(),
@@ -2855,7 +3008,8 @@ class _ChatInput extends StatelessWidget {
                   child: GestureDetector(
                     onTap: onAttach,
                     child: Container(
-                      width: 36, height: 36,
+                      width: 36,
+                      height: 36,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
@@ -2899,7 +3053,8 @@ class _ChatInput extends StatelessWidget {
                 GestureDetector(
                   onTap: onVoice,
                   child: Container(
-                    width: 36, height: 36,
+                    width: 36,
+                    height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: s.primary.withOpacity(0.12),
@@ -2913,13 +3068,16 @@ class _ChatInput extends StatelessWidget {
                 GestureDetector(
                   onTap: sending ? null : onSend,
                   child: Container(
-                    width: 36, height: 36,
+                    width: 36,
+                    height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: sending ? s.primary.withOpacity(0.5) : s.primary,
+                        color:
+                            sending ? s.primary.withOpacity(0.5) : s.primary,
                         shape: BoxShape.circle),
                     child: sending
-                        ? _SpinningIcon(asset: 'stop_button.svg', color: s.onPrimary)
+                        ? _SpinningIcon(
+                            asset: 'stop_button.svg', color: s.onPrimary)
                         : AppIcon('send.svg', color: s.onPrimary, size: 20),
                   ),
                 ),
@@ -2945,7 +3103,8 @@ class _SpinningIcon extends StatefulWidget {
   final String asset;
   final Color color;
   const _SpinningIcon({required this.asset, required this.color});
-  @override State<_SpinningIcon> createState() => _SpinningIconState();
+  @override
+  State<_SpinningIcon> createState() => _SpinningIconState();
 }
 
 class _SpinningIconState extends State<_SpinningIcon>
@@ -2954,10 +3113,16 @@ class _SpinningIconState extends State<_SpinningIcon>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
       ..repeat();
   }
-  @override void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => RotationTransition(
@@ -3008,7 +3173,8 @@ class _AttachedFilesPill extends StatelessWidget {
   final AppColorScheme s;
   final int count;
   final VoidCallback onTap;
-  const _AttachedFilesPill({required this.s, required this.count, required this.onTap});
+  const _AttachedFilesPill(
+      {required this.s, required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -3028,7 +3194,8 @@ class _AttachedFilesPill extends StatelessWidget {
             AppIcon('attached.svg', color: fg, size: 13),
             const SizedBox(width: 4),
             Text('$count anexo${count == 1 ? '' : 's'}',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
           ],
         ),
       ),
@@ -3068,9 +3235,21 @@ void showAttachPopup(
     const width = 240.0;
 
     final entries = <PopupMenuEntry<_AttachAction>>[
-      const PopupMenuEntry(value: _AttachAction.files, label: 'Arquivos', subtitle: 'Enviar qualquer tipo de arquivo', svgIcon: 'file.svg'),
-      const PopupMenuEntry(value: _AttachAction.photos, label: 'Fotos', subtitle: 'Enviar fotos da galeria', svgIcon: 'image.svg'),
-      const PopupMenuEntry(value: _AttachAction.camera, label: 'Câmera', subtitle: 'Tirar uma foto agora', svgIcon: 'camera.svg'),
+      const PopupMenuEntry(
+          value: _AttachAction.files,
+          label: 'Arquivos',
+          subtitle: 'Enviar qualquer tipo de arquivo',
+          svgIcon: 'file.svg'),
+      const PopupMenuEntry(
+          value: _AttachAction.photos,
+          label: 'Fotos',
+          subtitle: 'Enviar fotos da galeria',
+          svgIcon: 'image.svg'),
+      const PopupMenuEntry(
+          value: _AttachAction.camera,
+          label: 'Câmera',
+          subtitle: 'Tirar uma foto agora',
+          svgIcon: 'camera.svg'),
     ];
 
     return Stack(children: [
@@ -3091,11 +3270,13 @@ void showAttachPopup(
           animation: controller,
           builder: (_, child) => Opacity(
             opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                    parent: controller,
+                    curve: const Interval(0, 0.5, curve: Curves.easeOut))
                 .value,
             child: Transform.scale(
               scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .animate(
+                      CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
               alignment: Alignment.bottomLeft,
               child: child,
@@ -3121,9 +3302,15 @@ void showAttachPopup(
                       onTap: () {
                         close();
                         switch (e.value) {
-                          case _AttachAction.files: onFiles(); break;
-                          case _AttachAction.photos: onPhotos(); break;
-                          case _AttachAction.camera: onCamera(); break;
+                          case _AttachAction.files:
+                            onFiles();
+                            break;
+                          case _AttachAction.photos:
+                            onPhotos();
+                            break;
+                          case _AttachAction.camera:
+                            onCamera();
+                            break;
                         }
                       },
                     ),
@@ -3152,7 +3339,9 @@ Future<void> showCanvasSheet(
 }) {
   return showFluentBottomSheet<void>(
     context: context,
-    builder: (ctx) => FluentBottomSheet(
+    s: s,
+    child: FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3163,7 +3352,10 @@ Future<void> showCanvasSheet(
               SizedBox(width: kSpaceS),
               Text(
                 'Canvas desta conversa',
-                style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
+                style: TextStyle(
+                    fontSize: kTypeBodyLarge,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface),
               ),
             ],
           ),
@@ -3174,7 +3366,8 @@ Future<void> showCanvasSheet(
               child: Center(
                 child: Text(
                   'Ainda não há documentos nesta conversa.',
-                  style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+                  style: TextStyle(
+                      fontSize: kTypeBody, color: s.onSurfaceVariant),
                 ),
               ),
             )
@@ -3183,7 +3376,8 @@ Future<void> showCanvasSheet(
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: canvases.length,
-                separatorBuilder: (_, __) => SizedBox(height: kSpaceS + kSpaceXXS),
+                separatorBuilder: (_, __) =>
+                    SizedBox(height: kSpaceS + kSpaceXXS),
                 itemBuilder: (_, i) {
                   final item = canvases[canvases.length - 1 - i];
                   return _CanvasCard(
@@ -3207,8 +3401,10 @@ class _CanvasCard extends StatefulWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
   final VoidCallback onTap;
-  const _CanvasCard({required this.s, required this.item, required this.onTap});
-  @override State<_CanvasCard> createState() => _CanvasCardState();
+  const _CanvasCard(
+      {required this.s, required this.item, required this.onTap});
+  @override
+  State<_CanvasCard> createState() => _CanvasCardState();
 }
 
 class _CanvasCardState extends State<_CanvasCard> {
@@ -3221,10 +3417,10 @@ class _CanvasCardState extends State<_CanvasCard> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
         duration: kDurationFast,
         padding: EdgeInsets.all(kSpaceM),
@@ -3235,7 +3431,8 @@ class _CanvasCardState extends State<_CanvasCard> {
         ),
         child: Row(children: [
           Container(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: s.primaryContainer.withOpacity(0.5),
@@ -3251,10 +3448,14 @@ class _CanvasCardState extends State<_CanvasCard> {
                 Text(widget.item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: kTypeBody, fontWeight: FontWeight.w600, color: s.onSurface)),
+                    style: TextStyle(
+                        fontSize: kTypeBody,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface)),
                 SizedBox(height: kSpaceXXS),
                 Text(_editorType.label,
-                    style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
+                    style: TextStyle(
+                        fontSize: kTypeCaption, color: s.onSurfaceVariant)),
               ],
             ),
           ),
@@ -3276,7 +3477,8 @@ Future<void> showVoiceRecordSheet(
 }) {
   return showFluentBottomSheet<void>(
     context: context,
-    builder: (ctx) => _VoiceRecordSheetContent(
+    s: s,
+    child: _VoiceRecordSheetContent(
       s: s,
       onTranscribed: onTranscribed,
     ),
@@ -3336,6 +3538,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
   Widget build(BuildContext context) {
     final s = widget.s;
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -3356,9 +3559,8 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
           AnimatedBuilder(
             animation: _pulse,
             builder: (_, child) {
-              final scale = _recording
-                  ? 1.0 + (_pulse.value * 0.12)
-                  : 1.0;
+              final scale =
+                  _recording ? 1.0 + (_pulse.value * 0.12) : 1.0;
               return Transform.scale(scale: scale, child: child);
             },
             child: Container(
@@ -3378,6 +3580,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
           SizedBox(
             width: double.infinity,
             child: FluentButton(
+              s: s,
               label: _recording ? 'Concluir' : 'A processar...',
               onTap: _recording ? _stopAndTranscribe : null,
               style: FluentButtonStyle.primary,
@@ -3434,11 +3637,13 @@ void showModelSelectPopup(
           animation: controller,
           builder: (_, child) => Opacity(
             opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                    parent: controller,
+                    curve: const Interval(0, 0.5, curve: Curves.easeOut))
                 .value,
             child: Transform.scale(
               scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .animate(
+                      CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
               alignment: Alignment.bottomLeft,
               child: child,
@@ -3465,7 +3670,10 @@ void showModelSelectPopup(
                             subtitle: m.description,
                             selected: current == m,
                           ),
-                          onTap: () { close(); onSelect(m); },
+                          onTap: () {
+                            close();
+                            onSelect(m);
+                          },
                         ))
                     .toList(),
               ),

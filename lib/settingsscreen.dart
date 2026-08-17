@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/settingsscreen.dart
+// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -17,7 +20,8 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with ThemeReactive<SettingsScreen> {
   bool _refreshing = false;
 
   @override
@@ -55,11 +59,14 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   void _confirmLogout(BuildContext context, AppColorScheme s) {
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ConfirmActionSheet(
-        message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
+      s: s,
+      child: _ConfirmActionSheet(
+        s: s,
+        message:
+            'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
         confirmLabel: 'Terminar sessão',
         onConfirm: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           _logoutNow(context);
         },
       ),
@@ -76,7 +83,9 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   void _editName(BuildContext context, AppColorScheme s) {
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _EditFieldSheet(
+      s: s,
+      child: _EditFieldSheet(
+        s: s,
         title: 'Alterar nome',
         label: 'Nome',
         hint: 'O teu nome completo',
@@ -100,7 +109,9 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   void _editPassword(BuildContext context, AppColorScheme s) {
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _EditFieldSheet(
+      s: s,
+      child: _EditFieldSheet(
+        s: s,
         title: 'Alterar palavra-passe',
         label: 'Nova palavra-passe',
         hint: 'Mínimo 6 caracteres',
@@ -119,12 +130,14 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
     showFluentBottomSheet(
       context: context,
-      builder: (ctx) => _ConfirmActionSheet(
+      s: s,
+      child: _ConfirmActionSheet(
+        s: s,
         message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
         confirmLabel: 'Eliminar tudo',
         destructive: true,
         onConfirm: () async {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           final token = authController.token;
           if (token == null) return;
           await ConversationsApiService.deleteAll(token);
@@ -138,14 +151,14 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     final s = AppTheme.of(context);
     final user = authController.user;
 
-    // AnnotatedRegion respeita o z-order de rota e aplica o estilo ao topo da pilha.
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            s.isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarDividerColor: Colors.transparent,
       ),
       child: Material(
@@ -158,7 +171,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(height: kSpaceXXXL + kSpaceXXL + kSpaceXXS), // 58
+                    SizedBox(height: kSpaceXXXL + kSpaceXXL + kSpaceXXS),
                     Expanded(
                       child: RefreshIndicator(
                         color: s.primary,
@@ -177,15 +190,15 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               user: user,
                               loading: _refreshing,
                             ),
-
-                            SizedBox(height: kSpaceXXL + kSpaceXS), // 28
-
-                            FluentSectionLabel(label: 'Aparência'),
-                            SizedBox(height: kSpaceS + kSpaceXXS), // 10
+                            SizedBox(height: kSpaceXXL + kSpaceXS),
+                            FluentSectionLabel(s: s, label: 'Aparência'),
+                            SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
-                              children: [
+                              s: s,
+                              items: [
                                 FluentListCard(
-                                  title: 'Modo escuro',
+                                  s: s,
+                                  label: 'Modo escuro',
                                   onTap: () {},
                                   trailing: AppSwitch(
                                     value: appTheme.isDark,
@@ -195,14 +208,15 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                                 ),
                               ],
                             ),
-
                             SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(label: 'Conta'),
+                            FluentSectionLabel(s: s, label: 'Conta'),
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
-                              children: [
+                              s: s,
+                              items: [
                                 FluentListCard(
-                                  title: 'Nome',
+                                  s: s,
+                                  label: 'Nome',
                                   onTap: () => _editName(context, s),
                                   trailing: Text(
                                     'Alterar',
@@ -214,7 +228,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                                   ),
                                 ),
                                 FluentListCard(
-                                  title: 'Email',
+                                  s: s,
+                                  label: 'Email',
                                   onTap: () {},
                                   trailing: Text(
                                     user?.email ?? '—',
@@ -226,7 +241,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                                   ),
                                 ),
                                 FluentListCard(
-                                  title: 'Palavra-passe',
+                                  s: s,
+                                  label: 'Palavra-passe',
                                   onTap: () => _editPassword(context, s),
                                   trailing: Text(
                                     'Alterar',
@@ -238,7 +254,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                                   ),
                                 ),
                                 FluentListCard(
-                                  title: 'Créditos',
+                                  s: s,
+                                  label: 'Créditos',
                                   onTap: () {},
                                   trailing: Text(
                                     '${user?.credits ?? 0}',
@@ -250,31 +267,31 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                                 ),
                               ],
                             ),
-
                             SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(label: 'Dados'),
+                            FluentSectionLabel(s: s, label: 'Dados'),
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
-                              children: [
+                              s: s,
+                              items: [
                                 FluentListCard(
-                                  title: 'Eliminar todas as conversas',
+                                  s: s,
+                                  label: 'Eliminar todas as conversas',
                                   titleColor: s.error,
-                                  onTap: () => _confirmDeleteAllConversations(
-                                    context,
-                                    s,
-                                  ),
+                                  onTap: () =>
+                                      _confirmDeleteAllConversations(context, s),
                                   trailing: const SizedBox.shrink(),
                                 ),
                               ],
                             ),
-
                             SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(label: 'Sobre'),
+                            FluentSectionLabel(s: s, label: 'Sobre'),
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
-                              children: [
+                              s: s,
+                              items: [
                                 FluentListCard(
-                                  title: 'Versão',
+                                  s: s,
+                                  label: 'Versão',
                                   onTap: () {},
                                   trailing: Text(
                                     '1.0.0',
@@ -285,44 +302,45 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                                   ),
                                 ),
                                 FluentListCard(
-                                  title: 'Termos de serviço',
+                                  s: s,
+                                  label: 'Termos de serviço',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                                 FluentListCard(
-                                  title: 'Política de privacidade',
+                                  s: s,
+                                  label: 'Política de privacidade',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                                 FluentListCard(
-                                  title: 'Enviar feedback',
+                                  s: s,
+                                  label: 'Enviar feedback',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                                 FluentListCard(
-                                  title: 'Ajuda e suporte',
+                                  s: s,
+                                  label: 'Ajuda e suporte',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                               ],
                             ),
-
-                            SizedBox(height: kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS), // 90
+                            SizedBox(height: kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS),
                           ],
                         ),
                       ),
                     ),
                   ],
                 ),
-
-                // Barra superior
                 Positioned(
                   top: 0,
                   left: 0,
                   right: 0,
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: kSpaceS),
-                    height: kSpaceXXXL + kSpaceXL, // 52
+                    height: kSpaceXXXL + kSpaceXL,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -354,8 +372,6 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                     ),
                   ),
                 ),
-
-                // Botão terminar sessão inferior
                 Positioned(
                   left: 0,
                   right: 0,
@@ -363,7 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                   child: Container(
                     padding: EdgeInsets.fromLTRB(
                       kSpaceXL,
-                      kSpaceXXL + kSpaceXS, // 28
+                      kSpaceXXL + kSpaceXS,
                       kSpaceXL,
                       kSpaceL,
                     ),
@@ -377,6 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                     child: SizedBox(
                       width: double.infinity,
                       child: FluentButton(
+                        s: s,
                         label: 'Terminar sessão',
                         onTap: () => _confirmLogout(context, s),
                         style: FluentButtonStyle.destructive,
@@ -428,7 +445,7 @@ class _ProfileHeader extends StatelessWidget {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Container(
-      padding: EdgeInsets.all(kSpaceL + kSpaceXXS), // 18
+      padding: EdgeInsets.all(kSpaceL + kSpaceXXS),
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(kRadiusLarge),
@@ -436,7 +453,7 @@ class _ProfileHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: kSpaceXXXL + kSpaceXXL, // 56
+            width: kSpaceXXXL + kSpaceXXL,
             height: kSpaceXXXL + kSpaceXXL,
             alignment: Alignment.center,
             clipBehavior: Clip.antiAlias,
@@ -468,7 +485,7 @@ class _ProfileHeader extends StatelessWidget {
                     ),
                   ),
           ),
-          SizedBox(width: kSpaceL - kSpaceXXS), // 14
+          SizedBox(width: kSpaceL - kSpaceXXS),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,9 +516,9 @@ class _ProfileHeader extends StatelessWidget {
           ),
           if (loading)
             FluentShimmer(
+              s: s,
               width: kSpaceL,
               height: kSpaceL,
-              borderRadius: kRadiusSmall,
             ),
         ],
       ),
@@ -512,11 +529,13 @@ class _ProfileHeader extends StatelessWidget {
 // ── Sheet de confirmação genérico ────────────────────────────────
 
 class _ConfirmActionSheet extends StatelessWidget {
+  final AppColorScheme s;
   final String message;
   final String confirmLabel;
   final bool destructive;
   final VoidCallback onConfirm;
   const _ConfirmActionSheet({
+    required this.s,
     required this.message,
     required this.onConfirm,
     this.confirmLabel = 'Sim',
@@ -525,8 +544,8 @@ class _ConfirmActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -544,14 +563,16 @@ class _ConfirmActionSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Cancelar',
                   onTap: () => Navigator.pop(context),
                   style: FluentButtonStyle.secondary,
                 ),
               ),
-              SizedBox(width: kSpaceS + kSpaceXXS), // 10
+              SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: confirmLabel,
                   onTap: onConfirm,
                   style: destructive
@@ -570,6 +591,7 @@ class _ConfirmActionSheet extends StatelessWidget {
 // ── Sheet de edição de campo simples (nome / palavra-passe) ────
 
 class _EditFieldSheet extends StatefulWidget {
+  final AppColorScheme s;
   final String title;
   final String label;
   final String hint;
@@ -578,6 +600,7 @@ class _EditFieldSheet extends StatefulWidget {
   final int minLength;
   final Future<void> Function(String value) onSave;
   const _EditFieldSheet({
+    required this.s,
     required this.title,
     required this.label,
     required this.hint,
@@ -629,8 +652,9 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final s = widget.s;
     return FluentBottomSheet(
+      s: s,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -645,9 +669,10 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
           ),
           SizedBox(height: kSpaceL),
           FluentTextField(
+            s: s,
             controller: _ctrl,
-            labelText: widget.label,
-            hintText: widget.hint,
+            label: widget.label,
+            hint: widget.hint,
             obscureText: widget.obscure ? _obscureNow : false,
             errorText: _error,
             autofocus: true,
@@ -670,6 +695,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
             children: [
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Cancelar',
                   onTap: () => Navigator.pop(context),
                   style: FluentButtonStyle.secondary,
@@ -678,6 +704,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
               SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
                 child: FluentButton(
+                  s: s,
                   label: 'Guardar',
                   onTap: _saving ? null : _save,
                   style: FluentButtonStyle.primary,

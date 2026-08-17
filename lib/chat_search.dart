@@ -1,6 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/chat_search.dart
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'widgets.dart';
@@ -101,10 +98,11 @@ class _ChatSearchScreenState extends State<ChatSearchScreen>
                   SizedBox(width: kSpaceXS),
                   Expanded(
                     child: FluentTextField(
+                      s: s,
                       controller: _ctrl,
                       focusNode: _focus,
                       onChanged: (v) => setState(() => _query = v),
-                      hintText: 'Pesquisar conversas...',
+                      hint: 'Pesquisar conversas...',
                       prefixIcon: AppIcon(
                         'search.svg',
                         color: s.onSurfaceVariant,
@@ -124,8 +122,8 @@ class _ChatSearchScreenState extends State<ChatSearchScreen>
                               ),
                             )
                           : null,
-                      fillColor: s.controlDefault,
-                      borderRadius: kRadiusCircle,
+                      background: s.controlDefault,
+                      radius: kRadiusCircle,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: kSpaceM,
                         vertical: kSpaceS,
@@ -142,7 +140,6 @@ class _ChatSearchScreenState extends State<ChatSearchScreen>
                       child: FluentShimmer(
                         width: kSpaceXXXL,
                         height: kSpaceXXXL,
-                        borderRadius: kRadiusSmall,
                       ),
                     )
                   : results.isEmpty

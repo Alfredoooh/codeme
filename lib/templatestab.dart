@@ -148,13 +148,14 @@ class _TemplatesTabState extends State<TemplatesTab>
           ),
         ),
         SizedBox(
-          height: kSpaceXXXL + kSpaceXS, // 36
+          height: kSpaceXXXL + kSpaceXS,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: kSpaceXL),
             itemCount: _categories.length,
             separatorBuilder: (_, __) => SizedBox(width: kSpaceS),
             itemBuilder: (_, i) => FluentChip(
+              s: s,
               label: _categories[i],
               selected: _category == _categories[i],
               onTap: () => setState(() => _category = _categories[i]),
@@ -189,7 +190,7 @@ class _TemplatesTabState extends State<TemplatesTab>
                     kSpaceL,
                     0,
                     kSpaceL,
-                    kSpaceXXXL + kSpaceXXXL + kSpaceXXL + kSpaceXS, // 92
+                    kSpaceXXXL + kSpaceXXXL + kSpaceXXL + kSpaceXS,
                   ),
                   gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
@@ -252,8 +253,6 @@ class _TemplateCardState extends State<_TemplateCard> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    // withOpacity usado porque não existe token específico
-                    // para esta variante translúcida do primaryContainer.
                     color: s.primaryContainer.withOpacity(0.25),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(kRadiusLarge),
@@ -266,7 +265,7 @@ class _TemplateCardState extends State<_TemplateCard> {
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   kSpaceM,
-                  kSpaceS + kSpaceXXS, // 10
+                  kSpaceS + kSpaceXXS,
                   kSpaceM,
                   kSpaceM,
                 ),
