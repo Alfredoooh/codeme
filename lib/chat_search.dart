@@ -1,15 +1,10 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/chat_search.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
-
-// ══════════════════════════════════════════════════════════════
-// CHAT SEARCH SCREEN — ecrã dedicado à pesquisa de conversas.
-// Aberto sempre a partir do ícone de pesquisar no drawer, com
-// navegação Cupertino (CupertinoPageRoute, empurrado pelo próprio
-// AppDrawer). Não pertence a HomeScreen nem à bottom tab bar — é um
-// ecrã solto de topo, independente, tal como SettingsScreen.
-// ══════════════════════════════════════════════════════════════
 
 class ChatSearchScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -97,36 +92,54 @@ class _ChatSearchScreenState extends State<ChatSearchScreen>
                   ),
                   SizedBox(width: kSpaceXS),
                   Expanded(
-                    child: FluentTextField(
-                      s: s,
-                      controller: _ctrl,
-                      focusNode: _focus,
-                      onChanged: (v) => setState(() => _query = v),
-                      hint: 'Pesquisar conversas...',
-                      prefixIcon: AppIcon(
-                        'search.svg',
-                        color: s.onSurfaceVariant,
-                        size: 16,
+                    child: Container(
+                      height: 40,
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceM),
+                      decoration: BoxDecoration(
+                        color: s.controlDefault,
+                        borderRadius: BorderRadius.circular(kRadiusCircle),
                       ),
-                      suffixIcon: _query.isNotEmpty
-                          ? AppTap(
+                      child: Row(
+                        children: [
+                          AppIcon('search.svg',
+                              color: s.onSurfaceVariant, size: 16),
+                          SizedBox(width: kSpaceS),
+                          Expanded(
+                            child: TextField(
+                              controller: _ctrl,
+                              focusNode: _focus,
+                              onChanged: (v) => setState(() => _query = v),
+                              style: TextStyle(
+                                fontSize: kTypeBody,
+                                color: s.onSurface,
+                              ),
+                              cursorColor: s.primary,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                hintText: 'Pesquisar conversas...',
+                                hintStyle: TextStyle(
+                                  fontSize: kTypeBody,
+                                  color: s.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_query.isNotEmpty)
+                            AppTap(
                               onTap: () => setState(() {
                                 _ctrl.clear();
                                 _query = '';
                               }),
                               s: s,
+                              size: 28,
                               child: AppIcon(
                                 'close.svg',
                                 color: s.onSurfaceVariant,
                                 size: 14,
                               ),
-                            )
-                          : null,
-                      background: s.controlDefault,
-                      radius: kRadiusCircle,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: kSpaceM,
-                        vertical: kSpaceS,
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -138,6 +151,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen>
                       conversationsController.items.isEmpty
                   ? Center(
                       child: FluentShimmer(
+                        s: s,
                         width: kSpaceXXXL,
                         height: kSpaceXXXL,
                       ),

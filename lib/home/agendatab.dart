@@ -34,17 +34,12 @@ class AgendaEvent {
 
   String get dateStr =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-
   String get startTimeStr =>
       '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
-
   String get endTimeStr =>
       '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}';
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Enumerado e extensão para modos de vista
-// ─────────────────────────────────────────────────────────────────────
 enum AgendaViewMode { month, week, day, agenda }
 
 extension AgendaViewModeX on AgendaViewMode {
@@ -56,9 +51,6 @@ extension AgendaViewModeX on AgendaViewMode {
       };
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Cores dos eventos (paleta fixa de dados, não são tokens de tema)
-// ─────────────────────────────────────────────────────────────────────
 const List<Color> kEventColors = [
   Color(0xFF4285F4),
   Color(0xFF0F9D58),
@@ -88,9 +80,6 @@ const List<String> kRepeatLabels = [
   'Todos os anos',
 ];
 
-// ─────────────────────────────────────────────────────────────────────
-// Tela principal da agenda
-// ─────────────────────────────────────────────────────────────────────
 class AgendaTab extends StatefulWidget {
   const AgendaTab({super.key});
   @override
@@ -362,28 +351,25 @@ class _AgendaTabState extends State<AgendaTab> {
   }
 
   void _showValidationDialog(String message) {
+    final s = AppTheme.of(context);
     showFluentDialog<void>(
       context: context,
-      s: AppTheme.of(context),
-      child: FluentDialog(
-        s: AppTheme.of(context),
-        title: 'Atenção',
-        content: Text(
-          message,
-          style: TextStyle(
-            fontSize: kTypeBody,
-            color: AppTheme.of(context).onSurface,
-          ),
+      s: s,
+      title: 'Atenção',
+      content: Text(
+        message,
+        style: TextStyle(
+          fontSize: kTypeBody,
+          color: s.onSurface,
         ),
-        actions: [
-          FluentButton(
-            s: AppTheme.of(context),
-            label: 'OK',
-            onTap: () => Navigator.pop(context),
-            style: FluentButtonStyle.primary,
-          ),
-        ],
       ),
+      actions: [
+        FluentDialogAction(
+          label: 'OK',
+          primary: true,
+          onTap: () => Navigator.pop(context),
+        ),
+      ],
     );
   }
 
@@ -393,11 +379,12 @@ class _AgendaTabState extends State<AgendaTab> {
   }
 
   void _openDetail(AgendaEvent ev) {
+    final s = AppTheme.of(context);
     showFluentBottomSheet<void>(
       context: context,
-      s: AppTheme.of(context),
+      s: s,
       child: _AgendaDetailSheet(
-        s: AppTheme.of(context),
+        s: s,
         event: ev,
         onEdit: () {
           Navigator.pop(context);
@@ -456,8 +443,10 @@ class _AgendaTabState extends State<AgendaTab> {
         children: [
           FluentIconButton(
             s: s,
-            child: AppIcon('back_arrow.svg', color: s.onSurfaceVariant, size: 19),
+            asset: 'back_arrow.svg',
             onTap: () => Navigator.of(context).maybePop(),
+            color: s.onSurfaceVariant,
+            iconSize: 19,
           ),
           Expanded(
             child: Row(
@@ -484,8 +473,10 @@ class _AgendaTabState extends State<AgendaTab> {
           ),
           FluentIconButton(
             s: s,
-            child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 19),
+            asset: 'search.svg',
             onTap: _openSearch,
+            color: s.onSurfaceVariant,
+            iconSize: 19,
           ),
         ],
       ),
@@ -1073,6 +1064,7 @@ class _AgendaTabState extends State<AgendaTab> {
                               focusNode: _searchFocus,
                               onChanged: (val) => setState(() => _searchQuery = val),
                               style: TextStyle(color: s.onSurface),
+                              cursorColor: s.primary,
                               decoration: InputDecoration(
                                 hintText: 'Pesquisar eventos...',
                                 hintStyle: TextStyle(color: s.onSurfaceVariant),
@@ -1203,8 +1195,10 @@ class _AgendaTabState extends State<AgendaTab> {
                 children: [
                   FluentIconButton(
                     s: s,
-                    child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 16),
+                    asset: 'close.svg',
                     onTap: _closeEventScreen,
+                    color: s.onSurfaceVariant,
+                    iconSize: 16,
                   ),
                   Expanded(
                     child: Text(
@@ -1234,9 +1228,6 @@ class _AgendaTabState extends State<AgendaTab> {
                         controller: _titleController,
                         hint: 'Título do evento',
                         autofocus: _editing ? false : true,
-                        background: Colors.transparent,
-                        radius: kRadiusNone,
-                        contentPadding: EdgeInsets.zero,
                       ),
                     ),
                     Padding(
@@ -1377,11 +1368,7 @@ class _AgendaTabState extends State<AgendaTab> {
                           child: FluentTextField(
                             s: s,
                             controller: _locationController,
-                            textAlign: TextAlign.right,
                             hint: 'Adicionar local',
-                            background: Colors.transparent,
-                            radius: kRadiusNone,
-                            contentPadding: EdgeInsets.zero,
                           ),
                         ),
                       ),
@@ -1426,9 +1413,6 @@ class _AgendaTabState extends State<AgendaTab> {
                               maxLines: 4,
                               minLines: 2,
                               hint: 'Adicionar notas...',
-                              background: Colors.transparent,
-                              radius: kRadiusNone,
-                              contentPadding: EdgeInsets.zero,
                             ),
                           ),
                         ],
@@ -1710,12 +1694,6 @@ class _AgendaTabState extends State<AgendaTab> {
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     return '${days[d.weekday]}, ${d.day} ${months[d.month - 1]}';
   }
-
-  String _formatFullDate(DateTime d) {
-    const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-    return '${days[d.weekday]}, ${d.day} ${months[d.month - 1]} ${d.year}';
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1770,18 +1748,24 @@ class _AgendaDetailSheet extends StatelessWidget {
               ),
               FluentIconButton(
                 s: s,
-                child: AppIcon('edit.svg', color: s.primary, size: 18),
+                asset: 'edit.svg',
                 onTap: onEdit,
+                color: s.primary,
+                iconSize: 18,
               ),
               FluentIconButton(
                 s: s,
-                child: AppIcon('trash.svg', color: s.error, size: 18),
+                asset: 'trash.svg',
                 onTap: onDelete,
+                color: s.error,
+                iconSize: 18,
               ),
               FluentIconButton(
                 s: s,
-                child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
+                asset: 'close.svg',
                 onTap: () => Navigator.pop(context),
+                color: s.onSurfaceVariant,
+                iconSize: 14,
               ),
             ],
           ),

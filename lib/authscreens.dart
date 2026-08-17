@@ -6,7 +6,7 @@ import 'auth_service.dart';
 import 'main.dart';
 
 // ══════════════════════════════════════════════════════════════
-// AUTH GATE — decide entre Login/Register e a app, conforme sessão
+// AUTH GATE
 // ══════════════════════════════════════════════════════════════
 
 class AuthGate extends StatefulWidget {
@@ -52,7 +52,7 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHARED — logo (fallback), ilustração de topo, back button, error banner
+// SHARED
 // ══════════════════════════════════════════════════════════════
 
 class _AuthLogo extends StatelessWidget {
@@ -322,7 +322,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _emailCtrl,
                           hint: 'Email',
                           keyboardType: TextInputType.emailAddress,
-                          errorText: _emailError,
+                          error: _emailError,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _passFocus.requestFocus(),
                         ),
@@ -331,8 +331,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           s: s,
                           controller: _passCtrl,
                           hint: 'Password',
-                          obscureText: _obscure,
-                          errorText: _passError,
+                          obscure: _obscure,
+                          error: _passError,
                           focusNode: _passFocus,
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _submit(),
@@ -547,7 +547,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           s: s,
                           controller: _nameCtrl,
                           hint: 'Nome',
-                          errorText: _nameError,
+                          error: _nameError,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _emailFocus.requestFocus(),
                         ),
@@ -557,7 +557,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           controller: _emailCtrl,
                           hint: 'Email',
                           keyboardType: TextInputType.emailAddress,
-                          errorText: _emailError,
+                          error: _emailError,
                           focusNode: _emailFocus,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _passFocus.requestFocus(),
@@ -567,8 +567,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           s: s,
                           controller: _passCtrl,
                           hint: 'Password',
-                          obscureText: _obscurePass,
-                          errorText: _passError,
+                          obscure: _obscurePass,
+                          error: _passError,
                           focusNode: _passFocus,
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _confirmFocus.requestFocus(),
@@ -588,8 +588,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           s: s,
                           controller: _confirmCtrl,
                           hint: 'Confirmar password',
-                          obscureText: _obscureConfirm,
-                          errorText: _confirmError,
+                          obscure: _obscureConfirm,
+                          error: _confirmError,
                           focusNode: _confirmFocus,
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _submit(),
@@ -749,7 +749,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             controller: _emailCtrl,
                             hint: 'Email',
                             keyboardType: TextInputType.emailAddress,
-                            errorText: _emailError,
+                            error: _emailError,
                             textInputAction: TextInputAction.done,
                             onSubmitted: (_) => _submit(),
                           ),

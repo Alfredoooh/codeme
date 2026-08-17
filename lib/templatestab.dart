@@ -154,12 +154,15 @@ class _TemplatesTabState extends State<TemplatesTab>
             padding: EdgeInsets.symmetric(horizontal: kSpaceXL),
             itemCount: _categories.length,
             separatorBuilder: (_, __) => SizedBox(width: kSpaceS),
-            itemBuilder: (_, i) => FluentChip(
-              s: s,
-              label: _categories[i],
-              selected: _category == _categories[i],
-              onTap: () => setState(() => _category = _categories[i]),
-            ),
+            itemBuilder: (_, i) {
+              final selected = _category == _categories[i];
+              return FluentChip(
+                s: s,
+                label: _categories[i],
+                style: selected ? FluentChipStyle.accent : FluentChipStyle.neutral,
+                onTap: () => setState(() => _category = _categories[i]),
+              );
+            },
           ),
         ),
         SizedBox(height: kSpaceL),

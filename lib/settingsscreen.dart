@@ -10,10 +10,6 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 
-// ══════════════════════════════════════════════════════════════
-// SETTINGS SCREEN
-// ══════════════════════════════════════════════════════════════
-
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -51,7 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       await SessionManager.updateUser(authController.user!);
       authController.notifyListeners();
     } catch (_) {
-      // Sem sorte agora — mantém o que já estava carregado localmente.
+      // mantém o que estava
     }
     if (mounted) setState(() => _refreshing = false);
   }
@@ -195,9 +191,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              items: [
+                              children: [
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Modo escuro',
                                   onTap: () {},
                                   trailing: AppSwitch(
@@ -213,9 +210,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              items: [
+                              children: [
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Nome',
                                   onTap: () => _editName(context, s),
                                   trailing: Text(
@@ -229,6 +227,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Email',
                                   onTap: () {},
                                   trailing: Text(
@@ -242,6 +241,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Palavra-passe',
                                   onTap: () => _editPassword(context, s),
                                   trailing: Text(
@@ -255,6 +255,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Créditos',
                                   onTap: () {},
                                   trailing: Text(
@@ -272,11 +273,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              items: [
+                              children: [
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Eliminar todas as conversas',
-                                  titleColor: s.error,
+                                  labelColor: s.error,
                                   onTap: () =>
                                       _confirmDeleteAllConversations(context, s),
                                   trailing: const SizedBox.shrink(),
@@ -288,9 +290,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              items: [
+                              children: [
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Versão',
                                   onTap: () {},
                                   trailing: Text(
@@ -303,31 +306,37 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Termos de serviço',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Política de privacidade',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Enviar feedback',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                                 FluentListCard(
                                   s: s,
+                                  radius: kRadiusLarge,
                                   label: 'Ajuda e suporte',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
                               ],
                             ),
-                            SizedBox(height: kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS),
+                            SizedBox(
+                                height:
+                                    kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS),
                           ],
                         ),
                       ),
@@ -673,8 +682,8 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
             controller: _ctrl,
             label: widget.label,
             hint: widget.hint,
-            obscureText: widget.obscure ? _obscureNow : false,
-            errorText: _error,
+            obscure: widget.obscure ? _obscureNow : false,
+            error: _error,
             autofocus: true,
             onSubmitted: (_) => _save(),
             suffixIcon: widget.obscure

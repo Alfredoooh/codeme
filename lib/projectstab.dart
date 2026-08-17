@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/projectstab.dart
+// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -124,6 +127,7 @@ class _ProjectsTabState extends State<ProjectsTab>
     if (projectsController.loading && roots.isEmpty) {
       return Center(
         child: FluentShimmer(
+          s: s,
           width: kSpaceXXL,
           height: kSpaceXXL,
         ),
@@ -318,6 +322,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                     AppTap(
                       onTap: _openOptions,
                       s: s,
+                      size: 28,
                       child: AppIcon(
                         'more_filled.svg',
                         size: 14,
@@ -545,8 +550,10 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
             children: [
               FluentIconButton(
                 s: s,
-                child: AppIcon('back.svg', color: s.onSurface, size: 16),
+                asset: 'back.svg',
                 onTap: widget.onBack,
+                color: s.onSurface,
+                iconSize: 16,
               ),
               SizedBox(width: kSpaceS + kSpaceXXS),
               Expanded(
@@ -736,6 +743,7 @@ class _NodeCardState extends State<_NodeCard> {
                     AppTap(
                       onTap: _openOptions,
                       s: s,
+                      size: 28,
                       child: AppIcon(
                         'more_filled.svg',
                         size: 14,
@@ -768,7 +776,7 @@ class _NodeCardState extends State<_NodeCard> {
   }
 }
 
-// ── Sheets auxiliares (agora usando FluentBottomSheet e FluentListGroup) ──
+// ── Sheets auxiliares ─────────────────────────────────────────
 
 class _AddItemSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -788,25 +796,28 @@ class _AddItemSheet extends StatelessWidget {
       s: s,
       child: FluentListGroup(
         s: s,
-        items: [
-          FluentListCard(
-            s: s,
-            leading: AppIcon('folder.svg', color: s.primary, size: 18),
-            label: 'Criar pasta',
-            onTap: onCreateFolder,
-          ),
-          FluentListCard(
-            s: s,
-            leading: AppIcon('doc.png', color: s.primary, size: 18),
-            label: 'Criar ficheiro',
-            onTap: onCreateFile,
-          ),
-          FluentListCard(
-            s: s,
-            leading: AppIcon('file.svg', color: s.primary, size: 18),
-            label: 'Upload de ficheiro',
-            onTap: onUpload,
-          ),
+        builders: [
+          (radius) => FluentListCard(
+                s: s,
+                radius: radius,
+                leading: AppIcon('folder.svg', color: s.primary, size: 18),
+                label: 'Criar pasta',
+                onTap: onCreateFolder,
+              ),
+          (radius) => FluentListCard(
+                s: s,
+                radius: radius,
+                leading: AppIcon('doc.png', color: s.primary, size: 18),
+                label: 'Criar ficheiro',
+                onTap: onCreateFile,
+              ),
+          (radius) => FluentListCard(
+                s: s,
+                radius: radius,
+                leading: AppIcon('file.svg', color: s.primary, size: 18),
+                label: 'Upload de ficheiro',
+                onTap: onUpload,
+              ),
         ],
       ),
     );
@@ -853,20 +864,22 @@ class _ProjectOptionsSheet extends StatelessWidget {
           ),
           FluentListGroup(
             s: s,
-            items: [
-              FluentListCard(
-                s: s,
-                leading: AppIcon('edit.svg', color: s.onSurface, size: 18),
-                label: 'Renomear',
-                onTap: onRename,
-              ),
-              FluentListCard(
-                s: s,
-                leading: AppIcon('trash.svg', color: s.error, size: 18),
-                label: 'Eliminar',
-                labelColor: s.error,
-                onTap: onDelete,
-              ),
+            builders: [
+              (radius) => FluentListCard(
+                    s: s,
+                    radius: radius,
+                    leading: AppIcon('edit.svg', color: s.onSurface, size: 18),
+                    label: 'Renomear',
+                    onTap: onRename,
+                  ),
+              (radius) => FluentListCard(
+                    s: s,
+                    radius: radius,
+                    leading: AppIcon('trash.svg', color: s.error, size: 18),
+                    label: 'Eliminar',
+                    labelColor: s.error,
+                    onTap: onDelete,
+                  ),
             ],
           ),
         ],

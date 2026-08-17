@@ -20,18 +20,18 @@ import 'chat_search.dart';
 enum AppTab { ai, edit }
 
 extension AppTabX on AppTab {
-  String get svg       => const {
-        AppTab.ai:   'ai_tab.svg',
+  String get svg => const {
+        AppTab.ai: 'ai_tab.svg',
         AppTab.edit: 'edit_tab.svg',
       }[this]!;
 
   String get svgFilled => const {
-        AppTab.ai:   'ai_tab_filled.svg',
+        AppTab.ai: 'ai_tab_filled.svg',
         AppTab.edit: 'edit_tab_filled.svg',
       }[this]!;
 
   String get label => const {
-        AppTab.ai:   'IA',
+        AppTab.ai: 'IA',
         AppTab.edit: 'Editor',
       }[this]!;
 }
@@ -108,8 +108,12 @@ class ConversationsController extends ChangeNotifier {
     if (idx == -1) return;
     final old = items[idx];
     items[idx] = ConversationItem(
-      id: old.id, title: old.title, preview: old.preview,
-      pinned: pinned, archived: old.archived, updatedAt: old.updatedAt,
+      id: old.id,
+      title: old.title,
+      preview: old.preview,
+      pinned: pinned,
+      archived: old.archived,
+      updatedAt: old.updatedAt,
     );
     _sortByRecency();
     notifyListeners();
@@ -123,8 +127,12 @@ class ConversationsController extends ChangeNotifier {
     if (idx == -1) return;
     final old = items[idx];
     items[idx] = ConversationItem(
-      id: old.id, title: old.title, preview: old.preview,
-      pinned: old.pinned, archived: archived, updatedAt: old.updatedAt,
+      id: old.id,
+      title: old.title,
+      preview: old.preview,
+      pinned: old.pinned,
+      archived: archived,
+      updatedAt: old.updatedAt,
     );
     _sortByRecency();
     notifyListeners();
@@ -138,8 +146,12 @@ class ConversationsController extends ChangeNotifier {
     if (idx == -1) return;
     final old = items[idx];
     items[idx] = ConversationItem(
-      id: old.id, title: newTitle, preview: old.preview,
-      pinned: old.pinned, archived: old.archived, updatedAt: old.updatedAt,
+      id: old.id,
+      title: newTitle,
+      preview: old.preview,
+      pinned: old.pinned,
+      archived: old.archived,
+      updatedAt: old.updatedAt,
     );
     _sortByRecency();
     notifyListeners();
@@ -174,7 +186,7 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — renderizado dentro do painel deslizante em main.dart
+// DRAWER
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -225,7 +237,9 @@ class _AppDrawerState extends State<AppDrawer> {
     super.dispose();
   }
 
-  void _onConvsChanged() { if (mounted) setState(() {}); }
+  void _onConvsChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _onAuthChanged() {
     if (!mounted) return;
@@ -265,7 +279,8 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeDrawer();
   }
 
-  void _openConvPopup(BuildContext context, LayerLink anchorLink, ConversationItem item) {
+  void _openConvPopup(
+      BuildContext context, LayerLink anchorLink, ConversationItem item) {
     final s = AppTheme.of(context);
     showConversationOptionsPopup(
       context,
@@ -273,7 +288,8 @@ class _AppDrawerState extends State<AppDrawer> {
       anchorLink: anchorLink,
       item: item,
       onOpen: () => _openConversation(item),
-      onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
+      onTogglePin: () =>
+          conversationsController.togglePin(item.id, !item.pinned),
       onArchive: () => conversationsController.archive(item.id, !item.archived),
       onRename: () => _openRenamePopup(context, item),
       onDelete: () => _confirmDeletePopup(context, item),
@@ -294,6 +310,7 @@ class _AppDrawerState extends State<AppDrawer> {
       context: context,
       s: s,
       child: _DeleteConversationSheet(
+        s: s,
         title: item.title,
         onConfirm: () {
           Navigator.pop(context);
@@ -306,8 +323,12 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
-    final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
+    final pinned = conversationsController.items
+        .where((c) => c.pinned && !c.archived)
+        .toList();
+    final others = conversationsController.items
+        .where((c) => !c.pinned && !c.archived)
+        .toList();
 
     return Material(
       color: s.surface,
@@ -339,14 +360,16 @@ class _AppDrawerState extends State<AppDrawer> {
                         onTap: () => _openSearch(context),
                         s: s,
                         size: kSpaceXXXL,
-                        child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
+                        child: AppIcon('search.svg',
+                            color: s.onSurfaceVariant, size: 16),
                       ),
                       SizedBox(width: kSpaceXXS),
                       AppTap(
                         onTap: _goHome,
                         s: s,
                         size: kSpaceXXXL,
-                        child: AppIcon('home.svg', color: s.onSurfaceVariant, size: 17),
+                        child: AppIcon('home.svg',
+                            color: s.onSurfaceVariant, size: 17),
                       ),
                     ],
                   ),
@@ -401,15 +424,18 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> pinned,
     List<ConversationItem> others,
   ) {
-    if (conversationsController.loading && conversationsController.items.isEmpty) {
+    if (conversationsController.loading &&
+        conversationsController.items.isEmpty) {
       return Center(
         child: FluentShimmer(
+          s: s,
           width: kSpaceXL,
           height: kSpaceXL,
         ),
       );
     }
-    if (conversationsController.error != null && conversationsController.items.isEmpty) {
+    if (conversationsController.error != null &&
+        conversationsController.items.isEmpty) {
       return Center(
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: kSpaceXXL),
@@ -462,7 +488,8 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           if (others.isNotEmpty)
             Padding(
-              padding: EdgeInsets.symmetric(vertical: kSpaceS, horizontal: kSpaceS),
+              padding:
+                  EdgeInsets.symmetric(vertical: kSpaceS, horizontal: kSpaceS),
               child: FluentDivider(s: s),
             )
           else
@@ -554,6 +581,8 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
   }
 }
 
+// ── Conversation tile ─────────────────────────────────────────
+
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
@@ -575,7 +604,8 @@ class _ConvTile extends StatefulWidget {
   State<_ConvTile> createState() => _ConvTileState();
 }
 
-class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixin {
+class _ConvTileState extends State<_ConvTile>
+    with SingleTickerProviderStateMixin {
   bool _h = false;
   final LayerLink _anchorLink = LayerLink();
 
@@ -625,7 +655,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
             Positioned.fill(
               child: Container(
                 margin: EdgeInsets.symmetric(vertical: kSpaceXXS),
-                alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
+                alignment:
+                    _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
                 padding: EdgeInsets.symmetric(horizontal: kSpaceL),
                 decoration: BoxDecoration(
                   color: bg,
@@ -670,8 +701,12 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
                               widget.item.title,
                               style: TextStyle(
                                 fontSize: kTypeBody,
-                                fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
-                                color: widget.active ? s.navLabelActive : s.onSurface,
+                                fontWeight: widget.active
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: widget.active
+                                    ? s.navLabelActive
+                                    : s.onSurface,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -680,7 +715,9 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
                               SizedBox(height: kSpaceXXS),
                               Text(
                                 widget.item.preview,
-                                style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
+                                style: TextStyle(
+                                    fontSize: kTypeCaption,
+                                    color: s.onSurfaceVariant),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -690,7 +727,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
                       ),
                       if (widget.item.pinned) ...[
                         SizedBox(width: kSpaceS),
-                        AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+                        AppIcon('pin.svg',
+                            color: s.onSurfaceVariant, size: 13),
                       ],
                     ],
                   ),
@@ -703,6 +741,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
     );
   }
 }
+
+// ── Popup de opções de conversa ───────────────────────────────
 
 void showConversationOptionsPopup(
   BuildContext context,
@@ -755,7 +795,8 @@ void showConversationOptionsPopup(
               ).value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                    .animate(
+                        CurvedAnimation(parent: controller, curve: kCupertinoOut))
                     .value,
                 alignment: Alignment.topLeft,
                 child: child,
@@ -894,16 +935,17 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
 }
 
 class _DeleteConversationSheet extends StatelessWidget {
+  final AppColorScheme s;
   final String title;
   final VoidCallback onConfirm;
   const _DeleteConversationSheet({
+    required this.s,
     required this.title,
     required this.onConfirm,
   });
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
     return FluentBottomSheet(
       s: s,
       child: Column(
@@ -958,6 +1000,7 @@ Future<void> showRenameSheet(
     context: context,
     s: s,
     child: _RenameSheet(
+      s: s,
       currentTitle: currentTitle,
       onConfirm: onConfirm,
       title: title,
@@ -967,11 +1010,13 @@ Future<void> showRenameSheet(
 }
 
 class _RenameSheet extends StatefulWidget {
+  final AppColorScheme s;
   final String currentTitle;
   final ValueChanged<String> onConfirm;
   final String title;
   final String hint;
   const _RenameSheet({
+    required this.s,
     required this.currentTitle,
     required this.onConfirm,
     required this.title,
@@ -993,7 +1038,7 @@ class _RenameSheetState extends State<_RenameSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final s = widget.s;
     return FluentBottomSheet(
       s: s,
       child: Column(
@@ -1014,7 +1059,7 @@ class _RenameSheetState extends State<_RenameSheet> {
             controller: _ctrl,
             autofocus: true,
             hint: widget.hint,
-            background: s.subtleFillHover,
+            fillColor: s.subtleFillHover,
             radius: kRadiusXLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceL,
@@ -1045,7 +1090,7 @@ class _RenameSheetState extends State<_RenameSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — avatar corrigido para URLs remotas e base64
+// ACCOUNT PILL
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {

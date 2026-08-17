@@ -136,7 +136,7 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) async {
   await showFluentDialog<void>(
     context: context,
     s: s,
-    child: FluentDialog(
+    builder: (ctx) => FluentDialog(
       s: s,
       title: 'URL da imagem',
       content: FluentTextField(
@@ -149,13 +149,13 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) async {
         FluentButton(
           s: s,
           label: 'Cancelar',
-          onTap: () => Navigator.pop(context),
+          onTap: () => Navigator.pop(ctx),
           style: FluentButtonStyle.secondary,
         ),
         FluentButton(
           s: s,
           label: 'Inserir',
-          onTap: () => Navigator.pop(context),
+          onTap: () => Navigator.pop(ctx),
           style: FluentButtonStyle.primary,
         ),
       ],
@@ -223,7 +223,7 @@ Future<void> showLinkSheet(
             s: s,
             controller: urlC,
             hint: 'https://',
-            background: s.subtleFillHover,
+            fillColor: s.subtleFillHover,
             radius: kRadiusLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceM,
@@ -235,7 +235,7 @@ Future<void> showLinkSheet(
             s: s,
             controller: txtC,
             hint: 'Texto (opcional)',
-            background: s.subtleFillHover,
+            fillColor: s.subtleFillHover,
             radius: kRadiusLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceM,
