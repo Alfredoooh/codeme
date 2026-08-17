@@ -3384,7 +3384,7 @@ Future<void> showCanvasSheet(
                     s: s,
                     item: item,
                     onTap: () {
-                      Navigator.pop(ctx);
+                      Navigator.pop(context);
                       onOpenCanvas(item);
                     },
                   );

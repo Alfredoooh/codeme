@@ -708,9 +708,15 @@ class FluentTextField extends StatefulWidget {
   final VoidCallback? onEditingComplete;
   final ValueChanged<String>? onSubmitted;
   final Widget? suffix;
+  final Widget? suffixIcon;
   final bool autofocus;
   final bool enabled;
   final TextCapitalization textCapitalization;
+  final Color? fillColor;
+  final double? radius;
+  final EdgeInsetsGeometry? contentPadding;
+  final TextInputAction? textInputAction;
+  final TextAlign textAlign;
 
   const FluentTextField({
     super.key,
@@ -728,9 +734,15 @@ class FluentTextField extends StatefulWidget {
     this.onEditingComplete,
     this.onSubmitted,
     this.suffix,
+    this.suffixIcon,
     this.autofocus = false,
     this.enabled = true,
     this.textCapitalization = TextCapitalization.none,
+    this.fillColor,
+    this.radius,
+    this.contentPadding,
+    this.textInputAction,
+    this.textAlign = TextAlign.start,
   });
 
   @override
@@ -788,8 +800,9 @@ class _FluentTextFieldState extends State<FluentTextField> {
         AnimatedContainer(
           duration: kDurationFast,
           decoration: BoxDecoration(
-            color: widget.enabled ? s.controlInputActive : s.controlDisabled,
-            borderRadius: BorderRadius.circular(kRadiusMedium),
+            color: widget.fillColor ??
+                (widget.enabled ? s.controlInputActive : s.controlDisabled),
+            borderRadius: BorderRadius.circular(widget.radius ?? kRadiusMedium),
             border: Border.all(
               color: borderColor,
               width: _focused ? 1.5 : 1,
@@ -808,6 +821,8 @@ class _FluentTextFieldState extends State<FluentTextField> {
                   autofocus: widget.autofocus,
                   enabled: widget.enabled,
                   textCapitalization: widget.textCapitalization,
+                  textInputAction: widget.textInputAction,
+                  textAlign: widget.textAlign,
                   style: TextStyle(
                     fontSize: kTypeBody,
                     color: widget.enabled ? s.onSurface : s.onSurfaceDisabled,
@@ -819,10 +834,11 @@ class _FluentTextFieldState extends State<FluentTextField> {
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: kSpaceL,
-                      vertical: kSpaceM,
-                    ),
+                    contentPadding: widget.contentPadding ??
+                        const EdgeInsets.symmetric(
+                          horizontal: kSpaceL,
+                          vertical: kSpaceM,
+                        ),
                     hintText: widget.hint,
                     hintStyle: TextStyle(
                       fontSize: kTypeBody,
@@ -842,6 +858,11 @@ class _FluentTextFieldState extends State<FluentTextField> {
                       size: 18,
                     ),
                   ),
+                ),
+              ] else if (widget.suffixIcon != null) ...[
+                Padding(
+                  padding: const EdgeInsets.only(right: kSpaceM),
+                  child: widget.suffixIcon!,
                 ),
               ] else if (widget.suffix != null) ...[
                 Padding(

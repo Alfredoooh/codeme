@@ -712,7 +712,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
             FluentTextField(
               s: s,
               controller: _titleController,
-              background: _inputBg(),
+              fillColor: _inputBg(),
               radius: kRadiusLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
@@ -748,7 +748,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           s: s,
                           controller: _labelControllers[index],
                           onChanged: (v) => item.label = v,
-                          background: _inputBg(),
+                          fillColor: _inputBg(),
                           radius: kRadiusMedium,
                           contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
                         ),
@@ -762,7 +762,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           onChanged: (v) => item.value = double.tryParse(v) ?? 0,
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.right,
-                          background: _inputBg(),
+                          fillColor: _inputBg(),
                           radius: kRadiusMedium,
                           contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
                         ),
@@ -1197,10 +1197,13 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                   final active = pair.key == _currentPairKey;
                   return FluentListCard(
                     s: widget.s,
+                    radius: kRadiusLarge,
                     label: pair.label,
                     subtitle: pair.sub,
                     onTap: () => Navigator.pop(context, pair.key),
-                    selected: active,
+                    trailing: active
+                        ? AppIcon('check.svg', color: widget.s.primary, size: 16)
+                        : null,
                   );
                 }).toList(),
               ),
@@ -1536,7 +1539,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
               s: s,
               controller: nameCtrl,
               hint: 'Nome do evento',
-              background: s.subtleFillHover,
+              fillColor: s.subtleFillHover,
               radius: kRadiusLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
@@ -1545,7 +1548,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
               s: s,
               controller: timeCtrl,
               hint: 'Hora (ex: 14:00)',
-              background: s.subtleFillHover,
+              fillColor: s.subtleFillHover,
               radius: kRadiusLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
@@ -1760,7 +1763,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     required VoidCallback? onTap,
   }) {
     return AppTap(
-      onTap: onTap,
+      onTap: onTap ?? () {},
       s: widget.s,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.start,
@@ -2984,7 +2987,7 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
               return FluentChip(
                 s: widget.s,
                 label: def.label,
-                selected: active,
+                style: active ? FluentChipStyle.accent : FluentChipStyle.neutral,
                 onTap: () => setState(() => _pendingType = key),
               );
             }).toList(),
@@ -3539,6 +3542,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                         child: Center(
                           child: _locating
                               ? FluentShimmer(
+                                  s: s,
                                   width: 16,
                                   height: 16,
                                 )
@@ -3569,7 +3573,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                     s: s,
                     controller: _searchCtrl,
                     hint: 'Procurar morada ou local…',
-                    background: Colors.transparent,
+                    fillColor: Colors.transparent,
                     radius: kRadiusCircle,
                     contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
                     onSubmitted: (_) => _search(),
@@ -3589,6 +3593,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                     child: Center(
                       child: _searching
                           ? FluentShimmer(
+                              s: s,
                               width: 16,
                               height: 16,
                             )

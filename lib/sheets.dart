@@ -136,30 +136,24 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) async {
   await showFluentDialog<void>(
     context: context,
     s: s,
-    builder: (ctx) => FluentDialog(
+    title: 'URL da imagem',
+    content: FluentTextField(
       s: s,
-      title: 'URL da imagem',
-      content: FluentTextField(
-        s: s,
-        controller: ctrl,
-        hint: 'https://',
-        autofocus: true,
-      ),
-      actions: [
-        FluentButton(
-          s: s,
-          label: 'Cancelar',
-          onTap: () => Navigator.pop(ctx),
-          style: FluentButtonStyle.secondary,
-        ),
-        FluentButton(
-          s: s,
-          label: 'Inserir',
-          onTap: () => Navigator.pop(ctx),
-          style: FluentButtonStyle.primary,
-        ),
-      ],
+      controller: ctrl,
+      hint: 'https://',
+      autofocus: true,
     ),
+    actions: [
+      FluentDialogAction(
+        label: 'Cancelar',
+        onTap: () => Navigator.pop(context),
+      ),
+      FluentDialogAction(
+        label: 'Inserir',
+        onTap: () => Navigator.pop(context),
+        primary: true,
+      ),
+    ],
   );
   ctrl.dispose();
 }

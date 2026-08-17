@@ -191,10 +191,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              children: [
-                                FluentListCard(
+                              builders: [
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Modo escuro',
                                   onTap: () {},
                                   trailing: AppSwitch(
@@ -210,10 +210,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              children: [
-                                FluentListCard(
+                              builders: [
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Nome',
                                   onTap: () => _editName(context, s),
                                   trailing: Text(
@@ -225,9 +225,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     ),
                                   ),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Email',
                                   onTap: () {},
                                   trailing: Text(
@@ -239,9 +239,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Palavra-passe',
                                   onTap: () => _editPassword(context, s),
                                   trailing: Text(
@@ -253,9 +253,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     ),
                                   ),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Créditos',
                                   onTap: () {},
                                   trailing: Text(
@@ -273,10 +273,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              children: [
-                                FluentListCard(
+                              builders: [
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Eliminar todas as conversas',
                                   labelColor: s.error,
                                   onTap: () =>
@@ -290,10 +290,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                             SizedBox(height: kSpaceS + kSpaceXXS),
                             FluentListGroup(
                               s: s,
-                              children: [
-                                FluentListCard(
+                              builders: [
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Versão',
                                   onTap: () {},
                                   trailing: Text(
@@ -304,30 +304,30 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     ),
                                   ),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Termos de serviço',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Política de privacidade',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Enviar feedback',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
                                 ),
-                                FluentListCard(
+                                (radius) => FluentListCard(
                                   s: s,
-                                  radius: kRadiusLarge,
+                                  radius: radius,
                                   label: 'Ajuda e suporte',
                                   onTap: () {},
                                   trailing: const SizedBox.shrink(),
