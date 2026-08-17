@@ -30,8 +30,8 @@ class _AgendaTabState extends State<AgendaTab> {
   bool _loading = true;
 
   AgendaViewMode _mode = AgendaViewMode.month;
-  late DateTime _current; // mês em foco (view Mês)
-  late DateTime _focusDay; // dia em foco (view Dia/Semana)
+  late DateTime _current;
+  late DateTime _focusDay;
   late DateTime _today;
   late String _selectedKey;
 
@@ -122,7 +122,7 @@ class _AgendaTabState extends State<AgendaTab> {
   }
 
   void _selectMode(AgendaViewMode m) {
-    Navigator.of(context).pop(); // fecha o drawer com o push suave nativo
+    Navigator.of(context).pop();
     if (m == _mode) return;
     setState(() => _mode = m);
   }
@@ -245,9 +245,9 @@ class _AgendaTabState extends State<AgendaTab> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
 // _AgendaLoading
-// ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
 class _AgendaLoading extends StatelessWidget {
   const _AgendaLoading();
   @override
@@ -260,9 +260,9 @@ class _AgendaLoading extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// _AgendaDrawer
-// ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// _AgendaDrawer + _AgendaDrawerItem
+// ══════════════════════════════════════════════════════════════
 class _AgendaDrawer extends StatefulWidget {
   final AppColorScheme s;
   final AgendaViewMode current;
@@ -392,12 +392,8 @@ class _AgendaDrawerItemState extends State<_AgendaDrawerItem> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PARTE 2/2 – Classes que estavam em falta
+// _NewEventSheet
 // ══════════════════════════════════════════════════════════════
-
-// ─────────────────────────────────────────────────────────────
-// _NewEventSheet – folha modal para criar um evento
-// ─────────────────────────────────────────────────────────────
 class _NewEventSheet extends StatefulWidget {
   final AppColorScheme s;
   final DateTime initialDate;
@@ -548,10 +544,9 @@ class _NewEventSheetState extends State<_NewEventSheet> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Helpers para as vistas de calendário
-// ─────────────────────────────────────────────────────────────
-
+// ══════════════════════════════════════════════════════════════
+// Widgets de calendário comuns
+// ══════════════════════════════════════════════════════════════
 class _CalendarHeader extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -627,7 +622,113 @@ class _WeekdayRow extends StatelessWidget {
   }
 }
 
-// Célula individual no calendário mensal
+// ─────────────────────────────────────────────────────────────
+// _MonthView + auxiliares
+// ─────────────────────────────────────────────────────────────
+class _MonthView extends StatelessWidget {
+  final AppColorScheme s;
+  final List<String> months;
+  final List<String> weekdays;
+  final DateTime current;
+  final DateTime today;
+  final String selectedKey;
+  final Map<String, List<EventItem>> eventsByDay;
+  final VoidCallback onPrevMonth;
+  final VoidCallback onNextMonth;
+  final ValueChanged<DateTime> onSelectDay;
+  final ValueChanged<EventItem> onDeleteEvent;
+
+  const _MonthView({
+    required this.s,
+    required this.months,
+    required this.weekdays,
+    required this.current,
+    required this.today,
+    required this.selectedKey,
+    required this.eventsByDay,
+    required this.onPrevMonth,
+    required this.onNextMonth,
+    required this.onSelectDay,
+    required this.onDeleteEvent,
+  });
+
+  String _keyOf(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  int _daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;
+
+  @override
+  Widget build(BuildContext context) {
+    final year = current.year;
+    final month = current.month;
+    final firstDay = DateTime(year, month, 1);
+    final leading = firstDay.weekday % 7;
+    final daysCount = _daysInMonth(year, month);
+    final cells = <DateTime>[];
+
+    for (int i = 0; i < leading; i++) {
+      cells.add(DateTime(year, month, 0).subtract(Duration(days: leading - 1 - i)));
+    }
+    for (int d = 1; d <= daysCount; d++) {
+      cells.add(DateTime(year, month, d));
+    }
+    final total = ((cells.length + 6) ~/ 7) * 7;
+    for (int i = cells.length; i < total; i++) {
+      cells.add(DateTime(year, month + 1, i - cells.length + 1));
+    }
+
+    return Column(
+      children: [
+        _CalendarHeader(
+          s: s,
+          title: '${months[month - 1]} $year',
+          onPrev: onPrevMonth,
+          onNext: onNextMonth,
+        ),
+        const SizedBox(height: 8),
+        _WeekdayRow(s: s, weekdays: weekdays),
+        const SizedBox(height: 4),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 0.82,
+            ),
+            itemCount: total,
+            itemBuilder: (ctx, index) {
+              final day = cells[index];
+              final key = _keyOf(day);
+              final isCurrentMonth = day.month == month && day.year == year;
+              final isToday = day.year == today.year && day.month == today.month && day.day == today.day;
+              final isSelected = key == selectedKey;
+              final events = eventsByDay[key] ?? [];
+
+              return _MonthDayCell(
+                s: s,
+                day: day,
+                isCurrentMonth: isCurrentMonth,
+                isToday: isToday,
+                isSelected: isSelected,
+                events: events,
+                onTap: () => onSelectDay(day),
+                onDeleteEvent: onDeleteEvent,
+              );
+            },
+          ),
+        ),
+        if (eventsByDay[selectedKey]?.isNotEmpty ?? false)
+          _SelectedDayEvents(
+            s: s,
+            date: DateTime.parse(selectedKey),
+            events: eventsByDay[selectedKey]!,
+            onDelete: onDeleteEvent,
+          ),
+      ],
+    );
+  }
+}
+
 class _MonthDayCell extends StatelessWidget {
   final AppColorScheme s;
   final DateTime day;
@@ -696,7 +797,6 @@ class _MonthDayCell extends StatelessWidget {
   }
 }
 
-// Lista de eventos do dia seleccionado (aparece em baixo no mês)
 class _SelectedDayEvents extends StatelessWidget {
   final AppColorScheme s;
   final DateTime date;
@@ -739,7 +839,6 @@ class _SelectedDayEvents extends StatelessWidget {
   }
 }
 
-// Linha de evento reutilizável
 class _EventRow extends StatelessWidget {
   final AppColorScheme s;
   final EventItem event;
@@ -775,7 +874,7 @@ class _EventRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// _WeekView – vista semanal
+// _WeekView
 // ─────────────────────────────────────────────────────────────
 class _WeekView extends StatelessWidget {
   final AppColorScheme s;
@@ -805,7 +904,6 @@ class _WeekView extends StatelessWidget {
   });
 
   List<DateTime> _weekDays(DateTime focus) {
-    // Domingo como início da semana (weekday % 7)
     final start = focus.subtract(Duration(days: focus.weekday % 7));
     return List.generate(7, (i) => start.add(Duration(days: i)));
   }
@@ -827,7 +925,6 @@ class _WeekView extends StatelessWidget {
           onNext: onNextWeek,
         ),
         const SizedBox(height: 8),
-        // Cabeçalho dos dias da semana
         Row(
           children: days.map((d) {
             final key = _keyOf(d);
@@ -880,10 +977,9 @@ class _WeekView extends StatelessWidget {
                 return Expanded(
                   child: Column(
                     children: [
-                      // Botão para adicionar evento no dia
                       IconButton(
                         icon: AppIcon('add.svg', size: 14, color: s.onSurfaceVariant),
-                        onPressed: () => onAddEventAt(d, 9), // exemplo: adicionar às 9h
+                        onPressed: () => onAddEventAt(d, 9),
                       ),
                       ...events.map((e) => Padding(
                             padding: const EdgeInsets.all(4),
@@ -910,7 +1006,7 @@ class _WeekView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// _DayView – vista diária
+// _DayView
 // ─────────────────────────────────────────────────────────────
 class _DayView extends StatelessWidget {
   final AppColorScheme s;
@@ -961,12 +1057,11 @@ class _DayView extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              // Botão para adicionar evento
               Align(
                 alignment: Alignment.centerRight,
                 child: IconButton(
                   icon: AppIcon('add.svg', size: 20, color: s.primary),
-                  onPressed: () => onAddEventAt(9), // exemplo 9h
+                  onPressed: () => onAddEventAt(9),
                 ),
               ),
               ...events.map((e) => _EventCard(
@@ -984,7 +1079,7 @@ class _DayView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// _EventCard – cartão de evento reutilizável
+// _EventCard
 // ─────────────────────────────────────────────────────────────
 class _EventCard extends StatelessWidget {
   final AppColorScheme s;
