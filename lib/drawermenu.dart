@@ -266,9 +266,10 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _openConvPopup(BuildContext context, LayerLink anchorLink, ConversationItem item) {
+    final s = AppTheme.of(context);
     showConversationOptionsPopup(
       context,
-      widget.s,
+      s,
       anchorLink: anchorLink,
       item: item,
       onOpen: () => _openConversation(item),
@@ -282,19 +283,15 @@ class _AppDrawerState extends State<AppDrawer> {
   void _openRenamePopup(BuildContext context, ConversationItem item) {
     showRenameSheet(
       context,
-      widget.s,
       currentTitle: item.title,
       onConfirm: (newTitle) => conversationsController.rename(item.id, newTitle),
     );
   }
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _DeleteConversationSheet(
-        s: widget.s,
         title: item.title,
         onConfirm: () {
           Navigator.pop(ctx);
@@ -306,7 +303,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
+    final s = AppTheme.of(context);
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
@@ -317,38 +314,45 @@ class _AppDrawerState extends State<AppDrawer> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              padding: EdgeInsets.fromLTRB(
+                kSpaceL,
+                kSpaceM,
+                kSpaceM,
+                kSpaceS,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'Menu',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: kTypeSubtitle,
                       fontWeight: FontWeight.bold,
                       color: s.onSurface,
                     ),
                   ),
-                  Row(children: [
-                    AppTap(
-                      onTap: () => _openSearch(context),
-                      s: s,
-                      size: 32,
-                      child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
-                    ),
-                    const SizedBox(width: 2),
-                    AppTap(
-                      onTap: _goHome,
-                      s: s,
-                      size: 32,
-                      child: AppIcon('home.svg', color: s.onSurfaceVariant, size: 17),
-                    ),
-                  ]),
+                  Row(
+                    children: [
+                      AppTap(
+                        onTap: () => _openSearch(context),
+                        s: s,
+                        size: kSpaceXXXL,
+                        child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
+                      ),
+                      SizedBox(width: kSpaceXXS),
+                      AppTap(
+                        onTap: _goHome,
+                        s: s,
+                        size: kSpaceXXXL,
+                        child: AppIcon('home.svg', color: s.onSurfaceVariant, size: 17),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: EdgeInsets.symmetric(horizontal: kSpaceS),
               child: Column(
                 children: [
                   for (final tab in _navigableTabs)
@@ -362,11 +366,16 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+              padding: EdgeInsets.fromLTRB(
+                kSpaceL,
+                kSpaceL,
+                kSpaceM,
+                kSpaceS,
+              ),
               child: Text(
                 'Conversas',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: kTypeBody,
                   fontWeight: FontWeight.w600,
                   color: s.onSurfaceVariant,
                 ),
@@ -376,7 +385,7 @@ class _AppDrawerState extends State<AppDrawer> {
               child: _buildConvBody(s, pinned, others),
             ),
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
               child: _AccountPill(s: s, onOpenSettings: widget.onSettings),
             ),
           ],
@@ -392,23 +401,21 @@ class _AppDrawerState extends State<AppDrawer> {
   ) {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
-        child: SizedBox(
-          width: 20, height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.2,
-            valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
-          ),
+        child: FluentShimmer(
+          width: kSpaceXL,
+          height: kSpaceXL,
+          borderRadius: kRadiusSmall,
         ),
       );
     }
     if (conversationsController.error != null && conversationsController.items.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: kSpaceXXL),
           child: Text(
             conversationsController.error!,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
+            style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
           ),
         ),
       );
@@ -417,25 +424,30 @@ class _AppDrawerState extends State<AppDrawer> {
       return Center(
         child: Text(
           'Sem conversas ainda',
-          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+          style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
         ),
       );
     }
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: EdgeInsets.symmetric(horizontal: kSpaceS),
       children: [
         if (pinned.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-            child: Row(children: [
-              AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
-              const SizedBox(width: 6),
-              Text('Fixadas',
+            padding: EdgeInsets.fromLTRB(kSpaceS, kSpaceXS, kSpaceS, kSpaceS),
+            child: Row(
+              children: [
+                AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+                SizedBox(width: kSpaceS),
+                Text(
+                  'Fixadas',
                   style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurfaceVariant)),
-            ]),
+                    fontSize: kTypeCaption,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
           for (final item in pinned)
             _ConvTile(
@@ -449,11 +461,11 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           if (others.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
+              padding: EdgeInsets.symmetric(vertical: kSpaceS, horizontal: kSpaceS),
+              child: FluentDivider(),
             )
           else
-            const SizedBox(height: 8),
+            SizedBox(height: kSpaceS),
         ],
         for (final item in others)
           _ConvTile(
@@ -465,7 +477,7 @@ class _AppDrawerState extends State<AppDrawer> {
             onArchive: () => conversationsController.archive(item.id, true),
             onDelete: () => conversationsController.delete(item.id),
           ),
-        const SizedBox(height: 8),
+        SizedBox(height: kSpaceS),
       ],
     );
   }
@@ -495,42 +507,47 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
 
   @override
   Widget build(BuildContext context) {
-    final s   = widget.s;
+    final s = AppTheme.of(context);
     final sel = widget.selected;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
       onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: kDurationNormal,
         curve: kCupertinoOut,
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: EdgeInsets.symmetric(vertical: kSpaceXXS),
+        padding: EdgeInsets.symmetric(
+          horizontal: kSpaceM,
+          vertical: kSpaceS + kSpaceXXS,
+        ),
         decoration: BoxDecoration(
           color: sel
               ? s.navIndicatorBg
-              : (_pressed ? s.hover : Colors.transparent),
-          borderRadius: BorderRadius.circular(999),
+              : (_pressed ? s.subtleFillHover : Colors.transparent),
+          borderRadius: BorderRadius.circular(kRadiusCircle),
         ),
-        child: Row(children: [
-          AppIcon(
-            sel ? widget.tab.svgFilled : widget.tab.svg,
-            color: sel ? s.navLabelActive : s.onSurfaceVariant,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            widget.tab.label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-              color: sel ? s.navLabelActive : s.onSurface,
+        child: Row(
+          children: [
+            AppIcon(
+              sel ? widget.tab.svgFilled : widget.tab.svg,
+              color: sel ? s.navLabelActive : s.onSurfaceVariant,
+              size: 20,
             ),
-          ),
-        ]),
+            SizedBox(width: kSpaceM),
+            Text(
+              widget.tab.label,
+              style: TextStyle(
+                fontSize: kTypeBody,
+                fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                color: sel ? s.navLabelActive : s.onSurface,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -553,7 +570,8 @@ class _ConvTile extends StatefulWidget {
     required this.onArchive,
     required this.onDelete,
   });
-  @override State<_ConvTile> createState() => _ConvTileState();
+  @override
+  State<_ConvTile> createState() => _ConvTileState();
 }
 
 class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixin {
@@ -588,7 +606,7 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
+    final s = AppTheme.of(context);
     final bg = _dragDx < 0
         ? s.error
         : _dragDx > 0
@@ -599,73 +617,88 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
 
     return AnimatedOpacity(
       opacity: _resolved ? 0.0 : 1.0,
-      duration: const Duration(milliseconds: 180),
-      child: Stack(children: [
-        if (_dragDx != 0)
-          Positioned.fill(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: AppIcon(icon, color: iconColor, size: 18),
-            ),
-          ),
-        Transform.translate(
-          offset: Offset(_dragDx, 0),
-          child: CompositedTransformTarget(
-            link: _anchorLink,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown:   (_) => setState(() => _h = true),
-              onTapCancel: ()  => setState(() => _h = false),
-              onTapUp:     (_) => setState(() => _h = false),
-              onTap: widget.onTap,
-              onLongPress: () => widget.onOptions(_anchorLink),
-              onHorizontalDragUpdate: _onDragUpdate,
-              onHorizontalDragEnd: _onDragEnd,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      duration: kDurationSlow,
+      child: Stack(
+        children: [
+          if (_dragDx != 0)
+            Positioned.fill(
+              child: Container(
+                margin: EdgeInsets.symmetric(vertical: kSpaceXXS),
+                alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
+                padding: EdgeInsets.symmetric(horizontal: kSpaceL),
                 decoration: BoxDecoration(
-                  color: widget.active
-                      ? s.navIndicatorBg
-                      : (_h ? s.hover : s.surface),
-                  borderRadius: BorderRadius.circular(10),
+                  color: bg,
+                  borderRadius: BorderRadius.circular(kRadiusLarge),
                 ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(widget.item.title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
-                            color: widget.active ? s.navLabelActive : s.onSurface,
-                          ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (widget.item.preview.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(widget.item.preview,
-                            style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ],
-                    ]),
+                child: AppIcon(icon, color: iconColor, size: 18),
+              ),
+            ),
+          Transform.translate(
+            offset: Offset(_dragDx, 0),
+            child: CompositedTransformTarget(
+              link: _anchorLink,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => setState(() => _h = true),
+                onTapCancel: () => setState(() => _h = false),
+                onTapUp: (_) => setState(() => _h = false),
+                onTap: widget.onTap,
+                onLongPress: () => widget.onOptions(_anchorLink),
+                onHorizontalDragUpdate: _onDragUpdate,
+                onHorizontalDragEnd: _onDragEnd,
+                child: AnimatedContainer(
+                  duration: kDurationFast,
+                  margin: EdgeInsets.symmetric(vertical: kSpaceXXS),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: kSpaceM,
+                    vertical: kSpaceS + kSpaceXXS,
                   ),
-                  if (widget.item.pinned) ...[
-                    const SizedBox(width: 6),
-                    AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
-                  ],
-                ]),
+                  decoration: BoxDecoration(
+                    color: widget.active
+                        ? s.navIndicatorBg
+                        : (_h ? s.subtleFillHover : s.surface),
+                    borderRadius: BorderRadius.circular(kRadiusLarge),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.item.title,
+                              style: TextStyle(
+                                fontSize: kTypeBody,
+                                fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
+                                color: widget.active ? s.navLabelActive : s.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (widget.item.preview.isNotEmpty) ...[
+                              SizedBox(height: kSpaceXXS),
+                              Text(
+                                widget.item.preview,
+                                style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (widget.item.pinned) ...[
+                        SizedBox(width: kSpaceS),
+                        AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -684,7 +717,7 @@ void showConversationOptionsPopup(
   late OverlayEntry entry;
   final controller = AnimationController(
     vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 190),
+    duration: kDurationNormal,
   );
 
   void close() {
@@ -697,77 +730,99 @@ void showConversationOptionsPopup(
   entry = OverlayEntry(builder: (ctx) {
     const width = 232.0;
 
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      CompositedTransformFollower(
-        link: anchorLink,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.bottomLeft,
-        followerAnchor: Alignment.topLeft,
-        offset: const Offset(0, 6),
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: Alignment.topLeft,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ConvPopupRow(
-                    s: s, icon: 'send.svg', label: 'Abrir conversa',
-                    onTap: () { close(); onOpen(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'pin.svg',
-                    label: item.pinned ? 'Desafixar' : 'Fixar',
-                    onTap: () { close(); onTogglePin(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'archive.svg',
-                    label: item.archived ? 'Desarquivar' : 'Arquivar',
-                    onTap: () { close(); onArchive(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'edit.svg', label: 'Renomear',
-                    onTap: () { close(); onRename(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: 'trash.svg', label: 'Eliminar',
-                    destructive: true,
-                    onTap: () { close(); onDelete(); },
-                  ),
-                ],
-              ),
-            ),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: close,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
           ),
         ),
-      ),
-    ]);
+        CompositedTransformFollower(
+          link: anchorLink,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomLeft,
+          followerAnchor: Alignment.topLeft,
+          offset: const Offset(0, 6),
+          child: AnimatedBuilder(
+            animation: controller,
+            builder: (_, child) => Opacity(
+              opacity: CurvedAnimation(
+                parent: controller,
+                curve: const Interval(0, 0.5, curve: Curves.easeOut),
+              ).value,
+              child: Transform.scale(
+                scale: Tween(begin: 0.92, end: 1.0)
+                    .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                    .value,
+                alignment: Alignment.topLeft,
+                child: child,
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: SizedBox(
+                width: width,
+                child: FluentPopupContainer(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ConvPopupRow(
+                        s: s,
+                        icon: 'send.svg',
+                        label: 'Abrir conversa',
+                        onTap: () {
+                          close();
+                          onOpen();
+                        },
+                      ),
+                      _ConvPopupRow(
+                        s: s,
+                        icon: 'pin.svg',
+                        label: item.pinned ? 'Desafixar' : 'Fixar',
+                        onTap: () {
+                          close();
+                          onTogglePin();
+                        },
+                      ),
+                      _ConvPopupRow(
+                        s: s,
+                        icon: 'archive.svg',
+                        label: item.archived ? 'Desarquivar' : 'Arquivar',
+                        onTap: () {
+                          close();
+                          onArchive();
+                        },
+                      ),
+                      _ConvPopupRow(
+                        s: s,
+                        icon: 'edit.svg',
+                        label: 'Renomear',
+                        onTap: () {
+                          close();
+                          onRename();
+                        },
+                      ),
+                      _ConvPopupRow(
+                        s: s,
+                        icon: 'trash.svg',
+                        label: 'Eliminar',
+                        destructive: true,
+                        onTap: () {
+                          close();
+                          onDelete();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   });
 
   Overlay.of(context).insert(entry);
@@ -789,234 +844,194 @@ class _ConvPopupRow extends StatefulWidget {
     this.destructive = false,
     this.useEditorIcon = false,
   });
-  @override State<_ConvPopupRow> createState() => _ConvPopupRowState();
+  @override
+  State<_ConvPopupRow> createState() => _ConvPopupRowState();
 }
 
 class _ConvPopupRowState extends State<_ConvPopupRow> {
   bool _h = false;
   @override
   Widget build(BuildContext context) {
-    final color = widget.destructive ? widget.s.error : widget.s.onSurface;
+    final s = widget.s;
+    final color = widget.destructive ? s.error : s.onSurface;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _h ? widget.s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+        duration: kDurationFast,
+        padding: EdgeInsets.symmetric(
+          horizontal: kSpaceM,
+          vertical: kSpaceS + kSpaceXXS,
         ),
-        child: Row(children: [
-          widget.useEditorIcon
-              ? EditorTypeIcon(widget.icon, size: 18)
-              : AppIcon(widget.icon, size: 18, color: color),
-          const SizedBox(width: 10),
-          Text(widget.label,
-              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
-        ]),
+        decoration: BoxDecoration(
+          color: _h ? s.subtleFillHover : Colors.transparent,
+          borderRadius: BorderRadius.circular(kRadiusCircle),
+        ),
+        child: Row(
+          children: [
+            widget.useEditorIcon
+                ? EditorTypeIcon(widget.icon, size: 18)
+                : AppIcon(widget.icon, size: 18, color: color),
+            SizedBox(width: kSpaceS + kSpaceXXS),
+            Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: kTypeBody,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _DeleteConversationSheet extends StatelessWidget {
-  final AppColorScheme s;
   final String title;
   final VoidCallback onConfirm;
   const _DeleteConversationSheet({
-    required this.s,
     required this.title,
     required this.onConfirm,
   });
 
   @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Text(
-                  'Eliminar "$title"?',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: s.onSurface),
-                ),
-                const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: 'Cancelar',
-                      filled: false,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: 'Eliminar',
-                      filled: true,
-                      onTap: onConfirm,
-                    ),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
-class _SheetActionButton extends StatefulWidget {
-  final AppColorScheme s;
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-  const _SheetActionButton(
-      {required this.s,
-      required this.label,
-      required this.filled,
-      required this.onTap});
-  @override State<_SheetActionButton> createState() => _SheetActionButtonState();
-}
-
-class _SheetActionButtonState extends State<_SheetActionButton> {
-  bool _p = false;
-
-  @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
-      child: AnimatedScale(
-        scale: _p ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.filled ? s.error : s.hover,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            widget.label,
+    final s = AppTheme.of(context);
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Eliminar "$title"?',
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: widget.filled ? s.onError : s.onSurface,
+              fontSize: kTypeBody,
+              fontWeight: FontWeight.w500,
+              color: s.onSurface,
             ),
           ),
-        ),
+          SizedBox(height: kSpaceXL),
+          Row(
+            children: [
+              Expanded(
+                child: FluentButton(
+                  label: 'Cancelar',
+                  onTap: () => Navigator.pop(context),
+                  style: FluentButtonStyle.secondary,
+                ),
+              ),
+              SizedBox(width: kSpaceS + kSpaceXXS),
+              Expanded(
+                child: FluentButton(
+                  label: 'Eliminar',
+                  onTap: onConfirm,
+                  style: FluentButtonStyle.destructive,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
 Future<void> showRenameSheet(
-  BuildContext context,
-  AppColorScheme s, {
+  BuildContext context, {
   required String currentTitle,
   required ValueChanged<String> onConfirm,
   String title = 'Renomear conversa',
   String hint = 'Título da conversa',
 }) {
-  final ctrl = TextEditingController(text: currentTitle);
-  return showModalBottomSheet(
+  return showFluentBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Text(title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  style: TextStyle(fontSize: 15, color: s.onSurface),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: hint,
-                    hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-                    filled: true,
-                    fillColor: s.hover,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                  onSubmitted: (v) {
-                    Navigator.pop(ctx);
-                    onConfirm(v.trim());
-                  },
-                ),
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    onConfirm(ctrl.text.trim());
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: s.primary,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text('Confirmar',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    builder: (ctx) => _RenameSheet(
+      currentTitle: currentTitle,
+      onConfirm: onConfirm,
+      title: title,
+      hint: hint,
     ),
   );
+}
+
+class _RenameSheet extends StatefulWidget {
+  final String currentTitle;
+  final ValueChanged<String> onConfirm;
+  final String title;
+  final String hint;
+  const _RenameSheet({
+    required this.currentTitle,
+    required this.onConfirm,
+    required this.title,
+    required this.hint,
+  });
+  @override
+  State<_RenameSheet> createState() => _RenameSheetState();
+}
+
+class _RenameSheetState extends State<_RenameSheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.currentTitle);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.title,
+            style: TextStyle(
+              fontSize: kTypeBody,
+              fontWeight: FontWeight.w600,
+              color: s.onSurface,
+            ),
+          ),
+          SizedBox(height: kSpaceM),
+          FluentTextField(
+            controller: _ctrl,
+            autofocus: true,
+            hintText: widget.hint,
+            fillColor: s.subtleFillHover,
+            borderRadius: kRadiusXLarge,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: kSpaceL,
+              vertical: kSpaceM,
+            ),
+            onSubmitted: (v) {
+              Navigator.pop(context);
+              widget.onConfirm(v.trim());
+            },
+          ),
+          SizedBox(height: kSpaceL),
+          SizedBox(
+            width: double.infinity,
+            child: FluentButton(
+              label: 'Confirmar',
+              onTap: () {
+                Navigator.pop(context);
+                widget.onConfirm(_ctrl.text.trim());
+              },
+              style: FluentButtonStyle.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1027,7 +1042,8 @@ class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onOpenSettings;
   const _AccountPill({required this.s, required this.onOpenSettings});
-  @override State<_AccountPill> createState() => _AccountPillState();
+  @override
+  State<_AccountPill> createState() => _AccountPillState();
 }
 
 class _AccountPillState extends State<_AccountPill> {
@@ -1055,18 +1071,26 @@ class _AccountPillState extends State<_AccountPill> {
     required double size,
     required double fontSize,
   }) {
-    final fallback = Text(initial,
-        style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: fontSize));
+    final fallback = Text(
+      initial,
+      style: TextStyle(
+        color: s.onPrimary,
+        fontWeight: FontWeight.w700,
+        fontSize: fontSize,
+      ),
+    );
 
     if (avatar == null || avatar.isEmpty) return fallback;
 
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
       return Image.network(
         avatar,
-        width: size, height: size,
+        width: size,
+        height: size,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => fallback,
-        loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
+        loadingBuilder: (_, child, progress) =>
+            progress == null ? child : fallback,
       );
     }
 
@@ -1074,7 +1098,8 @@ class _AccountPillState extends State<_AccountPill> {
     if (bytes == null) return fallback;
     return Image.memory(
       bytes,
-      width: size, height: size,
+      width: size,
+      height: size,
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => fallback,
     );
@@ -1082,7 +1107,7 @@ class _AccountPillState extends State<_AccountPill> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
+    final s = AppTheme.of(context);
     final user = authController.user;
     final name = user?.name ?? 'Utilizador';
     final avatar = user?.avatar;
@@ -1091,47 +1116,70 @@ class _AccountPillState extends State<_AccountPill> {
     return Container(
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(kRadiusCircle),
         boxShadow: s.cardShadow,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      child: Row(children: [
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown:   (_) => setState(() => _p = true),
-            onTapCancel: ()  => setState(() => _p = false),
-            onTapUp:     (_) => setState(() => _p = false),
-            onTap: widget.onOpenSettings,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 6, vertical: 4),
-              decoration: BoxDecoration(
-                color: _p ? s.hover : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+      padding: EdgeInsets.symmetric(
+        horizontal: kSpaceXS,
+        vertical: kSpaceXS,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (_) => setState(() => _p = true),
+              onTapCancel: () => setState(() => _p = false),
+              onTapUp: (_) => setState(() => _p = false),
+              onTap: widget.onOpenSettings,
+              child: AnimatedContainer(
+                duration: kDurationFast,
+                padding: EdgeInsets.symmetric(
+                  horizontal: kSpaceXS + kSpaceXXS,
+                  vertical: kSpaceXS,
+                ),
+                decoration: BoxDecoration(
+                  color: _p ? s.subtleFillHover : Colors.transparent,
+                  borderRadius: BorderRadius.circular(kRadiusCircle),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: s.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _buildAvatarContent(
+                        s,
+                        avatar,
+                        initial,
+                        size: 32,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(width: kSpaceS + kSpaceXXS),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: TextStyle(fontSize: kTypeBody, color: s.onSurface),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(children: [
-                Container(
-                  width: 32, height: 32,
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                      color: s.primary, shape: BoxShape.circle),
-                  child: _buildAvatarContent(s, avatar, initial, size: 32, fontSize: 14),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(name,
-                      style: TextStyle(fontSize: 14, color: s.onSurface),
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ]),
             ),
           ),
-        ),
-        _AccountQuickMenuButton(s: s, onOpenSettings: widget.onOpenSettings),
-      ]),
+          _AccountQuickMenuButton(
+            s: s,
+            onOpenSettings: widget.onOpenSettings,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1139,8 +1187,10 @@ class _AccountPillState extends State<_AccountPill> {
 class _AccountQuickMenuButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onOpenSettings;
-  const _AccountQuickMenuButton(
-      {required this.s, required this.onOpenSettings});
+  const _AccountQuickMenuButton({
+    required this.s,
+    required this.onOpenSettings,
+  });
   @override
   State<_AccountQuickMenuButton> createState() =>
       _AccountQuickMenuButtonState();
@@ -1156,90 +1206,102 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
   void initState() {
     super.initState();
     _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+      vsync: this,
+      duration: kDurationNormal,
+    );
   }
 
   @override
-  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
+  void dispose() {
+    _ac.dispose();
+    _ov?.remove();
+    super.dispose();
+  }
 
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
     final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
-    final sz  = box.size;
+    final sz = box.size;
     _ac.forward(from: 0);
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
-      return Stack(children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: _close,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.transparent),
-          ),
-        ),
-        Positioned(
-          bottom: MediaQuery.of(ctx).size.height - off.dy + 6,
-          left: off.dx + sz.width - 220,
-          child: AnimatedBuilder(
-            animation: _ac,
-            builder: (_, child) => Opacity(
-              opacity: CurvedAnimation(
-                      parent: _ac,
-                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                  .value,
-              child: Transform.scale(
-                scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
-                    .value,
-                alignment: Alignment.bottomRight,
-                child: child,
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Container(
-                width: 220,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: s.floatingShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _AccountQuickOption(
-                      s: s,
-                      icon: 'theme.svg',
-                      label: s.isDark ? 'Modo claro' : 'Modo escuro',
-                      onTap: () { appTheme.toggleDark(); _close(); },
-                    ),
-                    _AccountQuickOption(
-                      s: s,
-                      icon: 'settings.svg',
-                      label: 'Definições',
-                      onTap: () { widget.onOpenSettings(); _close(); },
-                    ),
-                    _AccountQuickOption(
-                      s: s,
-                      icon: 'logout.svg',
-                      label: 'Terminar sessão',
-                      destructive: true,
-                      onTap: () {
-                        _close();
-                        authController.logout();
-                      },
-                    ),
-                  ],
-                ),
-              ),
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _close,
+              behavior: HitTestBehavior.opaque,
+              child: Container(color: Colors.transparent),
             ),
           ),
-        ),
-      ]);
+          Positioned(
+            bottom: MediaQuery.of(ctx).size.height - off.dy + 6,
+            left: off.dx + sz.width - 220,
+            child: AnimatedBuilder(
+              animation: _ac,
+              builder: (_, child) => Opacity(
+                opacity: CurvedAnimation(
+                  parent: _ac,
+                  curve: const Interval(0, 0.5, curve: Curves.easeOut),
+                ).value,
+                child: Transform.scale(
+                  scale: Tween(begin: 0.92, end: 1.0)
+                      .animate(
+                        CurvedAnimation(parent: _ac, curve: kCupertinoOut),
+                      )
+                      .value,
+                  alignment: Alignment.bottomRight,
+                  child: child,
+                ),
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: SizedBox(
+                  width: 220,
+                  child: FluentPopupContainer(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _AccountQuickOption(
+                          s: s,
+                          icon: 'theme.svg',
+                          label: s.isDark ? 'Modo claro' : 'Modo escuro',
+                          onTap: () {
+                            appTheme.toggleDark();
+                            _close();
+                          },
+                        ),
+                        _AccountQuickOption(
+                          s: s,
+                          icon: 'settings.svg',
+                          label: 'Definições',
+                          onTap: () {
+                            widget.onOpenSettings();
+                            _close();
+                          },
+                        ),
+                        _AccountQuickOption(
+                          s: s,
+                          icon: 'logout.svg',
+                          label: 'Terminar sessão',
+                          destructive: true,
+                          onTap: () {
+                            _close();
+                            authController.logout();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
     });
     Overlay.of(context).insert(_ov!);
     setState(() {});
@@ -1254,23 +1316,29 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: _anchorKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: IgnorePointer(
-          child: Container(
-            width: 36, height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: widget.s.hover,
-              shape: BoxShape.circle,
-            ),
-            child: AppIcon('more_filled.svg',
-                color: widget.s.onSurfaceVariant, size: 18),
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: _anchorKey,
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggle,
+      child: IgnorePointer(
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.s.subtleFillHover,
+            shape: BoxShape.circle,
+          ),
+          child: AppIcon(
+            'more_filled.svg',
+            color: widget.s.onSurfaceVariant,
+            size: 18,
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _AccountQuickOption extends StatefulWidget {
@@ -1286,38 +1354,47 @@ class _AccountQuickOption extends StatefulWidget {
     required this.onTap,
     this.destructive = false,
   });
-  @override State<_AccountQuickOption> createState() => _AccountQuickOptionState();
+  @override
+  State<_AccountQuickOption> createState() => _AccountQuickOptionState();
 }
 
 class _AccountQuickOptionState extends State<_AccountQuickOption> {
   bool _h = false;
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     final color = widget.destructive ? s.error : s.onSurface;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+        duration: kDurationFast,
+        padding: EdgeInsets.symmetric(
+          horizontal: kSpaceM,
+          vertical: kSpaceS + kSpaceXXS,
         ),
-        child: Row(children: [
-          AppIcon(widget.icon, color: color, size: 18),
-          const SizedBox(width: 10),
-          Text(widget.label,
+        decoration: BoxDecoration(
+          color: _h ? s.subtleFillHover : Colors.transparent,
+          borderRadius: BorderRadius.circular(kRadiusCircle),
+        ),
+        child: Row(
+          children: [
+            AppIcon(widget.icon, color: color, size: 18),
+            SizedBox(width: kSpaceS + kSpaceXXS),
+            Text(
+              widget.label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: kTypeBody,
                 color: color,
                 fontWeight: FontWeight.normal,
-              )),
-        ]),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

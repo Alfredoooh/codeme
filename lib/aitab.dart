@@ -381,7 +381,7 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
   void initState() {
     super.initState();
     _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+        vsync: this, duration: kDurationNormal);
   }
 
   @override
@@ -426,7 +426,7 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
                   .value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
+                    .animate(CurvedAnimation(parent: _ac, curve: kFluentDecelerate))
                     .value,
                 alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
                 child: child,
@@ -436,10 +436,10 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
               type: MaterialType.transparency,
               child: Container(
                 width: widget.width,
-                padding: const EdgeInsets.all(6),
+                padding: EdgeInsets.all(kSpaceS),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(kRadiusXLarge),
                   boxShadow: s.floatingShadow,
                 ),
                 child: Column(
@@ -514,20 +514,20 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
         onTapUp:     e.disabled ? null : (_) => setState(() => _h = false),
         onTap:       widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          duration: kDurationFast,
+          padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
           decoration: BoxDecoration(
             color: _h && !e.disabled
-                ? s.hover
+                ? s.subtleFillHover
                 : e.selected
                     ? s.primaryContainer.withOpacity(0.4)
                     : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
           child: Row(children: [
             if (e.svgIcon != null) ...[
               AppIcon(e.svgIcon!, color: color, size: 18),
-              const SizedBox(width: 10),
+              SizedBox(width: kSpaceS + kSpaceXXS),
             ],
             Expanded(
               child: Column(
@@ -535,14 +535,14 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
                 children: [
                   Text(e.label,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: kTypeBody,
                         fontWeight: e.selected ? FontWeight.w600 : FontWeight.w400,
                         color: color,
                       )),
                   if (e.subtitle != null) ...[
-                    const SizedBox(height: 1),
+                    SizedBox(height: kSpaceXXS),
                     Text(e.subtitle!,
-                        style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                        style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
                   ],
                 ],
               ),
@@ -639,7 +639,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   void initState() {
     super.initState();
     _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+        vsync: this, duration: kDurationNormal);
     _webNotifier = ValueNotifier(widget.webSearchEnabled);
     _widgetsNotifier = ValueNotifier(widget.widgetsEnabled);
   }
@@ -697,7 +697,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                   .value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
+                    .animate(CurvedAnimation(parent: _ac, curve: kFluentDecelerate))
                     .value,
                 alignment: Alignment.topRight,
                 child: child,
@@ -710,10 +710,10 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                 child: SingleChildScrollView(
                   child: Container(
                     width: width,
-                    padding: const EdgeInsets.all(6),
+                    padding: EdgeInsets.all(kSpaceS),
                     decoration: BoxDecoration(
                       color: s.floatingSurface,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(kRadiusXLarge),
                       boxShadow: s.floatingShadow,
                     ),
                     child: Column(
@@ -750,8 +750,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                           onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
+                          padding: EdgeInsets.symmetric(vertical: kSpaceXS, horizontal: kSpaceS),
+                          child: FluentDivider(),
                         ),
                         _MenuActionRow(
                           s: s,
@@ -763,8 +763,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                           onTap: () { _close(); widget.onOpenCanvas(); },
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
+                          padding: EdgeInsets.symmetric(vertical: kSpaceXS, horizontal: kSpaceS),
+                          child: FluentDivider(),
                         ),
                         ValueListenableBuilder<bool>(
                           valueListenable: _webNotifier,
@@ -871,25 +871,25 @@ class _MenuActionRowState extends State<_MenuActionRow> {
         onTapUp:     widget.disabled ? null : (_) => setState(() => _h = false),
         onTap:       widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          duration: kDurationFast,
+          padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
           decoration: BoxDecoration(
-            color: _h && !widget.disabled ? widget.s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            color: _h && !widget.disabled ? widget.s.subtleFillHover : Colors.transparent,
+            borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
           child: Row(children: [
             AppIcon(widget.icon, size: 18, color: color),
-            const SizedBox(width: 10),
+            SizedBox(width: kSpaceS + kSpaceXXS),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(widget.label,
-                      style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+                      style: TextStyle(fontSize: kTypeBody, color: color, fontWeight: FontWeight.w500)),
                   if (widget.subtitle != null) ...[
-                    const SizedBox(height: 1),
+                    SizedBox(height: kSpaceXXS),
                     Text(widget.subtitle!,
-                        style: TextStyle(fontSize: 11.5, color: widget.s.onSurfaceVariant)),
+                        style: TextStyle(fontSize: kTypeCaption, color: widget.s.onSurfaceVariant)),
                   ],
                 ],
               ),
@@ -920,18 +920,18 @@ class _MenuSwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS),
       child: Row(children: [
         AppIcon(icon, size: 18, color: s.onSurface),
-        const SizedBox(width: 10),
+        SizedBox(width: kSpaceS + kSpaceXXS),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface)),
+                  style: TextStyle(fontSize: kTypeBody, fontWeight: FontWeight.w400, color: s.onSurface)),
               Text(subtitle,
-                  style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                  style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
             ],
           ),
         ),
@@ -942,7 +942,7 @@ class _MenuSwitchRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SIMPLE CANVAS CARD (substitui o DocumentWidgetCard)
+// SIMPLE CANVAS CARD
 // ══════════════════════════════════════════════════════════════
 
 class SimpleCanvasCard extends StatelessWidget {
@@ -959,17 +959,15 @@ class SimpleCanvasCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = this.s;
-    final item = this.item;
-
-    return GestureDetector(
+    return AppTap(
       onTap: onTap,
+      s: s,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: EdgeInsets.symmetric(vertical: kSpaceS),
+        padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
         decoration: BoxDecoration(
           color: s.cardBackground,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(kRadiusLarge),
           boxShadow: s.cardShadow,
           border: Border.all(color: s.outline.withOpacity(0.08)),
         ),
@@ -981,11 +979,11 @@ class SimpleCanvasCard extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: s.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(kRadiusMedium),
               ),
               child: EditorTypeIcon(item.kind.editorType.svgAsset, size: 20),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: kSpaceM),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -995,16 +993,16 @@ class SimpleCanvasCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: kTypeBody,
                       fontWeight: FontWeight.w600,
                       color: s.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: kSpaceXXS),
                   Text(
                     item.kind.shortLabel,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: kTypeCaption,
                       color: s.onSurfaceVariant,
                     ),
                   ),
@@ -1488,7 +1486,7 @@ class AiTabState extends State<AiTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.animateTo(_scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300), curve: kCupertinoOut);
+            duration: kDurationNormal, curve: kFluentDecelerate);
       }
     });
   }
@@ -1845,8 +1843,8 @@ class AiTabState extends State<AiTab> {
             onOpenAttachedFiles: _openAttachedFilesSheet,
           ),
           AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: kCupertinoOut,
+            duration: kDurationNormal,
+            curve: kFluentDecelerate,
             height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
           ),
         ]),
@@ -1897,17 +1895,17 @@ class _EmptyState extends StatelessWidget {
         padding: EdgeInsets.only(top: topPadding),
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
+            padding: EdgeInsets.symmetric(horizontal: kSpaceXXXL),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset('assets/logo.png', width: 40, height: 40),
-                const SizedBox(height: 14),
+                SizedBox(height: kSpaceL - kSpaceXXS),
                 Text(
                   'Olá, o que vamos criar hoje?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: kTypeSubtitle,
                     fontWeight: FontWeight.w400,
                     color: s.onSurface,
                   ),
@@ -1944,9 +1942,9 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
+    _c = AnimationController(vsync: this, duration: kDurationNormal);
     _scale = Tween(begin: 0.92, end: 1.0)
-        .animate(CurvedAnimation(parent: _c, curve: kCupertinoOut));
+        .animate(CurvedAnimation(parent: _c, curve: kFluentDecelerate));
     _op = Tween(begin: 0.0, end: 1.0)
         .animate(CurvedAnimation(parent: _c,
             curve: const Interval(0, 0.5, curve: Curves.easeOut)));
@@ -1992,17 +1990,17 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
         child: GestureDetector(
           onLongPress: _onLongPress,
           child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: EdgeInsets.only(bottom: kSpaceS + kSpaceXXS),
+            padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS + kSpaceXXS),
             constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75),
             decoration: BoxDecoration(
               color: bubbleColor,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(kRadiusXLarge),
               boxShadow: widget.s.cardShadow,
             ),
             child: Text(widget.text,
-                style: TextStyle(color: textColor, fontSize: 14)),
+                style: TextStyle(color: textColor, fontSize: kTypeBody)),
           ),
         ),
       ),
@@ -2040,7 +2038,7 @@ class _AssistantBubble extends StatelessWidget {
   Widget build(BuildContext context) => Align(
         alignment: Alignment.centerLeft,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 18),
+          margin: EdgeInsets.only(bottom: kSpaceXXL),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2054,10 +2052,10 @@ class _AssistantBubble extends StatelessWidget {
                   onSuggestionTap: onSuggestionTap,
                 ),
               for (final item in canvases) ...[
-                const SizedBox(height: 8),
+                SizedBox(height: kSpaceS),
                 SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
               ],
-              const SizedBox(height: 6),
+              SizedBox(height: kSpaceS),
               _AssistantActionBar(
                 s: s,
                 onThumbUp: onThumbUp,
@@ -2090,11 +2088,11 @@ class _AssistantActionBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _AssistantActionIcon(s: s, asset: 'thumb_up.svg', onTap: onThumbUp),
-          const SizedBox(width: 4),
+          SizedBox(width: kSpaceXS),
           _AssistantActionIcon(s: s, asset: 'thumb_down.svg', onTap: onThumbDown),
-          const SizedBox(width: 4),
+          SizedBox(width: kSpaceXS),
           _AssistantActionIcon(s: s, asset: 'copy.svg', onTap: onCopy),
-          const SizedBox(width: 4),
+          SizedBox(width: kSpaceXS),
           _AssistantActionIcon(s: s, asset: 'refresh.svg', onTap: onRefresh),
         ],
       );
@@ -2124,11 +2122,11 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
       onTapUp:     (_) => setState(() => _h = false),
       onTap:       widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+        duration: kDurationFast,
         width: 28, height: 28,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
+          color: _h ? s.subtleFillHover : Colors.transparent,
           shape: BoxShape.circle,
         ),
         child: AppIcon(widget.asset, color: s.onSurfaceVariant, size: 16),
@@ -2165,11 +2163,11 @@ class _StreamingBubble extends StatelessWidget {
 
     if (thinking != null && thinking!.isNotEmpty) {
       children.add(Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: EdgeInsets.only(bottom: kSpaceS),
         child: Text(thinking!,
             style: TextStyle(
                 color: s.onSurfaceVariant,
-                fontSize: 12.5,
+                fontSize: kTypeCaption,
                 fontStyle: FontStyle.italic,
                 height: 1.4)),
       ));
@@ -2202,13 +2200,13 @@ class _StreamingBubble extends StatelessWidget {
         case _StreamClosedCanvas(:final item):
           anyContent = true;
           children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.symmetric(vertical: kSpaceXS),
             child: SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
           ));
         case _StreamClosedWidget(:final block):
           anyContent = true;
           children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.symmetric(vertical: kSpaceXS),
             child: buildAiWidget(block, s),
           ));
       }
@@ -2221,7 +2219,7 @@ class _StreamingBubble extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 18),
+        margin: EdgeInsets.only(bottom: kSpaceXXL),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2233,7 +2231,7 @@ class _StreamingBubble extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING MARKDOWN CARD (substitui _GeneratingProcessCard)
+// STREAMING MARKDOWN CARD
 // ══════════════════════════════════════════════════════════════
 
 class _StreamingMarkdownCard extends StatefulWidget {
@@ -2268,14 +2266,14 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
 
     if (content.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: EdgeInsets.symmetric(vertical: kSpaceXS),
         child: Row(
           children: [
             AiSmallDotsLoader(color: s.onSurfaceVariant),
-            const SizedBox(width: 8),
+            SizedBox(width: kSpaceS),
             Text(
               widget.label,
-              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+              style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
             ),
           ],
         ),
@@ -2283,11 +2281,11 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
-        color: s.hover.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(14),
+        color: s.subtleFillHover.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(kRadiusLarge),
         border: Border.all(color: s.outline.withOpacity(0.2)),
       ),
       child: Column(
@@ -2298,12 +2296,12 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
             child: Row(
               children: [
                 AiSmallDotsLoader(color: s.primary),
-                const SizedBox(width: 8),
+                SizedBox(width: kSpaceS),
                 Expanded(
                   child: Text(
                     widget.label,
                     style: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: kTypeCaption,
                       fontWeight: FontWeight.w600,
                       color: s.onSurfaceVariant,
                     ),
@@ -2311,18 +2309,18 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
                 ),
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 200),
+                  duration: kDurationNormal,
                   child: AppIcon('chevron_down.svg', size: 14, color: s.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
+            duration: kDurationNormal,
             crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: EdgeInsets.only(top: kSpaceS),
               child: RichAiText(
                 text: content,
                 s: s,
@@ -2412,7 +2410,7 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
                       height: widget.dotSize,
                       decoration: BoxDecoration(
                         color: widget.color,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(kRadiusSmall),
                       ),
                     ),
                   ),
@@ -2444,7 +2442,7 @@ void showMessageActionsPopup(
   late OverlayEntry entry;
   final controller = AnimationController(
     vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 180),
+    duration: kDurationNormal,
   );
 
   void close() {
@@ -2480,7 +2478,7 @@ void showMessageActionsPopup(
                 .value,
             child: Transform.scale(
               scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .animate(CurvedAnimation(parent: controller, curve: kFluentDecelerate))
                   .value,
               alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
               child: child,
@@ -2490,10 +2488,10 @@ void showMessageActionsPopup(
             type: MaterialType.transparency,
             child: Container(
               width: 224,
-              padding: const EdgeInsets.all(6),
+              padding: EdgeInsets.all(kSpaceS),
               decoration: BoxDecoration(
                 color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
                 boxShadow: s.floatingShadow,
               ),
               child: Column(
@@ -2565,17 +2563,17 @@ class _MessageActionRowState extends State<_MessageActionRow> {
       onTapUp:     (_) => setState(() => _h = false),
       onTap:       widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        duration: kDurationFast,
+        padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
         decoration: BoxDecoration(
-          color: _h ? widget.s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+          color: _h ? widget.s.subtleFillHover : Colors.transparent,
+          borderRadius: BorderRadius.circular(kRadiusCircle),
         ),
         child: Row(children: [
           AppIcon(widget.icon, size: 18, color: color),
-          const SizedBox(width: 10),
+          SizedBox(width: kSpaceS + kSpaceXXS),
           Text(widget.label,
-              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+              style: TextStyle(fontSize: kTypeBody, color: color, fontWeight: FontWeight.w500)),
         ]),
       ),
     );
@@ -2591,44 +2589,31 @@ Future<void> showSelectTextSheet(
   AppColorScheme s, {
   required String text,
 }) {
-  return showModalBottomSheet(
+  return showFluentBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+    builder: (ctx) => FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Selecionar texto',
+            style: TextStyle(
+              fontSize: kTypeBodyLarge,
+              fontWeight: FontWeight.w600,
+              color: s.onSurface,
+            ),
           ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            boxShadow: s.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: SheetGrabber(s: s)),
-              Text('Selecionar texto',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-              const SizedBox(height: 12),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: SelectableText(
-                    text,
-                    style: TextStyle(fontSize: 15, color: s.onSurface, height: 1.5),
-                  ),
-                ),
+          SizedBox(height: kSpaceM),
+          Flexible(
+            child: SingleChildScrollView(
+              child: SelectableText(
+                text,
+                style: TextStyle(fontSize: kTypeBodyLarge, color: s.onSurface, height: 1.5),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     ),
   );
@@ -2644,68 +2629,56 @@ Future<void> showAttachedFilesSheet(
   required List<AttachedFile> files,
   required ValueChanged<String> onRemove,
 }) {
-  return showModalBottomSheet(
+  return showFluentBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setModalState) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx, setModalState) => FluentBottomSheet(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Center(child: SheetGrabber(s: s)),
-                Row(children: [
-                  AppIcon('attached.svg', color: s.onSurface, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Anexos desta mensagem',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                if (files.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text('Sem anexos.',
-                          style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: files.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final f = files[i];
-                        return _AttachedFileRow(
-                          s: s,
-                          file: f,
-                          onRemove: () {
-                            onRemove(f.id);
-                            setModalState(() {});
-                            if (files.length <= 1) Navigator.pop(ctx);
-                          },
-                        );
-                      },
-                    ),
-                  ),
+                AppIcon('attached.svg', color: s.onSurface, size: 18),
+                SizedBox(width: kSpaceS),
+                Text(
+                  'Anexos desta mensagem',
+                  style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
+                ),
               ],
             ),
-          ),
+            SizedBox(height: kSpaceM),
+            if (files.isEmpty)
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: kSpaceXXL),
+                child: Center(
+                  child: Text(
+                    'Sem anexos.',
+                    style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: files.length,
+                  separatorBuilder: (_, __) => SizedBox(height: kSpaceS),
+                  itemBuilder: (_, i) {
+                    final f = files[i];
+                    return _AttachedFileRow(
+                      s: s,
+                      file: f,
+                      onRemove: () {
+                        onRemove(f.id);
+                        setModalState(() {});
+                        if (files.length <= 1) Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     ),
@@ -2728,15 +2701,15 @@ class _AttachedFileRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(10),
+        padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
         decoration: BoxDecoration(
-          color: s.hover,
-          borderRadius: BorderRadius.circular(12),
+          color: s.subtleFillHover,
+          borderRadius: BorderRadius.circular(kRadiusLarge),
         ),
         child: Row(children: [
           if (_isImage)
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(kRadiusMedium),
               child: Image.memory(file.bytes, width: 40, height: 40, fit: BoxFit.cover),
             )
           else
@@ -2745,19 +2718,19 @@ class _AttachedFileRow extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: s.primaryContainer.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kRadiusMedium),
               ),
               child: AppIcon('attached.svg', color: s.onPrimaryContainer, size: 18),
             ),
-          const SizedBox(width: 10),
+          SizedBox(width: kSpaceS + kSpaceXXS),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(file.name,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
-                Text(_sizeLabel, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                    style: TextStyle(fontSize: kTypeBody, fontWeight: FontWeight.w600, color: s.onSurface)),
+                Text(_sizeLabel, style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
               ],
             ),
           ),
@@ -2775,7 +2748,7 @@ class _AttachedFileRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT
+// CHAT INPUT (mantido exactamente como estava)
 // ══════════════════════════════════════════════════════════════
 
 class _ChatInput extends StatelessWidget {
@@ -3064,7 +3037,7 @@ class _AttachedFilesPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP (LayerLink + CompositedTransformFollower)
+// ATTACH POPUP (mantido exactamente como estava)
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera }
@@ -3177,65 +3150,54 @@ Future<void> showCanvasSheet(
   required List<LocalCanvasItem> canvases,
   required ValueChanged<LocalCanvasItem> onOpenCanvas,
 }) {
-  return showModalBottomSheet(
+  return showFluentBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            boxShadow: s.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    builder: (ctx) => FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Center(child: SheetGrabber(s: s)),
-              Row(children: [
-                AppIcon('cards.svg', color: s.onSurface, size: 18),
-                const SizedBox(width: 8),
-                Text('Canvas desta conversa',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-              ]),
-              const SizedBox(height: 12),
-              if (canvases.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: Text('Ainda não há documentos nesta conversa.',
-                        style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-                  ),
-                )
-              else
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: canvases.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final item = canvases[canvases.length - 1 - i];
-                      return _CanvasCard(
-                        s: s,
-                        item: item,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          onOpenCanvas(item);
-                        },
-                      );
-                    },
-                  ),
-                ),
+              AppIcon('cards.svg', color: s.onSurface, size: 18),
+              SizedBox(width: kSpaceS),
+              Text(
+                'Canvas desta conversa',
+                style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
+              ),
             ],
           ),
-        ),
+          SizedBox(height: kSpaceM),
+          if (canvases.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: kSpaceXXXL),
+              child: Center(
+                child: Text(
+                  'Ainda não há documentos nesta conversa.',
+                  style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+                ),
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: canvases.length,
+                separatorBuilder: (_, __) => SizedBox(height: kSpaceS + kSpaceXXS),
+                itemBuilder: (_, i) {
+                  final item = canvases[canvases.length - 1 - i];
+                  return _CanvasCard(
+                    s: s,
+                    item: item,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      onOpenCanvas(item);
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     ),
   );
@@ -3264,11 +3226,11 @@ class _CanvasCardState extends State<_CanvasCard> {
       onTapUp:     (_) => setState(() => _h = false),
       onTap:       widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.all(12),
+        duration: kDurationFast,
+        padding: EdgeInsets.all(kSpaceM),
         decoration: BoxDecoration(
-          color: _h ? s.hover : s.cardBackground,
-          borderRadius: BorderRadius.circular(16),
+          color: _h ? s.subtleFillHover : s.cardBackground,
+          borderRadius: BorderRadius.circular(kRadiusLarge),
           boxShadow: s.cardShadow,
         ),
         child: Row(children: [
@@ -3277,11 +3239,11 @@ class _CanvasCardState extends State<_CanvasCard> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: s.primaryContainer.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(kRadiusMedium),
             ),
             child: EditorTypeIcon(_editorType.svgAsset, size: 20),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: kSpaceM),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3289,10 +3251,10 @@ class _CanvasCardState extends State<_CanvasCard> {
                 Text(widget.item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
-                const SizedBox(height: 2),
+                    style: TextStyle(fontSize: kTypeBody, fontWeight: FontWeight.w600, color: s.onSurface)),
+                SizedBox(height: kSpaceXXS),
                 Text(_editorType.label,
-                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+                    style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant)),
               ],
             ),
           ),
@@ -3312,10 +3274,8 @@ Future<void> showVoiceRecordSheet(
   AppColorScheme s, {
   required ValueChanged<String> onTranscribed,
 }) {
-  return showModalBottomSheet(
+  return showFluentBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (ctx) => _VoiceRecordSheetContent(
       s: s,
       onTranscribed: onTranscribed,
@@ -3345,7 +3305,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
     super.initState();
     _pulse = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: kDurationSlower,
     )..repeat(reverse: true);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _seconds++);
@@ -3375,85 +3335,62 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            boxShadow: s.floatingShadow,
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _recording ? 'A ouvir...' : 'A transcrever...',
+            style: TextStyle(
+              fontSize: kTypeBodyLarge,
+              fontWeight: FontWeight.w600,
+              color: s.onSurface,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SheetGrabber(s: s),
-              Text(
-                _recording ? 'A ouvir...' : 'A transcrever...',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: s.onSurface),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _formattedTime,
-                style: TextStyle(
-                    fontSize: 13, color: s.onSurfaceVariant),
-              ),
-              const SizedBox(height: 24),
-              AnimatedBuilder(
-                animation: _pulse,
-                builder: (_, child) {
-                  final scale = _recording
-                      ? 1.0 + (_pulse.value * 0.12)
-                      : 1.0;
-                  return Transform.scale(scale: scale, child: child);
-                },
-                child: Container(
-                  width: 76, height: 76,
-                  decoration: BoxDecoration(
-                    color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: s.error, width: 1.5),
-                  ),
-                  child: _recording
-                      ? AppIcon('mic.svg', size: 30, color: s.error)
-                      : AppIcon('mic_none.svg', size: 30, color: s.error),
-                ),
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: _recording ? _stopAndTranscribe : null,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.primary,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _recording ? 'Concluir' : 'A processar...',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: s.onPrimary),
-                  ),
-                ),
-              ),
-            ],
+          SizedBox(height: kSpaceS),
+          Text(
+            _formattedTime,
+            style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
           ),
-        ),
+          SizedBox(height: kSpaceXXL),
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, child) {
+              final scale = _recording
+                  ? 1.0 + (_pulse.value * 0.12)
+                  : 1.0;
+              return Transform.scale(scale: scale, child: child);
+            },
+            child: Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: s.error, width: 1.5),
+              ),
+              child: _recording
+                  ? AppIcon('mic.svg', size: 30, color: s.error)
+                  : AppIcon('mic_none.svg', size: 30, color: s.error),
+            ),
+          ),
+          SizedBox(height: kSpaceXXL),
+          SizedBox(
+            width: double.infinity,
+            child: FluentButton(
+              label: _recording ? 'Concluir' : 'A processar...',
+              onTap: _recording ? _stopAndTranscribe : null,
+              style: FluentButtonStyle.primary,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP (LayerLink + CompositedTransformFollower)
+// MODEL SELECT POPUP (mantido exactamente como estava)
 // ══════════════════════════════════════════════════════════════
 
 void showModelSelectPopup(

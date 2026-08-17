@@ -101,7 +101,8 @@ class TemplatesTab extends StatefulWidget {
   State<TemplatesTab> createState() => _TemplatesTabState();
 }
 
-class _TemplatesTabState extends State<TemplatesTab> {
+class _TemplatesTabState extends State<TemplatesTab>
+    with ThemeReactive<TemplatesTab> {
   String _category = 'Todos';
   int _idSeq = 0;
 
@@ -127,58 +128,86 @@ class _TemplatesTabState extends State<TemplatesTab> {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final items = _filtered;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-        child: Text('Templates',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            kSpaceXL,
+            kSpaceL,
+            kSpaceXL,
+            kSpaceM,
+          ),
+          child: Text(
+            'Templates',
             style: TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w700, color: s.onSurface)),
-      ),
-      SizedBox(
-        height: 36,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: _categories.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (_, i) => GestureDetector(
-            onTap: () => setState(() => _category = _categories[i]),
-            child: _CategoryChip(
-              s: s,
-              label: _categories[i],
-              selected: _category == _categories[i],
+              fontSize: kTypeSubtitle,
+              fontWeight: FontWeight.w700,
+              color: s.onSurface,
             ),
           ),
         ),
-      ),
-      const SizedBox(height: 16),
-      Expanded(
-        child: items.isEmpty
-            ? Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  AppIcon('doc_text.svg', size: 48, color: s.onSurfaceVariant.withOpacity(0.35)),
-                  const SizedBox(height: 12),
-                  Text('Sem templates nesta categoria',
-                      style: TextStyle(fontSize: 15, color: s.onSurfaceVariant)),
-                ]),
-              )
-            : GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 92),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.82,
+        SizedBox(
+          height: kSpaceXXXL + kSpaceXS, // 36
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: kSpaceXL),
+            itemCount: _categories.length,
+            separatorBuilder: (_, __) => SizedBox(width: kSpaceS),
+            itemBuilder: (_, i) => FluentChip(
+              label: _categories[i],
+              selected: _category == _categories[i],
+              onTap: () => setState(() => _category = _categories[i]),
+            ),
+          ),
+        ),
+        SizedBox(height: kSpaceL),
+        Expanded(
+          child: items.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppIcon(
+                        'doc_text.svg',
+                        size: 48,
+                        color: s.onSurfaceTertiary,
+                      ),
+                      SizedBox(height: kSpaceM),
+                      Text(
+                        'Sem templates nesta categoria',
+                        style: TextStyle(
+                          fontSize: kTypeBodyLarge,
+                          color: s.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : GridView.builder(
+                  padding: EdgeInsets.fromLTRB(
+                    kSpaceL,
+                    0,
+                    kSpaceL,
+                    kSpaceXXXL + kSpaceXXXL + kSpaceXXL + kSpaceXS, // 92
+                  ),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: kSpaceM,
+                    crossAxisSpacing: kSpaceM,
+                    childAspectRatio: 0.82,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (_, i) => _TemplateCard(
+                    s: s,
+                    def: items[i],
+                    onTap: () => _openTemplate(items[i]),
+                  ),
                 ),
-                itemCount: items.length,
-                itemBuilder: (_, i) => _TemplateCard(
-                  s: s,
-                  def: items[i],
-                  onTap: () => _openTemplate(items[i]),
-                ),
-              ),
-      ),
-    ]);
+        ),
+      ],
+    );
   }
 }
 
@@ -186,8 +215,13 @@ class _TemplateCard extends StatefulWidget {
   final AppColorScheme s;
   final TemplateDef def;
   final VoidCallback onTap;
-  const _TemplateCard({required this.s, required this.def, required this.onTap});
-  @override State<_TemplateCard> createState() => _TemplateCardState();
+  const _TemplateCard({
+    required this.s,
+    required this.def,
+    required this.onTap,
+  });
+  @override
+  State<_TemplateCard> createState() => _TemplateCardState();
 }
 
 class _TemplateCardState extends State<_TemplateCard> {
@@ -198,17 +232,17 @@ class _TemplateCardState extends State<_TemplateCard> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       child: AnimatedScale(
         scale: _h ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 100),
+        duration: kDurationFast,
         child: Container(
           decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(kRadiusLarge),
             boxShadow: s.cardShadow,
           ),
           child: Column(
@@ -218,24 +252,45 @@ class _TemplateCardState extends State<_TemplateCard> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
+                    // withOpacity usado porque não existe token específico
+                    // para esta variante translúcida do primaryContainer.
                     color: s.primaryContainer.withOpacity(0.25),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(kRadiusLarge),
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: EditorTypeIcon(widget.def.iconAsset, size: 40),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                padding: EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  kSpaceS + kSpaceXXS, // 10
+                  kSpaceM,
+                  kSpaceM,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.def.title,
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
-                    const SizedBox(height: 2),
-                    Text(widget.def.category,
-                        style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                    Text(
+                      widget.def.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: kTypeBody,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface,
+                      ),
+                    ),
+                    SizedBox(height: kSpaceXXS),
+                    Text(
+                      widget.def.category,
+                      style: TextStyle(
+                        fontSize: kTypeCaption,
+                        color: s.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -245,29 +300,4 @@ class _TemplateCardState extends State<_TemplateCard> {
       ),
     );
   }
-}
-
-class _CategoryChip extends StatelessWidget {
-  final AppColorScheme s;
-  final String label;
-  final bool selected;
-  const _CategoryChip(
-      {required this.s, required this.label, required this.selected});
-
-  @override
-  Widget build(BuildContext context) => AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: kCupertinoOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? s.primary : s.outline.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-              color: selected ? s.onPrimary : s.onSurfaceVariant,
-            )),
-      );
 }

@@ -85,27 +85,28 @@ class CraftLabApp extends StatelessWidget {
 
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
-  @override State<RootShell> createState() => _RootShellState();
+  @override
+  State<RootShell> createState() => _RootShellState();
 }
 
 class _RootShellState extends State<RootShell>
     with ThemeReactive<RootShell>, SingleTickerProviderStateMixin {
   late final AnimationController _drawerCtrl = AnimationController(
     vsync: this,
-    duration: _drawerAnim,
+    duration: kDurationSlower, // 333ms, closest token to original 320ms
     value: 0.0,
   );
 
   bool get _drawerOpen => _drawerCtrl.value > 0.5;
 
-  AppTab     _tab        = AppTab.ai;
+  AppTab _tab = AppTab.ai;
   EditorType _editorType = EditorType.docs;
-  bool       _hasMessages = false;
+  bool _hasMessages = false;
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => _drawerCtrl.animateTo(1.0, curve: _drawerCurve);
-  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: _drawerCurve);
+  void _openDrawer() => _drawerCtrl.animateTo(1.0, curve: kFluentStandard);
+  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: kFluentStandard);
   void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
 
   @override
@@ -134,6 +135,7 @@ class _RootShellState extends State<RootShell>
   }
 
   void _setEditorType(EditorType t) => setState(() => _editorType = t);
+
   void _onMessageSent() {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
@@ -145,8 +147,10 @@ class _RootShellState extends State<RootShell>
   void _onConversationAction(ConversationAction action) {
     setState(() {
       _pendingConversationAction = action;
-      if (action == ConversationAction.newChat || action == ConversationAction.incognito) {
-        _hasMessages = action == ConversationAction.newChat ? false : _hasMessages;
+      if (action == ConversationAction.newChat ||
+          action == ConversationAction.incognito) {
+        _hasMessages =
+            action == ConversationAction.newChat ? false : _hasMessages;
       }
     });
   }
@@ -183,8 +187,10 @@ class _RootShellState extends State<RootShell>
 
   String get _tabTitle {
     switch (_tab) {
-      case AppTab.ai:   return '';
-      case AppTab.edit: return _editorType.label;
+      case AppTab.ai:
+        return '';
+      case AppTab.edit:
+        return _editorType.label;
     }
   }
 
@@ -196,7 +202,8 @@ class _RootShellState extends State<RootShell>
           aiTabKey: _aiTabKey,
           onFirstMessage: _onMessageSent,
           externalAction: _pendingConversationAction,
-          onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
+          onExternalActionConsumed: () =>
+              setState(() => _pendingConversationAction = null),
           initialConversationId: _pendingConversationLoad,
           onConversationLoadConsumed: _onConversationLoadConsumed,
           onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
@@ -208,8 +215,11 @@ class _RootShellState extends State<RootShell>
   }
 
   static const double _drawerWidth = 280;
-  static const Duration _drawerAnim = Duration(milliseconds: 320);
-  static const Curve _drawerCurve = Curves.easeOutCubic;
+
+  // raio do drawer: 24 é um valor de design específico não contemplado
+  // nos tokens kRadius* (máximo kRadiusXLarge=12). Mantemos como const
+  // documentada para preservar a curvatura pretendida.
+  static const double _drawerRadius = 24.0;
 
   @override
   Widget build(BuildContext context) {
@@ -221,16 +231,18 @@ class _RootShellState extends State<RootShell>
             Positioned.fill(
               top: 0,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve: kCupertinoOut,
-                switchOutCurve: kCupertinoIn,
+                duration: kDurationSlow, // original 220ms
+                switchInCurve: kFluentDecelerate,
+                switchOutCurve: kFluentAccelerate,
                 transitionBuilder: (child, anim) =>
                     FadeTransition(opacity: anim, child: child),
                 child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
               ),
             ),
             Positioned(
-              top: 0, left: 0, right: 0,
+              top: 0,
+              left: 0,
+              right: 0,
               child: AnimatedBuilder(
                 animation: _AiTabHeaderRefresh.of(context),
                 builder: (_, __) {
@@ -266,14 +278,17 @@ class _RootShellState extends State<RootShell>
               headerBackground: s.surface,
               trailing: _tab == AppTab.edit
                   ? EditTypeButton(
-                      s: s, current: _editorType, onSelect: _setEditorType)
+                      s: s,
+                      current: _editorType,
+                      onSelect: _setEditorType,
+                    )
                   : null,
             ),
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve:  kCupertinoOut,
-                switchOutCurve: kCupertinoIn,
+                duration: kDurationSlow,
+                switchInCurve: kFluentDecelerate,
+                switchOutCurve: kFluentAccelerate,
                 transitionBuilder: (child, anim) =>
                     FadeTransition(opacity: anim, child: child),
                 child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
@@ -296,7 +311,9 @@ class _RootShellState extends State<RootShell>
             // por baixo do conteúdo. Nunca se move; é revelado quando
             // o conteúdo por cima desliza para a direita.
             Positioned(
-              top: 0, bottom: 0, left: 0,
+              top: 0,
+              bottom: 0,
+              left: 0,
               width: _drawerWidth,
               child: Material(
                 color: s.surface,
@@ -312,7 +329,8 @@ class _RootShellState extends State<RootShell>
                     onOpenConversation: _onOpenConversation,
                     onNewChat: () =>
                         _onConversationAction(ConversationAction.newChat),
-                    activeConversationId: _aiTabKey.currentState?.conversationId,
+                    activeConversationId:
+                        _aiTabKey.currentState?.conversationId,
                   ),
                 ),
               ),
@@ -329,29 +347,32 @@ class _RootShellState extends State<RootShell>
               },
               onHorizontalDragUpdate: (d) {
                 final delta = d.delta.dx / _drawerWidth;
-                _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+                _drawerCtrl.value =
+                    (_drawerCtrl.value + delta).clamp(0.0, 1.0);
               },
               onHorizontalDragEnd: (d) {
                 final velocity = d.velocity.pixelsPerSecond.dx;
-                // Fling rápido decide a direção mesmo a meio do gesto;
-                // sem fling, decide pela posição (mais de metade aberto).
                 if (velocity.abs() > 300) {
                   if (velocity > 0) {
-                    _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                    _drawerCtrl.animateTo(1.0,
+                        curve: kFluentStandard, duration: kDurationSlower);
                   } else {
-                    _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                    _drawerCtrl.animateTo(0.0,
+                        curve: kFluentStandard, duration: kDurationSlower);
                   }
                 } else if (_drawerCtrl.value > 0.5) {
-                  _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                  _drawerCtrl.animateTo(1.0,
+                      curve: kFluentStandard, duration: kDurationSlower);
                 } else {
-                  _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                  _drawerCtrl.animateTo(0.0,
+                      curve: kFluentStandard, duration: kDurationSlower);
                 }
               },
               child: AnimatedBuilder(
                 animation: _drawerCtrl,
                 builder: (_, child) {
                   final t = _drawerCtrl.value;
-                  final radius = 24.0 * t;
+                  final radius = _drawerRadius * t;
                   final scale = 1.0 - (0.06 * t);
                   return Transform(
                     transform: Matrix4.identity()
@@ -363,9 +384,13 @@ class _RootShellState extends State<RootShell>
                         borderRadius: BorderRadius.circular(radius),
                         boxShadow: t > 0
                             ? [
+                                // Sombra dinâmica proporcional à abertura do
+                                // drawer. Não existe token dinâmico; usamos
+                                // Colors.black com opacidade variável e
+                                // documentamos a necessidade.
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.18 * t),
-                                  blurRadius: 24,
+                                  blurRadius: kSpaceXXL, // 24
                                   offset: const Offset(-4, 0),
                                 ),
                               ]
@@ -383,11 +408,13 @@ class _RootShellState extends State<RootShell>
               ),
             ),
             // Área tocável sobre o conteúdo deslocado, quando o drawer
-            // está aberto — agora reativa ao _drawerCtrl dentro de um
+            // está aberto — reativa ao _drawerCtrl dentro de um
             // AnimatedBuilder, para não ficar "presa" durante animações.
             Positioned(
-              top: 0, bottom: 0,
-              left: _drawerWidth, right: 0,
+              top: 0,
+              bottom: 0,
+              left: _drawerWidth,
+              right: 0,
               child: AnimatedBuilder(
                 animation: _drawerCtrl,
                 builder: (_, child) {
@@ -437,7 +464,8 @@ class AiTabHost extends StatefulWidget {
     this.onHasMessagesChanged,
     this.onCanvasCreated,
   });
-  @override State<AiTabHost> createState() => _AiTabHostState();
+  @override
+  State<AiTabHost> createState() => _AiTabHostState();
 }
 
 class _AiTabHostState extends State<AiTabHost> {
@@ -508,27 +536,32 @@ class _AppHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = Padding(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 6,
-        bottom: 10, left: 6, right: 10,
+        top: MediaQuery.of(context).padding.top + kSpaceXS,
+        bottom: kSpaceS + kSpaceXXS, // 10
+        left: kSpaceXS,
+        right: kSpaceS + kSpaceXXS,
       ),
-      child: Row(children: [
-        AppTap(
-          onTap: onMenu, s: s,
-          child: AppIcon('menu.svg', color: s.onSurface, size: 20),
-        ),
-        const SizedBox(width: 8),
-        if (title.isNotEmpty)
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: s.onSurface,
-            ),
+      child: Row(
+        children: [
+          AppTap(
+            onTap: onMenu,
+            s: s,
+            child: AppIcon('menu.svg', color: s.onSurface, size: 20),
           ),
-        const Spacer(),
-        if (trailing != null) trailing!,
-      ]),
+          SizedBox(width: kSpaceS),
+          if (title.isNotEmpty)
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: kTypeBodyLarge, // 17
+                fontWeight: FontWeight.w600,
+                color: s.onSurface,
+              ),
+            ),
+          const Spacer(),
+          if (trailing != null) trailing!,
+        ],
+      ),
     );
 
     if (!transparent) {
@@ -540,10 +573,7 @@ class _AppHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            headerBackground,
-            headerBackground.withOpacity(0.0),
-          ],
+          colors: [headerBackground, Colors.transparent],
         ),
       ),
       child: content,

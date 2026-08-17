@@ -80,9 +80,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Stack(children: [
         Positioned.fill(
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: kCupertinoOut,
-            switchOutCurve: kCupertinoIn,
+            duration: kDurationSlow,
+            switchInCurve: kFluentDecelerate,
+            switchOutCurve: kFluentAccelerate,
             transitionBuilder: (child, anim) =>
                 FadeTransition(opacity: anim, child: child),
             child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
@@ -133,7 +133,7 @@ class _HomeNavigationBar extends StatelessWidget {
             shadowColor: Colors.transparent,
             indicatorColor: s.navIndicatorBg,
             indicatorShape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(kRadiusXLarge),
             ),
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             iconTheme: WidgetStateProperty.resolveWith((states) {
@@ -146,7 +146,7 @@ class _HomeNavigationBar extends StatelessWidget {
             labelTextStyle: WidgetStateProperty.resolveWith((states) {
               final selected = states.contains(WidgetState.selected);
               return TextStyle(
-                fontSize: 11,
+                fontSize: kTypeCaption,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 color: selected ? s.navLabelActive : s.navIconInactive,
               );

@@ -25,7 +25,8 @@ class ProjectsTab extends StatefulWidget {
   State<ProjectsTab> createState() => _ProjectsTabState();
 }
 
-class _ProjectsTabState extends State<ProjectsTab> {
+class _ProjectsTabState extends State<ProjectsTab>
+    with ThemeReactive<ProjectsTab> {
   String? _openProjectId;
 
   @override
@@ -43,12 +44,13 @@ class _ProjectsTabState extends State<ProjectsTab> {
     super.dispose();
   }
 
-  void _onChanged() { if (mounted) setState(() {}); }
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _createProject() {
     showRenameSheet(
       context,
-      AppTheme.of(context),
       currentTitle: '',
       title: 'Novo projeto',
       hint: 'Nome do projeto',
@@ -88,53 +90,50 @@ class _ProjectsTabState extends State<ProjectsTab> {
 
     final roots = projectsController.roots;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-        child: Row(children: [
-          Text('Projetos',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: s.onSurface)),
-          const Spacer(),
-          GestureDetector(
-            onTap: _createProject,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                  color: s.primary,
-                  borderRadius: BorderRadius.circular(999)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                AppIcon('add.svg', size: 14, color: s.onPrimary),
-                const SizedBox(width: 4),
-                Text('Novo',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: s.onPrimary,
-                        fontWeight: FontWeight.w600)),
-              ]),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            kSpaceXL,
+            kSpaceL,
+            kSpaceXL,
+            kSpaceL,
           ),
-        ]),
-      ),
-      Expanded(
-        child: _buildBody(s, roots),
-      ),
-      const SizedBox(height: 92),
-    ]);
+          child: Row(
+            children: [
+              Text(
+                'Projetos',
+                style: TextStyle(
+                  fontSize: kTypeSubtitle,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface,
+                ),
+              ),
+              const Spacer(),
+              FluentButton(
+                label: 'Novo',
+                onTap: _createProject,
+                style: FluentButtonStyle.primary,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _buildBody(s, roots),
+        ),
+        SizedBox(height: kSpaceXXXL + kSpaceXXXL + kSpaceXXL + kSpaceXS),
+      ],
+    );
   }
 
   Widget _buildBody(AppColorScheme s, List<ProjectNode> roots) {
     if (projectsController.loading && roots.isEmpty) {
       return Center(
-        child: SizedBox(
-          width: 22, height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.2,
-            valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
-          ),
+        child: FluentShimmer(
+          width: kSpaceXXL,
+          height: kSpaceXXL,
+          borderRadius: kRadiusSmall,
         ),
       );
     }
@@ -142,32 +141,45 @@ class _ProjectsTabState extends State<ProjectsTab> {
       return Center(
         child: Text(
           projectsController.error!,
-          style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
+          style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
         ),
       );
     }
     if (roots.isEmpty) {
       return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          AppIcon('projects_tab.svg',
-              color: s.onSurfaceVariant.withOpacity(0.35), size: 52),
-          const SizedBox(height: 14),
-          Text('Sem projetos ainda',
-              style: TextStyle(fontSize: 16, color: s.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          Text('Cria o teu primeiro projeto',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: s.onSurfaceVariant.withOpacity(0.55))),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon(
+              'projects_tab.svg',
+              color: s.onSurfaceTertiary,
+              size: 52,
+            ),
+            SizedBox(height: kSpaceL - kSpaceXXS), // 14
+            Text(
+              'Sem projetos ainda',
+              style: TextStyle(fontSize: kTypeBodyLarge, color: s.onSurfaceVariant),
+            ),
+            SizedBox(height: kSpaceXS),
+            Text(
+              'Cria o teu primeiro projeto',
+              style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+            ),
+          ],
+        ),
       );
     }
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        kSpaceL,
+        kSpaceXS,
+        kSpaceL,
+        kSpaceM,
+      ),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
+        mainAxisSpacing: kSpaceM,
+        crossAxisSpacing: kSpaceM,
         childAspectRatio: 0.88,
       ),
       itemCount: roots.length,
@@ -178,7 +190,7 @@ class _ProjectsTabState extends State<ProjectsTab> {
           node: root,
           onTap: () => _openProject(root.id),
           onRename: () => showRenameSheet(
-            context, s,
+            context,
             currentTitle: root.name,
             onConfirm: (name) {
               if (name.trim().isEmpty) return;
@@ -192,12 +204,9 @@ class _ProjectsTabState extends State<ProjectsTab> {
   }
 
   void _confirmDelete(ProjectNode node) {
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _ConfirmDeleteSheet(
-        s: AppTheme.of(context),
         title: node.name,
         onConfirm: () {
           Navigator.pop(ctx);
@@ -223,22 +232,26 @@ class _ProjectCard extends StatefulWidget {
     required this.onRename,
     required this.onDelete,
   });
-  @override State<_ProjectCard> createState() => _ProjectCardState();
+  @override
+  State<_ProjectCard> createState() => _ProjectCardState();
 }
 
 class _ProjectCardState extends State<_ProjectCard> {
   bool _h = false;
 
   void _openOptions() {
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _ProjectOptionsSheet(
-        s: widget.s,
         title: widget.node.name,
-        onRename: () { Navigator.pop(ctx); widget.onRename(); },
-        onDelete: () { Navigator.pop(ctx); widget.onDelete(); },
+        onRename: () {
+          Navigator.pop(ctx);
+          widget.onRename();
+        },
+        onDelete: () {
+          Navigator.pop(ctx);
+          widget.onDelete();
+        },
       ),
     );
   }
@@ -249,18 +262,18 @@ class _ProjectCardState extends State<_ProjectCard> {
     final childCount = projectsController.childrenOf(widget.node.id).length;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       onLongPress: _openOptions,
       child: AnimatedScale(
         scale: _h ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 100),
+        duration: kDurationFast,
         child: Container(
           decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(kRadiusLarge),
             boxShadow: s.cardShadow,
           ),
           child: Column(
@@ -270,34 +283,69 @@ class _ProjectCardState extends State<_ProjectCard> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
+                    // withOpacity usado porque não existe token específico
+                    // para esta variante translúcida do primaryContainer.
                     color: s.primaryContainer.withOpacity(0.25),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(kRadiusLarge),
+                    ),
                   ),
                   alignment: Alignment.center,
-                  child: AppIcon('folder.svg', size: 40, color: s.primary),
+                  child: AppIcon(
+                    'folder.svg',
+                    size: 40,
+                    color: s.primary,
+                  ),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                padding: EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  kSpaceS + kSpaceXXS, // 10
+                  kSpaceM,
+                  kSpaceXS,
+                ),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(widget.node.name,
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
+                      child: Text(
+                        widget.node.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: kTypeBody,
+                          fontWeight: FontWeight.w600,
+                          color: s.onSurface,
+                        ),
+                      ),
                     ),
-                    GestureDetector(
+                    AppTap(
                       onTap: _openOptions,
-                      child: AppIcon('more_filled.svg', size: 14, color: s.onSurfaceVariant),
+                      s: s,
+                      child: AppIcon(
+                        'more_filled.svg',
+                        size: 14,
+                        color: s.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                padding: EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  0,
+                  kSpaceM,
+                  kSpaceM,
+                ),
                 child: Text(
-                  childCount == 0 ? 'Vazio' : '$childCount item${childCount == 1 ? '' : 's'}',
-                  style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                  childCount == 0
+                      ? 'Vazio'
+                      : '$childCount item${childCount == 1 ? '' : 's'}',
+                  style: TextStyle(
+                    fontSize: kTypeCaption,
+                    color: s.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
@@ -321,7 +369,8 @@ class _ProjectContentsView extends StatefulWidget {
     required this.onBack,
     this.onOpenFile,
   });
-  @override State<_ProjectContentsView> createState() => _ProjectContentsViewState();
+  @override
+  State<_ProjectContentsView> createState() => _ProjectContentsViewState();
 }
 
 class _ProjectContentsViewState extends State<_ProjectContentsView> {
@@ -329,7 +378,7 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
 
   void _createFolder() {
     showRenameSheet(
-      context, widget.s,
+      context,
       currentTitle: '',
       title: 'Nova pasta',
       hint: 'Nome da pasta',
@@ -342,7 +391,7 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
 
   void _createFile() {
     showRenameSheet(
-      context, widget.s,
+      context,
       currentTitle: '',
       title: 'Novo documento',
       hint: 'Nome do ficheiro',
@@ -359,7 +408,8 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
   }
 
   Future<void> _uploadFile() async {
-    final result = await FilePicker.pickFiles(allowMultiple: false, withData: true);
+    final result =
+        await FilePicker.pickFiles(allowMultiple: false, withData: true);
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.bytes == null) return;
@@ -381,29 +431,43 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
   ProjectFileKind _inferFileKind(String filename) {
     final lower = filename.toLowerCase();
     if (lower.endsWith('.pdf')) return ProjectFileKind.pdf;
-    if (lower.endsWith('.docx') || lower.endsWith('.doc')) return ProjectFileKind.docx;
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')) return ProjectFileKind.xlsx;
-    if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) return ProjectFileKind.pptx;
+    if (lower.endsWith('.docx') || lower.endsWith('.doc')) {
+      return ProjectFileKind.docx;
+    }
+    if (lower.endsWith('.xlsx') ||
+        lower.endsWith('.xls') ||
+        lower.endsWith('.csv')) {
+      return ProjectFileKind.xlsx;
+    }
+    if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) {
+      return ProjectFileKind.pptx;
+    }
     return ProjectFileKind.other;
   }
 
   void _openAddMenu() {
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _AddItemSheet(
-        s: widget.s,
-        onCreateFolder: () { Navigator.pop(ctx); _createFolder(); },
-        onCreateFile: () { Navigator.pop(ctx); _createFile(); },
-        onUpload: () { Navigator.pop(ctx); _uploadFile(); },
+        onCreateFolder: () {
+          Navigator.pop(ctx);
+          _createFolder();
+        },
+        onCreateFile: () {
+          Navigator.pop(ctx);
+          _createFile();
+        },
+        onUpload: () {
+          Navigator.pop(ctx);
+          _uploadFile();
+        },
       ),
     );
   }
 
   void _renameNode(ProjectNode node) {
     showRenameSheet(
-      context, widget.s,
+      context,
       currentTitle: node.name,
       onConfirm: (name) {
         if (name.trim().isEmpty) return;
@@ -413,12 +477,9 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
   }
 
   void _confirmDeleteNode(ProjectNode node) {
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _ConfirmDeleteSheet(
-        s: widget.s,
         title: node.name,
         onConfirm: () {
           Navigator.pop(ctx);
@@ -430,25 +491,23 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
 
   void _openNode(ProjectNode node) {
     if (node.type == ProjectNodeType.folder) {
-      // Navega para dentro da pasta usando o mesmo mecanismo — abrimos
-      // uma nova _ProjectContentsView empilhada por cima.
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: AppTheme.of(context).surface,
-          body: SafeArea(
-            child: _ProjectContentsView(
-              s: widget.s,
-              project: node,
-              onBack: () => Navigator.of(context).pop(),
-              onOpenFile: widget.onOpenFile,
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            backgroundColor: AppTheme.of(context).surface,
+            body: SafeArea(
+              child: _ProjectContentsView(
+                s: widget.s,
+                project: node,
+                onBack: () => Navigator.of(context).pop(),
+                onOpenFile: widget.onOpenFile,
+              ),
             ),
           ),
         ),
-      ));
+      );
       return;
     }
-    // Ficheiro: se tiver conteúdo local editável (doc/sheet/slide),
-    // abre diretamente no editor via onOpenFile.
     final kind = node.fileKind;
     if (kind != null && node.content != null && widget.onOpenFile != null) {
       final canvasKind = switch (kind) {
@@ -470,75 +529,95 @@ class _ProjectContentsViewState extends State<_ProjectContentsView> {
     final s = widget.s;
     final children = projectsController.childrenOf(widget.project.id);
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 16, 20, 16),
-        child: Row(children: [
-          GestureDetector(
-            onTap: widget.onBack,
-            child: Container(
-              width: 34, height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: s.hover, shape: BoxShape.circle),
-              child: AppIcon('back.svg', size: 16, color: s.onSurface),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            kSpaceM,
+            kSpaceL,
+            kSpaceXL,
+            kSpaceL,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(widget.project.name,
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: s.onSurface)),
-          ),
-          GestureDetector(
-            onTap: _uploading ? null : _openAddMenu,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: _uploading
-                  ? SizedBox(
-                      width: 14, height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(s.onPrimary)),
-                    )
-                  : Row(mainAxisSize: MainAxisSize.min, children: [
-                      AppIcon('add.svg', size: 14, color: s.onPrimary),
-                      const SizedBox(width: 4),
-                      Text('Novo', style: TextStyle(fontSize: 13, color: s.onPrimary, fontWeight: FontWeight.w600)),
-                    ]),
-            ),
-          ),
-        ]),
-      ),
-      Expanded(
-        child: children.isEmpty
-            ? Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  AppIcon('folder.svg', size: 44, color: s.onSurfaceVariant.withOpacity(0.35)),
-                  const SizedBox(height: 12),
-                  Text('Pasta vazia', style: TextStyle(fontSize: 15, color: s.onSurfaceVariant)),
-                ]),
-              )
-            : GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.88,
-                ),
-                itemCount: children.length,
-                itemBuilder: (_, i) {
-                  final node = children[i];
-                  return _NodeCard(
-                    s: s,
-                    node: node,
-                    onTap: () => _openNode(node),
-                    onRename: () => _renameNode(node),
-                    onDelete: () => _confirmDeleteNode(node),
-                  );
-                },
+          child: Row(
+            children: [
+              FluentIconButton(
+                icon: AppIcon('back.svg', color: s.onSurface, size: 16),
+                onTap: widget.onBack,
+                s: s,
               ),
-      ),
-    ]);
+              SizedBox(width: kSpaceS + kSpaceXXS), // 10
+              Expanded(
+                child: Text(
+                  widget.project.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: kTypeBodyLarge,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface,
+                  ),
+                ),
+              ),
+              FluentButton(
+                label: _uploading ? 'A enviar...' : 'Novo',
+                onTap: _uploading ? null : _openAddMenu,
+                style: FluentButtonStyle.primary,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: children.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppIcon(
+                        'folder.svg',
+                        size: 44,
+                        color: s.onSurfaceTertiary,
+                      ),
+                      SizedBox(height: kSpaceM),
+                      Text(
+                        'Pasta vazia',
+                        style: TextStyle(
+                          fontSize: kTypeBodyLarge,
+                          color: s.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : GridView.builder(
+                  padding: EdgeInsets.fromLTRB(
+                    kSpaceL,
+                    kSpaceXS,
+                    kSpaceL,
+                    kSpaceXXL,
+                  ),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: kSpaceM,
+                    crossAxisSpacing: kSpaceM,
+                    childAspectRatio: 0.88,
+                  ),
+                  itemCount: children.length,
+                  itemBuilder: (_, i) {
+                    final node = children[i];
+                    return _NodeCard(
+                      s: s,
+                      node: node,
+                      onTap: () => _openNode(node),
+                      onRename: () => _renameNode(node),
+                      onDelete: () => _confirmDeleteNode(node),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 }
 
@@ -557,22 +636,26 @@ class _NodeCard extends StatefulWidget {
     required this.onRename,
     required this.onDelete,
   });
-  @override State<_NodeCard> createState() => _NodeCardState();
+  @override
+  State<_NodeCard> createState() => _NodeCardState();
 }
 
 class _NodeCardState extends State<_NodeCard> {
   bool _h = false;
 
   void _openOptions() {
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _ProjectOptionsSheet(
-        s: widget.s,
         title: widget.node.name,
-        onRename: () { Navigator.pop(ctx); widget.onRename(); },
-        onDelete: () { Navigator.pop(ctx); widget.onDelete(); },
+        onRename: () {
+          Navigator.pop(ctx);
+          widget.onRename();
+        },
+        onDelete: () {
+          Navigator.pop(ctx);
+          widget.onDelete();
+        },
       ),
     );
   }
@@ -582,22 +665,23 @@ class _NodeCardState extends State<_NodeCard> {
     final s = widget.s;
     final node = widget.node;
     final isFolder = node.isContainer;
-    final iconAsset = isFolder ? 'folder.svg' : (node.fileKind?.svgAsset ?? 'file.svg');
+    final iconAsset =
+        isFolder ? 'folder.svg' : (node.fileKind?.svgAsset ?? 'file.svg');
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _h = true),
+      onTapCancel: () => setState(() => _h = false),
+      onTapUp: (_) => setState(() => _h = false),
+      onTap: widget.onTap,
       onLongPress: _openOptions,
       child: AnimatedScale(
         scale: _h ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 100),
+        duration: kDurationFast,
         child: Container(
           decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(kRadiusLarge),
             boxShadow: s.cardShadow,
           ),
           child: Column(
@@ -607,36 +691,69 @@ class _NodeCardState extends State<_NodeCard> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
+                    // withOpacity usado porque não existe token específico
+                    // para esta variante translúcida do primaryContainer.
                     color: s.primaryContainer.withOpacity(0.25),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(kRadiusLarge),
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: isFolder
-                      ? AppIcon(iconAsset, size: 36, color: s.primary)
+                      ? AppIcon(
+                          iconAsset,
+                          size: 36,
+                          color: s.primary,
+                        )
                       : EditorTypeIcon(iconAsset, size: 36),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                padding: EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  kSpaceS + kSpaceXXS, // 10
+                  kSpaceM,
+                  kSpaceXS,
+                ),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(node.name,
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
+                      child: Text(
+                        node.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: kTypeBody,
+                          fontWeight: FontWeight.w600,
+                          color: s.onSurface,
+                        ),
+                      ),
                     ),
-                    GestureDetector(
+                    AppTap(
                       onTap: _openOptions,
-                      child: AppIcon('more_filled.svg', size: 14, color: s.onSurfaceVariant),
+                      s: s,
+                      child: AppIcon(
+                        'more_filled.svg',
+                        size: 14,
+                        color: s.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                padding: EdgeInsets.fromLTRB(
+                  kSpaceM,
+                  0,
+                  kSpaceM,
+                  kSpaceM,
+                ),
                 child: Text(
                   isFolder ? 'Pasta' : (node.fileKind?.label ?? 'Ficheiro'),
-                  style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: kTypeCaption,
+                    color: s.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
@@ -647,225 +764,147 @@ class _NodeCardState extends State<_NodeCard> {
   }
 }
 
-// ── Sheets auxiliares (mantidos iguais) ─────────────────────────
+// ── Sheets auxiliares (agora usando FluentBottomSheet e FluentListGroup) ──
 
 class _AddItemSheet extends StatelessWidget {
-  final AppColorScheme s;
   final VoidCallback onCreateFolder;
   final VoidCallback onCreateFile;
   final VoidCallback onUpload;
   const _AddItemSheet({
-    required this.s,
     required this.onCreateFolder,
     required this.onCreateFile,
     required this.onUpload,
   });
 
   @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                _SheetOptionRow(s: s, icon: 'folder.svg', label: 'Criar pasta', onTap: onCreateFolder),
-                _SheetOptionRow(s: s, icon: 'doc.png', useEditorIcon: true, label: 'Criar ficheiro', onTap: onCreateFile),
-                _SheetOptionRow(s: s, icon: 'file.svg', label: 'Upload de ficheiro', onTap: onUpload),
-              ],
-            ),
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return FluentBottomSheet(
+      child: FluentListGroup(
+        children: [
+          FluentListCard(
+            leading: AppIcon('folder.svg', color: s.primary, size: 18),
+            title: 'Criar pasta',
+            onTap: onCreateFolder,
           ),
-        ),
-      );
+          FluentListCard(
+            leading: AppIcon('doc.png', color: s.primary, size: 18),
+            title: 'Criar ficheiro',
+            onTap: onCreateFile,
+          ),
+          FluentListCard(
+            leading: AppIcon('file.svg', color: s.primary, size: 18),
+            title: 'Upload de ficheiro',
+            onTap: onUpload,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ProjectOptionsSheet extends StatelessWidget {
-  final AppColorScheme s;
   final String title;
   final VoidCallback onRename;
   final VoidCallback onDelete;
   const _ProjectOptionsSheet({
-    required this.s,
     required this.title,
     required this.onRename,
     required this.onDelete,
   });
 
   @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                  child: Text(title,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurfaceVariant)),
-                ),
-                _SheetOptionRow(s: s, icon: 'edit.svg', label: 'Renomear', onTap: onRename),
-                _SheetOptionRow(s: s, icon: 'trash.svg', label: 'Eliminar', destructive: true, onTap: onDelete),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
-class _ConfirmDeleteSheet extends StatelessWidget {
-  final AppColorScheme s;
-  final String title;
-  final VoidCallback onConfirm;
-  const _ConfirmDeleteSheet({required this.s, required this.title, required this.onConfirm});
-
-  @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Text('Eliminar "$title"?',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurface)),
-                const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(
-                    child: _ConfirmButton(
-                      s: s, label: 'Cancelar', filled: false,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _ConfirmButton(
-                      s: s, label: 'Eliminar', filled: true, onTap: onConfirm,
-                    ),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
-class _ConfirmButton extends StatefulWidget {
-  final AppColorScheme s;
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-  const _ConfirmButton({required this.s, required this.label, required this.filled, required this.onTap});
-  @override State<_ConfirmButton> createState() => _ConfirmButtonState();
-}
-
-class _ConfirmButtonState extends State<_ConfirmButton> {
-  bool _p = false;
-  @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
-      child: AnimatedScale(
-        scale: _p ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.filled ? s.error : s.hover,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(widget.label,
+    final s = AppTheme.of(context);
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              kSpaceM,
+              0,
+              kSpaceM,
+              kSpaceS,
+            ),
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w600,
-                color: widget.filled ? s.onError : s.onSurface,
-              )),
-        ),
+                fontSize: kTypeBody,
+                fontWeight: FontWeight.w600,
+                color: s.onSurfaceVariant,
+              ),
+            ),
+          ),
+          FluentListGroup(
+            children: [
+              FluentListCard(
+                leading: AppIcon('edit.svg', color: s.onSurface, size: 18),
+                title: 'Renomear',
+                onTap: onRename,
+              ),
+              FluentListCard(
+                leading: AppIcon('trash.svg', color: s.error, size: 18),
+                title: 'Eliminar',
+                titleColor: s.error,
+                onTap: onDelete,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SheetOptionRow extends StatefulWidget {
-  final AppColorScheme s;
-  final String icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-  final bool useEditorIcon;
-  const _SheetOptionRow({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-    this.useEditorIcon = false,
+class _ConfirmDeleteSheet extends StatelessWidget {
+  final String title;
+  final VoidCallback onConfirm;
+  const _ConfirmDeleteSheet({
+    required this.title,
+    required this.onConfirm,
   });
-  @override State<_SheetOptionRow> createState() => _SheetOptionRowState();
-}
 
-class _SheetOptionRowState extends State<_SheetOptionRow> {
-  bool _h = false;
   @override
   Widget build(BuildContext context) {
-    final color = widget.destructive ? widget.s.error : widget.s.onSurface;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: _h ? widget.s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(children: [
-          widget.useEditorIcon
-              ? EditorTypeIcon(widget.icon, size: 18)
-              : AppIcon(widget.icon, size: 18, color: color),
-          const SizedBox(width: 12),
-          Text(widget.label,
-              style: TextStyle(fontSize: 14.5, color: color, fontWeight: FontWeight.w500)),
-        ]),
+    final s = AppTheme.of(context);
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Eliminar "$title"?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: kTypeBody,
+              fontWeight: FontWeight.w500,
+              color: s.onSurface,
+            ),
+          ),
+          SizedBox(height: kSpaceXL),
+          Row(
+            children: [
+              Expanded(
+                child: FluentButton(
+                  label: 'Cancelar',
+                  onTap: () => Navigator.pop(context),
+                  style: FluentButtonStyle.secondary,
+                ),
+              ),
+              SizedBox(width: kSpaceS + kSpaceXXS), // 10
+              Expanded(
+                child: FluentButton(
+                  label: 'Eliminar',
+                  onTap: onConfirm,
+                  style: FluentButtonStyle.destructive,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -58,7 +58,7 @@ extension AgendaViewModeX on AgendaViewMode {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Cores dos eventos (as mesmas do design)
+// Cores dos eventos (paleta fixa de dados, não são tokens de tema)
 // ─────────────────────────────────────────────────────────────────────
 const List<Color> kEventColors = [
   Color(0xFF4285F4), // Azul
@@ -70,6 +70,12 @@ const List<Color> kEventColors = [
   Color(0xFF00ACC1), // Ciano
   Color(0xFFE91E63), // Rosa
 ];
+
+// Cor de fim de semana e erros destrutivos no calendário.
+// Não existe token semântico para "fim de semana" nem para
+// "vermelho de alerta de calendário"; mantemos uma constante
+// isolada para evitar repetir o literal pelo ficheiro.
+const Color _kWeekendColor = Color(0xFFFF3B30);
 
 const List<String> kRepeatOptions = [
   'none',
@@ -133,7 +139,7 @@ class _AgendaTabState extends State<AgendaTab> {
     _titleController = TextEditingController();
     _locationController = TextEditingController();
     _descriptionController = TextEditingController();
-    _loadSampleEvents(); // carregar eventos de exemplo (opcional)
+    _loadSampleEvents();
   }
 
   @override
@@ -223,7 +229,6 @@ class _AgendaTabState extends State<AgendaTab> {
           _viewDate = DateTime(_selectedDay.year, _selectedDay.month, 1);
           break;
         case AgendaViewMode.agenda:
-          // nada
           break;
       }
     });
@@ -244,7 +249,6 @@ class _AgendaTabState extends State<AgendaTab> {
           _viewDate = DateTime(_selectedDay.year, _selectedDay.month, 1);
           break;
         case AgendaViewMode.agenda:
-          // nada
           break;
       }
     });
@@ -347,9 +351,7 @@ class _AgendaTabState extends State<AgendaTab> {
 
   void _saveEvent() {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Insere um título')),
-      );
+      _showValidationDialog('Insere um título para o evento.');
       return;
     }
     final event = AgendaEvent(
@@ -375,6 +377,29 @@ class _AgendaTabState extends State<AgendaTab> {
     _closeEventScreen();
   }
 
+  void _showValidationDialog(String message) {
+    showFluentDialog<void>(
+      context: context,
+      builder: (ctx) => FluentDialog(
+        title: 'Atenção',
+        content: Text(
+          message,
+          style: TextStyle(
+            fontSize: kTypeBody,
+            color: AppTheme.of(ctx).onSurface,
+          ),
+        ),
+        actions: [
+          FluentButton(
+            label: 'OK',
+            onTap: () => Navigator.pop(ctx),
+            style: FluentButtonStyle.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
   void _deleteEvent(String id) {
     setState(() => _events.removeWhere((e) => e.id == id));
     _closeEventScreen();
@@ -383,7 +408,16 @@ class _AgendaTabState extends State<AgendaTab> {
 
   // ── Abrir detalhe ────────────────────────────────────────────────
   void _openDetail(AgendaEvent ev) {
-    setState(() => _detailEvent = ev);
+    showFluentBottomSheet<void>(
+      context: context,
+      builder: (ctx) => _AgendaDetailSheet(event: ev, onEdit: () {
+        Navigator.pop(ctx);
+        _openEditEvent(ev);
+      }, onDelete: () {
+        Navigator.pop(ctx);
+        _deleteEvent(ev.id);
+      }),
+    );
   }
 
   void _closeDetail() {
@@ -409,21 +443,19 @@ class _AgendaTabState extends State<AgendaTab> {
           ),
           // Botão flutuante (FAB)
           Positioned(
-            right: 18,
+            right: kSpaceL,
             bottom: MediaQuery.of(context).padding.bottom + 88,
             child: _buildFab(s),
           ),
           // Barra de separadores
           Positioned(
-            left: 14,
-            right: 14,
-            bottom: MediaQuery.of(context).padding.bottom + 16,
+            left: kSpaceM,
+            right: kSpaceM,
+            bottom: MediaQuery.of(context).padding.bottom + kSpaceL,
             child: _buildTabBar(s),
           ),
           // Pesquisa overlay
           if (_showSearch) _buildSearchOverlay(s),
-          // Detalhe bottom sheet
-          if (_detailEvent != null) _buildDetailSheet(s),
           // Ecrã de criação/edição
           if (_showEventScreen) _buildEventScreen(s),
         ],
@@ -435,16 +467,18 @@ class _AgendaTabState extends State<AgendaTab> {
   Widget _buildHeader(AppColorScheme s) {
     return Padding(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 14,
-        left: 14,
-        right: 14,
-        bottom: 12,
+        top: MediaQuery.of(context).padding.top + kSpaceL,
+        left: kSpaceM,
+        right: kSpaceM,
+        bottom: kSpaceM,
       ),
       child: Row(
         children: [
-          // Voltar
-          _iconBtn(s, icon: 'back_arrow.svg', onTap: () => Navigator.of(context).maybePop()),
-          // Navegação central
+          FluentIconButton(
+            s: s,
+            icon: AppIcon('back_arrow.svg', color: s.onSurfaceVariant, size: 19),
+            onTap: () => Navigator.of(context).maybePop(),
+          ),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -453,11 +487,11 @@ class _AgendaTabState extends State<AgendaTab> {
                 GestureDetector(
                   onTap: _goToday,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceXS),
                     child: Text(
                       _navLabel,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: kTypeBodyLarge,
                         fontWeight: FontWeight.w700,
                         color: s.onSurface,
                       ),
@@ -468,24 +502,12 @@ class _AgendaTabState extends State<AgendaTab> {
               ],
             ),
           ),
-          // Pesquisa
-          _iconBtn(s, icon: 'search.svg', onTap: _openSearch),
+          FluentIconButton(
+            s: s,
+            icon: AppIcon('search.svg', color: s.onSurfaceVariant, size: 19),
+            onTap: _openSearch,
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _iconBtn(AppColorScheme s, {required String icon, required VoidCallback onTap}) {
-    return Material(
-      color: s.hover,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: AppIcon(icon, color: s.onSurfaceVariant, size: 19),
-        ),
       ),
     );
   }
@@ -493,9 +515,9 @@ class _AgendaTabState extends State<AgendaTab> {
   Widget _navArrow(AppColorScheme s, {required bool isLeft, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(kRadiusCircle),
       child: Padding(
-        padding: const EdgeInsets.all(6),
+        padding: EdgeInsets.all(kSpaceS),
         child: AppIcon(
           isLeft ? 'chevron_left.svg' : 'chevron_right.svg',
           color: s.onSurfaceVariant,
@@ -509,7 +531,7 @@ class _AgendaTabState extends State<AgendaTab> {
   Widget _buildBody(AppColorScheme s) {
     return SingleChildScrollView(
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
+        duration: kDurationSlow,
         child: _buildView(s),
       ),
     );
@@ -533,9 +555,8 @@ class _AgendaTabState extends State<AgendaTab> {
     final days = _monthDays(_viewDate);
     return Column(
       children: [
-        // Cabeçalho da semana
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: EdgeInsets.symmetric(horizontal: kSpaceM),
           child: Row(
             children: List.generate(7, (i) {
               final weekend = i == 0 || i == 6;
@@ -544,9 +565,9 @@ class _AgendaTabState extends State<AgendaTab> {
                   child: Text(
                     ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][i],
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: kTypeCaption,
                       fontWeight: FontWeight.w700,
-                      color: weekend ? const Color(0xFFFF3B30) : s.onSurfaceVariant,
+                      color: weekend ? _kWeekendColor : s.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -554,12 +575,11 @@ class _AgendaTabState extends State<AgendaTab> {
             }),
           ),
         ),
-        const SizedBox(height: 4),
-        // Grelha mensal
+        SizedBox(height: kSpaceXS),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: EdgeInsets.symmetric(horizontal: kSpaceS),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
             childAspectRatio: 0.78,
@@ -604,7 +624,6 @@ class _AgendaTabState extends State<AgendaTab> {
     final weekDays = _weekDays(_selectedDay);
     return Column(
       children: [
-        // Cabeçalho dos dias
         Row(
           children: weekDays.map((d) {
             final isToday = _isToday(d);
@@ -617,20 +636,20 @@ class _AgendaTabState extends State<AgendaTab> {
                   });
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: EdgeInsets.symmetric(vertical: kSpaceS),
                   child: Column(
                     children: [
                       Text(
                         ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.weekday],
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: kTypeCaption,
                           fontWeight: FontWeight.w700,
                           color: (d.weekday == 0 || d.weekday == 6)
-                              ? const Color(0xFFFF3B30)
+                              ? _kWeekendColor
                               : s.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: kSpaceXS),
                       Container(
                         width: 26,
                         height: 26,
@@ -642,12 +661,12 @@ class _AgendaTabState extends State<AgendaTab> {
                         child: Text(
                           '${d.day}',
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: kTypeBody,
                             fontWeight: FontWeight.w700,
                             color: isToday
                                 ? s.onPrimary
                                 : (d.weekday == 0 || d.weekday == 6)
-                                    ? const Color(0xFFFF3B30)
+                                    ? _kWeekendColor
                                     : s.onSurface,
                           ),
                         ),
@@ -659,8 +678,7 @@ class _AgendaTabState extends State<AgendaTab> {
             );
           }).toList(),
         ),
-        const SizedBox(height: 8),
-        // Grelha de horas
+        SizedBox(height: kSpaceS),
         Expanded(
           child: ListView.builder(
             itemCount: 24,
@@ -671,11 +689,11 @@ class _AgendaTabState extends State<AgendaTab> {
                   SizedBox(
                     width: 44,
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
+                      padding: EdgeInsets.only(top: kSpaceXXS),
                       child: Text(
                         hour == 0 ? '' : '${hour.toString().padLeft(2, '0')}:00',
                         textAlign: TextAlign.right,
-                        style: TextStyle(fontSize: 9.5, color: s.onSurfaceVariant),
+                        style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
                       ),
                     ),
                   ),
@@ -690,8 +708,8 @@ class _AgendaTabState extends State<AgendaTab> {
                             height: 56,
                             decoration: BoxDecoration(
                               border: Border(
-                                top: BorderSide(color: s.hover, width: 0.5),
-                                right: BorderSide(color: s.hover, width: 0.5),
+                                top: BorderSide(color: s.subtleFillHover, width: 0.5),
+                                right: BorderSide(color: s.subtleFillHover, width: 0.5),
                               ),
                             ),
                             child: Stack(
@@ -705,9 +723,9 @@ class _AgendaTabState extends State<AgendaTab> {
                                   ),
                                 ),
                                 ...dayEvents.map((ev) => Positioned(
-                                      top: 2,
-                                      left: 2,
-                                      right: 2,
+                                      top: kSpaceXXS,
+                                      left: kSpaceXXS,
+                                      right: kSpaceXXS,
                                       child: _WeekEventChip(
                                         s: s,
                                         event: ev,
@@ -765,9 +783,9 @@ class _AgendaTabState extends State<AgendaTab> {
       children: [
         if (allDay.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: s.hover, width: 0.5)),
+              border: Border(bottom: BorderSide(color: s.subtleFillHover, width: 0.5)),
             ),
             child: Row(
               children: [
@@ -776,10 +794,10 @@ class _AgendaTabState extends State<AgendaTab> {
                   child: Text(
                     'Todo\no dia',
                     textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 9, color: s.onSurfaceVariant),
+                    style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: kSpaceS),
                 Expanded(
                   child: Column(
                     children: allDay.map((ev) => _AllDayChip(
@@ -803,11 +821,11 @@ class _AgendaTabState extends State<AgendaTab> {
                   SizedBox(
                     width: 44,
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
+                      padding: EdgeInsets.only(top: kSpaceXXS),
                       child: Text(
                         hour == 0 ? '' : '${hour.toString().padLeft(2, '0')}:00',
                         textAlign: TextAlign.right,
-                        style: TextStyle(fontSize: 9.5, color: s.onSurfaceVariant),
+                        style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
                       ),
                     ),
                   ),
@@ -816,7 +834,7 @@ class _AgendaTabState extends State<AgendaTab> {
                       height: 56,
                       decoration: BoxDecoration(
                         border: Border(
-                          top: BorderSide(color: s.hover, width: 0.5),
+                          top: BorderSide(color: s.subtleFillHover, width: 0.5),
                         ),
                       ),
                       child: Stack(
@@ -828,9 +846,9 @@ class _AgendaTabState extends State<AgendaTab> {
                             ),
                           ),
                           ...hourEvents.map((ev) => Positioned(
-                                top: 2,
-                                left: 4,
-                                right: 8,
+                                top: kSpaceXXS,
+                                left: kSpaceXS,
+                                right: kSpaceS,
                                 child: _DayEventCard(
                                   s: s,
                                   event: ev,
@@ -886,20 +904,14 @@ class _AgendaTabState extends State<AgendaTab> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AppIcon('calendar.svg', color: s.onSurfaceVariant, size: 52),
-            const SizedBox(height: 12),
+            SizedBox(height: kSpaceM),
             Text('Sem eventos nos próximos 60 dias',
-                style: TextStyle(color: s.onSurfaceVariant, fontSize: 15)),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () => _openNewEvent(),
-              icon: const Icon(Icons.add, size: 14, color: Colors.white),
-              label: const Text('Criar evento', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: s.primary,
-                foregroundColor: s.onPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-              ),
+                style: TextStyle(color: s.onSurfaceVariant, fontSize: kTypeBodyLarge)),
+            SizedBox(height: kSpaceM),
+            FluentButton(
+              label: 'Criar evento',
+              onTap: () => _openNewEvent(),
+              style: FluentButtonStyle.primary,
             ),
           ],
         ),
@@ -914,19 +926,19 @@ class _AgendaTabState extends State<AgendaTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS + kSpaceXXS),
               color: s.surface,
               child: Row(
                 children: [
                   Text(
                     ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][date.weekday],
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: kTypeCaption,
                       fontWeight: FontWeight.w800,
                       color: isToday ? s.primary : s.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: kSpaceS),
                   Container(
                     width: 26,
                     height: 26,
@@ -938,27 +950,27 @@ class _AgendaTabState extends State<AgendaTab> {
                     child: Text(
                       '${date.day}',
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: kTypeBody,
                         fontWeight: FontWeight.w700,
                         color: isToday ? s.onPrimary : s.onSurface,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: kSpaceS),
                   Text(
                     ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][date.month - 1],
-                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                    style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
                   ),
                   if (isToday) ...[
-                    const SizedBox(width: 8),
+                    SizedBox(width: kSpaceS),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceXXS),
                       decoration: BoxDecoration(
                         color: s.primary,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(kRadiusCircle),
                       ),
                       child: Text('Hoje',
-                          style: TextStyle(fontSize: 10, color: s.onPrimary, fontWeight: FontWeight.w800)),
+                          style: TextStyle(fontSize: kTypeCaption, color: s.onPrimary, fontWeight: FontWeight.w800)),
                     ),
                   ],
                 ],
@@ -969,7 +981,7 @@ class _AgendaTabState extends State<AgendaTab> {
                   event: ev,
                   onTap: () => _openDetail(ev),
                 )),
-            const SizedBox(height: 4),
+            SizedBox(height: kSpaceXS),
           ],
         );
       }).toList(),
@@ -988,7 +1000,7 @@ class _AgendaTabState extends State<AgendaTab> {
         child: SizedBox(
           width: 52,
           height: 52,
-          child: Icon(Icons.add, color: s.onPrimary, size: 24),
+          child: AppIcon('add.svg', color: s.onPrimary, size: 24),
         ),
       ),
     );
@@ -997,14 +1009,14 @@ class _AgendaTabState extends State<AgendaTab> {
   // ── Tab Bar (bottom) ─────────────────────────────────────────────
   Widget _buildTabBar(AppColorScheme s) {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(kSpaceXS),
       decoration: BoxDecoration(
         color: s.floatingSurface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: s.hover),
+        borderRadius: BorderRadius.circular(kRadiusCircle),
+        border: Border.all(color: s.subtleFillHover),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.14),
+            color: Colors.black.withOpacity(0.14), // Sombra de superfície flutuante
             blurRadius: 28,
             offset: const Offset(0, 8),
           ),
@@ -1016,23 +1028,23 @@ class _AgendaTabState extends State<AgendaTab> {
           return Expanded(
             child: InkWell(
               onTap: () => setState(() => _currentView = mode),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(kRadiusCircle),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 11),
+                duration: kDurationSlower,
+                curve: kFluentDecelerate,
+                padding: EdgeInsets.symmetric(vertical: kSpaceS + kSpaceXXS),
                 decoration: BoxDecoration(
-                  color: selected ? s.hover : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
+                  color: selected ? s.subtleFillHover : Colors.transparent,
+                  borderRadius: BorderRadius.circular(kRadiusCircle),
                   border: Border.all(
-                    color: selected ? s.hover : Colors.transparent,
+                    color: selected ? s.subtleFillHover : Colors.transparent,
                     width: 1,
                   ),
                   boxShadow: selected
                       ? [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
+                            blurRadius: kSpaceS,
                             offset: const Offset(0, 2),
                           )
                         ]
@@ -1042,7 +1054,7 @@ class _AgendaTabState extends State<AgendaTab> {
                   mode.label,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: kTypeCaption,
                     fontWeight: FontWeight.w600,
                     color: selected ? s.onSurface : s.onSurfaceVariant,
                   ),
@@ -1064,24 +1076,24 @@ class _AgendaTabState extends State<AgendaTab> {
           children: [
             Padding(
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 14,
-                left: 14,
-                right: 14,
-                bottom: 12,
+                top: MediaQuery.of(context).padding.top + kSpaceL,
+                left: kSpaceM,
+                right: kSpaceM,
+                bottom: kSpaceM,
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceM),
                       decoration: BoxDecoration(
-                        color: s.hover,
-                        borderRadius: BorderRadius.circular(12),
+                        color: s.subtleFillHover,
+                        borderRadius: BorderRadius.circular(kRadiusLarge),
                       ),
                       child: Row(
                         children: [
                           AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
-                          const SizedBox(width: 8),
+                          SizedBox(width: kSpaceS),
                           Expanded(
                             child: TextField(
                               controller: _searchController,
@@ -1093,7 +1105,7 @@ class _AgendaTabState extends State<AgendaTab> {
                                 hintStyle: TextStyle(color: s.onSurfaceVariant),
                                 border: InputBorder.none,
                                 isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                contentPadding: EdgeInsets.symmetric(vertical: kSpaceS + kSpaceXXS),
                               ),
                             ),
                           ),
@@ -1109,7 +1121,7 @@ class _AgendaTabState extends State<AgendaTab> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: kSpaceS + kSpaceXXS),
                   InkWell(
                     onTap: _closeSearch,
                     child: Text('Cancelar',
@@ -1124,7 +1136,7 @@ class _AgendaTabState extends State<AgendaTab> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         AppIcon('calendar.svg', color: s.onSurfaceVariant.withOpacity(0.25), size: 36),
-                        const SizedBox(height: 12),
+                        SizedBox(height: kSpaceM),
                         Text('Pesquisa por título, local ou descrição',
                             style: TextStyle(color: s.onSurfaceVariant)),
                       ],
@@ -1135,7 +1147,7 @@ class _AgendaTabState extends State<AgendaTab> {
                           children: [
                             AppIcon('search.svg',
                                 color: s.onSurfaceVariant.withOpacity(0.3), size: 40),
-                            const SizedBox(height: 12),
+                            SizedBox(height: kSpaceM),
                             Text('Sem resultados para «$_searchQuery»',
                                 style: TextStyle(color: s.onSurfaceVariant)),
                           ],
@@ -1150,10 +1162,10 @@ class _AgendaTabState extends State<AgendaTab> {
                                 _closeSearch();
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
                                 decoration: BoxDecoration(
                                   border: Border(
-                                    bottom: BorderSide(color: s.hover, width: 0.5),
+                                    bottom: BorderSide(color: s.subtleFillHover, width: 0.5),
                                   ),
                                 ),
                                 child: Row(
@@ -1166,7 +1178,7 @@ class _AgendaTabState extends State<AgendaTab> {
                                         shape: BoxShape.circle,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    SizedBox(width: kSpaceM),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1175,13 +1187,13 @@ class _AgendaTabState extends State<AgendaTab> {
                                               style: TextStyle(
                                                   fontWeight: FontWeight.w700,
                                                   color: s.onSurface)),
-                                          const SizedBox(height: 2),
+                                          SizedBox(height: kSpaceXXS),
                                           Text(
                                             '${_formatShortDate(ev.date)}'
                                             '${ev.allDay ? '' : ' · ${_formatTime(ev.startTime)}'}'
                                             '${ev.location.isNotEmpty ? ' · 📍 ${ev.location}' : ''}',
                                             style: TextStyle(
-                                                fontSize: 12, color: s.onSurfaceVariant),
+                                                fontSize: kTypeCaption, color: s.onSurfaceVariant),
                                           ),
                                         ],
                                       ),
@@ -1201,128 +1213,6 @@ class _AgendaTabState extends State<AgendaTab> {
     );
   }
 
-  // ── Bottom Sheet de Detalhe ──────────────────────────────────────
-  Widget _buildDetailSheet(AppColorScheme s) {
-    final ev = _detailEvent!;
-    return Stack(
-      children: [
-        // Overlay
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: _closeDetail,
-            child: Container(color: Colors.black.withOpacity(0.45)),
-          ),
-        ),
-        // Sheet
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: Material(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: SafeArea(
-              top: false,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Handle
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        margin: const EdgeInsets.only(top: 10, bottom: 8),
-                        decoration: BoxDecoration(
-                          color: s.hover,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    // Header com ações
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Container(width: 4, height: 28, color: ev.color),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(ev.title,
-                                style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w800, color: s.onSurface)),
-                          ),
-                          IconButton(
-                            icon: AppIcon('edit.svg', color: s.primary, size: 18),
-                            onPressed: () {
-                              _closeDetail();
-                              _openEditEvent(ev);
-                            },
-                          ),
-                          IconButton(
-                            icon: AppIcon('trash.svg', color: const Color(0xFFFF3B30), size: 18),
-                            onPressed: () => _deleteEvent(ev.id),
-                          ),
-                          IconButton(
-                            icon: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
-                            onPressed: _closeDetail,
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Detalhes
-                    _detailRow(s, 'calendar.svg', _formatFullDate(ev.date)),
-                    if (ev.allDay)
-                      _detailRow(s, 'clock.svg', 'Todo o dia')
-                    else
-                      _detailRow(s, 'clock.svg', '${_formatTime(ev.startTime)} – ${_formatTime(ev.endTime)}'),
-                    if (ev.location.isNotEmpty)
-                      _detailRow(s, 'location.svg', ev.location),
-                    if (ev.repeat != 'none')
-                      _detailRow(
-                          s,
-                          'repeat.svg',
-                          kRepeatLabels[kRepeatOptions.indexOf(ev.repeat)]),
-                    if (ev.description.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AppIcon('note.svg', color: s.onSurfaceVariant, size: 18),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(ev.description,
-                                  style: TextStyle(color: s.onSurface)),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _detailRow(AppColorScheme s, String icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          AppIcon(icon, color: s.onSurfaceVariant, size: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(text, style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── Ecrã de Criação/Edição ───────────────────────────────────────
   Widget _buildEventScreen(AppColorScheme s) {
     return Positioned.fill(
@@ -1333,16 +1223,17 @@ class _AgendaTabState extends State<AgendaTab> {
             // Header
             Padding(
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 14,
-                left: 14,
-                right: 14,
-                bottom: 14,
+                top: MediaQuery.of(context).padding.top + kSpaceL,
+                left: kSpaceM,
+                right: kSpaceM,
+                bottom: kSpaceM,
               ),
               child: Row(
                 children: [
-                  InkWell(
+                  FluentIconButton(
+                    s: s,
+                    icon: AppIcon('close.svg', color: s.onSurfaceVariant, size: 16),
                     onTap: _closeEventScreen,
-                    child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 16),
                   ),
                   Expanded(
                     child: Text(
@@ -1362,49 +1253,38 @@ class _AgendaTabState extends State<AgendaTab> {
             // Corpo scrollável
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: 24),
+                padding: EdgeInsets.only(bottom: kSpaceXXL),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Título
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                      child: TextField(
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceL),
+                      child: FluentTextField(
                         controller: _titleController,
+                        hintText: 'Título do evento',
                         autofocus: _editing ? false : true,
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: s.onSurface),
-                        decoration: InputDecoration(
-                          hintText: 'Título do evento',
-                          hintStyle: TextStyle(color: s.onSurfaceVariant.withOpacity(0.5)),
-                          border: InputBorder.none,
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: _formColor, width: 2),
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: _formColor, width: 2),
-                          ),
-                        ),
+                        fillColor: Colors.transparent,
+                        borderRadius: kRadiusNone,
+                        contentPadding: EdgeInsets.zero,
                       ),
                     ),
                     // Cor
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Cor',
                               style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: kTypeCaption,
                                   fontWeight: FontWeight.w700,
                                   color: s.onSurfaceVariant,
                                   letterSpacing: 0.6)),
-                          const SizedBox(height: 12),
+                          SizedBox(height: kSpaceM),
                           Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
+                            spacing: kSpaceS + kSpaceXXS,
+                            runSpacing: kSpaceS + kSpaceXXS,
                             children: kEventColors.map((color) {
                               final selected = _formColor == color;
                               return GestureDetector(
@@ -1423,7 +1303,7 @@ class _AgendaTabState extends State<AgendaTab> {
                                             BoxShadow(
                                               color: color,
                                               spreadRadius: 2,
-                                              blurRadius: 4,
+                                              blurRadius: kSpaceXS,
                                             )
                                           ]
                                         : null,
@@ -1439,7 +1319,7 @@ class _AgendaTabState extends State<AgendaTab> {
                     Container(
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: s.hover, width: 0.5),
+                          bottom: BorderSide(color: s.subtleFillHover, width: 0.5),
                         ),
                       ),
                       child: Column(
@@ -1448,10 +1328,10 @@ class _AgendaTabState extends State<AgendaTab> {
                             s,
                             icon: 'clock.svg',
                             label: 'Todo o dia',
-                            trailing: Switch(
+                            trailing: AppSwitch(
                               value: _formAllDay,
+                              s: s,
                               onChanged: (val) => setState(() => _formAllDay = val),
-                              activeColor: s.primary,
                             ),
                           ),
                           _buildSettingRow(
@@ -1470,7 +1350,7 @@ class _AgendaTabState extends State<AgendaTab> {
                               },
                               child: Text(
                                 _formatShortDate(_formDate),
-                                style: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
+                                style: TextStyle(color: s.onSurfaceVariant, fontSize: kTypeBody),
                               ),
                             ),
                           ),
@@ -1489,7 +1369,7 @@ class _AgendaTabState extends State<AgendaTab> {
                                 },
                                 child: Text(
                                   _formatTime(_formStart),
-                                  style: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
+                                  style: TextStyle(color: s.onSurfaceVariant, fontSize: kTypeBody),
                                 ),
                               ),
                             ),
@@ -1507,7 +1387,7 @@ class _AgendaTabState extends State<AgendaTab> {
                                 },
                                 child: Text(
                                   _formatTime(_formEnd),
-                                  style: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
+                                  style: TextStyle(color: s.onSurfaceVariant, fontSize: kTypeBody),
                                 ),
                               ),
                             ),
@@ -1519,7 +1399,7 @@ class _AgendaTabState extends State<AgendaTab> {
                     Container(
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: s.hover, width: 0.5),
+                          bottom: BorderSide(color: s.subtleFillHover, width: 0.5),
                         ),
                       ),
                       child: _buildSettingRow(
@@ -1527,15 +1407,13 @@ class _AgendaTabState extends State<AgendaTab> {
                         icon: 'location.svg',
                         label: 'Local',
                         trailing: Expanded(
-                          child: TextField(
+                          child: FluentTextField(
                             controller: _locationController,
                             textAlign: TextAlign.right,
-                            style: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText: 'Adicionar local',
-                              hintStyle: TextStyle(color: s.onSurfaceVariant.withOpacity(0.5)),
-                              border: InputBorder.none,
-                            ),
+                            hintText: 'Adicionar local',
+                            fillColor: Colors.transparent,
+                            borderRadius: kRadiusNone,
+                            contentPadding: EdgeInsets.zero,
                           ),
                         ),
                       ),
@@ -1544,7 +1422,7 @@ class _AgendaTabState extends State<AgendaTab> {
                     Container(
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: s.hover, width: 0.5),
+                          bottom: BorderSide(color: s.subtleFillHover, width: 0.5),
                         ),
                       ),
                       child: _buildSettingRow(
@@ -1555,7 +1433,7 @@ class _AgendaTabState extends State<AgendaTab> {
                           child: DropdownButton<String>(
                             value: _formRepeat,
                             dropdownColor: s.floatingSurface,
-                            style: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
+                            style: TextStyle(color: s.onSurfaceVariant, fontSize: kTypeBody),
                             items: kRepeatOptions.map((val) {
                               return DropdownMenuItem(
                                 value: val,
@@ -1569,23 +1447,21 @@ class _AgendaTabState extends State<AgendaTab> {
                     ),
                     // Notas
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           AppIcon('note.svg', color: s.onSurfaceVariant, size: 18),
-                          const SizedBox(width: 12),
+                          SizedBox(width: kSpaceM),
                           Expanded(
-                            child: TextField(
+                            child: FluentTextField(
                               controller: _descriptionController,
                               maxLines: 4,
                               minLines: 2,
-                              style: TextStyle(color: s.onSurface, fontSize: 15),
-                              decoration: InputDecoration(
-                                hintText: 'Adicionar notas...',
-                                hintStyle: TextStyle(color: s.onSurfaceVariant.withOpacity(0.5)),
-                                border: InputBorder.none,
-                              ),
+                              hintText: 'Adicionar notas...',
+                              fillColor: Colors.transparent,
+                              borderRadius: kRadiusNone,
+                              contentPadding: EdgeInsets.zero,
                             ),
                           ),
                         ],
@@ -1594,18 +1470,13 @@ class _AgendaTabState extends State<AgendaTab> {
                     // Botão eliminar (se edição)
                     if (_editing)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-                        child: OutlinedButton.icon(
-                          onPressed: () => _deleteEvent(_editingEvent!.id),
-                          icon: const Icon(Icons.delete_outline, color: Color(0xFFFF3B30), size: 16),
-                          label: const Text('Eliminar evento',
-                              style: TextStyle(color: Color(0xFFFF3B30))),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFFF3B30)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                        padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceXL),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FluentButton(
+                            label: 'Eliminar evento',
+                            onTap: () => _deleteEvent(_editingEvent!.id),
+                            style: FluentButtonStyle.destructive,
                           ),
                         ),
                       ),
@@ -1622,13 +1493,13 @@ class _AgendaTabState extends State<AgendaTab> {
   Widget _buildSettingRow(AppColorScheme s,
       {required String icon, required String label, required Widget trailing}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
       child: Row(
         children: [
           AppIcon(icon, color: s.onSurfaceVariant, size: 18),
-          const SizedBox(width: 12),
+          SizedBox(width: kSpaceM),
           Text(label,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.onSurface)),
+              style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w500, color: s.onSurface)),
           const Spacer(),
           trailing,
         ],
@@ -1652,7 +1523,7 @@ class _AgendaTabState extends State<AgendaTab> {
       onTap: onTap,
       onDoubleTap: onDoubleTap,
       child: Container(
-        margin: const EdgeInsets.all(2),
+        margin: EdgeInsets.all(kSpaceXXS),
         child: Opacity(
           opacity: inMonth ? 1 : 0.28,
           child: Column(
@@ -1669,44 +1540,44 @@ class _AgendaTabState extends State<AgendaTab> {
                 child: Text(
                   '${day.day}',
                   style: TextStyle(
-                    fontSize: 11.5,
+                    fontSize: kTypeCaption,
                     fontWeight: FontWeight.w600,
                     color: isToday
                         ? s.onPrimary
                         : (day.weekday == 0 || day.weekday == 6)
-                            ? const Color(0xFFFF3B30)
+                            ? _kWeekendColor
                             : textColor,
                   ),
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: kSpaceXXS),
               ...events.take(3).map((ev) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: EdgeInsets.symmetric(horizontal: kSpaceXXS),
                     child: InkWell(
                       onTap: () => onEventTap(ev),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                        padding: EdgeInsets.symmetric(horizontal: kSpaceXXS + 1, vertical: kSpaceXXS),
                         decoration: BoxDecoration(
                           color: ev.color.withOpacity(0.13),
                           border: Border(left: BorderSide(color: ev.color, width: 2.5)),
-                          borderRadius: BorderRadius.circular(3),
+                          borderRadius: BorderRadius.circular(kRadiusSmall),
                         ),
                         child: Text(
                           '${ev.allDay ? '' : '${_formatTime(ev.startTime)} '}${ev.title}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 9.5, color: ev.color),
+                          style: TextStyle(fontSize: kTypeCaption, color: ev.color),
                         ),
                       ),
                     ),
                   )),
               if (events.length > 3)
                 Padding(
-                  padding: const EdgeInsets.only(left: 4),
+                  padding: EdgeInsets.only(left: kSpaceXS),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text('+${events.length - 3} mais',
-                        style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w600, color: s.primary)),
+                        style: TextStyle(fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: s.primary)),
                   ),
                 ),
             ],
@@ -1724,12 +1595,12 @@ class _AgendaTabState extends State<AgendaTab> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        margin: EdgeInsets.symmetric(horizontal: kSpaceXXS, vertical: kSpaceXXS),
+        padding: EdgeInsets.symmetric(horizontal: kSpaceXS, vertical: kSpaceXXS),
         decoration: BoxDecoration(
           color: event.color.withOpacity(0.16),
           border: Border(left: BorderSide(color: event.color, width: 3)),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(kRadiusSmall),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1738,11 +1609,11 @@ class _AgendaTabState extends State<AgendaTab> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontSize: 10,
+                    fontSize: kTypeCaption,
                     fontWeight: FontWeight.w700,
                     color: event.color)),
             Text(_formatTime(event.startTime),
-                style: TextStyle(fontSize: 9, color: event.color.withOpacity(0.8))),
+                style: TextStyle(fontSize: kTypeCaption, color: event.color.withOpacity(0.8))),
           ],
         ),
       ),
@@ -1757,16 +1628,16 @@ class _AgendaTabState extends State<AgendaTab> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        margin: EdgeInsets.symmetric(vertical: kSpaceXXS),
+        padding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceXXS),
         decoration: BoxDecoration(
           color: event.color.withOpacity(0.13),
           border: Border(left: BorderSide(color: event.color, width: 3)),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(kRadiusMedium),
         ),
         child: Text(event.title,
             style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w600, color: event.color)),
+                fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: event.color)),
       ),
     );
   }
@@ -1779,31 +1650,31 @@ class _AgendaTabState extends State<AgendaTab> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        margin: EdgeInsets.symmetric(vertical: kSpaceXXS),
+        padding: EdgeInsets.symmetric(horizontal: kSpaceS + kSpaceXXS, vertical: kSpaceS),
         decoration: BoxDecoration(
           color: event.color.withOpacity(0.1),
           border: Border(left: BorderSide(color: event.color, width: 4)),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kRadiusLarge),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(event.title,
                 style: TextStyle(
-                    fontSize: 14,
+                    fontSize: kTypeBody,
                     fontWeight: FontWeight.w700,
                     color: event.color)),
-            const SizedBox(height: 2),
+            SizedBox(height: kSpaceXXS),
             Text(
               '${_formatTime(event.startTime)} – ${_formatTime(event.endTime)}',
-              style: TextStyle(fontSize: 12, color: event.color.withOpacity(0.8)),
+              style: TextStyle(fontSize: kTypeCaption, color: event.color.withOpacity(0.8)),
             ),
             if (event.location.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 2),
+                padding: EdgeInsets.only(top: kSpaceXXS),
                 child: Text('📍 ${event.location}',
-                    style: TextStyle(fontSize: 11, color: event.color.withOpacity(0.7))),
+                    style: TextStyle(fontSize: kTypeCaption, color: event.color.withOpacity(0.7))),
               ),
           ],
         ),
@@ -1819,17 +1690,17 @@ class _AgendaTabState extends State<AgendaTab> {
     return InkWell(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceXXS),
+        padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
         decoration: BoxDecoration(
           color: event.color.withOpacity(0.06),
           border: Border(left: BorderSide(color: event.color, width: 4)),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(kRadiusLarge),
         ),
         child: Row(
           children: [
             Container(width: 8, height: 8, decoration: BoxDecoration(color: event.color, shape: BoxShape.circle)),
-            const SizedBox(width: 10),
+            SizedBox(width: kSpaceS + kSpaceXXS),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1837,20 +1708,20 @@ class _AgendaTabState extends State<AgendaTab> {
                   Text(event.title,
                       style: TextStyle(
                           fontWeight: FontWeight.w700, color: s.onSurface)),
-                  const SizedBox(height: 2),
+                  SizedBox(height: kSpaceXXS),
                   Text(
                     event.allDay
                         ? 'Todo o dia'
                         : '${_formatTime(event.startTime)} – ${_formatTime(event.endTime)}',
-                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                    style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant),
                   ),
                   if (event.description.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: 4),
+                      padding: EdgeInsets.only(top: kSpaceXS),
                       child: Text(event.description,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 12, color: s.onSurfaceVariant.withOpacity(0.75))),
+                          style: TextStyle(fontSize: kTypeCaption, color: s.onSurfaceVariant.withOpacity(0.75))),
                     ),
                 ],
               ),
@@ -1879,5 +1750,123 @@ class _AgendaTabState extends State<AgendaTab> {
     const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
     const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
     return '${days[d.weekday]}, ${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Bottom sheet de detalhe de evento (extraído para component Fluent)
+// ─────────────────────────────────────────────────────────────────────
+class _AgendaDetailSheet extends StatelessWidget {
+  final AgendaEvent event;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _AgendaDetailSheet({
+    required this.event,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  String _formatTime(TimeOfDay time) {
+    final hour12 = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final period = time.hour >= 12 ? 'PM' : 'AM';
+    return '$hour12:${time.minute.toString().padLeft(2, '0')} $period';
+  }
+
+  String _formatFullDate(DateTime d) {
+    const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    return '${days[d.weekday]}, ${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: kSpaceXS, height: kSpaceXXXL, color: event.color),
+              SizedBox(width: kSpaceS + kSpaceXXS),
+              Expanded(
+                child: Text(
+                  event.title,
+                  style: TextStyle(
+                    fontSize: kTypeSubtitle,
+                    fontWeight: FontWeight.w800,
+                    color: s.onSurface,
+                  ),
+                ),
+              ),
+              FluentIconButton(
+                s: s,
+                icon: AppIcon('edit.svg', color: s.primary, size: 18),
+                onTap: onEdit,
+              ),
+              FluentIconButton(
+                s: s,
+                icon: AppIcon('trash.svg', color: s.error, size: 18),
+                onTap: onDelete,
+              ),
+              FluentIconButton(
+                s: s,
+                icon: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          _detailRow(s, 'calendar.svg', _formatFullDate(event.date)),
+          if (event.allDay)
+            _detailRow(s, 'clock.svg', 'Todo o dia')
+          else
+            _detailRow(s, 'clock.svg', '${_formatTime(event.startTime)} – ${_formatTime(event.endTime)}'),
+          if (event.location.isNotEmpty)
+            _detailRow(s, 'location.svg', event.location),
+          if (event.repeat != 'none')
+            _detailRow(
+                s,
+                'repeat.svg',
+                kRepeatLabels[kRepeatOptions.indexOf(event.repeat)]),
+          if (event.description.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppIcon('note.svg', color: s.onSurfaceVariant, size: 18),
+                  SizedBox(width: kSpaceM),
+                  Expanded(
+                    child: Text(
+                      event.description,
+                      style: TextStyle(color: s.onSurface),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(AppColorScheme s, String icon, String text) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS),
+      child: Row(
+        children: [
+          AppIcon(icon, color: s.onSurfaceVariant, size: 18),
+          SizedBox(width: kSpaceM),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

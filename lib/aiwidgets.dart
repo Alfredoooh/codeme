@@ -230,20 +230,24 @@ class _WidgetActionButtonState extends State<_WidgetActionButton> {
       onTapUp:     (_) => setState(() => _h = false),
       onTap:       a.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        color: _h ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        duration: kDurationFast,
+        color: _h ? s.subtleFillHover : Colors.transparent,
+        padding: EdgeInsets.symmetric(vertical: kSpaceS),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             AppIcon(a.icon, size: 15, color: color),
-            const SizedBox(width: 6),
+            SizedBox(width: kSpaceS),
             Flexible(
               child: Text(
                 a.label,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: color),
+                style: TextStyle(
+                  fontSize: kTypeCaption,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
               ),
             ),
           ],
@@ -291,7 +295,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: kDurationSlow,
     )..forward();
     _parseInitialData();
     _initChartType();
@@ -337,14 +341,12 @@ class _AiChartWidgetState extends State<AiChartWidget>
   Color _previewBg()     => widget.s.surface;
   Color _titleColor()    => widget.s.onSurface;
   Color _legendText()    => widget.s.onSurfaceVariant;
-  Color _actionsBg()     => widget.s.hover;
+  Color _actionsBg()     => widget.s.subtleFillHover;
   Color _primary()       => widget.s.primary;
 
   Future<void> _openOptions() async {
-    final result = await showModalBottomSheet(
+    final result = await showFluentBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _ChartOptionsSheet(
         initialType: _chartType,
         initialTitle: _title,
@@ -368,13 +370,13 @@ class _AiChartWidgetState extends State<AiChartWidget>
     final lines = _data.map((d) => '${d.label}: ${d.value}').join('\n');
     Clipboard.setData(ClipboardData(text: '$_title\n$lines'));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Dados copiados!')),
+      SnackBar(content: Text('Dados copiados!')),
     );
   }
 
   void _downloadChart() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Download em breve')),
+      SnackBar(content: Text('Download em breve')),
     );
   }
 
@@ -382,11 +384,11 @@ class _AiChartWidgetState extends State<AiChartWidget>
   Widget build(BuildContext context) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: _cardBg(),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: widget.s.outline.withOpacity(0.1)),
         boxShadow: widget.s.cardShadow,
       ),
@@ -398,19 +400,19 @@ class _AiChartWidgetState extends State<AiChartWidget>
             child: Container(
               decoration: BoxDecoration(
                 color: _previewBg(),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, 0),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         _title,
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: kTypeCaption,
                           fontWeight: FontWeight.w700,
                           color: _titleColor(),
                         ),
@@ -432,10 +434,10 @@ class _AiChartWidgetState extends State<AiChartWidget>
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                    padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceXS, kSpaceL, kSpaceM),
                     child: Wrap(
-                      spacing: 12,
-                      runSpacing: 4,
+                      spacing: kSpaceM,
+                      runSpacing: kSpaceXS,
                       alignment: WrapAlignment.start,
                       children: _data.asMap().entries.map((e) {
                         final item = e.value;
@@ -450,11 +452,11 @@ class _AiChartWidgetState extends State<AiChartWidget>
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            const SizedBox(width: 5),
+                            SizedBox(width: kSpaceXS),
                             Text(
                               item.label,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: kTypeCaption,
                                 color: _legendText(),
                               ),
                             ),
@@ -467,44 +469,24 @@ class _AiChartWidgetState extends State<AiChartWidget>
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: kSpaceS + kSpaceXXS),
           Container(
-            padding: const EdgeInsets.all(5),
+            padding: EdgeInsets.all(kSpaceXS),
             decoration: BoxDecoration(
               color: _actionsBg(),
-              borderRadius: BorderRadius.circular(50),
+              borderRadius: BorderRadius.circular(kRadiusCircle),
             ),
             child: Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
+                  child: FluentButton(
+                    label: 'Opções',
                     onTap: _openOptions,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      decoration: BoxDecoration(
-                        color: _primary(),
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AppIcon('sliders.svg', size: 14, color: widget.s.onPrimary),
-                          const SizedBox(width: 7),
-                          Text(
-                            'Opções',
-                            style: TextStyle(
-                              color: widget.s.onPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    style: FluentButtonStyle.primary,
+                    icon: AppIcon('sliders.svg', size: 14, color: widget.s.onPrimary),
                   ),
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: kSpaceS),
                 _CircularActionButton(
                   icon: 'copy.svg',
                   tooltip: 'Copiar',
@@ -512,7 +494,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
                   primary: _primary(),
                   onPrimary: widget.s.onPrimary,
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: kSpaceS),
                 _CircularActionButton(
                   icon: 'download.svg',
                   tooltip: 'Download',
@@ -624,48 +606,50 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
     super.dispose();
   }
 
-  Color _inputBg()      => widget.s.hover;
+  Color _inputBg()      => widget.s.subtleFillHover;
   Color _inputBorder()  => widget.s.outline;
   Color _inputText()    => widget.s.onSurface;
   Color _label()        => widget.s.onSurfaceVariant;
-  Color _chipInactiveBg() => widget.s.hover;
+  Color _chipInactiveBg() => widget.s.subtleFillHover;
   Color _chipInactiveBorder() => widget.s.outline;
   Color _chipInactiveText() => widget.s.onSurfaceVariant;
   Color _sheetBg()      => widget.s.cardBackground;
   Color _primary()      => widget.s.primary;
 
   Future<void> _pickColor(int index) async {
-    final selected = await showModalBottomSheet<Color>(
+    final selected = await showFluentBottomSheet<Color>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _sheetBg(),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
+      builder: (ctx) => FluentBottomSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
-                width: 36,
-                height: 4,
+                width: kSpaceXXXL,
+                height: kSpaceXS,
                 decoration: BoxDecoration(
                   color: _label(),
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(kRadiusSmall),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Text('Escolher cor', style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
+            SizedBox(height: kSpaceL),
+            Text(
+              'Escolher cor',
+              style: TextStyle(
+                color: _inputText(),
+                fontSize: kTypeBodyLarge,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(height: kSpaceM),
             Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _colorPalette.map((c) => GestureDetector(
+              spacing: kSpaceS + kSpaceXXS,
+              runSpacing: kSpaceS + kSpaceXXS,
+              children: _colorPalette.map((c) => AppTap(
                 onTap: () => Navigator.pop(ctx, c),
+                s: widget.s,
                 child: Container(
                   width: 32,
                   height: 32,
@@ -708,248 +692,186 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
-            decoration: BoxDecoration(
-              color: _sheetBg(),
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: widget.s.floatingShadow,
+    final s = widget.s;
+    return FluentBottomSheet(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: kSpaceXXXL,
+                height: kSpaceXS,
+                decoration: BoxDecoration(
+                  color: _label(),
+                  borderRadius: BorderRadius.circular(kRadiusSmall),
+                ),
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: _label(),
-                      borderRadius: BorderRadius.circular(3),
+            SizedBox(height: kSpaceL),
+            Text(
+              'Opções do gráfico',
+              style: TextStyle(color: _inputText(), fontSize: kTypeBodyLarge, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: kSpaceM),
+            Text(
+              'Tipo de gráfico',
+              style: TextStyle(fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4),
+            ),
+            SizedBox(height: kSpaceS),
+            Row(
+              children: _chartTypes.map((t) {
+                final active = _draftType == t.key;
+                return Expanded(
+                  child: AppTap(
+                    onTap: () => setState(() => _draftType = t.key),
+                    s: s,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: kSpaceM),
+                      margin: EdgeInsets.symmetric(horizontal: kSpaceXXS),
+                      decoration: BoxDecoration(
+                        color: active ? _primary() : _chipInactiveBg(),
+                        border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
+                        borderRadius: BorderRadius.circular(kRadiusLarge),
+                      ),
+                      child: AppIcon(t.icon, size: 17, color: active ? s.onPrimary : _chipInactiveText()),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text('Opções do gráfico',
-                    style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 14),
-                Text('Tipo de gráfico',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-                Row(
-                  children: _chartTypes.map((t) {
-                    final active = _draftType == t.key;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _draftType = t.key),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: kSpaceM),
+            Text(
+              'Título',
+              style: TextStyle(fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4),
+            ),
+            SizedBox(height: kSpaceS),
+            FluentTextField(
+              controller: _titleController,
+              fillColor: _inputBg(),
+              borderRadius: kRadiusLarge,
+              contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
+            ),
+            SizedBox(height: kSpaceM),
+            Text(
+              'Valores',
+              style: TextStyle(fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4),
+            ),
+            SizedBox(height: kSpaceS),
+            Column(
+              children: _draftData.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: kSpaceS),
+                  child: Row(
+                    children: [
+                      AppTap(
+                        onTap: () => _pickColor(index),
+                        s: s,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: 26,
+                          height: 26,
                           decoration: BoxDecoration(
-                            color: active ? _primary() : _chipInactiveBg(),
-                            border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
-                            borderRadius: BorderRadius.circular(14),
+                            color: item.color,
+                            borderRadius: BorderRadius.circular(kRadiusMedium),
                           ),
-                          child: AppIcon(t.icon, size: 17, color: active ? widget.s.onPrimary : _chipInactiveText()),
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 14),
-                Text('Título',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _titleController,
-                  style: TextStyle(color: _inputText(), fontSize: 14),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: _inputBg(),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _inputBorder()),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _inputBorder()),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _primary()),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text('Valores',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: _draftData.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final item = entry.value;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () => _pickColor(index),
-                                child: Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    color: item.color,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: _labelControllers[index],
-                                  onChanged: (v) => item.label = v,
-                                  style: TextStyle(color: _inputText(), fontSize: 13),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: _inputBg(),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _primary()),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 64,
-                                child: TextField(
-                                  controller: _valueControllers[index],
-                                  onChanged: (v) => item.value = double.tryParse(v) ?? 0,
-                                  keyboardType: TextInputType.number,
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(color: _inputText(), fontSize: 13),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: _inputBg(),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _primary()),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              GestureDetector(
-                                onTap: () => _removeRow(index),
-                                child: Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _chipInactiveBg(),
-                                  ),
-                                  child: AppIcon('close.svg', size: 12, color: _chipInactiveText()),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: _addRow,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _chipInactiveBorder(), width: 1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AppIcon('add.svg', size: 12, color: _label()),
-                        const SizedBox(width: 6),
-                        Text('Adicionar valor',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _label())),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                      SizedBox(width: kSpaceS),
+                      Expanded(
+                        child: FluentTextField(
+                          controller: _labelControllers[index],
+                          onChanged: (v) => item.label = v,
+                          fillColor: _inputBg(),
+                          borderRadius: kRadiusMedium,
+                          contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
+                        ),
+                      ),
+                      SizedBox(width: kSpaceS),
+                      SizedBox(
+                        width: 64,
+                        child: FluentTextField(
+                          controller: _valueControllers[index],
+                          onChanged: (v) => item.value = double.tryParse(v) ?? 0,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.right,
+                          fillColor: _inputBg(),
+                          borderRadius: kRadiusMedium,
+                          contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
+                        ),
+                      ),
+                      SizedBox(width: kSpaceXS),
+                      AppTap(
+                        onTap: () => _removeRow(index),
+                        s: s,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          width: 26,
+                          height: 26,
                           decoration: BoxDecoration(
+                            shape: BoxShape.circle,
                             color: _chipInactiveBg(),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: _chipInactiveBorder()),
                           ),
-                          alignment: Alignment.center,
-                          child: Text('Cancelar',
-                              style: TextStyle(color: _chipInactiveText(), fontSize: 14, fontWeight: FontWeight.w600)),
+                          child: AppIcon('close.svg', size: 12, color: _chipInactiveText()),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context, {
-                            'type': _draftType,
-                            'title': _titleController.text.trim().isEmpty ? 'Dados' : _titleController.text.trim(),
-                            'data': _draftData,
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _primary(),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text('Aplicar',
-                              style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: kSpaceS),
+            AppTap(
+              onTap: _addRow,
+              s: s,
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(vertical: kSpaceS + kSpaceXXS),
+                decoration: BoxDecoration(
+                  border: Border.all(color: _chipInactiveBorder(), width: 1),
+                  borderRadius: BorderRadius.circular(kRadiusLarge),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon('add.svg', size: 12, color: _label()),
+                    SizedBox(width: kSpaceS),
+                    Text(
+                      'Adicionar valor',
+                      style: TextStyle(fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: _label()),
                     ),
                   ],
                 ),
+              ),
+            ),
+            SizedBox(height: kSpaceM),
+            Row(
+              children: [
+                Expanded(
+                  child: FluentButton(
+                    label: 'Cancelar',
+                    onTap: () => Navigator.pop(context),
+                    style: FluentButtonStyle.secondary,
+                  ),
+                ),
+                SizedBox(width: kSpaceS),
+                Expanded(
+                  child: FluentButton(
+                    label: 'Aplicar',
+                    onTap: () {
+                      Navigator.pop(context, {
+                        'type': _draftType,
+                        'title': _titleController.text.trim().isEmpty ? 'Dados' : _titleController.text.trim(),
+                        'data': _draftData,
+                      });
+                    },
+                    style: FluentButtonStyle.primary,
+                  ),
+                ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1019,7 +941,7 @@ class _UnifiedChartPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: d.label,
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 10),
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: kTypeCaption),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -1085,7 +1007,7 @@ class _UnifiedChartPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: data[i].label,
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 10),
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: kTypeCaption),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -1120,7 +1042,7 @@ class _UnifiedChartPainter extends CustomPainter {
         text: total.round().toString(),
         style: TextStyle(
           color: isDark ? Colors.white : Colors.black,
-          fontSize: 15,
+          fontSize: kTypeBodyLarge,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -1143,7 +1065,8 @@ class AiMarketWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMarketWidget({super.key, required this.json, required this.s});
-  @override State<AiMarketWidget> createState() => _AiMarketWidgetState();
+  @override
+  State<AiMarketWidget> createState() => _AiMarketWidgetState();
 }
 
 class _MarketPair {
@@ -1201,7 +1124,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 420),
+      duration: kDurationNormal,
     )..addListener(() {
         setState(() => _progress = Curves.easeOutCubic.transform(_animController.value));
       });
@@ -1275,58 +1198,39 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   }
 
   Future<void> _openPairSelector() async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showFluentBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: widget.s.cardBackground,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+      builder: (ctx) => FluentBottomSheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
-                width: 36,
-                height: 4,
+                width: kSpaceXXXL,
+                height: kSpaceXS,
                 decoration: BoxDecoration(
                   color: widget.s.onSurfaceVariant,
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(kRadiusSmall),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: kSpaceL),
             Text(
               'Escolher par',
-              style: TextStyle(color: widget.s.onSurface, fontSize: 15, fontWeight: FontWeight.w700),
+              style: TextStyle(color: widget.s.onSurface, fontSize: kTypeBodyLarge, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: kSpaceM),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
                 children: _pairs.map((pair) {
                   final active = pair.key == _currentPairKey;
-                  return GestureDetector(
+                  return FluentListCard(
+                    title: pair.label,
+                    subtitle: pair.sub,
                     onTap: () => Navigator.pop(ctx, pair.key),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: active ? widget.s.primaryContainer.withOpacity(0.3) : widget.s.hover,
-                        border: Border.all(color: active ? widget.s.primary : widget.s.outline),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(pair.label, style: TextStyle(color: widget.s.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
-                          Text(pair.sub, style: TextStyle(color: widget.s.onSurfaceVariant, fontSize: 11)),
-                        ],
-                      ),
-                    ),
+                    selected: active,
                   );
                 }).toList(),
               ),
@@ -1352,11 +1256,11 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: widget.s.cardBackground,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: widget.s.outline.withOpacity(0.1)),
         boxShadow: widget.s.cardShadow,
       ),
@@ -1368,13 +1272,13 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
             child: Container(
               decoration: BoxDecoration(
                 color: widget.s.surface,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceXS),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1384,52 +1288,52 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                               pair.label,
                               style: TextStyle(
                                 color: widget.s.onSurface,
-                                fontSize: 14,
+                                fontSize: kTypeBody,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: kSpaceS),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              padding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceXXS),
                               decoration: BoxDecoration(
-                                color: widget.s.hover,
-                                borderRadius: BorderRadius.circular(8),
+                                color: widget.s.subtleFillHover,
+                                borderRadius: BorderRadius.circular(kRadiusMedium),
                               ),
                               child: Text(
                                 pair.badge,
                                 style: TextStyle(
                                   color: widget.s.onSurfaceVariant,
-                                  fontSize: 10,
+                                  fontSize: kTypeCaption,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: kSpaceXS),
                         Text(
                           _formatPrice(last, pair),
                           style: TextStyle(
                             color: widget.s.onSurface,
-                            fontSize: 24,
+                            fontSize: kTypeSubtitle,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: kSpaceXXS),
                         Row(
                           children: [
                             AnimatedRotation(
                               turns: isUp ? 0.0 : 0.5,
-                              duration: const Duration(milliseconds: 150),
+                              duration: kDurationFast,
                               child: AppIcon('chevron_up.svg', color: color, size: 14),
                             ),
-                            const SizedBox(width: 2),
+                            SizedBox(width: kSpaceXXS),
                             Text(
                               '${isUp ? '+' : ''}${change.toStringAsFixed(2)}% · $_currentTf',
                               style: TextStyle(
                                 color: color,
-                                fontSize: 12,
+                                fontSize: kTypeCaption,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1440,7 +1344,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                   ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                      padding: EdgeInsets.fromLTRB(kSpaceXS, kSpaceXS, kSpaceXS, 0),
                       child: CustomPaint(
                         painter: _MarketChartPainter(
                           series: series,
@@ -1452,26 +1356,27 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    padding: EdgeInsets.fromLTRB(kSpaceM, kSpaceS, kSpaceM, kSpaceM),
                     child: Row(
                       children: _timeframes.map((tf) {
                         final active = tf.key == _currentTf;
                         return Expanded(
-                          child: GestureDetector(
+                          child: AppTap(
                             onTap: () => _changeTimeframe(tf.key),
+                            s: widget.s,
                             child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 2),
-                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              margin: EdgeInsets.symmetric(horizontal: kSpaceXXS),
+                              padding: EdgeInsets.symmetric(vertical: kSpaceS),
                               decoration: BoxDecoration(
-                                color: active ? widget.s.hover : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
+                                color: active ? widget.s.subtleFillHover : Colors.transparent,
+                                borderRadius: BorderRadius.circular(kRadiusMedium),
                               ),
                               alignment: Alignment.center,
                               child: Text(
                                 tf.label,
                                 style: TextStyle(
                                   color: active ? widget.s.onSurface : widget.s.onSurfaceVariant,
-                                  fontSize: 11,
+                                  fontSize: kTypeCaption,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -1485,37 +1390,20 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: kSpaceS + kSpaceXXS),
           Container(
-            padding: const EdgeInsets.all(5),
+            padding: EdgeInsets.all(kSpaceXS),
             decoration: BoxDecoration(
-              color: widget.s.hover,
-              borderRadius: BorderRadius.circular(50),
+              color: widget.s.subtleFillHover,
+              borderRadius: BorderRadius.circular(kRadiusCircle),
             ),
-            child: GestureDetector(
-              onTap: _openPairSelector,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: widget.s.primary,
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppIcon('repaste.svg', color: widget.s.onPrimary, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Alterar moeda',
-                      style: TextStyle(
-                        color: widget.s.onPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FluentButton(
+                label: 'Alterar moeda',
+                onTap: _openPairSelector,
+                style: FluentButtonStyle.primary,
+                icon: AppIcon('repaste.svg', color: widget.s.onPrimary, size: 16),
               ),
             ),
           ),
@@ -1610,7 +1498,8 @@ class AiCalendarWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiCalendarWidget({super.key, required this.json, required this.s});
-  @override State<AiCalendarWidget> createState() => _AiCalendarWidgetState();
+  @override
+  State<AiCalendarWidget> createState() => _AiCalendarWidgetState();
 }
 
 class _AiCalendarWidgetState extends State<AiCalendarWidget> {
@@ -1646,91 +1535,66 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
   Color _cardBg()          => widget.s.cardBackground;
   Color _previewBg()       => widget.s.surface;
   Color _monthTextColor()  => widget.s.onSurface;
-  Color _navBtnBg()        => widget.s.hover;
+  Color _navBtnBg()        => widget.s.subtleFillHover;
   Color _navIconColor()    => widget.s.onSurfaceVariant;
   Color _weekdayColor()    => widget.s.onSurfaceVariant;
   Color _dayNumColor()     => widget.s.onSurface;
   Color _otherMonthColor() => widget.s.onSurfaceVariant.withOpacity(0.5);
-  Color _selectedBg()      => widget.s.hover;
-  Color _actionsBg()       => widget.s.hover;
+  Color _selectedBg()      => widget.s.subtleFillHover;
+  Color _actionsBg()       => widget.s.subtleFillHover;
   Color _accent()          => widget.s.primary;
 
   void _openNewEventSheet() {
     final s = widget.s;
     final nameCtrl = TextEditingController();
     final timeCtrl = TextEditingController();
-    showModalBottomSheet(
+    showFluentBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Material(
-          type: MaterialType.transparency,
-          child: SafeArea(
-            top: false,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: SheetGrabber(s: s)),
-                  Text('Novo evento · $_selectedKey',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: nameCtrl,
-                    style: TextStyle(color: s.onSurface),
-                    decoration: InputDecoration(
-                      hintText: 'Nome do evento',
-                      hintStyle: TextStyle(color: s.onSurfaceVariant),
-                      filled: true, fillColor: s.hover,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: timeCtrl,
-                    style: TextStyle(color: s.onSurface),
-                    decoration: InputDecoration(
-                      hintText: 'Hora (ex: 14:00)',
-                      hintStyle: TextStyle(color: s.onSurfaceVariant),
-                      filled: true, fillColor: s.hover,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () {
-                      if (nameCtrl.text.trim().isEmpty) return;
-                      setState(() {
-                        _events.putIfAbsent(_selectedKey, () => []).add((
-                          name: nameCtrl.text.trim(),
-                          time: timeCtrl.text.trim(),
-                          color: const Color(0xFF6F5AF6),
-                        ));
-                      });
-                      Navigator.pop(ctx);
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-                      child: Text('Adicionar', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
-                    ),
-                  ),
-                ],
+      builder: (ctx) => FluentBottomSheet(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Novo evento · $_selectedKey',
+              style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
+            ),
+            SizedBox(height: kSpaceM),
+            FluentTextField(
+              controller: nameCtrl,
+              hintText: 'Nome do evento',
+              fillColor: s.subtleFillHover,
+              borderRadius: kRadiusLarge,
+              contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
+            ),
+            SizedBox(height: kSpaceS + kSpaceXXS),
+            FluentTextField(
+              controller: timeCtrl,
+              hintText: 'Hora (ex: 14:00)',
+              fillColor: s.subtleFillHover,
+              borderRadius: kRadiusLarge,
+              contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
+            ),
+            SizedBox(height: kSpaceL),
+            SizedBox(
+              width: double.infinity,
+              child: FluentButton(
+                label: 'Adicionar',
+                onTap: () {
+                  if (nameCtrl.text.trim().isEmpty) return;
+                  setState(() {
+                    _events.putIfAbsent(_selectedKey, () => []).add((
+                      name: nameCtrl.text.trim(),
+                      time: timeCtrl.text.trim(),
+                      color: const Color(0xFF6F5AF6),
+                    ));
+                  });
+                  Navigator.pop(ctx);
+                },
+                style: FluentButtonStyle.primary,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1788,11 +1652,11 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: _cardBg(),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: widget.s.outline.withOpacity(0.1)),
         boxShadow: widget.s.cardShadow,
       ),
@@ -1804,20 +1668,20 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             child: Container(
               decoration: BoxDecoration(
                 color: _previewBg(),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+                    padding: EdgeInsets.fromLTRB(kSpaceL, kSpaceM, kSpaceL, kSpaceS + kSpaceXXS),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           '${_months[m - 1]} $y',
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: kTypeBodyLarge,
                             fontWeight: FontWeight.w700,
                             color: _monthTextColor(),
                             letterSpacing: 0.2,
@@ -1829,7 +1693,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                               icon: 'chevron_left.svg',
                               onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1)),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: kSpaceS),
                             _buildNavButton(
                               icon: 'chevron_right.svg',
                               onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1)),
@@ -1840,14 +1704,14 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: EdgeInsets.symmetric(horizontal: kSpaceS + kSpaceXXS),
                     child: Row(
                       children: _weekdays.map((w) => Expanded(
                         child: Center(
                           child: Text(
                             w,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: kTypeCaption,
                               fontWeight: FontWeight.w600,
                               color: _weekdayColor(),
                               letterSpacing: 0.5,
@@ -1857,10 +1721,10 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                       )).toList(),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: kSpaceXS),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceS + kSpaceXXS),
                       child: Column(
                         children: rows.map((row) => Expanded(
                           child: Row(
@@ -1874,37 +1738,20 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: kSpaceS + kSpaceXXS),
           Container(
-            padding: const EdgeInsets.all(5),
+            padding: EdgeInsets.all(kSpaceXS),
             decoration: BoxDecoration(
               color: _actionsBg(),
-              borderRadius: BorderRadius.circular(50),
+              borderRadius: BorderRadius.circular(kRadiusCircle),
             ),
-            child: GestureDetector(
-              onTap: _openNewEventSheet,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: _accent(),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppIcon('add.svg', size: 14, color: widget.s.onPrimary),
-                    const SizedBox(width: 7),
-                    Text(
-                      'Novo evento',
-                      style: TextStyle(
-                        color: widget.s.onPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FluentButton(
+                label: 'Novo evento',
+                onTap: _openNewEventSheet,
+                style: FluentButtonStyle.primary,
+                icon: AppIcon('add.svg', size: 14, color: widget.s.onPrimary),
               ),
             ),
           ),
@@ -1914,8 +1761,9 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
   }
 
   Widget _buildNavButton({required String icon, required VoidCallback onTap}) {
-    return GestureDetector(
+    return AppTap(
       onTap: onTap,
+      s: widget.s,
       child: Container(
         width: 28,
         height: 28,
@@ -1936,9 +1784,9 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     required List<Color> eventColors,
     required VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return AppTap(
       onTap: onTap,
+      s: widget.s,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
@@ -1957,7 +1805,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: kTypeCaption,
                 fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
                 color: isToday
                     ? widget.s.onPrimary
@@ -1969,12 +1817,12 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
           ),
           if (eventColors.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: EdgeInsets.only(top: kSpaceXXS),
               child: Column(
                 children: eventColors.take(2).map((c) => Container(
                   width: 4,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 1),
+                  margin: EdgeInsets.only(bottom: kSpaceXXS),
                   decoration: BoxDecoration(
                     color: c,
                     shape: BoxShape.circle,
@@ -1996,7 +1844,8 @@ class AiTimerWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiTimerWidget({super.key, required this.json, required this.s});
-  @override State<AiTimerWidget> createState() => _AiTimerWidgetState();
+  @override
+  State<AiTimerWidget> createState() => _AiTimerWidgetState();
 }
 
 class _AiTimerWidgetState extends State<AiTimerWidget> {
@@ -2021,7 +1870,7 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
       setState(() => _running = false);
     } else {
       setState(() => _running = true);
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _timer = Timer.periodic(kDurationPage, (_) {
         if (_remaining <= 0) {
           _timer?.cancel();
           setState(() => _running = false);
@@ -2052,44 +1901,66 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
       decoration: BoxDecoration(
         color: s.cardBackground,
         border: Border.all(color: s.outline.withOpacity(0.4), width: 1.5),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(kRadiusLarge),
         boxShadow: s.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-          child: Column(children: [
-            if (_label.isNotEmpty) ...[
-              Text(_label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: s.onSurfaceVariant)),
-              const SizedBox(height: 10),
-            ],
-            SizedBox(
-              width: 140, height: 140,
-              child: Stack(alignment: Alignment.center, children: [
-                CustomPaint(
-                  size: const Size(140, 140),
-                  painter: _TimerRingPainter(progress: progress, isDark: s.isDark),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(kSpaceXL, kSpaceXXL, kSpaceXL, kSpaceL),
+            child: Column(
+              children: [
+                if (_label.isNotEmpty) ...[
+                  Text(
+                    _label,
+                    style: TextStyle(fontSize: kTypeCaption, fontWeight: FontWeight.w600, color: s.onSurfaceVariant),
+                  ),
+                  SizedBox(height: kSpaceS + kSpaceXXS),
+                ],
+                SizedBox(
+                  width: 140,
+                  height: 140,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(140, 140),
+                        painter: _TimerRingPainter(progress: progress, isDark: s.isDark),
+                      ),
+                      Text(
+                        _formatted,
+                        style: TextStyle(
+                          fontSize: kTypeTitle,
+                          fontWeight: FontWeight.w800,
+                          color: s.onSurface,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(_formatted, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: s.onSurface, letterSpacing: -0.5)),
-              ]),
+              ],
             ),
-          ]),
-        ),
-        _WidgetActionBar(s: s, actions: [
-          _WidgetAction(
-            icon: _running ? 'pause.svg' : 'play.svg',
-            label: _running ? 'Pausar' : 'Iniciar',
-            primary: true,
-            onTap: _toggle,
           ),
-          _WidgetAction(icon: 'refresh.svg', label: 'Reiniciar', onTap: _reset),
-        ]),
-      ]),
+          _WidgetActionBar(
+            s: s,
+            actions: [
+              _WidgetAction(
+                icon: _running ? 'pause.svg' : 'play.svg',
+                label: _running ? 'Pausar' : 'Iniciar',
+                primary: true,
+                onTap: _toggle,
+              ),
+              _WidgetAction(icon: 'refresh.svg', label: 'Reiniciar', onTap: _reset),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2147,7 +2018,8 @@ class AiMindMapWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMindMapWidget({super.key, required this.json, required this.s});
-  @override State<AiMindMapWidget> createState() => _AiMindMapWidgetState();
+  @override
+  State<AiMindMapWidget> createState() => _AiMindMapWidgetState();
 }
 
 class _AiMindMapWidgetState extends State<AiMindMapWidget> {
@@ -2268,11 +2140,11 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
     final s = widget.s;
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: s.outline.withOpacity(0.1)),
         boxShadow: s.cardShadow,
       ),
@@ -2313,15 +2185,16 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
                   ),
                 ),
                 Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
+                  top: kSpaceS,
+                  right: kSpaceS,
+                  child: AppTap(
                     onTap: _openExpanded,
+                    s: s,
                     child: Container(
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: s.hover,
+                        color: s.subtleFillHover,
                         shape: BoxShape.circle,
                         border: Border.all(color: s.outline),
                       ),
@@ -2350,11 +2223,11 @@ Widget build(BuildContext context) {
   final textColor = isRoot
       ? const Color(0xFF4A3B00)
       : Colors.white;
-  final fontSize = isRoot ? 15.0 : 12.0;
+  final fontSize = isRoot ? kTypeBodyLarge : kTypeCaption;
   final padding = isRoot
-      ? const EdgeInsets.symmetric(horizontal: 26, vertical: 14)
-      : const EdgeInsets.symmetric(horizontal: 18, vertical: 10);
-  final borderRadius = isRoot ? 14.0 : 20.0;
+      ? EdgeInsets.symmetric(horizontal: kSpaceXXL, vertical: kSpaceM)
+      : EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS + kSpaceXXS);
+  final borderRadius = isRoot ? kRadiusLarge : kRadiusXLarge;
 
   return Container(
     padding: padding,
@@ -2364,7 +2237,7 @@ Widget build(BuildContext context) {
       boxShadow: [
         BoxShadow(
           color: Colors.black.withOpacity(0.1),
-          blurRadius: 5,
+          blurRadius: kSpaceS,
           offset: const Offset(0, 2),
         ),
       ],
@@ -2443,7 +2316,7 @@ class AiMindMapExpandedScreen extends StatelessWidget {
         elevation: 0,
         title: Text(
           'Mapa mental',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: s.onSurface),
+          style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
         ),
       ),
       body: Scrollbar(
@@ -2531,7 +2404,8 @@ class AiMathGraphWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMathGraphWidget({super.key, required this.json, required this.s});
-  @override State<AiMathGraphWidget> createState() => _AiMathGraphWidgetState();
+  @override
+  State<AiMathGraphWidget> createState() => _AiMathGraphWidgetState();
 }
 
 class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
@@ -2764,7 +2638,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     _animDir = 1;
     _animating = true;
     setState(() {});
-    _animTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+    _animTimer = Timer.periodic(kDurationNormal, (_) {
       if (!mounted) return;
       final key = firstParam.key;
       final speed = (firstParam.max - firstParam.min) / 140;
@@ -2782,10 +2656,8 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
   }
 
   Future<void> _openEditSheet() async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showFluentBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _MathTypeSheet(
         currentType: _currentType,
         functionDefs: _functionDefs,
@@ -2807,7 +2679,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
       children: def.params.map((param) {
         final value = _params[param.key] ?? param.defaultValue;
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.only(bottom: kSpaceS),
           child: Row(
             children: [
               SizedBox(
@@ -2816,7 +2688,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                   child: Text(
                     param.symbol,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: kTypeCaption,
                       fontStyle: FontStyle.italic,
                       fontFamily: 'Georgia',
                       color: widget.s.onSurface,
@@ -2849,7 +2721,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                   _fmt(value),
                   textAlign: TextAlign.right,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: kTypeCaption,
                     color: widget.s.onSurfaceVariant,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -2865,11 +2737,11 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
   Widget _buildLegend() {
     final def = _currentDef;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+      padding: EdgeInsets.fromLTRB(kSpaceM, kSpaceXS, kSpaceM, kSpaceS + kSpaceXXS),
       child: Row(
         children: [
           _LegendItem(color: def.color, label: def.label),
-          const SizedBox(width: 14),
+          SizedBox(width: kSpaceM),
           _LegendItem(color: widget.s.outline, label: 'eixos'),
         ],
       ),
@@ -2878,49 +2750,29 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
 
   Widget _buildActionBar() {
     return Container(
-      padding: const EdgeInsets.all(5),
+      padding: EdgeInsets.all(kSpaceXS),
       decoration: BoxDecoration(
-        color: widget.s.hover,
-        borderRadius: BorderRadius.circular(50),
+        color: widget.s.subtleFillHover,
+        borderRadius: BorderRadius.circular(kRadiusCircle),
       ),
       child: Row(
         children: [
           Expanded(
-            child: GestureDetector(
+            child: FluentButton(
+              label: 'Editar',
               onTap: _openEditSheet,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: widget.s.primary,
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppIcon('edit.svg', size: 15, color: widget.s.onPrimary),
-                    const SizedBox(width: 7),
-                    Text(
-                      'Editar',
-                      style: TextStyle(
-                        color: widget.s.onPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              style: FluentButtonStyle.primary,
+              icon: AppIcon('edit.svg', size: 15, color: widget.s.onPrimary),
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: kSpaceS),
           _CircleActionButton(
             svgAsset: _animating ? 'pause.svg' : 'play.svg',
             onTap: _toggleAnimation,
             active: _animating,
             s: widget.s,
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: kSpaceS),
           _CircleActionButton(
             svgAsset: 'refresh.svg',
             onTap: _reset,
@@ -2936,11 +2788,11 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
     final s = widget.s;
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: s.outline.withOpacity(0.1)),
         boxShadow: s.cardShadow,
       ),
@@ -2952,14 +2804,14 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
             child: Container(
               decoration: BoxDecoration(
                 color: s.surface,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                    padding: EdgeInsets.fromLTRB(kSpaceM, kSpaceS + kSpaceXXS, kSpaceM, 0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2969,20 +2821,20 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                             _eqString,
                             style: TextStyle(
                               color: s.onSurface,
-                              fontSize: 15,
+                              fontSize: kTypeBodyLarge,
                               fontFamily: 'Georgia',
                               fontStyle: FontStyle.italic,
                             ),
                           ),
                         ),
                         if (_rootsString != null) ...[
-                          const SizedBox(width: 8),
+                          SizedBox(width: kSpaceS),
                           Text(
                             _rootsString!,
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               color: s.onSurfaceVariant,
-                              fontSize: 10.5,
+                              fontSize: kTypeCaption,
                               height: 1.4,
                             ),
                           ),
@@ -3006,16 +2858,16 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: kSpaceS + kSpaceXXS),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             decoration: BoxDecoration(
-              color: s.hover,
-              borderRadius: BorderRadius.circular(20),
+              color: s.subtleFillHover,
+              borderRadius: BorderRadius.circular(kRadiusXLarge),
             ),
             child: _buildSliders(),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: kSpaceS + kSpaceXXS),
           _buildActionBar(),
         ],
       ),
@@ -3038,8 +2890,9 @@ class _CircleActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppTap(
       onTap: onTap,
+      s: s,
       child: Container(
         width: 36,
         height: 36,
@@ -3071,14 +2924,14 @@ class _LegendItem extends StatelessWidget {
           height: 2,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(kRadiusSmall),
           ),
         ),
-        const SizedBox(width: 5),
+        SizedBox(width: kSpaceXS),
         Text(
           label,
           style: TextStyle(
-            fontSize: 11,
+            fontSize: kTypeCaption,
             color: AppTheme.of(context).onSurfaceVariant,
           ),
         ),
@@ -3116,119 +2969,69 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
   @override
   Widget build(BuildContext context) {
     final types = widget.functionDefs.keys.toList();
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
-          decoration: BoxDecoration(
-            color: widget.s.cardBackground,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: widget.s.floatingShadow,
+    return FluentBottomSheet(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: kSpaceXXXL,
+              height: kSpaceXS,
+              decoration: BoxDecoration(
+                color: widget.s.onSurfaceVariant,
+                borderRadius: BorderRadius.circular(kRadiusSmall),
+              ),
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          SizedBox(height: kSpaceL),
+          Text(
+            'Editar gráfico',
+            style: TextStyle(
+              color: widget.s.onSurface,
+              fontSize: kTypeBodyLarge,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: kSpaceM),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: kSpaceS,
+            crossAxisSpacing: kSpaceS,
+            childAspectRatio: 2.2,
+            children: types.map((key) {
+              final def = widget.functionDefs[key]!;
+              final active = key == _pendingType;
+              return FluentChip(
+                label: def.label,
+                selected: active,
+                onTap: () => setState(() => _pendingType = key),
+              );
+            }).toList(),
+          ),
+          SizedBox(height: kSpaceL),
+          Row(
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: widget.s.onSurfaceVariant,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
+              Expanded(
+                child: FluentButton(
+                  label: 'Cancelar',
+                  onTap: () => Navigator.pop(context),
+                  style: FluentButtonStyle.secondary,
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Editar gráfico',
-                style: TextStyle(
-                  color: widget.s.onSurface,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              SizedBox(width: kSpaceS),
+              Expanded(
+                child: FluentButton(
+                  label: 'Aplicar',
+                  onTap: () => Navigator.pop(context, _pendingType),
+                  style: FluentButtonStyle.primary,
                 ),
-              ),
-              const SizedBox(height: 14),
-              GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 2.2,
-                children: types.map((key) {
-                  final def = widget.functionDefs[key]!;
-                  final active = key == _pendingType;
-                  return GestureDetector(
-                    onTap: () => setState(() => _pendingType = key),
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: active ? widget.s.primary : widget.s.hover,
-                        border: Border.all(
-                          color: active ? widget.s.primary : widget.s.outline,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        def.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: active ? widget.s.onPrimary : widget.s.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: widget.s.hover,
-                          border: Border.all(color: widget.s.outline),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          'Cancelar',
-                          style: TextStyle(color: widget.s.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context, _pendingType),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: widget.s.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          'Aplicar',
-                          style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -3307,8 +3110,8 @@ class _MathGraphPainter extends CustomPainter {
       ..lineTo(originX + 4, graphRect.top + 8);
     canvas.drawPath(arrowY, axisPaint);
 
-    _drawText(canvas, 'x', Offset(graphRect.right - 14, originY - 8), labelColor, fontSize: 11, fontStyle: FontStyle.italic);
-    _drawText(canvas, 'y', Offset(originX + 8, graphRect.top + 14), labelColor, fontSize: 11, fontStyle: FontStyle.italic);
+    _drawText(canvas, 'x', Offset(graphRect.right - 14, originY - 8), labelColor, fontSize: kTypeCaption, fontStyle: FontStyle.italic);
+    _drawText(canvas, 'y', Offset(originX + 8, graphRect.top + 14), labelColor, fontSize: kTypeCaption, fontStyle: FontStyle.italic);
 
     _drawTicks(canvas, graphRect, stepX, stepY, originY, originX, labelColor);
 
@@ -3422,7 +3225,7 @@ class _MathGraphPainter extends CustomPainter {
       final px = rect.left + (x - xMin) / (xMax - xMin) * rect.width;
       if (px < rect.left || px > rect.right) continue;
       final tp = TextPainter(
-        text: TextSpan(text: _fmt(x), style: TextStyle(color: color, fontSize: 9)),
+        text: TextSpan(text: _fmt(x), style: TextStyle(color: color, fontSize: kTypeCaption)),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(px - tp.width / 2, originY + 4));
@@ -3433,14 +3236,14 @@ class _MathGraphPainter extends CustomPainter {
       final py = rect.bottom - (y - yMin) / (yMax - yMin) * rect.height;
       if (py < rect.top || py > rect.bottom) continue;
       final tp = TextPainter(
-        text: TextSpan(text: _fmt(y), style: TextStyle(color: color, fontSize: 9)),
+        text: TextSpan(text: _fmt(y), style: TextStyle(color: color, fontSize: kTypeCaption)),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(rect.left - tp.width - 6, py - tp.height / 2));
     }
   }
 
-  void _drawText(Canvas canvas, String text, Offset offset, Color color, {double fontSize = 11, FontStyle fontStyle = FontStyle.normal}) {
+  void _drawText(Canvas canvas, String text, Offset offset, Color color, {double fontSize = kTypeCaption, FontStyle fontStyle = FontStyle.normal}) {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
@@ -3545,7 +3348,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: kDurationSlower,
     )..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.8, end: 1.4).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeOut),
@@ -3561,7 +3364,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
 
   Color get _cardBg => widget.s.cardBackground;
   Color get _previewBg => widget.s.surface;
-  Color get _actionsBg => widget.s.hover;
+  Color get _actionsBg => widget.s.subtleFillHover;
   Color get _badgeBg => widget.s.cardBackground.withOpacity(0.9);
   Color get _badgeText => widget.s.onSurface;
   Color get _searchText => widget.s.onSurface;
@@ -3593,7 +3396,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível obter a localização.')),
+          SnackBar(content: Text('Não foi possível obter a localização.')),
         );
       }
     } finally {
@@ -3616,7 +3419,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
       if (list.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Local não encontrado.')),
+            SnackBar(content: Text('Local não encontrado.')),
           );
         }
         return;
@@ -3640,7 +3443,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro na pesquisa.')),
+          SnackBar(content: Text('Erro na pesquisa.')),
         );
       }
     } finally {
@@ -3653,11 +3456,11 @@ class _AiMapWidgetState extends State<AiMapWidget>
     final s = widget.s;
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
+      margin: EdgeInsets.symmetric(vertical: kSpaceS),
+      padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: _cardBg,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: s.outline.withOpacity(0.1)),
         boxShadow: s.cardShadow,
       ),
@@ -3669,7 +3472,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
             child: Container(
               decoration: BoxDecoration(
                 color: _previewBg,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
@@ -3704,13 +3507,13 @@ class _AiMapWidgetState extends State<AiMapWidget>
                     ],
                   ),
                   Positioned(
-                    top: 12,
-                    left: 14,
+                    top: kSpaceM,
+                    left: kSpaceM,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      padding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceS),
                       decoration: BoxDecoration(
                         color: _badgeBg,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(kRadiusXLarge),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -3720,12 +3523,12 @@ class _AiMapWidgetState extends State<AiMapWidget>
                             color: s.primary,
                             size: 13,
                           ),
-                          const SizedBox(width: 6),
+                          SizedBox(width: kSpaceS),
                           Text(
                             _name,
                             style: TextStyle(
                               color: _badgeText,
-                              fontSize: 12,
+                              fontSize: kTypeCaption,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -3734,10 +3537,11 @@ class _AiMapWidgetState extends State<AiMapWidget>
                     ),
                   ),
                   Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: GestureDetector(
+                    bottom: kSpaceM,
+                    right: kSpaceM,
+                    child: AppTap(
                       onTap: _locateUser,
+                      s: s,
                       child: Container(
                         width: 36,
                         height: 36,
@@ -3747,20 +3551,17 @@ class _AiMapWidgetState extends State<AiMapWidget>
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.4),
-                              blurRadius: 8,
+                              blurRadius: kSpaceS,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: Center(
                           child: _locating
-                              ? SizedBox(
+                              ? FluentShimmer(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: s.primary,
-                                  ),
+                                  borderRadius: kRadiusSmall,
                                 )
                               : AppIcon(
                                   'locate.svg',
@@ -3775,33 +3576,29 @@ class _AiMapWidgetState extends State<AiMapWidget>
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: kSpaceS + kSpaceXXS),
           Container(
-            padding: const EdgeInsets.all(5),
+            padding: EdgeInsets.all(kSpaceXS),
             decoration: BoxDecoration(
               color: _actionsBg,
-              borderRadius: BorderRadius.circular(50),
+              borderRadius: BorderRadius.circular(kRadiusCircle),
             ),
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: FluentTextField(
                     controller: _searchCtrl,
-                    style: TextStyle(color: _searchText, fontSize: 14),
-                    cursorColor: s.primary,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Procurar morada ou local…',
-                      hintStyle: TextStyle(color: _searchHint, fontSize: 14),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
+                    hintText: 'Procurar morada ou local…',
+                    fillColor: Colors.transparent,
+                    borderRadius: kRadiusCircle,
+                    contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
                     onSubmitted: (_) => _search(),
                   ),
                 ),
-                const SizedBox(width: 6),
-                GestureDetector(
+                SizedBox(width: kSpaceS),
+                AppTap(
                   onTap: _search,
+                  s: s,
                   child: Container(
                     width: 36,
                     height: 36,
@@ -3811,13 +3608,10 @@ class _AiMapWidgetState extends State<AiMapWidget>
                     ),
                     child: Center(
                       child: _searching
-                          ? SizedBox(
+                          ? FluentShimmer(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: s.onPrimary,
-                              ),
+                              borderRadius: kRadiusSmall,
                             )
                           : AppIcon(
                               'search.svg',
@@ -3888,22 +3682,26 @@ class _PulsingMapMarker extends StatelessWidget {
 class AiSmallDotsLoader extends StatefulWidget {
   final Color color;
   const AiSmallDotsLoader({super.key, required this.color});
-  @override State<AiSmallDotsLoader> createState() => _AiSmallDotsLoaderState();
+  @override
+  State<AiSmallDotsLoader> createState() => _AiSmallDotsLoaderState();
 }
 
-class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader> with SingleTickerProviderStateMixin {
+class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c;
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat();
+    _c = AnimationController(vsync: this, duration: kDurationSlower)..repeat();
   }
-  @override void dispose() { _c.dispose(); super.dispose(); }
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 32, height: 8,
+      width: kSpaceXXXL,
+      height: kSpaceS,
       child: AnimatedBuilder(
         animation: _c,
         builder: (_, __) => Row(
@@ -3915,7 +3713,11 @@ class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader> with SingleTicker
             final scale = 0.5 + 0.5 * (t < 0.5 ? (t * 2) : (2 - t * 2));
             return Transform.scale(
               scale: scale,
-              child: Container(width: 6, height: 6, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+              ),
             );
           }),
         ),
