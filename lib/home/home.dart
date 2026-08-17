@@ -6,6 +6,7 @@ import '../colors.dart';
 import '../widgets.dart';
 import '../templatestab.dart';
 import '../projectstab.dart';
+import '../aitab.dart' show LocalCanvasItem;
 import 'agendatab.dart';
 
 // ══════════════════════════════════════════════════════════════
@@ -42,7 +43,11 @@ extension HomeTabX on HomeTab {
 // ══════════════════════════════════════════════════════════════
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  /// Chamado quando o utilizador toca num template ou ficheiro de
+  /// projeto. A Home fecha-se e o RootShell abre o documento no editor.
+  final ValueChanged<LocalCanvasItem>? onOpenDocument;
+
+  const HomeScreen({super.key, this.onOpenDocument});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -55,12 +60,17 @@ class _HomeScreenState extends State<HomeScreen> {
     if (t != _tab) setState(() => _tab = t);
   }
 
+  void _openDocument(LocalCanvasItem item) {
+    Navigator.of(context).pop();
+    widget.onOpenDocument?.call(item);
+  }
+
   Widget _buildTab() {
     switch (_tab) {
       case HomeTab.templates:
-        return const TemplatesTab();
+        return TemplatesTab(onOpenTemplate: _openDocument);
       case HomeTab.projects:
-        return const ProjectsTab();
+        return ProjectsTab(onOpenFile: _openDocument);
       case HomeTab.agenda:
         return const AgendaTab();
     }

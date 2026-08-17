@@ -780,6 +780,101 @@ class ProjectsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
+// EVENTS API
+// ══════════════════════════════════════════════════════════════
+class EventItem {
+  final String id;
+  final String title;
+  final String description;
+  final int startAt;
+  final int endAt;
+  final bool allDay;
+  final String color;
+
+  const EventItem({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.startAt,
+    required this.endAt,
+    required this.allDay,
+    required this.color,
+  });
+
+  DateTime get startDate => DateTime.fromMillisecondsSinceEpoch(startAt);
+  DateTime get endDate => DateTime.fromMillisecondsSinceEpoch(endAt);
+
+  factory EventItem.fromJson(Map<String, dynamic> j) => EventItem(
+        id: j['id']?.toString() ?? '',
+        title: j['title']?.toString() ?? '',
+        description: j['description']?.toString() ?? '',
+        startAt: (j['startAt'] is num) ? (j['startAt'] as num).toInt() : 0,
+        endAt: (j['endAt'] is num) ? (j['endAt'] as num).toInt() : 0,
+        allDay: j['allDay'] == true,
+        color: j['color']?.toString() ?? '#6F5AF6',
+      );
+}
+
+class EventsApiService {
+  static Future<List<EventItem>> list(String token) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$kApiBase/events'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) return [];
+      final data = _decode(res.body);
+      final events = data['events'];
+      if (events is! List) return [];
+      return events.whereType<Map<String, dynamic>>().map(EventItem.fromJson).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<EventItem?> create(
+    String token, {
+    required String title,
+    String description = '',
+    required int startAt,
+    int? endAt,
+    bool allDay = false,
+    String color = '#6F5AF6',
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$kApiBase/events'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({
+          'title': title,
+          'description': description,
+          'startAt': startAt,
+          if (endAt != null) 'endAt': endAt,
+          'allDay': allDay,
+          'color': color,
+        }),
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      return EventItem.fromJson(_decode(res.body));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> delete(String token, String id) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$kApiBase/events/$id'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // AI CHAT API
 // ══════════════════════════════════════════════════════════════
 class AiApiService {

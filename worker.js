@@ -518,6 +518,84 @@ async function handleDeleteProjectNode(request, env) {
   return json({ success: true, deleted: toDelete.length });
 }
 
+// ══════════════════════════════════════════════════════════════
+// AGENDA — eventos simples por utilizador, mesmo padrão de KV
+// storage já usado para conversas e projetos.
+// ══════════════════════════════════════════════════════════════
+
+async function handleListEvents(request, env) {
+  const payload = await getAuthUser(request, env);
+  if (!payload) return error("Não autenticado", 401);
+  const raw = await env.IPC_USERS.get("events:" + payload.id);
+  const ids = raw ? JSON.parse(raw) : [];
+  const all = await Promise.all(ids.map(async function(id) {
+    const data = await env.IPC_USERS.get("event:" + id);
+    return data ? JSON.parse(data) : null;
+  }));
+  const events = all.filter(function(e) { return e !== null; })
+    .sort(function(a, b) { return a.startAt - b.startAt; });
+  return json({ events });
+}
+
+async function handleCreateEvent(request, env) {
+  const payload = await getAuthUser(request, env);
+  if (!payload) return error("Não autenticado", 401);
+  const body = await request.json().catch(function() { return null; });
+  if (!body || !body.title || !body.startAt) return error("Campos 'title' e 'startAt' obrigatórios");
+  const id = crypto.randomUUID();
+  const event = {
+    id, userId: payload.id,
+    title: body.title,
+    description: body.description || "",
+    startAt: Number(body.startAt),
+    endAt: body.endAt ? Number(body.endAt) : Number(body.startAt) + 3600000,
+    allDay: !!body.allDay,
+    color: body.color || "#6F5AF6",
+    createdAt: Date.now(),
+  };
+  await env.IPC_USERS.put("event:" + id, JSON.stringify(event));
+  const raw = await env.IPC_USERS.get("events:" + payload.id);
+  const ids = raw ? JSON.parse(raw) : [];
+  ids.push(id);
+  await env.IPC_USERS.put("events:" + payload.id, JSON.stringify(ids));
+  return json(event, 201);
+}
+
+async function handleUpdateEvent(request, env) {
+  const payload = await getAuthUser(request, env);
+  if (!payload) return error("Não autenticado", 401);
+  const id = new URL(request.url).pathname.split("/").pop();
+  const data = await env.IPC_USERS.get("event:" + id);
+  if (!data) return error("Evento não encontrado", 404);
+  const event = JSON.parse(data);
+  if (event.userId !== payload.id) return error("Acesso negado", 403);
+  const body = await request.json().catch(function() { return null; });
+  if (!body) return error("Body inválido");
+  if (body.title       !== undefined) event.title       = body.title;
+  if (body.description !== undefined) event.description = body.description;
+  if (body.startAt     !== undefined) event.startAt     = Number(body.startAt);
+  if (body.endAt       !== undefined) event.endAt       = Number(body.endAt);
+  if (body.allDay      !== undefined) event.allDay      = !!body.allDay;
+  if (body.color       !== undefined) event.color       = body.color;
+  await env.IPC_USERS.put("event:" + id, JSON.stringify(event));
+  return json(event);
+}
+
+async function handleDeleteEvent(request, env) {
+  const payload = await getAuthUser(request, env);
+  if (!payload) return error("Não autenticado", 401);
+  const id = new URL(request.url).pathname.split("/").pop();
+  const data = await env.IPC_USERS.get("event:" + id);
+  if (!data) return error("Evento não encontrado", 404);
+  const event = JSON.parse(data);
+  if (event.userId !== payload.id) return error("Acesso negado", 403);
+  await env.IPC_USERS.delete("event:" + id);
+  const raw = await env.IPC_USERS.get("events:" + payload.id);
+  const ids = raw ? JSON.parse(raw) : [];
+  await env.IPC_USERS.put("events:" + payload.id, JSON.stringify(ids.filter(function(i) { return i !== id; })));
+  return json({ success: true });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
@@ -559,6 +637,11 @@ export default {
     if (path.match(/^\/projects\/[^/]+$/)                 && request.method === "GET")    return handleGetProjectNode(request, env);
     if (path.match(/^\/projects\/[^/]+$/)                 && request.method === "PUT")    return handleUpdateProjectNode(request, env);
     if (path.match(/^\/projects\/[^/]+$/)                 && request.method === "DELETE") return handleDeleteProjectNode(request, env);
+
+    if (path === "/events"                                && request.method === "GET")    return handleListEvents(request, env);
+    if (path === "/events"                                && request.method === "POST")   return handleCreateEvent(request, env);
+    if (path.match(/^\/events\/[^/]+$/)                   && request.method === "PUT")    return handleUpdateEvent(request, env);
+    if (path.match(/^\/events\/[^/]+$/)                   && request.method === "DELETE") return handleDeleteEvent(request, env);
 
     if (path === "/admin/stats"                                       && request.method === "GET")    return handleAdminStats(request, env);
     if (path === "/admin/users"                                       && request.method === "GET")    return handleAdminListUsers(request, env);
