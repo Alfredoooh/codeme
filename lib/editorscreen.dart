@@ -91,17 +91,7 @@ class EditTabController extends ChangeNotifier {
 final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
-// EDITOR SCREEN — dispose explícito dos WebViews adicionado. Isto é a
-// correção real do cinza no drawer: sem chamar controller.dispose()
-// aqui, a superfície nativa Android do Hybrid Composition podia
-// sobreviver 1-2 frames depois do widget Flutter já ter sido
-// removido da árvore, e nesse intervalo compunha por cima de
-// QUALQUER overlay Flutter (incluindo o drawer), porque o z-order
-// dessa superfície é gerido pelo sistema operativo Android, não pelo
-// Stack/Positioned do Flutter. Chamar dispose() explicitamente no
-// WidgetsBinding do próprio widget garante que a View nativa é
-// destruída no mesmo ciclo, antes do próximo frame poder desenhar
-// outra coisa por cima dela.
+// EDITOR SCREEN — dispose explícito dos WebViews adicionado.
 // ══════════════════════════════════════════════════════════════
 
 class EditorScreen extends StatefulWidget {
@@ -127,22 +117,10 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   void dispose() {
     editTabController.removeListener(_onPendingLoad);
-    // Dispose explícito de cada WebViewController — força o Android a
-    // destruir a superfície nativa Hybrid Composition de imediato, no
-    // mesmo ciclo de dispose do widget Flutter, em vez de deixar essa
-    // destruição pendente para um frame futuro incerto. Isto é o que
-    // impede a superfície órfã de aparecer como retângulo cinza sólido
-    // por cima do drawer ou de qualquer outro overlay.
     for (final ctrl in _controllers.values) {
       try {
         ctrl?.dispose();
-      } catch (_) {
-        // Alguns estados internos do plugin podem já ter sido
-        // limpos pelo próprio Flutter antes de chegarmos aqui —
-        // ignorar é seguro, o objetivo (não sobrar superfície viva)
-        // já está garantido de qualquer forma pelo dispose do
-        // widget nativo em si.
-      }
+      } catch (_) {}
     }
     super.dispose();
   }
@@ -177,26 +155,6 @@ class _EditorScreenState extends State<EditorScreen> {
     ctrl.evaluateJavascript(source: "editorApi.setContent('$escaped')");
   }
 
-  /// CORREÇÃO (bug real confirmado): antes, esta função ignorava
-  /// item.kind e chamava sempre _injectCanvas, que chama sempre
-  /// editorApi.setContent(...) — mesmo para sheet/slide, cujos HTML
-  /// (sheets.html, slides.html) já expõem editorApi.setContentFromAi
-  /// especificamente para conteúdo vindo da IA.
-  ///
-  /// Confirmado contra o código real de sheets.html e slides.html:
-  /// `function setContentFromAi(json) { setContent(json); return
-  /// true; }` — ou seja, setContentFromAi é um wrapper fino que
-  /// delega para o mesmo setContent(json), que por sua vez faz
-  /// `JSON.parse(json || '{}')` internamente. Isto significa que
-  /// setContentFromAi espera uma STRING JSON, exatamente como
-  /// setContent — não um objeto já parseado. Por isso o escaping de
-  /// string usado abaixo é o mesmo que _injectCanvas já usa para doc,
-  /// só troca o nome da função JS chamada consoante o kind.
-  ///
-  /// whiteboard.html também segue este padrão: `function
-  /// setContent(json) { var dados = JSON.parse(json || '{}'); ... }`
-  /// — mesma necessidade de string escapada, via setContent normal
-  /// (whiteboard.html não expõe setContentFromAi, só setContent).
   void _injectLocalCanvas(InAppWebViewController ctrl, LocalCanvasItem item) {
     if (item.kind == LocalCanvasKind.doc) {
       _injectCanvas(ctrl, item.content);
@@ -207,7 +165,6 @@ class _EditorScreenState extends State<EditorScreen> {
           .replaceAll('\n', '\\n');
       ctrl.evaluateJavascript(source: "editorApi.setContentFromAi('$escaped')");
     } else {
-      // whiteboard: usa setContent normal, mesmo escaping.
       _injectCanvas(ctrl, item.content);
     }
   }
@@ -401,10 +358,6 @@ class _AiEditFabState extends State<_AiEditFab> {
 }
 
 // ── Modal de input do FAB de sparkles ─────────────────────────────
-// Bordas retas/coladas (Bloco D): margin 10→0, borderRadius 28→14,
-// e cantos curvos só no topo (bottom sheet colado às bordas laterais
-// e inferior da tela, como o padrão de showCraftBottomSheet em
-// sheets.dart — que já estava correto e serviu de referência aqui).
 
 Future<String?> showAiEditModal(
   BuildContext context,
@@ -514,7 +467,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
-  final GlobalKey _anchorBoxKey = GlobalKey();
+  final LayerLink _anchorLink = LayerLink();
 
   @override
   void initState() {
@@ -529,24 +482,11 @@ class _EditTypeButtonState extends State<EditTypeButton>
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
-    final box = _anchorBoxKey.currentContext!.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz  = box.size;
     _ac.forward(from: 0);
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
-      final screenSize = MediaQuery.of(ctx).size;
-      const estimatedHeight = 200.0;
-      final desiredTop = off.dy + sz.height + 6;
-      final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
-      final top = overflowsBottom ? null : desiredTop;
-      final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
-      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - 220 - 12);
 
-      // NOTA (Bloco D): popup pequeno ancorado ao botão de tipo de
-      // editor no header — não é bottom sheet full-width. circular(28)
-      // mantido de propósito, conforme a distinção pedida.
       return Stack(children: [
         Positioned.fill(
           child: GestureDetector(
@@ -555,10 +495,12 @@ class _EditTypeButtonState extends State<EditTypeButton>
             child: Container(color: Colors.transparent),
           ),
         ),
-        Positioned(
-          top: top,
-          bottom: bottom,
-          right: right,
+        CompositedTransformFollower(
+          link: _anchorLink,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
+          offset: const Offset(0, 6),
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -570,7 +512,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 scale: Tween(begin: 0.92, end: 1.0)
                     .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
                     .value,
-                alignment: overflowsBottom ? Alignment.bottomRight : Alignment.topRight,
+                alignment: Alignment.topRight,
                 child: child,
               ),
             ),
@@ -614,16 +556,18 @@ class _EditTypeButtonState extends State<EditTypeButton>
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: _anchorBoxKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: IgnorePointer(
-          child: AppTap(
-            onTap: () {},
-            s: widget.s,
-            size: 36,
-            child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+  Widget build(BuildContext context) => CompositedTransformTarget(
+        link: _anchorLink,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _toggle,
+          child: IgnorePointer(
+            child: AppTap(
+              onTap: () {},
+              s: widget.s,
+              size: 36,
+              child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+            ),
           ),
         ),
       );

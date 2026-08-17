@@ -631,7 +631,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
-  final GlobalKey _anchorKey = GlobalKey();
+  final LayerLink _anchorLink = LayerLink();
   late ValueNotifier<bool> _webNotifier;
   late ValueNotifier<bool> _widgetsNotifier;
 
@@ -665,9 +665,6 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
-    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz  = box.size;
     _ac.forward(from: 0);
     _webNotifier.value = widget.webSearchEnabled;
     _widgetsNotifier.value = widget.widgetsEnabled;
@@ -676,13 +673,6 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
       final s = widget.s;
       final screenSize = MediaQuery.of(ctx).size;
       const width = 260.0;
-      const estimatedHeight = 400.0;
-
-      final desiredTop = off.dy + sz.height + 6;
-      final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
-      final top = overflowsBottom ? null : desiredTop;
-      final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
-      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - width - 12);
 
       return Stack(children: [
         Positioned.fill(
@@ -692,10 +682,12 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
             child: Container(color: Colors.transparent),
           ),
         ),
-        Positioned(
-          top: top,
-          bottom: bottom,
-          right: right,
+        CompositedTransformFollower(
+          link: _anchorLink,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
+          offset: const Offset(0, 6),
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -707,7 +699,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                 scale: Tween(begin: 0.92, end: 1.0)
                     .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
                     .value,
-                alignment: overflowsBottom ? Alignment.bottomRight : Alignment.topRight,
+                alignment: Alignment.topRight,
                 child: child,
               ),
             ),
@@ -825,15 +817,17 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: _anchorKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: IgnorePointer(
-          child: AppTap(
-            onTap: () {},
-            s: widget.s,
-            child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+  Widget build(BuildContext context) => CompositedTransformTarget(
+        link: _anchorLink,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _toggle,
+          child: IgnorePointer(
+            child: AppTap(
+              onTap: () {},
+              s: widget.s,
+              child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+            ),
           ),
         ),
       );
@@ -1219,6 +1213,8 @@ class AiTabState extends State<AiTab> {
   StreamSubscription<ChatStreamEvent>? _streamSub;
 
   final FocusNode _inputFocus = FocusNode();
+  final LayerLink _attachLink = LayerLink();
+  final LayerLink _modelLink  = LayerLink();
 
   @override
   void initState() {
@@ -1311,9 +1307,6 @@ class AiTabState extends State<AiTab> {
     final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
     final imageAttachments = pendingAttachments.where((f) => f.mimeType.startsWith('image/')).toList();
 
-    // A DeepSeek não processa imagens — nunca finge analisar o que não
-    // consegue ver. Anexa uma nota clara ao conteúdo enviado, para que
-    // tanto o modelo como o histórico reflitam a limitação real.
     var effectiveContent = t;
     if (imageAttachments.isNotEmpty) {
       final names = imageAttachments.map((f) => f.name).join(', ');
@@ -1444,7 +1437,7 @@ class AiTabState extends State<AiTab> {
   Future<void> _createConversationWithGeneratedTitle(String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
-    if (_conversationId != null) return; // já criada entretanto, não duplicar
+    if (_conversationId != null) return;
     final title = await AiApiService.generateTitle(token, firstMessage);
     if (!mounted) return;
     if (_incognito || _conversationId != null) return;
@@ -1578,11 +1571,11 @@ class AiTabState extends State<AiTab> {
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
-  void _openAttachSheet(GlobalKey anchorKey) {
+  void _openAttachSheet(LayerLink link) {
     showAttachPopup(
       context,
       AppTheme.of(context),
-      anchorKey: anchorKey,
+      link: link,
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
@@ -1603,11 +1596,11 @@ class AiTabState extends State<AiTab> {
     );
   }
 
-  void _openModelPopup(GlobalKey anchorKey) {
+  void _openModelPopup(LayerLink link) {
     showModelSelectPopup(
       context,
       AppTheme.of(context),
-      anchorKey: anchorKey,
+      link: link,
       current: _model,
       onSelect: _onModelSelected,
     );
@@ -1744,9 +1737,6 @@ class AiTabState extends State<AiTab> {
     _send();
   }
 
-  final GlobalKey _attachAnchorKey = GlobalKey();
-  final GlobalKey _modelAnchorKey  = GlobalKey();
-
   @override
   void dispose() {
     _ctrl.dispose();
@@ -1845,12 +1835,12 @@ class AiTabState extends State<AiTab> {
             attachedFilesCount: _attachedFiles.length,
             incognito: _incognito,
             sending: _sending,
-            attachAnchorKey: _attachAnchorKey,
-            modelAnchorKey: _modelAnchorKey,
+            attachLink: _attachLink,
+            modelLink: _modelLink,
             onSend: _send,
-            onAttach: () => _openAttachSheet(_attachAnchorKey),
+            onAttach: () => _openAttachSheet(_attachLink),
             onVoice: _openVoiceSheet,
-            onModel: () => _openModelPopup(_modelAnchorKey),
+            onModel: () => _openModelPopup(_modelLink),
             onClearTool: _onClearTool,
             onOpenAttachedFiles: _openAttachedFilesSheet,
           ),
@@ -2797,8 +2787,8 @@ class _ChatInput extends StatelessWidget {
   final int attachedFilesCount;
   final bool incognito;
   final bool sending;
-  final GlobalKey attachAnchorKey;
-  final GlobalKey modelAnchorKey;
+  final LayerLink attachLink;
+  final LayerLink modelLink;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onVoice;
@@ -2815,8 +2805,8 @@ class _ChatInput extends StatelessWidget {
     required this.attachedFilesCount,
     required this.incognito,
     required this.sending,
-    required this.attachAnchorKey,
-    required this.modelAnchorKey,
+    required this.attachLink,
+    required this.modelLink,
     required this.onSend,
     required this.onAttach,
     required this.onVoice,
@@ -2887,44 +2877,48 @@ class _ChatInput extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
             child: Row(
               children: [
-                GestureDetector(
-                  key: attachAnchorKey,
-                  onTap: onAttach,
-                  child: Container(
-                    width: 36, height: 36,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
-                      shape: BoxShape.circle,
+                CompositedTransformTarget(
+                  link: attachLink,
+                  child: GestureDetector(
+                    onTap: onAttach,
+                    child: Container(
+                      width: 36, height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: AppIcon('add.svg', color: s.onSurface, size: 22),
                     ),
-                    child: AppIcon('add.svg', color: s.onSurface, size: 22),
                   ),
                 ),
                 const SizedBox(width: 6),
-                GestureDetector(
-                  key: modelAnchorKey,
-                  onTap: onModel,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: s.hover,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(model.label,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: s.onSurface)),
-                        const SizedBox(width: 3),
-                        Text(model.badge,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: s.onSurfaceVariant)),
-                      ],
+                CompositedTransformTarget(
+                  link: modelLink,
+                  child: GestureDetector(
+                    onTap: onModel,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: s.hover,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(model.label,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: s.onSurface)),
+                          const SizedBox(width: 3),
+                          Text(model.badge,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: s.onSurfaceVariant)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -3070,7 +3064,7 @@ class _AttachedFilesPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP (posição dinâmica com teclado)
+// ATTACH POPUP (LayerLink + CompositedTransformFollower)
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera }
@@ -3078,7 +3072,7 @@ enum _AttachAction { files, photos, camera }
 void showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
-  required GlobalKey anchorKey,
+  required LayerLink link,
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
@@ -3098,21 +3092,7 @@ void showAttachPopup(
   }
 
   entry = OverlayEntry(builder: (ctx) {
-    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return const SizedBox.shrink();
-    final off = box.localToGlobal(Offset.zero);
-    final sz = box.size;
-    final screenSize = MediaQuery.of(ctx).size;
-    final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
-    final usableBottom = screenSize.height - keyboardInset;
-
     const width = 240.0;
-    const estimatedHeight = 210.0;
-    final spaceAbove = off.dy;
-    final spaceBelow = usableBottom - (off.dy + sz.height);
-    final opensUp = spaceBelow < estimatedHeight + 24 && spaceAbove >= estimatedHeight + 24;
-    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
-    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
 
     final entries = <PopupMenuEntry<_AttachAction>>[
       const PopupMenuEntry(value: _AttachAction.files, label: 'Arquivos', subtitle: 'Enviar qualquer tipo de arquivo', svgIcon: 'file.svg'),
@@ -3128,9 +3108,12 @@ void showAttachPopup(
           child: Container(color: Colors.transparent),
         ),
       ),
-      Positioned(
-        top: top,
-        left: left,
+      CompositedTransformFollower(
+        link: link,
+        showWhenUnlinked: false,
+        targetAnchor: Alignment.topLeft,
+        followerAnchor: Alignment.bottomLeft,
+        offset: const Offset(0, -6),
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -3141,7 +3124,7 @@ void showAttachPopup(
               scale: Tween(begin: 0.92, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: opensUp ? Alignment.bottomLeft : Alignment.topLeft,
+              alignment: Alignment.bottomLeft,
               child: child,
             ),
           ),
@@ -3470,13 +3453,13 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP (posição dinâmica com teclado)
+// MODEL SELECT POPUP (LayerLink + CompositedTransformFollower)
 // ══════════════════════════════════════════════════════════════
 
 void showModelSelectPopup(
   BuildContext context,
   AppColorScheme s, {
-  required GlobalKey anchorKey,
+  required LayerLink link,
   required AiModel current,
   required ValueChanged<AiModel> onSelect,
 }) {
@@ -3494,21 +3477,7 @@ void showModelSelectPopup(
   }
 
   entry = OverlayEntry(builder: (ctx) {
-    final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return const SizedBox.shrink();
-    final off = box.localToGlobal(Offset.zero);
-    final sz = box.size;
-    final screenSize = MediaQuery.of(ctx).size;
-    final keyboardInset = MediaQuery.of(ctx).viewInsets.bottom;
-    final usableBottom = screenSize.height - keyboardInset;
-
     const width = 250.0;
-    const estimatedHeight = 200.0;
-    final spaceAbove = off.dy;
-    final spaceBelow = usableBottom - (off.dy + sz.height);
-    final opensUp = spaceBelow < estimatedHeight + 24 && spaceAbove >= estimatedHeight + 24;
-    final top = opensUp ? off.dy - 6 - estimatedHeight : off.dy + sz.height + 6;
-    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
 
     return Stack(children: [
       Positioned.fill(
@@ -3518,9 +3487,12 @@ void showModelSelectPopup(
           child: Container(color: Colors.transparent),
         ),
       ),
-      Positioned(
-        top: top,
-        left: left,
+      CompositedTransformFollower(
+        link: link,
+        showWhenUnlinked: false,
+        targetAnchor: Alignment.topLeft,
+        followerAnchor: Alignment.bottomLeft,
+        offset: const Offset(0, -6),
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -3531,7 +3503,7 @@ void showModelSelectPopup(
               scale: Tween(begin: 0.92, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: opensUp ? Alignment.bottomLeft : Alignment.topLeft,
+              alignment: Alignment.bottomLeft,
               child: child,
             ),
           ),

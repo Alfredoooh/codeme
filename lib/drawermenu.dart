@@ -175,17 +175,6 @@ final ConversationsController conversationsController = ConversationsController(
 
 // ══════════════════════════════════════════════════════════════
 // DRAWER — renderizado dentro do painel deslizante em main.dart
-// (implementação nativa com Stack/AnimatedPositioned, sem pacote
-// externo). Recebe um VoidCallback onClose do RootShell e chama-o
-// em cada ação que deve fechar o drawer.
-//
-// FIX: drawerKey (GlobalKey<SliderDrawerState>) removido e
-// substituído por onClose (VoidCallback) — o pacote
-// flutter_slider_drawer foi removido do projeto por falhas
-// repetidas de build relacionadas com a API do enum/classe
-// SlideDirection na v3.0.2 (ver nota detalhada em main.dart). O
-// drawer passou a ser controlado diretamente pelo estado do
-// RootShell.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -276,17 +265,17 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeDrawer();
   }
 
-  void _openConvPopup(BuildContext context, GlobalKey anchorKey, ConversationItem item) {
+  void _openConvPopup(BuildContext context, LayerLink anchorLink, ConversationItem item) {
     showConversationOptionsPopup(
       context,
       widget.s,
-      anchorKey: anchorKey,
+      anchorLink: anchorLink,
       item: item,
       onOpen: () => _openConversation(item),
       onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
       onArchive: () => conversationsController.archive(item.id, !item.archived),
       onRename: () => _openRenamePopup(context, item),
-      onDelete: () => _confirmDeletePopup(context, anchorKey, item),
+      onDelete: () => _confirmDeletePopup(context, item),
     );
   }
 
@@ -299,7 +288,7 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  void _confirmDeletePopup(BuildContext context, GlobalKey anchorKey, ConversationItem item) {
+  void _confirmDeletePopup(BuildContext context, ConversationItem item) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -454,7 +443,7 @@ class _AppDrawerState extends State<AppDrawer> {
               item: item,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
-              onOptions: (key) => _openConvPopup(context, key, item),
+              onOptions: (link) => _openConvPopup(context, link, item),
               onArchive: () => conversationsController.archive(item.id, true),
               onDelete: () => conversationsController.delete(item.id),
             ),
@@ -472,7 +461,7 @@ class _AppDrawerState extends State<AppDrawer> {
             item: item,
             active: item.id == widget.activeConversationId,
             onTap: () => _openConversation(item),
-            onOptions: (key) => _openConvPopup(context, key, item),
+            onOptions: (link) => _openConvPopup(context, link, item),
             onArchive: () => conversationsController.archive(item.id, true),
             onDelete: () => conversationsController.delete(item.id),
           ),
@@ -552,7 +541,7 @@ class _ConvTile extends StatefulWidget {
   final ConversationItem item;
   final bool active;
   final VoidCallback onTap;
-  final ValueChanged<GlobalKey> onOptions;
+  final ValueChanged<LayerLink> onOptions;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
   const _ConvTile({
@@ -569,7 +558,7 @@ class _ConvTile extends StatefulWidget {
 
 class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixin {
   bool _h = false;
-  final GlobalKey _anchorKey = GlobalKey();
+  final LayerLink _anchorLink = LayerLink();
 
   double _dragDx = 0;
   bool _resolved = false;
@@ -627,50 +616,52 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
           ),
         Transform.translate(
           offset: Offset(_dragDx, 0),
-          child: GestureDetector(
-            key: _anchorKey,
-            behavior: HitTestBehavior.opaque,
-            onTapDown:   (_) => setState(() => _h = true),
-            onTapCancel: ()  => setState(() => _h = false),
-            onTapUp:     (_) => setState(() => _h = false),
-            onTap: widget.onTap,
-            onLongPress: () => widget.onOptions(_anchorKey),
-            onHorizontalDragUpdate: _onDragUpdate,
-            onHorizontalDragEnd: _onDragEnd,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: widget.active
-                    ? s.navIndicatorBg
-                    : (_h ? s.hover : s.surface),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(widget.item.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
-                          color: widget.active ? s.navLabelActive : s.onSurface,
-                        ),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    if (widget.item.preview.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(widget.item.preview,
-                          style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ],
-                  ]),
+          child: CompositedTransformTarget(
+            link: _anchorLink,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown:   (_) => setState(() => _h = true),
+              onTapCancel: ()  => setState(() => _h = false),
+              onTapUp:     (_) => setState(() => _h = false),
+              onTap: widget.onTap,
+              onLongPress: () => widget.onOptions(_anchorLink),
+              onHorizontalDragUpdate: _onDragUpdate,
+              onHorizontalDragEnd: _onDragEnd,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                margin: const EdgeInsets.symmetric(vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: widget.active
+                      ? s.navIndicatorBg
+                      : (_h ? s.hover : s.surface),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                if (widget.item.pinned) ...[
-                  const SizedBox(width: 6),
-                  AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
-                ],
-              ]),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(widget.item.title,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
+                            color: widget.active ? s.navLabelActive : s.onSurface,
+                          ),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if (widget.item.preview.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(widget.item.preview,
+                            style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ]),
+                  ),
+                  if (widget.item.pinned) ...[
+                    const SizedBox(width: 6),
+                    AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+                  ],
+                ]),
+              ),
             ),
           ),
         ),
@@ -682,7 +673,7 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
 void showConversationOptionsPopup(
   BuildContext context,
   AppColorScheme s, {
-  required GlobalKey anchorKey,
+  required LayerLink anchorLink,
   required ConversationItem item,
   required VoidCallback onOpen,
   required VoidCallback onTogglePin,
@@ -690,11 +681,6 @@ void showConversationOptionsPopup(
   required VoidCallback onRename,
   required VoidCallback onDelete,
 }) {
-  final box = anchorKey.currentContext!.findRenderObject() as RenderBox;
-  final off = box.localToGlobal(Offset.zero);
-  final sz = box.size;
-  final screenSize = MediaQuery.of(context).size;
-
   late OverlayEntry entry;
   final controller = AnimationController(
     vsync: Navigator.of(context),
@@ -710,12 +696,6 @@ void showConversationOptionsPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const width = 232.0;
-    const estimatedHeight = 244.0;
-    final desiredTop = off.dy + sz.height + 6;
-    final overflowsBottom = desiredTop + estimatedHeight > screenSize.height - 24;
-    final top = overflowsBottom ? null : desiredTop;
-    final bottom = overflowsBottom ? screenSize.height - off.dy + 6 : null;
-    final left = off.dx.clamp(12.0, screenSize.width - width - 12);
 
     return Stack(children: [
       Positioned.fill(
@@ -725,10 +705,12 @@ void showConversationOptionsPopup(
           child: Container(color: Colors.transparent),
         ),
       ),
-      Positioned(
-        top: top,
-        bottom: bottom,
-        left: left,
+      CompositedTransformFollower(
+        link: anchorLink,
+        showWhenUnlinked: false,
+        targetAnchor: Alignment.bottomLeft,
+        followerAnchor: Alignment.topLeft,
+        offset: const Offset(0, 6),
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -739,7 +721,7 @@ void showConversationOptionsPopup(
               scale: Tween(begin: 0.92, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: overflowsBottom ? Alignment.bottomLeft : Alignment.topLeft,
+              alignment: Alignment.topLeft,
               child: child,
             ),
           ),
@@ -1053,8 +1035,6 @@ class _AccountPillState extends State<_AccountPill> {
 
   Uint8List? _decodeAvatar(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      // URL remoto (ex: avatar do Google/Firebase) — não é base64,
-      // não deve ser decodificado aqui. Tratado à parte via Image.network.
       return null;
     }
     try {
@@ -1064,8 +1044,6 @@ class _AccountPillState extends State<_AccountPill> {
           : raw;
       return base64Decode(b64);
     } catch (_) {
-      // Base64 malformado/truncado — nunca deixar rebentar o build do
-      // drawer inteiro por causa de uma imagem de perfil inválida.
       return null;
     }
   }
