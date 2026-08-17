@@ -1197,7 +1197,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                   final active = pair.key == _currentPairKey;
                   return FluentListCard(
                     s: widget.s,
-                    radius: kRadiusLarge,
+                    radius: BorderRadius.circular(kRadiusLarge),
                     label: pair.label,
                     subtitle: pair.sub,
                     onTap: () => Navigator.pop(context, pair.key),
