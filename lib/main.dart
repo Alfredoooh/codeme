@@ -77,9 +77,10 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer estilo overlay slide (iOS): drawer desliza
-// por cima do conteúdo, conteúdo fica parado, overlay escurece
-// atrás do drawer.
+// ROOT SHELL — drawer estilo "push" com gesto contínuo.
+// O drawer fica sempre fixo por baixo; o conteúdo principal desliza
+// para a direita conforme o dedo, com encolhimento e cantos que
+// arredondam proporcionalmente ao progresso do gesto.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -92,7 +93,7 @@ class _RootShellState extends State<RootShell>
     with ThemeReactive<RootShell>, SingleTickerProviderStateMixin {
   late final AnimationController _drawerCtrl = AnimationController(
     vsync: this,
-    duration: kDurationDrawer,
+    duration: kDurationSlower,
     value: 0.0,
   );
 
@@ -104,8 +105,8 @@ class _RootShellState extends State<RootShell>
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer() => _drawerCtrl.animateTo(1.0, curve: kAppleDrawer);
-  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: kAppleDrawer);
+  void _openDrawer() => _drawerCtrl.animateTo(1.0, curve: kFluentStandard);
+  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: kFluentStandard);
   void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
 
   @override
@@ -273,52 +274,110 @@ class _RootShellState extends State<RootShell>
       backgroundColor: s.surface,
       body: Stack(
         children: [
-          bodyContent,
-          AnimatedBuilder(
-            animation: _drawerCtrl,
-            builder: (_, __) {
-              if (_drawerCtrl.value == 0.0) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: _closeDrawer,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  color: Colors.black.withOpacity(0.45 * _drawerCtrl.value),
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: _drawerWidth,
+            child: Material(
+              color: s.surface,
+              child: AnimatedBuilder(
+                animation: _AiTabHeaderRefresh.of(context),
+                builder: (_, __) => AppDrawer(
+                  s: s,
+                  onClose: _closeDrawer,
+                  onSettings: _openSettings,
+                  currentTab: _tab,
+                  onSelectTab: _selectTab,
+                  onOpenConversation: _onOpenConversation,
+                  onNewChat: () =>
+                      _onConversationAction(ConversationAction.newChat),
+                  activeConversationId:
+                      _aiTabKey.currentState?.conversationId,
                 ),
-              );
-            },
+              ),
+            ),
           ),
-          AnimatedBuilder(
-            animation: _drawerCtrl,
-            builder: (_, child) {
-              final t = _drawerCtrl.value;
-              return Transform.translate(
-                offset: Offset(_drawerWidth * (t - 1.0), 0.0),
-                child: child,
-              );
+          GestureDetector(
+            behavior: HitTestBehavior.deferToChild,
+            onHorizontalDragStart: (_) {
+              _drawerCtrl.stop();
             },
-            child: Positioned(
-              top: 0,
-              bottom: 0,
-              left: 0,
-              width: _drawerWidth,
-              child: Material(
-                elevation: 16,
-                color: s.surface,
-                child: AnimatedBuilder(
-                  animation: _AiTabHeaderRefresh.of(context),
-                  builder: (_, __) => AppDrawer(
-                    s: s,
-                    onClose: _closeDrawer,
-                    onSettings: _openSettings,
-                    currentTab: _tab,
-                    onSelectTab: _selectTab,
-                    onOpenConversation: _onOpenConversation,
-                    onNewChat: () =>
-                        _onConversationAction(ConversationAction.newChat),
-                    activeConversationId:
-                        _aiTabKey.currentState?.conversationId,
+            onHorizontalDragUpdate: (d) {
+              final delta = d.delta.dx / _drawerWidth;
+              _drawerCtrl.value =
+                  (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+            },
+            onHorizontalDragEnd: (d) {
+              final velocity = d.velocity.pixelsPerSecond.dx;
+              if (velocity.abs() > 300) {
+                if (velocity > 0) {
+                  _drawerCtrl.animateTo(1.0,
+                      curve: kFluentStandard, duration: kDurationSlower);
+                } else {
+                  _drawerCtrl.animateTo(0.0,
+                      curve: kFluentStandard, duration: kDurationSlower);
+                }
+              } else if (_drawerCtrl.value > 0.5) {
+                _drawerCtrl.animateTo(1.0,
+                    curve: kFluentStandard, duration: kDurationSlower);
+              } else {
+                _drawerCtrl.animateTo(0.0,
+                    curve: kFluentStandard, duration: kDurationSlower);
+              }
+            },
+            child: AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (_, child) {
+                final t = _drawerCtrl.value;
+                final radius = _drawerRadius * t;
+                final scale = 1.0 - (0.06 * t);
+                return Transform(
+                  transform: Matrix4.identity()
+                    ..translate(_drawerWidth * t, 0.0)
+                    ..scale(scale),
+                  alignment: Alignment.center,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius),
+                      boxShadow: t > 0
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18 * t),
+                                blurRadius: kSpaceXXL,
+                                offset: const Offset(-4, 0),
+                              ),
+                            ]
+                          : const [],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: child,
                   ),
-                ),
+                );
+              },
+              child: AbsorbPointer(
+                absorbing: _drawerOpen,
+                child: bodyContent,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: _drawerWidth,
+            right: 0,
+            child: AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (_, child) {
+                final open = _drawerCtrl.value > 0.01;
+                return IgnorePointer(
+                  ignoring: !open,
+                  child: child,
+                );
+              },
+              child: GestureDetector(
+                onTap: _closeDrawer,
+                behavior: HitTestBehavior.translucent,
               ),
             ),
           ),

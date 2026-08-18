@@ -32,9 +32,6 @@ const Curve kFluentDecelerate = Cubic(0.0,  0.0,  0.0,  1.0);
 /// Fluent: Fast Out (saída de elementos)
 const Curve kFluentAccelerate = Cubic(0.9,  0.0,  1.0,  1.0);
 
-/// Apple/UIKit: spring suave estilo iOS (sheets, drawers)
-const Curve kAppleDrawer = Cubic(0.16, 1.0, 0.3, 1.0);
-
 // ─────────────────────────────────────────────────────────────
 // DURAÇÕES DE ANIMAÇÃO (Fluent Motion)
 // ─────────────────────────────────────────────────────────────
@@ -44,7 +41,6 @@ const Duration kDurationNormal   = Duration(milliseconds: 167);
 const Duration kDurationSlow     = Duration(milliseconds: 250);
 const Duration kDurationSlower   = Duration(milliseconds: 333);
 const Duration kDurationPage     = Duration(milliseconds: 400);
-const Duration kDurationDrawer   = Duration(milliseconds: 300);
 
 // ─────────────────────────────────────────────────────────────
 // BORDER RADIUS TOKENS (Fluent)
