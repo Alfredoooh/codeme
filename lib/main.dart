@@ -14,7 +14,7 @@ import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
-import 'home/home.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,14 +121,6 @@ class _RootShellState extends State<RootShell>
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
   }
 
-  void _goHome() {
-    Navigator.of(context).push(CupertinoPageRoute(
-      builder: (_) => HomeScreen(
-        onOpenDocument: _onOpenFromHome,
-      ),
-    ));
-  }
-
   void _selectTab(AppTab t) {
     _closeDrawer();
     if (t != _tab) setState(() => _tab = t);
@@ -167,22 +159,16 @@ class _RootShellState extends State<RootShell>
     setState(() => _pendingConversationLoad = null);
   }
 
-  /// Quando a IA cria um canvas, apenas carregamos o item no
-  /// controller. A navegação para o editor NÃO é automática — o
-  /// utilizador toca no card do documento para abrir.
-  void _onCanvasCreated(LocalCanvasItem item) {
-    editTabController.requestLoadLocal(item);
-  }
-
-  /// Callback vindo da HomeScreen quando o utilizador toca num
-  /// template ou ficheiro de projeto. Aqui a navegação é sempre feita,
-  /// porque é resultado de um toque explícito do utilizador.
-  void _onOpenFromHome(LocalCanvasItem item) {
-    editTabController.requestLoadLocal(item);
-    setState(() {
-      _editorType = item.kind.editorType;
-      _tab = AppTab.edit;
-    });
+  /// Callback chamado quando o utilizador toca num documento/canvas.
+  /// Abre o editor como tela própria com navegação push (CupertinoPageRoute),
+  /// tal como apps nativas (Docs, Notion, etc.).
+  void _onOpenDocument(LocalCanvasItem item) {
+    _closeDrawer();
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => _DocumentEditorPage(item: item),
+      ),
+    );
   }
 
   String get _tabTitle {
@@ -207,7 +193,7 @@ class _RootShellState extends State<RootShell>
           initialConversationId: _pendingConversationLoad,
           onConversationLoadConsumed: _onConversationLoadConsumed,
           onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
-          onCanvasCreated: _onCanvasCreated,
+          onCanvasCreated: _onOpenDocument,
         );
       case AppTab.edit:
         return EditorScreen(editorType: _editorType);
@@ -323,7 +309,6 @@ class _RootShellState extends State<RootShell>
                     s: s,
                     onClose: _closeDrawer,
                     onSettings: _openSettings,
-                    onGoHome: _goHome,
                     currentTab: _tab,
                     onSelectTab: _selectTab,
                     onOpenConversation: _onOpenConversation,
@@ -442,6 +427,87 @@ class _AiTabHeaderRefresh extends ChangeNotifier {
   _AiTabHeaderRefresh._();
   static _AiTabHeaderRefresh of(BuildContext context) => _instance;
   void ping() => notifyListeners();
+}
+
+// ══════════════════════════════════════════════════════════════
+// DOCUMENT EDITOR PAGE — tela própria de edição.
+// Aberta via Navigator.push quando o utilizador toca num documento
+// (canvas) criado pela IA ou guardado. Usa CupertinoPageRoute para
+// a transição slide-from-right padrão de apps nativas.
+// A AppBar segue o mesmo estilo do _AppHeader mas com back button
+// nativo do Cupertino para fechar a tela.
+// ══════════════════════════════════════════════════════════════
+
+class _DocumentEditorPage extends StatefulWidget {
+  final LocalCanvasItem item;
+  const _DocumentEditorPage({required this.item});
+
+  @override
+  State<_DocumentEditorPage> createState() => _DocumentEditorPageState();
+}
+
+class _DocumentEditorPageState extends State<_DocumentEditorPage>
+    with ThemeReactive<_DocumentEditorPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Carregamos o documento logo após o frame inicial, quando
+    // o EditorScreen já montou os WebViews.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      editTabController.requestLoadLocal(widget.item);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    final editorType = widget.item.kind.editorType;
+
+    return Scaffold(
+      backgroundColor: s.surface,
+      body: Column(
+        children: [
+          // Header com back button + título do documento
+          Container(
+            color: s.surface,
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + kSpaceXS,
+              bottom: kSpaceS + kSpaceXXS,
+              left: kSpaceXXS,
+              right: kSpaceS + kSpaceXXS,
+            ),
+            child: Row(
+              children: [
+                AppTap(
+                  onTap: () => Navigator.of(context).pop(),
+                  s: s,
+                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                ),
+                SizedBox(width: kSpaceXS),
+                Expanded(
+                  child: Text(
+                    widget.item.title.isNotEmpty
+                        ? widget.item.title
+                        : editorType.label,
+                    style: TextStyle(
+                      fontSize: kTypeBodyLarge,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // O EditorScreen ocupa o resto do espaço disponível.
+          Expanded(
+            child: EditorScreen(editorType: editorType),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class AiTabHost extends StatefulWidget {

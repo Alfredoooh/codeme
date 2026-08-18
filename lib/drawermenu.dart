@@ -193,7 +193,6 @@ class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onClose;
   final VoidCallback onSettings;
-  final VoidCallback onGoHome;
   final AppTab currentTab;
   final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
@@ -205,7 +204,6 @@ class AppDrawer extends StatefulWidget {
     required this.s,
     required this.onClose,
     required this.onSettings,
-    required this.onGoHome,
     required this.currentTab,
     required this.onSelectTab,
     this.onOpenConversation,
@@ -267,11 +265,6 @@ class _AppDrawerState extends State<AppDrawer> {
         },
       ),
     ));
-  }
-
-  void _goHome() {
-    _closeDrawer();
-    widget.onGoHome();
   }
 
   void _openConversation(ConversationItem item) {
@@ -354,24 +347,12 @@ class _AppDrawerState extends State<AppDrawer> {
                       color: s.onSurface,
                     ),
                   ),
-                  Row(
-                    children: [
-                      AppTap(
-                        onTap: () => _openSearch(context),
-                        s: s,
-                        size: kSpaceXXXL,
-                        child: AppIcon('search.svg',
-                            color: s.onSurfaceVariant, size: 16),
-                      ),
-                      SizedBox(width: kSpaceXXS),
-                      AppTap(
-                        onTap: _goHome,
-                        s: s,
-                        size: kSpaceXXXL,
-                        child: AppIcon('home.svg',
-                            color: s.onSurfaceVariant, size: 17),
-                      ),
-                    ],
+                  AppTap(
+                    onTap: () => _openSearch(context),
+                    s: s,
+                    size: kSpaceXXXL,
+                    child: AppIcon('search.svg',
+                        color: s.onSurfaceVariant, size: 16),
                   ),
                 ],
               ),

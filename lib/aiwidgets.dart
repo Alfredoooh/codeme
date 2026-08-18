@@ -2948,74 +2948,60 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
   @override
   Widget build(BuildContext context) {
     final types = widget.functionDefs.keys.toList();
-    return FluentBottomSheet(
-      s: widget.s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: kSpaceXXXL,
-              height: kSpaceXS,
-              decoration: BoxDecoration(
-                color: widget.s.onSurfaceVariant,
-                borderRadius: BorderRadius.circular(kRadiusSmall),
-              ),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Editar gráfico',
+          style: TextStyle(
+            color: widget.s.onSurface,
+            fontSize: kTypeBodyLarge,
+            fontWeight: FontWeight.w700,
           ),
-          SizedBox(height: kSpaceL),
-          Text(
-            'Editar gráfico',
-            style: TextStyle(
-              color: widget.s.onSurface,
-              fontSize: kTypeBodyLarge,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: kSpaceM),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: kSpaceS,
-            crossAxisSpacing: kSpaceS,
-            childAspectRatio: 2.2,
-            children: types.map((key) {
-              final def = widget.functionDefs[key]!;
-              final active = key == _pendingType;
-              return FluentChip(
+        ),
+        SizedBox(height: kSpaceM),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: kSpaceS,
+          crossAxisSpacing: kSpaceS,
+          childAspectRatio: 2.2,
+          children: types.map((key) {
+            final def = widget.functionDefs[key]!;
+            final active = key == _pendingType;
+            return FluentChip(
+              s: widget.s,
+              label: def.label,
+              style: active ? FluentChipStyle.accent : FluentChipStyle.neutral,
+              onTap: () => setState(() => _pendingType = key),
+            );
+          }).toList(),
+        ),
+        SizedBox(height: kSpaceL),
+        Row(
+          children: [
+            Expanded(
+              child: FluentButton(
                 s: widget.s,
-                label: def.label,
-                style: active ? FluentChipStyle.accent : FluentChipStyle.neutral,
-                onTap: () => setState(() => _pendingType = key),
-              );
-            }).toList(),
-          ),
-          SizedBox(height: kSpaceL),
-          Row(
-            children: [
-              Expanded(
-                child: FluentButton(
-                  s: widget.s,
-                  label: 'Cancelar',
-                  onTap: () => Navigator.pop(context),
-                  style: FluentButtonStyle.secondary,
-                ),
+                label: 'Cancelar',
+                onTap: () => Navigator.pop(context),
+                style: FluentButtonStyle.secondary,
               ),
-              SizedBox(width: kSpaceS),
-              Expanded(
-                child: FluentButton(
-                  s: widget.s,
-                  label: 'Aplicar',
-                  onTap: () => Navigator.pop(context, _pendingType),
-                  style: FluentButtonStyle.primary,
-                ),
+            ),
+            SizedBox(width: kSpaceS),
+            Expanded(
+              child: FluentButton(
+                s: widget.s,
+                label: 'Aplicar',
+                onTap: () => Navigator.pop(context, _pendingType),
+                style: FluentButtonStyle.primary,
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
