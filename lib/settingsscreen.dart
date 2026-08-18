@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'colors.dart';
@@ -46,9 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       authController.user = AppUser.fromJson(me);
       await SessionManager.updateUser(authController.user!);
       authController.notifyListeners();
-    } catch (_) {
-      // mantém o que estava
-    }
+    } catch (_) {}
     if (mounted) setState(() => _refreshing = false);
   }
 
@@ -164,6 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: SafeArea(
             child: Stack(
               children: [
+                // ── Conteúdo scrollável ──────────────────────────
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -334,78 +334,98 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ),
                               ],
                             ),
-                            SizedBox(
-                                height:
-                                    kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS),
+                            SizedBox(height: kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS),
                           ],
                         ),
                       ),
                     ),
                   ],
                 ),
+
+                // ── Header com progressive blur ──────────────────
                 Positioned(
                   top: 0,
                   left: 0,
                   right: 0,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: kSpaceS),
-                    height: kSpaceXXXL + kSpaceXL,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [s.pageBackground, Colors.transparent],
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: kSpaceS),
+                        height: kSpaceXXXL + kSpaceXL,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              s.pageBackground.withOpacity(s.isDark ? 0.82 : 0.88),
+                              s.pageBackground.withOpacity(0.0),
+                            ],
+                            stops: const [0.60, 1.0],
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            AppTap(
+                              onTap: () => Navigator.pop(context),
+                              s: s,
+                              child: AppIcon(
+                                'back.svg',
+                                color: s.onSurface,
+                                size: 20,
+                              ),
+                            ),
+                            SizedBox(width: kSpaceS),
+                            Text(
+                              'Definições',
+                              style: TextStyle(
+                                fontSize: kTypeBodyLarge,
+                                fontWeight: FontWeight.w600,
+                                color: s.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        AppTap(
-                          onTap: () => Navigator.pop(context),
-                          s: s,
-                          child: AppIcon(
-                            'back.svg',
-                            color: s.onSurface,
-                            size: 20,
-                          ),
-                        ),
-                        SizedBox(width: kSpaceS),
-                        Text(
-                          'Definições',
-                          style: TextStyle(
-                            fontSize: kTypeBodyLarge,
-                            fontWeight: FontWeight.w600,
-                            color: s.onSurface,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ),
+
+                // ── Footer com progressive blur + botão logout ───
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: Container(
-                    padding: EdgeInsets.fromLTRB(
-                      kSpaceXL,
-                      kSpaceXXL + kSpaceXS,
-                      kSpaceXL,
-                      kSpaceL,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [s.pageBackground, Colors.transparent],
-                      ),
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FluentButton(
-                        s: s,
-                        label: 'Terminar sessão',
-                        onTap: () => _confirmLogout(context, s),
-                        style: FluentButtonStyle.destructive,
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        padding: EdgeInsets.fromLTRB(
+                          kSpaceXL,
+                          kSpaceXXL + kSpaceXS,
+                          kSpaceXL,
+                          kSpaceL,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              s.pageBackground.withOpacity(s.isDark ? 0.82 : 0.88),
+                              s.pageBackground.withOpacity(0.0),
+                            ],
+                            stops: const [0.55, 1.0],
+                          ),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FluentButton(
+                            s: s,
+                            label: 'Terminar sessão',
+                            onTap: () => _confirmLogout(context, s),
+                            style: FluentButtonStyle.destructive,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -536,6 +556,9 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 // ── Sheet de confirmação genérico ────────────────────────────────
+// NOTA: este widget é passado como `child` de showFluentBottomSheet,
+// que já envolve tudo num FluentBottomSheet — por isso aqui
+// retornamos apenas o conteúdo, sem FluentBottomSheet adicional.
 
 class _ConfirmActionSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -553,51 +576,51 @@ class _ConfirmActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FluentBottomSheet(
-      s: s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: kTypeBody,
-              fontWeight: FontWeight.w500,
-              color: s.onSurface,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: kTypeBody,
+            fontWeight: FontWeight.w500,
+            color: s.onSurface,
+          ),
+        ),
+        SizedBox(height: kSpaceXL),
+        Row(
+          children: [
+            Expanded(
+              child: FluentButton(
+                s: s,
+                label: 'Cancelar',
+                onTap: () => Navigator.pop(context),
+                style: FluentButtonStyle.secondary,
+              ),
             ),
-          ),
-          SizedBox(height: kSpaceXL),
-          Row(
-            children: [
-              Expanded(
-                child: FluentButton(
-                  s: s,
-                  label: 'Cancelar',
-                  onTap: () => Navigator.pop(context),
-                  style: FluentButtonStyle.secondary,
-                ),
+            SizedBox(width: kSpaceS + kSpaceXXS),
+            Expanded(
+              child: FluentButton(
+                s: s,
+                label: confirmLabel,
+                onTap: onConfirm,
+                style: destructive
+                    ? FluentButtonStyle.destructive
+                    : FluentButtonStyle.primary,
               ),
-              SizedBox(width: kSpaceS + kSpaceXXS),
-              Expanded(
-                child: FluentButton(
-                  s: s,
-                  label: confirmLabel,
-                  onTap: onConfirm,
-                  style: destructive
-                      ? FluentButtonStyle.destructive
-                      : FluentButtonStyle.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
 // ── Sheet de edição de campo simples (nome / palavra-passe) ────
+// NOTA: este widget é passado como `child` de showFluentBottomSheet,
+// que já envolve tudo num FluentBottomSheet — por isso aqui
+// retornamos apenas o conteúdo, sem FluentBottomSheet adicional.
 
 class _EditFieldSheet extends StatefulWidget {
   final AppColorScheme s;
@@ -662,67 +685,64 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return FluentBottomSheet(
-      s: s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.title,
-            style: TextStyle(
-              fontSize: kTypeBodyLarge,
-              fontWeight: FontWeight.w700,
-              color: s.onSurface,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.title,
+          style: TextStyle(
+            fontSize: kTypeBodyLarge,
+            fontWeight: FontWeight.w700,
+            color: s.onSurface,
+          ),
+        ),
+        SizedBox(height: kSpaceL),
+        FluentTextField(
+          s: s,
+          controller: _ctrl,
+          label: widget.label,
+          hint: widget.hint,
+          obscure: widget.obscure ? _obscureNow : false,
+          error: _error,
+          autofocus: true,
+          onSubmitted: (_) => _save(),
+          suffixIcon: widget.obscure
+              ? AppTap(
+                  onTap: () =>
+                      setState(() => _obscureNow = !_obscureNow),
+                  s: s,
+                  child: AppIcon(
+                    _obscureNow ? 'eye.svg' : 'eye_off.svg',
+                    color: s.onSurfaceVariant,
+                    size: 18,
+                  ),
+                )
+              : null,
+        ),
+        SizedBox(height: kSpaceXL),
+        Row(
+          children: [
+            Expanded(
+              child: FluentButton(
+                s: s,
+                label: 'Cancelar',
+                onTap: () => Navigator.pop(context),
+                style: FluentButtonStyle.secondary,
+              ),
             ),
-          ),
-          SizedBox(height: kSpaceL),
-          FluentTextField(
-            s: s,
-            controller: _ctrl,
-            label: widget.label,
-            hint: widget.hint,
-            obscure: widget.obscure ? _obscureNow : false,
-            error: _error,
-            autofocus: true,
-            onSubmitted: (_) => _save(),
-            suffixIcon: widget.obscure
-                ? AppTap(
-                    onTap: () =>
-                        setState(() => _obscureNow = !_obscureNow),
-                    s: s,
-                    child: AppIcon(
-                      _obscureNow ? 'eye.svg' : 'eye_off.svg',
-                      color: s.onSurfaceVariant,
-                      size: 18,
-                    ),
-                  )
-                : null,
-          ),
-          SizedBox(height: kSpaceXL),
-          Row(
-            children: [
-              Expanded(
-                child: FluentButton(
-                  s: s,
-                  label: 'Cancelar',
-                  onTap: () => Navigator.pop(context),
-                  style: FluentButtonStyle.secondary,
-                ),
+            SizedBox(width: kSpaceS + kSpaceXXS),
+            Expanded(
+              child: FluentButton(
+                s: s,
+                label: 'Guardar',
+                onTap: _saving ? null : _save,
+                style: FluentButtonStyle.primary,
               ),
-              SizedBox(width: kSpaceS + kSpaceXXS),
-              Expanded(
-                child: FluentButton(
-                  s: s,
-                  label: 'Guardar',
-                  onTap: _saving ? null : _save,
-                  style: FluentButtonStyle.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

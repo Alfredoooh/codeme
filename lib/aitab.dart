@@ -3516,57 +3516,54 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return FluentBottomSheet(
-      s: s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _recording ? 'A ouvir...' : 'A transcrever...',
-            style: TextStyle(
-              fontSize: kTypeBodyLarge,
-              fontWeight: FontWeight.w600,
-              color: s.onSurface,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _recording ? 'A ouvir...' : 'A transcrever...',
+          style: TextStyle(
+            fontSize: kTypeBodyLarge,
+            fontWeight: FontWeight.w600,
+            color: s.onSurface,
+          ),
+        ),
+        SizedBox(height: kSpaceS),
+        Text(
+          _formattedTime,
+          style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+        ),
+        SizedBox(height: kSpaceXXL),
+        AnimatedBuilder(
+          animation: _pulse,
+          builder: (_, child) {
+            final scale =
+                _recording ? 1.0 + (_pulse.value * 0.12) : 1.0;
+            return Transform.scale(scale: scale, child: child);
+          },
+          child: Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: s.error, width: 1.5),
             ),
+            child: _recording
+                ? AppIcon('mic.svg', size: 30, color: s.error)
+                : AppIcon('mic_none.svg', size: 30, color: s.error),
           ),
-          SizedBox(height: kSpaceS),
-          Text(
-            _formattedTime,
-            style: TextStyle(fontSize: kTypeBody, color: s.onSurfaceVariant),
+        ),
+        SizedBox(height: kSpaceXXL),
+        SizedBox(
+          width: double.infinity,
+          child: FluentButton(
+            s: s,
+            label: _recording ? 'Concluir' : 'A processar...',
+            onTap: _recording ? _stopAndTranscribe : null,
+            style: FluentButtonStyle.primary,
           ),
-          SizedBox(height: kSpaceXXL),
-          AnimatedBuilder(
-            animation: _pulse,
-            builder: (_, child) {
-              final scale =
-                  _recording ? 1.0 + (_pulse.value * 0.12) : 1.0;
-              return Transform.scale(scale: scale, child: child);
-            },
-            child: Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: s.error, width: 1.5),
-              ),
-              child: _recording
-                  ? AppIcon('mic.svg', size: 30, color: s.error)
-                  : AppIcon('mic_none.svg', size: 30, color: s.error),
-            ),
-          ),
-          SizedBox(height: kSpaceXXL),
-          SizedBox(
-            width: double.infinity,
-            child: FluentButton(
-              s: s,
-              label: _recording ? 'Concluir' : 'A processar...',
-              onTap: _recording ? _stopAndTranscribe : null,
-              style: FluentButtonStyle.primary,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

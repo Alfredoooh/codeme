@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
+import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -92,7 +93,7 @@ class _RootShellState extends State<RootShell>
     with ThemeReactive<RootShell>, SingleTickerProviderStateMixin {
   late final AnimationController _drawerCtrl = AnimationController(
     vsync: this,
-    duration: kDurationSlower, // 333ms, closest token to original 320ms
+    duration: kDurationSlower,
     value: 0.0,
   );
 
@@ -158,9 +159,6 @@ class _RootShellState extends State<RootShell>
     setState(() => _pendingConversationLoad = null);
   }
 
-  /// Quando a IA cria um canvas, apenas carregamos o item no
-  /// controller. A navegação para o editor NÃO é automática — o
-  /// utilizador toca no card do documento para abrir.
   void _onCanvasCreated(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
   }
@@ -195,10 +193,6 @@ class _RootShellState extends State<RootShell>
   }
 
   static const double _drawerWidth = 280;
-
-  // raio do drawer: 24 é um valor de design específico não contemplado
-  // nos tokens kRadius* (máximo kRadiusXLarge=12). Mantemos como const
-  // documentada para preservar a curvatura pretendida.
   static const double _drawerRadius = 24.0;
 
   @override
@@ -211,7 +205,7 @@ class _RootShellState extends State<RootShell>
             Positioned.fill(
               top: 0,
               child: AnimatedSwitcher(
-                duration: kDurationSlow, // original 220ms
+                duration: kDurationSlow,
                 switchInCurve: kFluentDecelerate,
                 switchOutCurve: kFluentAccelerate,
                 transitionBuilder: (child, anim) =>
@@ -280,9 +274,6 @@ class _RootShellState extends State<RootShell>
       backgroundColor: s.surface,
       body: Stack(
         children: [
-          // Drawer — sempre montado, sempre fixo na mesma posição
-          // por baixo do conteúdo. Nunca se move; é revelado quando
-          // o conteúdo por cima desliza para a direita.
           Positioned(
             top: 0,
             bottom: 0,
@@ -307,11 +298,6 @@ class _RootShellState extends State<RootShell>
               ),
             ),
           ),
-          // Conteúdo principal — segue o dedo em tempo real durante o
-          // arraste (via _drawerCtrl.value, 0.0 a 1.0), com encolhimento
-          // progressivo e cantos que se arredondam conforme o drawer
-          // abre. AnimatedBuilder reconstrói só este bloco a cada tick
-          // do controller, seja por gesto ou por animateTo/fling.
           GestureDetector(
             behavior: HitTestBehavior.deferToChild,
             onHorizontalDragStart: (_) {
@@ -356,13 +342,9 @@ class _RootShellState extends State<RootShell>
                       borderRadius: BorderRadius.circular(radius),
                       boxShadow: t > 0
                           ? [
-                              // Sombra dinâmica proporcional à abertura do
-                              // drawer. Não existe token dinâmico; usamos
-                              // Colors.black com opacidade variável e
-                              // documentamos a necessidade.
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.18 * t),
-                                blurRadius: kSpaceXXL, // 24
+                                blurRadius: kSpaceXXL,
                                 offset: const Offset(-4, 0),
                               ),
                             ]
@@ -379,9 +361,6 @@ class _RootShellState extends State<RootShell>
               ),
             ),
           ),
-          // Área tocável sobre o conteúdo deslocado, quando o drawer
-          // está aberto — reativa ao _drawerCtrl dentro de um
-          // AnimatedBuilder, para não ficar "presa" durante animações.
           Positioned(
             top: 0,
             bottom: 0,
@@ -403,8 +382,8 @@ class _RootShellState extends State<RootShell>
             ),
           ),
         ],
-        ),
-      );
+      ),
+    );
   }
 }
 
@@ -464,6 +443,13 @@ class _AiTabHostState extends State<AiTabHost> {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// APP HEADER
+// Progressive blur estilo Apple: BackdropFilter com ImageFilter.blur
+// num gradiente semi-transparente — blur forte no topo, dissolve
+// para completamente transparente na base.
+// ══════════════════════════════════════════════════════════════
+
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -483,10 +469,12 @@ class _AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
     final content = Padding(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + kSpaceXS,
-        bottom: kSpaceS + kSpaceXXS, // 10
+        top: topPadding + kSpaceXS,
+        bottom: kSpaceS + kSpaceXXS,
         left: kSpaceXS,
         right: kSpaceS + kSpaceXXS,
       ),
@@ -502,7 +490,7 @@ class _AppHeader extends StatelessWidget {
             Text(
               title,
               style: TextStyle(
-                fontSize: kTypeBodyLarge, // 17
+                fontSize: kTypeBodyLarge,
                 fontWeight: FontWeight.w600,
                 color: s.onSurface,
               ),
@@ -513,19 +501,30 @@ class _AppHeader extends StatelessWidget {
       ),
     );
 
+    // Modo opaco — tab de editor, sem blur
     if (!transparent) {
       return Container(color: headerBackground, child: content);
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [headerBackground, Colors.transparent],
+    // Modo transparente (tab AI) — progressive blur estilo Apple
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                headerBackground.withOpacity(s.isDark ? 0.82 : 0.88),
+                headerBackground.withOpacity(0.0),
+              ],
+              stops: const [0.55, 1.0],
+            ),
+          ),
+          child: content,
         ),
       ),
-      child: content,
     );
   }
 }
