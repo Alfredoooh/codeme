@@ -1839,94 +1839,108 @@ class AiTabState extends State<AiTab> {
     final topInset = MediaQuery.of(context).padding.top;
     final headerHeight = topInset + 6 + 40 + 12;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         color: _incognito ? s.pageBackground : s.pageBackground,
-        child: Column(children: [
-          Expanded(
-            child: _incognito
-                ? const _IncognitoState()
-                : (_msgs.isEmpty && _streamingText.isEmpty)
-                    ? _EmptyState(s: s, topPadding: headerHeight)
-                    : ListView.builder(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
-                        itemCount: _msgs.length + (_sending ? 1 : 0),
-                        itemBuilder: (_, i) {
-                          if (i >= _msgs.length) {
-                            final elements =
-                                _parseStreamingContent(_streamingText, _nextCanvasId);
-                            return _StreamingBubble(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _incognito
+                  ? const _IncognitoState()
+                  : (_msgs.isEmpty && _streamingText.isEmpty)
+                      ? _EmptyState(s: s, topPadding: headerHeight)
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: EdgeInsets.fromLTRB(
+                              16, headerHeight, 16, 120 + bottomInset),
+                          itemCount: _msgs.length + (_sending ? 1 : 0),
+                          itemBuilder: (_, i) {
+                            if (i >= _msgs.length) {
+                              final elements = _parseStreamingContent(
+                                  _streamingText, _nextCanvasId);
+                              return _StreamingBubble(
+                                s: s,
+                                elements: elements,
+                                thinking: _streamingThink != null
+                                    ? cleanAiText(_streamingThink!)
+                                    : null,
+                                widgetsEnabled: _widgetsEnabled,
+                                onEnableWidgets: () => setWidgetsEnabled(true),
+                                onSuggestionTap: sendSuggestedMessage,
+                                onOpenCanvas: _onOpenCanvas,
+                              );
+                            }
+                            final msg = _msgs[i];
+                            if (msg.role == 'user') {
+                              return _Bubble(
+                                s: s,
+                                text: msg.content,
+                                onEdit: () => _onBubbleEdit(i),
+                                onCopy: () => _onBubbleCopy(i),
+                                onDelete: () => _onBubbleDelete(i),
+                                onSelectText: () => _onBubbleSelectText(i),
+                              );
+                            }
+                            final scan =
+                                _scanForCanvasItems(msg.content, () => '');
+                            final msgCanvases = _canvasesForMessage(msg.content);
+                            return _AssistantBubble(
                               s: s,
-                              elements: elements,
-                              thinking: _streamingThink != null
-                                  ? cleanAiText(_streamingThink!)
-                                  : null,
+                              text: cleanAiText(scan.cleanText),
+                              canvases: msgCanvases,
+                              onOpenCanvas: _onOpenCanvas,
+                              onThumbUp: () => _onAssistantThumbUp(i),
+                              onThumbDown: () => _onAssistantThumbDown(i),
+                              onCopy: () => _onAssistantCopy(i),
+                              onRefresh: () => _onAssistantRefresh(i),
                               widgetsEnabled: _widgetsEnabled,
                               onEnableWidgets: () => setWidgetsEnabled(true),
                               onSuggestionTap: sendSuggestedMessage,
-                              onOpenCanvas: _onOpenCanvas,
                             );
-                          }
-                          final msg = _msgs[i];
-                          if (msg.role == 'user') {
-                            return _Bubble(
-                              s: s,
-                              text: msg.content,
-                              onEdit: () => _onBubbleEdit(i),
-                              onCopy: () => _onBubbleCopy(i),
-                              onDelete: () => _onBubbleDelete(i),
-                              onSelectText: () => _onBubbleSelectText(i),
-                            );
-                          }
-                          final scan =
-                              _scanForCanvasItems(msg.content, () => '');
-                          final msgCanvases = _canvasesForMessage(msg.content);
-                          return _AssistantBubble(
-                            s: s,
-                            text: cleanAiText(scan.cleanText),
-                            canvases: msgCanvases,
-                            onOpenCanvas: _onOpenCanvas,
-                            onThumbUp: () => _onAssistantThumbUp(i),
-                            onThumbDown: () => _onAssistantThumbDown(i),
-                            onCopy: () => _onAssistantCopy(i),
-                            onRefresh: () => _onAssistantRefresh(i),
-                            widgetsEnabled: _widgetsEnabled,
-                            onEnableWidgets: () => setWidgetsEnabled(true),
-                            onSuggestionTap: sendSuggestedMessage,
-                          );
-                        },
-                      ),
-          ),
-          _ChatInput(
-            s: s,
-            ctrl: _ctrl,
-            focusNode: _inputFocus,
-            model: _model,
-            attachedTool: _attachedTool,
-            attachedFilesCount: _attachedFiles.length,
-            incognito: _incognito,
-            sending: _sending,
-            attachLink: _attachLink,
-            modelLink: _modelLink,
-            onSend: _send,
-            onAttach: () => _openAttachSheet(_attachLink),
-            onVoice: _openVoiceSheet,
-            onModel: () => _openModelPopup(_modelLink),
-            onClearTool: _onClearTool,
-            onOpenAttachedFiles: _openAttachedFilesSheet,
-          ),
-          AnimatedContainer(
-            duration: kDurationNormal,
-            curve: kFluentDecelerate,
-            height: keyboardInset > 0
-                ? keyboardInset + 8
-                : MediaQuery.of(context).padding.bottom + 8,
-          ),
-        ]),
+                          },
+                        ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ChatInput(
+                    s: s,
+                    ctrl: _ctrl,
+                    focusNode: _inputFocus,
+                    model: _model,
+                    attachedTool: _attachedTool,
+                    attachedFilesCount: _attachedFiles.length,
+                    incognito: _incognito,
+                    sending: _sending,
+                    attachLink: _attachLink,
+                    modelLink: _modelLink,
+                    onSend: _send,
+                    onAttach: () => _openAttachSheet(_attachLink),
+                    onVoice: _openVoiceSheet,
+                    onModel: () => _openModelPopup(_modelLink),
+                    onClearTool: _onClearTool,
+                    onOpenAttachedFiles: _openAttachedFilesSheet,
+                  ),
+                  AnimatedContainer(
+                    duration: kDurationNormal,
+                    curve: kFluentDecelerate,
+                    height: keyboardInset > 0
+                        ? keyboardInset + 8
+                        : bottomInset + 8,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
