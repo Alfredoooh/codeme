@@ -579,50 +579,36 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
     final selected = await showFluentBottomSheet<Color>(
       context: context,
       s: widget.s,
-      child: FluentBottomSheet(
-        s: widget.s,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Escolher cor',
+            style: TextStyle(
+              color: _inputText(),
+              fontSize: kTypeBodyLarge,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: kSpaceM),
+          Wrap(
+            spacing: kSpaceS + kSpaceXXS,
+            runSpacing: kSpaceS + kSpaceXXS,
+            children: _colorPalette.map((c) => AppTap(
+              onTap: () => Navigator.pop(context, c),
+              s: widget.s,
               child: Container(
-                width: kSpaceXXXL,
-                height: kSpaceXS,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
-                  color: _label(),
-                  borderRadius: BorderRadius.circular(kRadiusSmall),
+                  color: c,
+                  shape: BoxShape.circle,
                 ),
               ),
-            ),
-            SizedBox(height: kSpaceL),
-            Text(
-              'Escolher cor',
-              style: TextStyle(
-                color: _inputText(),
-                fontSize: kTypeBodyLarge,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            SizedBox(height: kSpaceM),
-            Wrap(
-              spacing: kSpaceS + kSpaceXXS,
-              runSpacing: kSpaceS + kSpaceXXS,
-              children: _colorPalette.map((c) => AppTap(
-                onTap: () => Navigator.pop(context, c),
-                s: widget.s,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: c,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              )).toList(),
-            ),
-          ],
-        ),
+            )).toList(),
+          ),
+        ],
       ),
     );
     if (selected != null) {
@@ -1168,48 +1154,34 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
     final selected = await showFluentBottomSheet<String>(
       context: context,
       s: widget.s,
-      child: FluentBottomSheet(
-        s: widget.s,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: kSpaceXXXL,
-                height: kSpaceXS,
-                decoration: BoxDecoration(
-                  color: widget.s.onSurfaceVariant,
-                  borderRadius: BorderRadius.circular(kRadiusSmall),
-                ),
-              ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Escolher par',
+            style: TextStyle(color: widget.s.onSurface, fontSize: kTypeBodyLarge, fontWeight: FontWeight.w700),
+          ),
+          SizedBox(height: kSpaceM),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: _pairs.map((pair) {
+                final active = pair.key == _currentPairKey;
+                return FluentListCard(
+                  s: widget.s,
+                  radius: BorderRadius.circular(kRadiusLarge),
+                  label: pair.label,
+                  subtitle: pair.sub,
+                  onTap: () => Navigator.pop(context, pair.key),
+                  trailing: active
+                      ? AppIcon('check.svg', color: widget.s.primary, size: 16)
+                      : null,
+                );
+              }).toList(),
             ),
-            SizedBox(height: kSpaceL),
-            Text(
-              'Escolher par',
-              style: TextStyle(color: widget.s.onSurface, fontSize: kTypeBodyLarge, fontWeight: FontWeight.w700),
-            ),
-            SizedBox(height: kSpaceM),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: _pairs.map((pair) {
-                  final active = pair.key == _currentPairKey;
-                  return FluentListCard(
-                    s: widget.s,
-                    radius: BorderRadius.circular(kRadiusLarge),
-                    label: pair.label,
-                    subtitle: pair.sub,
-                    onTap: () => Navigator.pop(context, pair.key),
-                    trailing: active
-                        ? AppIcon('check.svg', color: widget.s.primary, size: 16)
-                        : null,
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
     if (selected != null && selected != _currentPairKey) {
@@ -1524,56 +1496,53 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     showFluentBottomSheet(
       context: context,
       s: s,
-      child: FluentBottomSheet(
-        s: s,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Novo evento · $_selectedKey',
-              style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
-            ),
-            SizedBox(height: kSpaceM),
-            FluentTextField(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Novo evento · $_selectedKey',
+            style: TextStyle(fontSize: kTypeBodyLarge, fontWeight: FontWeight.w600, color: s.onSurface),
+          ),
+          SizedBox(height: kSpaceM),
+          FluentTextField(
+            s: s,
+            controller: nameCtrl,
+            hint: 'Nome do evento',
+            fillColor: s.subtleFillHover,
+            radius: kRadiusLarge,
+            contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
+          ),
+          SizedBox(height: kSpaceS + kSpaceXXS),
+          FluentTextField(
+            s: s,
+            controller: timeCtrl,
+            hint: 'Hora (ex: 14:00)',
+            fillColor: s.subtleFillHover,
+            radius: kRadiusLarge,
+            contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
+          ),
+          SizedBox(height: kSpaceL),
+          SizedBox(
+            width: double.infinity,
+            child: FluentButton(
               s: s,
-              controller: nameCtrl,
-              hint: 'Nome do evento',
-              fillColor: s.subtleFillHover,
-              radius: kRadiusLarge,
-              contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
+              label: 'Adicionar',
+              onTap: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                setState(() {
+                  _events.putIfAbsent(_selectedKey, () => []).add((
+                    name: nameCtrl.text.trim(),
+                    time: timeCtrl.text.trim(),
+                    color: const Color(0xFF6F5AF6),
+                  ));
+                });
+                Navigator.pop(context);
+              },
+              style: FluentButtonStyle.primary,
             ),
-            SizedBox(height: kSpaceS + kSpaceXXS),
-            FluentTextField(
-              s: s,
-              controller: timeCtrl,
-              hint: 'Hora (ex: 14:00)',
-              fillColor: s.subtleFillHover,
-              radius: kRadiusLarge,
-              contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
-            ),
-            SizedBox(height: kSpaceL),
-            SizedBox(
-              width: double.infinity,
-              child: FluentButton(
-                s: s,
-                label: 'Adicionar',
-                onTap: () {
-                  if (nameCtrl.text.trim().isEmpty) return;
-                  setState(() {
-                    _events.putIfAbsent(_selectedKey, () => []).add((
-                      name: nameCtrl.text.trim(),
-                      time: timeCtrl.text.trim(),
-                      color: const Color(0xFF6F5AF6),
-                    ));
-                  });
-                  Navigator.pop(context);
-                },
-                style: FluentButtonStyle.primary,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

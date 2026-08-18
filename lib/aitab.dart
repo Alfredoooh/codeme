@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'colors.dart';
@@ -1682,7 +1683,9 @@ class AiTabState extends State<AiTab> {
 
   void _onOpenCanvas(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
-    AiTabHostNavigation.of(context)?.goToEditTab(item.kind.editorType);
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => EditorPageScreen(initialType: item.kind.editorType),
+    ));
   }
 
   void _onConversationAction(ConversationAction action) {
@@ -1927,21 +1930,6 @@ class AiTabState extends State<AiTab> {
       ),
     );
   }
-}
-
-class AiTabHostNavigation extends InheritedWidget {
-  final void Function(EditorType type) goToEditTab;
-  const AiTabHostNavigation({
-    super.key,
-    required this.goToEditTab,
-    required super.child,
-  });
-
-  static AiTabHostNavigation? of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AiTabHostNavigation>();
-
-  @override
-  bool updateShouldNotify(AiTabHostNavigation oldWidget) => true;
 }
 
 class _IncognitoState extends StatelessWidget {
@@ -2713,34 +2701,31 @@ Future<void> showSelectTextSheet(
   return showFluentBottomSheet<void>(
     context: context,
     s: s,
-    child: FluentBottomSheet(
-      s: s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Selecionar texto',
-            style: TextStyle(
-              fontSize: kTypeBodyLarge,
-              fontWeight: FontWeight.w600,
-              color: s.onSurface,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Selecionar texto',
+          style: TextStyle(
+            fontSize: kTypeBodyLarge,
+            fontWeight: FontWeight.w600,
+            color: s.onSurface,
+          ),
+        ),
+        SizedBox(height: kSpaceM),
+        Flexible(
+          child: SingleChildScrollView(
+            child: SelectableText(
+              text,
+              style: TextStyle(
+                  fontSize: kTypeBodyLarge,
+                  color: s.onSurface,
+                  height: 1.5),
             ),
           ),
-          SizedBox(height: kSpaceM),
-          Flexible(
-            child: SingleChildScrollView(
-              child: SelectableText(
-                text,
-                style: TextStyle(
-                    fontSize: kTypeBodyLarge,
-                    color: s.onSurface,
-                    height: 1.5),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }
@@ -2759,59 +2744,56 @@ Future<void> showAttachedFilesSheet(
     context: context,
     s: s,
     child: StatefulBuilder(
-      builder: (ctx, setModalState) => FluentBottomSheet(
-        s: s,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                AppIcon('attached.svg', color: s.onSurface, size: 18),
-                SizedBox(width: kSpaceS),
-                Text(
-                  'Anexos desta mensagem',
+      builder: (ctx, setModalState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppIcon('attached.svg', color: s.onSurface, size: 18),
+              SizedBox(width: kSpaceS),
+              Text(
+                'Anexos desta mensagem',
+                style: TextStyle(
+                    fontSize: kTypeBodyLarge,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface),
+              ),
+            ],
+          ),
+          SizedBox(height: kSpaceM),
+          if (files.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: kSpaceXXL),
+              child: Center(
+                child: Text(
+                  'Sem anexos.',
                   style: TextStyle(
-                      fontSize: kTypeBodyLarge,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurface),
-                ),
-              ],
-            ),
-            SizedBox(height: kSpaceM),
-            if (files.isEmpty)
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: kSpaceXXL),
-                child: Center(
-                  child: Text(
-                    'Sem anexos.',
-                    style: TextStyle(
-                        fontSize: kTypeBody, color: s.onSurfaceVariant),
-                  ),
-                ),
-              )
-            else
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: files.length,
-                  separatorBuilder: (_, __) => SizedBox(height: kSpaceS),
-                  itemBuilder: (_, i) {
-                    final f = files[i];
-                    return _AttachedFileRow(
-                      s: s,
-                      file: f,
-                      onRemove: () {
-                        onRemove(f.id);
-                        setModalState(() {});
-                        if (files.length <= 1) Navigator.pop(ctx);
-                      },
-                    );
-                  },
+                      fontSize: kTypeBody, color: s.onSurfaceVariant),
                 ),
               ),
-          ],
-        ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: files.length,
+                separatorBuilder: (_, __) => SizedBox(height: kSpaceS),
+                itemBuilder: (_, i) {
+                  final f = files[i];
+                  return _AttachedFileRow(
+                    s: s,
+                    file: f,
+                    onRemove: () {
+                      onRemove(f.id);
+                      setModalState(() {});
+                      if (files.length <= 1) Navigator.pop(ctx);
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     ),
   );
@@ -3340,59 +3322,56 @@ Future<void> showCanvasSheet(
   return showFluentBottomSheet<void>(
     context: context,
     s: s,
-    child: FluentBottomSheet(
-      s: s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              AppIcon('cards.svg', color: s.onSurface, size: 18),
-              SizedBox(width: kSpaceS),
-              Text(
-                'Canvas desta conversa',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            AppIcon('cards.svg', color: s.onSurface, size: 18),
+            SizedBox(width: kSpaceS),
+            Text(
+              'Canvas desta conversa',
+              style: TextStyle(
+                  fontSize: kTypeBodyLarge,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface),
+            ),
+          ],
+        ),
+        SizedBox(height: kSpaceM),
+        if (canvases.isEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: kSpaceXXXL),
+            child: Center(
+              child: Text(
+                'Ainda não há documentos nesta conversa.',
                 style: TextStyle(
-                    fontSize: kTypeBodyLarge,
-                    fontWeight: FontWeight.w600,
-                    color: s.onSurface),
-              ),
-            ],
-          ),
-          SizedBox(height: kSpaceM),
-          if (canvases.isEmpty)
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: kSpaceXXXL),
-              child: Center(
-                child: Text(
-                  'Ainda não há documentos nesta conversa.',
-                  style: TextStyle(
-                      fontSize: kTypeBody, color: s.onSurfaceVariant),
-                ),
-              ),
-            )
-          else
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: canvases.length,
-                separatorBuilder: (_, __) =>
-                    SizedBox(height: kSpaceS + kSpaceXXS),
-                itemBuilder: (_, i) {
-                  final item = canvases[canvases.length - 1 - i];
-                  return _CanvasCard(
-                    s: s,
-                    item: item,
-                    onTap: () {
-                      Navigator.pop(context);
-                      onOpenCanvas(item);
-                    },
-                  );
-                },
+                    fontSize: kTypeBody, color: s.onSurfaceVariant),
               ),
             ),
-        ],
-      ),
+          )
+        else
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: canvases.length,
+              separatorBuilder: (_, __) =>
+                  SizedBox(height: kSpaceS + kSpaceXXS),
+              itemBuilder: (_, i) {
+                final item = canvases[canvases.length - 1 - i];
+                return _CanvasCard(
+                  s: s,
+                  item: item,
+                  onTap: () {
+                    Navigator.pop(context);
+                    onOpenCanvas(item);
+                  },
+                );
+              },
+            ),
+          ),
+      ],
     ),
   );
 }

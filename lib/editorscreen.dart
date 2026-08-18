@@ -91,6 +91,74 @@ class EditTabController extends ChangeNotifier {
 final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
+// EDITOR PAGE SCREEN — tela própria do editor, empurrada via
+// Navigator.push (não mais uma aba dentro do RootShell). Dona do
+// seu próprio EditorType local e do botão de voltar nativo.
+// ══════════════════════════════════════════════════════════════
+
+class EditorPageScreen extends StatefulWidget {
+  final EditorType initialType;
+  const EditorPageScreen({super.key, required this.initialType});
+  @override State<EditorPageScreen> createState() => _EditorPageScreenState();
+}
+
+class _EditorPageScreenState extends State<EditorPageScreen> {
+  late EditorType _editorType = widget.initialType;
+
+  void _setEditorType(EditorType t) => setState(() => _editorType = t);
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Material(
+      color: s.surface,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              color: s.surface,
+              padding: EdgeInsets.only(
+                top: kSpaceXS,
+                bottom: kSpaceS + kSpaceXXS,
+                left: kSpaceXS,
+                right: kSpaceS + kSpaceXXS,
+              ),
+              child: Row(
+                children: [
+                  AppTap(
+                    onTap: () => Navigator.pop(context),
+                    s: s,
+                    child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                  ),
+                  SizedBox(width: kSpaceS),
+                  Text(
+                    _editorType.label,
+                    style: TextStyle(
+                      fontSize: kTypeBodyLarge,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  EditTypeButton(
+                    s: s,
+                    current: _editorType,
+                    onSelect: _setEditorType,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: EditorScreen(editorType: _editorType),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // EDITOR SCREEN — dispose explícito dos WebViews adicionado.
 // ══════════════════════════════════════════════════════════════
 

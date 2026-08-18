@@ -347,12 +347,16 @@ class _AppDrawerState extends State<AppDrawer> {
                       color: s.onSurface,
                     ),
                   ),
-                  AppTap(
-                    onTap: () => _openSearch(context),
-                    s: s,
-                    size: kSpaceXXXL,
-                    child: AppIcon('search.svg',
-                        color: s.onSurfaceVariant, size: 16),
+                  Row(
+                    children: [
+                      AppTap(
+                        onTap: () => _openSearch(context),
+                        s: s,
+                        size: kSpaceXXXL,
+                        child: AppIcon('search.svg',
+                            color: s.onSurfaceVariant, size: 16),
+                      ),
+                    ],
                   ),
                 ],
               ),

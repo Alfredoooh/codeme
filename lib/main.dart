@@ -15,7 +15,6 @@ import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) {
@@ -159,16 +158,11 @@ class _RootShellState extends State<RootShell>
     setState(() => _pendingConversationLoad = null);
   }
 
-  /// Callback chamado quando o utilizador toca num documento/canvas.
-  /// Abre o editor como tela própria com navegação push (CupertinoPageRoute),
-  /// tal como apps nativas (Docs, Notion, etc.).
-  void _onOpenDocument(LocalCanvasItem item) {
-    _closeDrawer();
-    Navigator.of(context).push(
-      CupertinoPageRoute(
-        builder: (_) => _DocumentEditorPage(item: item),
-      ),
-    );
+  /// Quando a IA cria um canvas, apenas carregamos o item no
+  /// controller. A navegação para o editor NÃO é automática — o
+  /// utilizador toca no card do documento para abrir.
+  void _onCanvasCreated(LocalCanvasItem item) {
+    editTabController.requestLoadLocal(item);
   }
 
   String get _tabTitle {
@@ -193,7 +187,7 @@ class _RootShellState extends State<RootShell>
           initialConversationId: _pendingConversationLoad,
           onConversationLoadConsumed: _onConversationLoadConsumed,
           onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
-          onCanvasCreated: _onOpenDocument,
+          onCanvasCreated: _onCanvasCreated,
         );
       case AppTab.edit:
         return EditorScreen(editorType: _editorType);
@@ -282,143 +276,135 @@ class _RootShellState extends State<RootShell>
             ),
           ]);
 
-    return RootShellNavigation(
-      switchToEditTab: (type) {
-        setState(() {
-          _editorType = type;
-          _tab = AppTab.edit;
-        });
-      },
-      child: Scaffold(
-        backgroundColor: s.surface,
-        body: Stack(
-          children: [
-            // Drawer — sempre montado, sempre fixo na mesma posição
-            // por baixo do conteúdo. Nunca se move; é revelado quando
-            // o conteúdo por cima desliza para a direita.
-            Positioned(
-              top: 0,
-              bottom: 0,
-              left: 0,
-              width: _drawerWidth,
-              child: Material(
-                color: s.surface,
-                child: AnimatedBuilder(
-                  animation: _AiTabHeaderRefresh.of(context),
-                  builder: (_, __) => AppDrawer(
-                    s: s,
-                    onClose: _closeDrawer,
-                    onSettings: _openSettings,
-                    currentTab: _tab,
-                    onSelectTab: _selectTab,
-                    onOpenConversation: _onOpenConversation,
-                    onNewChat: () =>
-                        _onConversationAction(ConversationAction.newChat),
-                    activeConversationId:
-                        _aiTabKey.currentState?.conversationId,
-                  ),
+    return Scaffold(
+      backgroundColor: s.surface,
+      body: Stack(
+        children: [
+          // Drawer — sempre montado, sempre fixo na mesma posição
+          // por baixo do conteúdo. Nunca se move; é revelado quando
+          // o conteúdo por cima desliza para a direita.
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: _drawerWidth,
+            child: Material(
+              color: s.surface,
+              child: AnimatedBuilder(
+                animation: _AiTabHeaderRefresh.of(context),
+                builder: (_, __) => AppDrawer(
+                  s: s,
+                  onClose: _closeDrawer,
+                  onSettings: _openSettings,
+                  currentTab: _tab,
+                  onSelectTab: _selectTab,
+                  onOpenConversation: _onOpenConversation,
+                  onNewChat: () =>
+                      _onConversationAction(ConversationAction.newChat),
+                  activeConversationId:
+                      _aiTabKey.currentState?.conversationId,
                 ),
               ),
             ),
-            // Conteúdo principal — segue o dedo em tempo real durante o
-            // arraste (via _drawerCtrl.value, 0.0 a 1.0), com encolhimento
-            // progressivo e cantos que se arredondam conforme o drawer
-            // abre. AnimatedBuilder reconstrói só este bloco a cada tick
-            // do controller, seja por gesto ou por animateTo/fling.
-            GestureDetector(
-              behavior: HitTestBehavior.deferToChild,
-              onHorizontalDragStart: (_) {
-                _drawerCtrl.stop();
-              },
-              onHorizontalDragUpdate: (d) {
-                final delta = d.delta.dx / _drawerWidth;
-                _drawerCtrl.value =
-                    (_drawerCtrl.value + delta).clamp(0.0, 1.0);
-              },
-              onHorizontalDragEnd: (d) {
-                final velocity = d.velocity.pixelsPerSecond.dx;
-                if (velocity.abs() > 300) {
-                  if (velocity > 0) {
-                    _drawerCtrl.animateTo(1.0,
-                        curve: kFluentStandard, duration: kDurationSlower);
-                  } else {
-                    _drawerCtrl.animateTo(0.0,
-                        curve: kFluentStandard, duration: kDurationSlower);
-                  }
-                } else if (_drawerCtrl.value > 0.5) {
+          ),
+          // Conteúdo principal — segue o dedo em tempo real durante o
+          // arraste (via _drawerCtrl.value, 0.0 a 1.0), com encolhimento
+          // progressivo e cantos que se arredondam conforme o drawer
+          // abre. AnimatedBuilder reconstrói só este bloco a cada tick
+          // do controller, seja por gesto ou por animateTo/fling.
+          GestureDetector(
+            behavior: HitTestBehavior.deferToChild,
+            onHorizontalDragStart: (_) {
+              _drawerCtrl.stop();
+            },
+            onHorizontalDragUpdate: (d) {
+              final delta = d.delta.dx / _drawerWidth;
+              _drawerCtrl.value =
+                  (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+            },
+            onHorizontalDragEnd: (d) {
+              final velocity = d.velocity.pixelsPerSecond.dx;
+              if (velocity.abs() > 300) {
+                if (velocity > 0) {
                   _drawerCtrl.animateTo(1.0,
                       curve: kFluentStandard, duration: kDurationSlower);
                 } else {
                   _drawerCtrl.animateTo(0.0,
                       curve: kFluentStandard, duration: kDurationSlower);
                 }
-              },
-              child: AnimatedBuilder(
-                animation: _drawerCtrl,
-                builder: (_, child) {
-                  final t = _drawerCtrl.value;
-                  final radius = _drawerRadius * t;
-                  final scale = 1.0 - (0.06 * t);
-                  return Transform(
-                    transform: Matrix4.identity()
-                      ..translate(_drawerWidth * t, 0.0)
-                      ..scale(scale),
-                    alignment: Alignment.center,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(radius),
-                        boxShadow: t > 0
-                            ? [
-                                // Sombra dinâmica proporcional à abertura do
-                                // drawer. Não existe token dinâmico; usamos
-                                // Colors.black com opacidade variável e
-                                // documentamos a necessidade.
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.18 * t),
-                                  blurRadius: kSpaceXXL, // 24
-                                  offset: const Offset(-4, 0),
-                                ),
-                              ]
-                            : const [],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: child,
+              } else if (_drawerCtrl.value > 0.5) {
+                _drawerCtrl.animateTo(1.0,
+                    curve: kFluentStandard, duration: kDurationSlower);
+              } else {
+                _drawerCtrl.animateTo(0.0,
+                    curve: kFluentStandard, duration: kDurationSlower);
+              }
+            },
+            child: AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (_, child) {
+                final t = _drawerCtrl.value;
+                final radius = _drawerRadius * t;
+                final scale = 1.0 - (0.06 * t);
+                return Transform(
+                  transform: Matrix4.identity()
+                    ..translate(_drawerWidth * t, 0.0)
+                    ..scale(scale),
+                  alignment: Alignment.center,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius),
+                      boxShadow: t > 0
+                          ? [
+                              // Sombra dinâmica proporcional à abertura do
+                              // drawer. Não existe token dinâmico; usamos
+                              // Colors.black com opacidade variável e
+                              // documentamos a necessidade.
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18 * t),
+                                blurRadius: kSpaceXXL, // 24
+                                offset: const Offset(-4, 0),
+                              ),
+                            ]
+                          : const [],
                     ),
-                  );
-                },
-                child: AbsorbPointer(
-                  absorbing: _drawerOpen,
-                  child: bodyContent,
-                ),
-              ),
-            ),
-            // Área tocável sobre o conteúdo deslocado, quando o drawer
-            // está aberto — reativa ao _drawerCtrl dentro de um
-            // AnimatedBuilder, para não ficar "presa" durante animações.
-            Positioned(
-              top: 0,
-              bottom: 0,
-              left: _drawerWidth,
-              right: 0,
-              child: AnimatedBuilder(
-                animation: _drawerCtrl,
-                builder: (_, child) {
-                  final open = _drawerCtrl.value > 0.01;
-                  return IgnorePointer(
-                    ignoring: !open,
+                    clipBehavior: Clip.antiAlias,
                     child: child,
-                  );
-                },
-                child: GestureDetector(
-                  onTap: _closeDrawer,
-                  behavior: HitTestBehavior.translucent,
-                ),
+                  ),
+                );
+              },
+              child: AbsorbPointer(
+                absorbing: _drawerOpen,
+                child: bodyContent,
               ),
             ),
-          ],
+          ),
+          // Área tocável sobre o conteúdo deslocado, quando o drawer
+          // está aberto — reativa ao _drawerCtrl dentro de um
+          // AnimatedBuilder, para não ficar "presa" durante animações.
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: _drawerWidth,
+            right: 0,
+            child: AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (_, child) {
+                final open = _drawerCtrl.value > 0.01;
+                return IgnorePointer(
+                  ignoring: !open,
+                  child: child,
+                );
+              },
+              child: GestureDetector(
+                onTap: _closeDrawer,
+                behavior: HitTestBehavior.translucent,
+              ),
+            ),
+          ),
+        ],
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -427,87 +413,6 @@ class _AiTabHeaderRefresh extends ChangeNotifier {
   _AiTabHeaderRefresh._();
   static _AiTabHeaderRefresh of(BuildContext context) => _instance;
   void ping() => notifyListeners();
-}
-
-// ══════════════════════════════════════════════════════════════
-// DOCUMENT EDITOR PAGE — tela própria de edição.
-// Aberta via Navigator.push quando o utilizador toca num documento
-// (canvas) criado pela IA ou guardado. Usa CupertinoPageRoute para
-// a transição slide-from-right padrão de apps nativas.
-// A AppBar segue o mesmo estilo do _AppHeader mas com back button
-// nativo do Cupertino para fechar a tela.
-// ══════════════════════════════════════════════════════════════
-
-class _DocumentEditorPage extends StatefulWidget {
-  final LocalCanvasItem item;
-  const _DocumentEditorPage({required this.item});
-
-  @override
-  State<_DocumentEditorPage> createState() => _DocumentEditorPageState();
-}
-
-class _DocumentEditorPageState extends State<_DocumentEditorPage>
-    with ThemeReactive<_DocumentEditorPage> {
-  @override
-  void initState() {
-    super.initState();
-    // Carregamos o documento logo após o frame inicial, quando
-    // o EditorScreen já montou os WebViews.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      editTabController.requestLoadLocal(widget.item);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    final editorType = widget.item.kind.editorType;
-
-    return Scaffold(
-      backgroundColor: s.surface,
-      body: Column(
-        children: [
-          // Header com back button + título do documento
-          Container(
-            color: s.surface,
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + kSpaceXS,
-              bottom: kSpaceS + kSpaceXXS,
-              left: kSpaceXXS,
-              right: kSpaceS + kSpaceXXS,
-            ),
-            child: Row(
-              children: [
-                AppTap(
-                  onTap: () => Navigator.of(context).pop(),
-                  s: s,
-                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
-                ),
-                SizedBox(width: kSpaceXS),
-                Expanded(
-                  child: Text(
-                    widget.item.title.isNotEmpty
-                        ? widget.item.title
-                        : editorType.label,
-                    style: TextStyle(
-                      fontSize: kTypeBodyLarge,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // O EditorScreen ocupa o resto do espaço disponível.
-          Expanded(
-            child: EditorScreen(editorType: editorType),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class AiTabHost extends StatefulWidget {
@@ -544,41 +449,19 @@ class _AiTabHostState extends State<AiTabHost> {
     }
   }
 
-  void _goToEditTab(EditorType type) {
-    RootShellNavigation.of(context)?.switchToEditTab(type);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return AiTabHostNavigation(
-      goToEditTab: _goToEditTab,
-      child: AiTab(
-        key: widget.aiTabKey,
-        onFirstMessage: widget.onFirstMessage,
-        externalAction: widget.externalAction,
-        onExternalActionConsumed: widget.onExternalActionConsumed,
-        initialConversationId: widget.initialConversationId,
-        onHasMessagesChanged: widget.onHasMessagesChanged,
-        onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
-        onCanvasCreated: widget.onCanvasCreated,
-      ),
+    return AiTab(
+      key: widget.aiTabKey,
+      onFirstMessage: widget.onFirstMessage,
+      externalAction: widget.externalAction,
+      onExternalActionConsumed: widget.onExternalActionConsumed,
+      initialConversationId: widget.initialConversationId,
+      onHasMessagesChanged: widget.onHasMessagesChanged,
+      onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
+      onCanvasCreated: widget.onCanvasCreated,
     );
   }
-}
-
-class RootShellNavigation extends InheritedWidget {
-  final ValueChanged<EditorType> switchToEditTab;
-  const RootShellNavigation({
-    super.key,
-    required this.switchToEditTab,
-    required super.child,
-  });
-
-  static RootShellNavigation? of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<RootShellNavigation>();
-
-  @override
-  bool updateShouldNotify(RootShellNavigation oldWidget) => true;
 }
 
 class _AppHeader extends StatelessWidget {

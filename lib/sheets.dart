@@ -15,27 +15,24 @@ Future<T?> showCraftBottomSheet<T>({
   return showFluentBottomSheet<T>(
     context: context,
     s: s,
-    child: FluentBottomSheet(
-      s: s,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null) ...[
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: kTypeBody,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null) ...[
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: kTypeBody,
+              fontWeight: FontWeight.w600,
+              color: s.onSurface,
             ),
-            SizedBox(height: kSpaceS),
-          ],
-          child,
+          ),
           SizedBox(height: kSpaceS),
         ],
-      ),
+        child,
+        SizedBox(height: kSpaceS),
+      ],
     ),
   );
 }
