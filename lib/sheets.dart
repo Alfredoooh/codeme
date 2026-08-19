@@ -215,7 +215,7 @@ Future<void> showLinkSheet(
             controller: urlC,
             hint: 'https://',
             fillColor: s.subtleFillHover,
-            radius: kRadiusLarge,
+            radius: kRadiusXLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceM,
               vertical: kSpaceM,
@@ -227,7 +227,7 @@ Future<void> showLinkSheet(
             controller: txtC,
             hint: 'Texto (opcional)',
             fillColor: s.subtleFillHover,
-            radius: kRadiusLarge,
+            radius: kRadiusXLarge,
             contentPadding: EdgeInsets.symmetric(
               horizontal: kSpaceM,
               vertical: kSpaceM,

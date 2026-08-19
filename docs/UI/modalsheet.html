@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Modal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #111;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 40px 20px 80px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 26px;
+    }
+
+    .group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .group-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #4a4a4a;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 0 2px;
+    }
+
+    .card {
+      background: #1c1c1e;
+      border-radius: 28px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .card-simple {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .card-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .card-text { font-size: 13px; color: #888; line-height: 1.5; }
+
+    /* ---------- Lista tipo Apple: cards separados por gap curto, cantos internos levemente curvos, externos 100% curvos ---------- */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .card-row {
+      background: #1c1c1e;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .card-row:active { background: #232325; }
+
+    .card-list .card-row:first-child {
+      border-top-left-radius: 28px;
+      border-top-right-radius: 28px;
+    }
+
+    .card-list .card-row:last-child {
+      border-bottom-left-radius: 28px;
+      border-bottom-right-radius: 28px;
+    }
+
+    .row-icon {
+      width: 22px; height: 22px;
+      color: #5ba9dd;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+
+    .row-body { flex: 1; min-width: 0; }
+    .row-title { font-size: 14px; font-weight: 600; color: #fff; }
+    .row-sub { font-size: 12px; color: #666; margin-top: 2px; }
+    .row-chevron { color: #444; font-size: 13px; flex-shrink: 0; }
+
+    /* ================= BOTÃO GATILHO (demo) ================= */
+    .trigger-btn {
+      background: #2e8bc9;
+      color: #fff;
+      border: none;
+      border-radius: 9999px;
+      padding: 15px;
+      font-size: 14.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .trigger-btn:active { background: #1f6a9e; }
+
+    /* ================= MODAL / BOTTOM SHEET ================= */
+    .sheet-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 100;
+    }
+
+    .sheet-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sheet {
+      width: 100%;
+      max-width: 380px;
+      background: #1c1c1e;
+      border-radius: 28px 28px 0 0;
+      border: 1px solid #2a2a2c;
+      border-bottom: none;
+      padding: 10px 18px 28px;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+
+    .sheet-overlay.open .sheet {
+      transform: translateY(0);
+    }
+
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: #3a3a3c;
+      border-radius: 9999px;
+      margin: 0 auto 18px;
+    }
+
+    .sheet-header {
+      margin-bottom: 18px;
+    }
+
+    .sheet-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .sheet-body {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .sheet-text {
+      font-size: 13.5px;
+      color: #999;
+      line-height: 1.6;
+    }
+
+    /* Campo de input dentro do modal, mesma linguagem dos cards */
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1px solid #262626;
+    }
+
+    .field-row {
+      background: #1c1c1e;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .field-group .field-row:first-child {
+      border-top-left-radius: 28px;
+      border-top-right-radius: 28px;
+    }
+
+    .field-group .field-row:last-child {
+      border-bottom-left-radius: 28px;
+      border-bottom-right-radius: 28px;
+    }
+
+    .field-icon {
+      width: 20px;
+      color: #5ba9dd;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .field-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .field-input::placeholder { color: #555; }
+
+    /* Ações do modal */
+    .sheet-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .sheet-btn {
+      border: none;
+      border-radius: 9999px;
+      padding: 15px;
+      font-size: 14.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .sheet-btn-primary { background: #2e8bc9; color: #fff; }
+    .sheet-btn-primary:active { background: #1f6a9e; }
+
+    .sheet-btn-ghost { background: #2a2a2c; color: #ddd; }
+    .sheet-btn-ghost:active { background: #333335; }
+
+    .sheet-btn-danger { background: transparent; color: #e05e5e; }
+    .sheet-btn-danger:active { background: rgba(224,94,94,0.1); }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <div class="group">
+      <div class="group-label">Lista com ícones</div>
+      <div class="card-list">
+        <div class="card-row">
+          <div class="row-icon"><i class="fa-solid fa-calendar-days"></i></div>
+          <div class="row-body">
+            <div class="row-title">Calendário</div>
+            <div class="row-sub">3 eventos hoje</div>
+          </div>
+          <i class="fa-solid fa-chevron-right row-chevron"></i>
+        </div>
+        <div class="card-row" onclick="document.getElementById('demoSheet').classList.add('open')">
+          <div class="row-icon"><i class="fa-solid fa-plus"></i></div>
+          <div class="row-body">
+            <div class="row-title">Abrir modal</div>
+            <div class="row-sub">Toca aqui para testar</div>
+          </div>
+          <i class="fa-solid fa-chevron-right row-chevron"></i>
+        </div>
+        <div class="card-row">
+          <div class="row-icon red"><i class="fa-solid fa-bell"></i></div>
+          <div class="row-body">
+            <div class="row-title">Lembretes</div>
+            <div class="row-sub">2 pendentes</div>
+          </div>
+          <i class="fa-solid fa-chevron-right row-chevron"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Gatilho</div>
+      <button class="trigger-btn" onclick="document.getElementById('demoSheet').classList.add('open')">
+        Abrir modal
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ================= MODAL (fecha por toque fora ou pelo botão de ação) ================= -->
+  <div class="sheet-overlay" id="demoSheet" onclick="if(event.target===this) this.classList.remove('open')">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">Novo evento</div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="sheet-text">Preenche os detalhes abaixo para adicionar um novo evento ao teu calendário.</div>
+
+        <div class="field-group">
+          <div class="field-row">
+            <div class="field-icon"><i class="fa-solid fa-pen"></i></div>
+            <input class="field-input" type="text" placeholder="Título do evento">
+          </div>
+          <div class="field-row">
+            <div class="field-icon"><i class="fa-solid fa-calendar-days"></i></div>
+            <input class="field-input" type="text" placeholder="18 de agosto">
+          </div>
+          <div class="field-row">
+            <div class="field-icon"><i class="fa-solid fa-clock"></i></div>
+            <input class="field-input" type="text" placeholder="14:00 — 15:00">
+          </div>
+        </div>
+
+        <div class="sheet-actions">
+          <button class="sheet-btn sheet-btn-primary" onclick="document.getElementById('demoSheet').classList.remove('open')">
+            Guardar evento
+          </button>
+          <button class="sheet-btn sheet-btn-ghost" onclick="document.getElementById('demoSheet').classList.remove('open')">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

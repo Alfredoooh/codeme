@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Botões</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #111;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 40px 20px 80px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .group-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #4a4a4a;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 0 2px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* ---------- Base ---------- */
+    .btn {
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.1px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+
+    .btn:active { transform: scale(0.96); }
+
+    /* ---------- Tamanhos ---------- */
+    .btn-lg { padding: 15px 22px; border-radius: 50px; font-size: 15px; }
+    .btn-md { padding: 11px 18px; border-radius: 50px; }
+    .btn-sm { padding: 8px 14px; border-radius: 50px; font-size: 12.5px; }
+
+    .btn-icon-only {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 50%;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+    .btn-icon-only.btn-sm { width: 34px; height: 34px; font-size: 12px; }
+    .btn-icon-only.btn-lg { width: 50px; height: 50px; font-size: 16px; }
+
+    .btn-full { width: 100%; }
+
+    /* ---------- Primary (azul) ---------- */
+    .btn-primary {
+      background: #2e8bc9;
+      color: #fff;
+    }
+    .btn-primary:hover  { background: #3695d4; }
+    .btn-primary:active { background: #1f6a9e; }
+
+    /* ---------- Destructive (vermelho) ---------- */
+    .btn-danger {
+      background: #e05e5e;
+      color: #fff;
+    }
+    .btn-danger:hover  { background: #e77070; }
+    .btn-danger:active { background: #b34545; }
+
+    /* ---------- Success ---------- */
+    .btn-success {
+      background: #4ec994;
+      color: #0d1f16;
+    }
+    .btn-success:hover  { background: #5cd5a1; }
+    .btn-success:active { background: #3fb682; }
+
+    /* ---------- Warning ---------- */
+    .btn-warning {
+      background: #f0a500;
+      color: #1f1600;
+    }
+    .btn-warning:hover  { background: #ffb318; }
+    .btn-warning:active { background: #d69300; }
+
+    /* ---------- Secondary (cinza sólido) ---------- */
+    .btn-secondary {
+      background: #232323;
+      color: #fff;
+    }
+    .btn-secondary:hover  { background: #2c2c2c; }
+    .btn-secondary:active { background: #333; }
+
+    /* ---------- Ghost (transparente) ---------- */
+    .btn-ghost {
+      background: transparent;
+      color: #999;
+    }
+    .btn-ghost:hover  { background: #1e1e1e; color: #fff; }
+    .btn-ghost:active { background: #272727; }
+
+    /* ---------- Outline ---------- */
+    .btn-outline {
+      background: transparent;
+      color: #4fa3d8;
+      box-shadow: inset 0 0 0 1.5px #2e6f96;
+    }
+    .btn-outline:hover  { background: rgba(46,139,201,0.1); box-shadow: inset 0 0 0 1.5px #2e8bc9; }
+    .btn-outline:active { background: rgba(46,139,201,0.18); }
+
+    .btn-outline-danger {
+      background: transparent;
+      color: #e08080;
+      box-shadow: inset 0 0 0 1.5px #96403f;
+    }
+    .btn-outline-danger:hover  { background: rgba(224,94,94,0.1); box-shadow: inset 0 0 0 1.5px #e05e5e; }
+
+    /* ---------- Tint (fundo suave da cor) ---------- */
+    .btn-tint-blue {
+      background: rgba(46,139,201,0.15);
+      color: #6db4e6;
+    }
+    .btn-tint-blue:hover { background: rgba(46,139,201,0.24); }
+
+    .btn-tint-red {
+      background: rgba(224,94,94,0.15);
+      color: #ef9797;
+    }
+    .btn-tint-red:hover { background: rgba(224,94,94,0.24); }
+
+    /* ---------- Disabled ---------- */
+    .btn-disabled,
+    .btn:disabled {
+      opacity: 0.32;
+      pointer-events: none;
+    }
+
+    /* ---------- Loading ---------- */
+    .btn-loading {
+      color: transparent !important;
+      position: relative;
+      pointer-events: none;
+    }
+    .btn-loading::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Segmented control ---------- */
+    .segmented {
+      display: flex;
+      background: #1a1a1a;
+      border-radius: 50px;
+      padding: 4px;
+      gap: 2px;
+      width: fit-content;
+    }
+    .segmented .seg {
+      border: none;
+      background: transparent;
+      color: #777;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      font-family: inherit;
+    }
+    .segmented .seg.active {
+      background: #2e8bc9;
+      color: #fff;
+    }
+
+    /* ---------- Split action ---------- */
+    .split-actions {
+      display: flex;
+      align-items: center;
+      background: #1a1a1a;
+      border-radius: 50px;
+      padding: 5px;
+      gap: 6px;
+    }
+    .split-actions .btn { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <div class="group">
+      <div class="group-label">Primary</div>
+      <div class="row">
+        <button class="btn btn-primary btn-md btn-full">
+          <i class="fa-solid fa-plus"></i> Novo evento
+        </button>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary btn-sm">Pequeno</button>
+        <button class="btn btn-primary btn-md">Médio</button>
+        <button class="btn btn-primary btn-lg">Grande</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Destructive</div>
+      <div class="row">
+        <button class="btn btn-danger btn-md">
+          <i class="fa-solid fa-trash"></i> Eliminar
+        </button>
+        <button class="btn btn-outline-danger btn-md">Cancelar assinatura</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Status</div>
+      <div class="row">
+        <button class="btn btn-success btn-sm">
+          <i class="fa-solid fa-check"></i> Aprovado
+        </button>
+        <button class="btn btn-warning btn-sm">
+          <i class="fa-solid fa-triangle-exclamation"></i> Pendente
+        </button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Secondary / Ghost / Outline</div>
+      <div class="row">
+        <button class="btn btn-secondary btn-md">Secundário</button>
+        <button class="btn btn-ghost btn-md">Ghost</button>
+        <button class="btn btn-outline btn-md">Outline azul</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Tint</div>
+      <div class="row">
+        <button class="btn btn-tint-blue btn-md">
+          <i class="fa-solid fa-bell"></i> Notificar
+        </button>
+        <button class="btn btn-tint-red btn-md">
+          <i class="fa-solid fa-flag"></i> Reportar
+        </button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Icon only</div>
+      <div class="row">
+        <button class="btn btn-primary btn-icon-only btn-sm"><i class="fa-solid fa-plus"></i></button>
+        <button class="btn btn-secondary btn-icon-only btn-md"><i class="fa-solid fa-ellipsis"></i></button>
+        <button class="btn btn-danger btn-icon-only btn-md"><i class="fa-solid fa-xmark"></i></button>
+        <button class="btn btn-ghost btn-icon-only btn-lg"><i class="fa-solid fa-share-nodes"></i></button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Disabled / Loading</div>
+      <div class="row">
+        <button class="btn btn-primary btn-md btn-disabled">Indisponível</button>
+        <button class="btn btn-primary btn-md btn-loading">A carregar</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Segmented control</div>
+      <div class="segmented">
+        <button class="seg active">Dia</button>
+        <button class="seg">Semana</button>
+        <button class="seg">Mês</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Split action</div>
+      <div class="split-actions">
+        <button class="btn btn-danger btn-md">Eliminar</button>
+        <button class="btn btn-primary btn-md">Cancelar</button>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

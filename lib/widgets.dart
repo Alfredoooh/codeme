@@ -122,8 +122,9 @@ class _AppTapState extends State<AppTap> {
         onTapUp: (_) => setState(() => _p = false),
         onTap: widget.onTap,
         child: AnimatedScale(
-          scale: _p ? 0.88 : 1.0,
-          duration: kDurationFast,
+          scale: _p ? 0.94 : 1.0,
+          duration: kDurationNormal,
+          curve: Curves.easeOutCubic,
           child: AnimatedContainer(
             duration: kDurationFast,
             width: widget.size,
@@ -167,7 +168,7 @@ class AppSwitch extends StatelessWidget {
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             color: value ? s.primary : s.outline,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
@@ -275,7 +276,7 @@ class SheetGrabber extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // FLUENT BOTTOM SHEET
 //
-// Fluent Design usa radius de 8px no topo (não 28px estilo iOS).
+// Linguagem visual arredondada, inspirada em folhas e cartões SwiftUI.
 // O fundo é floatingSurface, grabber fino, sombra elevation8.
 // Padding interno padronizado: 20h, 20 bottom + safe area.
 // ══════════════════════════════════════════════════════════════
@@ -313,7 +314,7 @@ class FluentBottomSheet extends StatelessWidget {
             decoration: BoxDecoration(
               color: s.floatingSurface,
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(8),
+                top: Radius.circular(kRadiusXLarge),
               ),
               boxShadow: s.elevation8,
               border: Border(
@@ -414,7 +415,7 @@ class FluentDialog extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 24),
             decoration: BoxDecoration(
               color: s.surface,
-              borderRadius: BorderRadius.circular(kRadiusLarge),
+              borderRadius: BorderRadius.circular(kRadiusXLarge),
               boxShadow: s.elevation16,
               border: Border.all(color: s.strokeCard, width: 1),
             ),
@@ -644,14 +645,15 @@ class _FluentButtonState extends State<FluentButton> {
       onTap: enabled ? widget.onTap : null,
       onLongPressCancel: enabled ? () => setState(() { _h = false; _p = false; }) : null,
       child: AnimatedContainer(
-        duration: kDurationFast,
-        height: h,
+duration: kDurationNormal,
+            curve: Curves.easeOutCubic,
+            height: h,
         width: widget.fullWidth ? double.infinity : null,
         padding: EdgeInsets.symmetric(horizontal: hPad),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _bg(s),
-          borderRadius: BorderRadius.circular(kRadiusMedium),
+          borderRadius: BorderRadius.circular(kRadiusCircle),
           border: _border(s),
         ),
         child: widget.loading
@@ -798,11 +800,12 @@ class _FluentTextFieldState extends State<FluentTextField> {
           const SizedBox(height: kSpaceXS),
         ],
         AnimatedContainer(
-          duration: kDurationFast,
+          duration: kDurationNormal,
+          curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: widget.fillColor ??
                 (widget.enabled ? s.controlInputActive : s.controlDisabled),
-            borderRadius: BorderRadius.circular(widget.radius ?? kRadiusMedium),
+            borderRadius: BorderRadius.circular(widget.radius ?? kRadiusXLarge),
             border: Border.all(
               color: borderColor,
               width: _focused ? 1.5 : 1,
@@ -1028,8 +1031,8 @@ class _FluentListCardState extends State<FluentListCard> {
 }
 
 // Radii partilhados pelas ListCard
-const double _kCardOuter = 6.0;
-const double _kCardInner = 2.0;
+const double _kCardOuter = kRadiusXLarge;
+const double _kCardInner = kRadiusLarge;
 
 BorderRadius _listCardRadius(int index, int total) {
   if (total == 1) return BorderRadius.circular(_kCardOuter);
@@ -1206,7 +1209,7 @@ class FluentPopupContainer extends StatelessWidget {
         padding: padding,
         decoration: BoxDecoration(
           color: s.floatingSurface,
-          borderRadius: BorderRadius.circular(kRadiusLarge),
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
           boxShadow: s.elevation8,
           border: Border.all(color: s.strokeCard, width: 1),
         ),
@@ -1356,13 +1359,14 @@ class _FluentIconButtonState extends State<FluentIconButton> {
       onTapUp: enabled ? (_) => setState(() { _h = false; _p = false; }) : null,
       onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: kDurationFast,
+        duration: kDurationNormal,
+        curve: Curves.easeOutCubic,
         width: widget.containerSize,
         height: widget.containerSize,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(kRadiusMedium),
+          borderRadius: BorderRadius.circular(kRadiusCircle),
         ),
         child: AppIcon(
           widget.asset,

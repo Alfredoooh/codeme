@@ -645,7 +645,7 @@ class _ConvTileState extends State<_ConvTile>
                 padding: EdgeInsets.symmetric(horizontal: kSpaceL),
                 decoration: BoxDecoration(
                   color: bg,
-                  borderRadius: BorderRadius.circular(kRadiusLarge),
+                  borderRadius: BorderRadius.circular(kRadiusXLarge),
                 ),
                 child: AppIcon(icon, color: iconColor, size: 18),
               ),
@@ -674,7 +674,7 @@ class _ConvTileState extends State<_ConvTile>
                     color: widget.active
                         ? s.navIndicatorBg
                         : (_h ? s.subtleFillHover : s.surface),
-                    borderRadius: BorderRadius.circular(kRadiusLarge),
+                    borderRadius: BorderRadius.circular(kRadiusXLarge),
                   ),
                   child: Row(
                     children: [

@@ -1010,7 +1010,7 @@ class SimpleCanvasCard extends StatelessWidget {
             EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceM),
         decoration: BoxDecoration(
           color: s.cardBackground,
-          borderRadius: BorderRadius.circular(kRadiusLarge),
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
           boxShadow: s.cardShadow,
           border: Border.all(color: s.outline.withOpacity(0.08)),
         ),
@@ -1022,7 +1022,7 @@ class SimpleCanvasCard extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: s.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(kRadiusMedium),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               child: EditorTypeIcon(item.kind.editorType.svgAsset, size: 20),
             ),
@@ -2379,7 +2379,7 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
           horizontal: kSpaceM, vertical: kSpaceS + kSpaceXXS),
       decoration: BoxDecoration(
         color: s.subtleFillHover.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(kRadiusLarge),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         border: Border.all(color: s.outline.withOpacity(0.2)),
       ),
       child: Column(
@@ -2512,7 +2512,7 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
                           height: widget.dotSize,
                           decoration: BoxDecoration(
                             color: widget.color,
-                            borderRadius: BorderRadius.circular(kRadiusSmall),
+                            borderRadius: BorderRadius.circular(kRadiusXLarge),
                           ),
                         ),
                       ),
@@ -2833,12 +2833,12 @@ class _AttachedFileRow extends StatelessWidget {
         padding: EdgeInsets.all(kSpaceS + kSpaceXXS),
         decoration: BoxDecoration(
           color: s.subtleFillHover,
-          borderRadius: BorderRadius.circular(kRadiusLarge),
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
         ),
         child: Row(children: [
           if (_isImage)
             ClipRRect(
-              borderRadius: BorderRadius.circular(kRadiusMedium),
+              borderRadius: BorderRadius.circular(kRadiusXLarge),
               child: Image.memory(file.bytes,
                   width: 40, height: 40, fit: BoxFit.cover),
             )
@@ -2849,7 +2849,7 @@ class _AttachedFileRow extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: s.primaryContainer.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(kRadiusMedium),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               child: AppIcon('attached.svg',
                   color: s.onPrimaryContainer, size: 18),
@@ -3025,7 +3025,7 @@ class _ChatInput extends StatelessWidget {
                           horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         color: s.hover,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(kRadiusCircle),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -3141,7 +3141,7 @@ class _AttachedToolPill extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(
             color: s.primaryContainer,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -3182,7 +3182,7 @@ class _AttachedFilesPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(kRadiusCircle),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -3285,7 +3285,7 @@ void showAttachPopup(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
                 boxShadow: s.floatingShadow,
               ),
               child: Column(
@@ -3419,7 +3419,7 @@ class _CanvasCardState extends State<_CanvasCard> {
         padding: EdgeInsets.all(kSpaceM),
         decoration: BoxDecoration(
           color: _h ? s.subtleFillHover : s.cardBackground,
-          borderRadius: BorderRadius.circular(kRadiusLarge),
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
           boxShadow: s.cardShadow,
         ),
         child: Row(children: [
@@ -3429,7 +3429,7 @@ class _CanvasCardState extends State<_CanvasCard> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: s.primaryContainer.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(kRadiusMedium),
+              borderRadius: BorderRadius.circular(kRadiusXLarge),
             ),
             child: EditorTypeIcon(_editorType.svgAsset, size: 20),
           ),
@@ -3646,7 +3646,7 @@ void showModelSelectPopup(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
                 boxShadow: s.floatingShadow,
               ),
               child: Column(

@@ -447,7 +447,7 @@ Future<String?> showAiEditModal(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             decoration: BoxDecoration(
               color: s.floatingSurface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusXLarge)),
               boxShadow: s.floatingShadow,
             ),
             child: Column(
@@ -483,7 +483,7 @@ Future<String?> showAiEditModal(
                     filled: true,
                     fillColor: s.hover,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(kRadiusXLarge),
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -499,7 +499,7 @@ Future<String?> showAiEditModal(
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: s.primary,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(kRadiusCircle),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -591,7 +591,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(kRadiusXLarge),
                   boxShadow: s.floatingShadow,
                 ),
                 child: Column(
@@ -669,7 +669,7 @@ class _TypeOptionState extends State<_TypeOption> {
                 : widget.selected
                     ? widget.s.primaryContainer.withOpacity(0.5)
                     : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
           child: Row(children: [
             EditorTypeIcon(widget.type.svgAsset, size: 18),

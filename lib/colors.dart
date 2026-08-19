@@ -47,10 +47,10 @@ const Duration kDurationPage     = Duration(milliseconds: 400);
 // ─────────────────────────────────────────────────────────────
 
 const double kRadiusNone     = 0.0;
-const double kRadiusSmall    = 2.0;
-const double kRadiusMedium   = 4.0;
-const double kRadiusLarge    = 8.0;
-const double kRadiusXLarge   = 12.0;
+const double kRadiusSmall    = 8.0;
+const double kRadiusMedium   = 12.0;
+const double kRadiusLarge    = 18.0;
+const double kRadiusXLarge   = 26.0;
 const double kRadiusCircle   = 9999.0;
 
 // ─────────────────────────────────────────────────────────────
@@ -90,19 +90,19 @@ class AppColorScheme {
   // ─── ACCENT / PRIMARY ────────────────────────────────────
 
   /// Accent Default — cor de destaque principal (azul Fluent)
-  Color get primary              => isDark ? const Color(0xFF479EF5) : const Color(0xFF0F6CBD);
+  Color get primary              => isDark ? const Color(0xFF7EC8FF) : const Color(0xFF5B5CE2);
 
   /// Texto/ícone sobre superfície accent
   Color get onPrimary            => isDark ? const Color(0xFF061724) : const Color(0xFFFFFFFF);
 
   /// Accent Light 3 / Dark 3 — fundo de containers de destaque (chips, badges)
-  Color get primaryContainer     => isDark ? const Color(0xFF0C3B5E) : const Color(0xFFEBF3FC);
+  Color get primaryContainer     => isDark ? const Color(0xFF274A68) : const Color(0xFFE7E7FF);
 
   /// Texto sobre primaryContainer
   Color get onPrimaryContainer   => isDark ? const Color(0xFFCFE4FA) : const Color(0xFF0C3B5E);
 
   /// Accent Light 2 — hover sobre accent (botão primário hovered)
-  Color get primaryHover         => isDark ? const Color(0xFF62ABFF) : const Color(0xFF0E5BA8);
+  Color get primaryHover         => isDark ? const Color(0xFF9AD6FF) : const Color(0xFF7475F0);
 
   /// Accent Light 1 — pressed sobre accent
   Color get primaryPressed       => isDark ? const Color(0xFF3B90E8) : const Color(0xFF0E5BA8);
@@ -111,7 +111,7 @@ class AppColorScheme {
   Color get primarySubtle        => isDark ? const Color(0xFF1E4C7A) : const Color(0xFFBDD7EF);
 
   /// Accent secundário (usado em gráficos, highlights adicionais)
-  Color get secondary            => isDark ? const Color(0xFF9CDCFE) : const Color(0xFF005FB7);
+  Color get secondary            => isDark ? const Color(0xFFFFB86B) : const Color(0xFFFF7A59);
   Color get onSecondary          => isDark ? const Color(0xFF012B4A) : const Color(0xFFFFFFFF);
   Color get secondaryContainer   => isDark ? const Color(0xFF003A5C) : const Color(0xFFDCEEFC);
   Color get onSecondaryContainer => isDark ? const Color(0xFFB8D9F5) : const Color(0xFF003A5C);
@@ -119,22 +119,22 @@ class AppColorScheme {
   // ─── NEUTRAL BACKGROUNDS (Fluent Layers) ─────────────────
 
   /// Solid Background — fundo de toda a app (Layer 0)
-  Color get solidBackground      => isDark ? const Color(0xFF1C1C1C) : const Color(0xFFEEEEEE);
+  Color get solidBackground      => isDark ? const Color(0xFF20243A) : const Color(0xFFFFF8F2);
 
   /// Page Background — fundo de conteúdo principal (Layer 1)
-  Color get pageBackground       => isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF3F3F3);
+  Color get pageBackground       => isDark ? const Color(0xFF252A44) : const Color(0xFFFFF4EC);
 
   /// Card Background — fundo de cards, painéis, superfícies elevadas (Layer 2)
-  Color get cardBackground       => isDark ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+  Color get cardBackground      => isDark ? const Color(0xFF333956) : const Color(0xFFFFFFFF);
 
   /// Surface — superfície de diálogos, menus, flyouts (Layer 3)
-  Color get surface              => isDark ? const Color(0xFF3C3C3C) : const Color(0xFFFFFFFF);
+  Color get surface              => isDark ? const Color(0xFF3A4161) : const Color(0xFFFFFCFA);
 
   /// Floating Surface — tooltips, menus suspensos (Layer 4)
-  Color get floatingSurface      => isDark ? const Color(0xFF454545) : const Color(0xFFFFFFFF);
+  Color get floatingSurface      => isDark ? const Color(0xFF454B6B) : const Color(0xFFFFFFFF);
 
   /// Layer Subtle — fundo alternado em listas, tabelas (faixa zebra)
-  Color get layerSubtle          => isDark ? const Color(0xFF26262A) : const Color(0xFFF0F0F0);
+  Color get layerSubtle          => isDark ? const Color(0xFF2D3350) : const Color(0xFFFFEEE5);
 
   /// Layer Default — camada de item selecionado em listas
   Color get layerDefault         => isDark ? const Color(0xFF323232) : const Color(0xFFFFFFFF);
@@ -179,10 +179,10 @@ class AppColorScheme {
   // ─── TEXT / ON-SURFACE COLORS ────────────────────────────
 
   /// Texto primário sobre superfície
-  Color get onSurface            => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF1A1A1A);
+  Color get onSurface            => isDark ? const Color(0xFFFFFBF7) : const Color(0xFF302A3D);
 
   /// Texto secundário (metadados, labels de apoio)
-  Color get onSurfaceVariant     => isDark ? const Color(0xFFC8C8C8) : const Color(0xFF4A4A4A);
+  Color get onSurfaceVariant     => isDark ? const Color(0xFFD8D9E8) : const Color(0xFF6A6175);
 
   /// Texto terciário (placeholders, hints)
   Color get onSurfaceTertiary    => isDark ? const Color(0xFF898989) : const Color(0xFF767676);
@@ -209,8 +209,8 @@ class AppColorScheme {
   Color get strokeFocusInner     => isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 
   /// Outline padrão (campos, borders gerais)
-  Color get outline              => isDark ? const Color(0xFF4E4E4E) : const Color(0xFFD1D1D1);
-  Color get outlineVariant       => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE5E5E5);
+  Color get outline              => isDark ? const Color(0xFF5C6486) : const Color(0xFFF0D9CF);
+  Color get outlineVariant       => isDark ? const Color(0xFF4A5170) : const Color(0xFFF7E7DF);
 
   /// Control Stroke — borda de controles interativos (input, button)
   Color get controlStroke        => isDark ? const Color(0x1AFFFFFF) : const Color(0x0F000000);
@@ -319,7 +319,7 @@ class AppColorScheme {
   Color get navIndicatorBg     => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEBF3FC);
 
   /// Shell nav rail (lateral, estilo Windows)
-  Color get navRailBg          => isDark ? const Color(0xFF282828) : const Color(0xFFF3F3F3);
+  Color get navRailBg          => isDark ? const Color(0xFF2A304D) : const Color(0xFFFFF0E7);
   Color get navRailItemHover   => isDark ? const Color(0x14FFFFFF) : const Color(0x08000000);
   Color get navRailItemActive  => isDark ? const Color(0x1FFFFFFF) : const Color(0xFFEBF3FC);
 
@@ -334,7 +334,7 @@ class AppColorScheme {
   // ─── APP-SPECIFIC TOKENS (Nexa / CraftLab) ───────────────
 
   /// Tab "Projetos" / CraftLab brand — pill fixo azul
-  Color get projectsTabBg      => const Color(0xFF0F6CBD);
+  Color get projectsTabBg      => const Color(0xFF5B5CE2);
   Color get projectsTabFg      => const Color(0xFFFFFFFF);
 
   /// Área de preview A4 no DocumentWidgetCard
@@ -344,32 +344,32 @@ class AppColorScheme {
   Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE5E5EA);
 
   /// Canvas / whiteboard background
-  Color get canvasBackground   => isDark ? const Color(0xFF161616) : const Color(0xFFF8F9FA);
-  Color get canvasGrid         => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE8E8E8);
+  Color get canvasBackground   => isDark ? const Color(0xFF20243A) : const Color(0xFFFFFBF8);
+  Color get canvasGrid         => isDark ? const Color(0xFF4A5170) : const Color(0xFFF3DDD3);
 
   /// Shimmer (skeleton loading)
-  Color get shimmerBase        => isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0);
-  Color get shimmerHighlight   => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF5F5F5);
+  Color get shimmerBase        => isDark ? const Color(0xFF39405F) : const Color(0xFFFFE5D9);
+  Color get shimmerHighlight   => isDark ? const Color(0xFF505878) : const Color(0xFFFFF8F4);
 
   /// AI process pill
-  Color get processPillBg      => isDark ? const Color(0xFF1E2A3A) : const Color(0xFFE8F2FF);
-  Color get processPillFg      => isDark ? const Color(0xFF479EF5) : const Color(0xFF0F6CBD);
+  Color get processPillBg      => isDark ? const Color(0xFF304460) : const Color(0xFFEAF0FF);
+  Color get processPillFg      => isDark ? const Color(0xFF9BD5FF) : const Color(0xFF5B5CE2);
   Color get processPillBorder  => isDark ? const Color(0xFF2A3F5A) : const Color(0xFFBDD7EF);
 
   /// Chat message bubbles
-  Color get bubbleUser         => isDark ? const Color(0xFF0C3B5E) : const Color(0xFF0F6CBD);
+  Color get bubbleUser         => isDark ? const Color(0xFF4B5E96) : const Color(0xFF5B5CE2);
   Color get bubbleUserFg       => const Color(0xFFFFFFFF);
-  Color get bubbleAssistant    => isDark ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+  Color get bubbleAssistant    => isDark ? const Color(0xFF3A4161) : const Color(0xFFFFFFFF);
   Color get bubbleAssistantFg  => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF1A1A1A);
 
   // ─── INCOGNITO ───────────────────────────────────────────
 
-  Color get incognitoBackground => const Color(0xFF0D0D0F);
-  Color get incognitoSurface    => const Color(0xFF17171A);
-  Color get incognitoCardBg     => const Color(0xFF1E1E22);
+  Color get incognitoBackground => const Color(0xFF25243A);
+  Color get incognitoSurface    => const Color(0xFF343451);
+  Color get incognitoCardBg     => const Color(0xFF414260);
   Color get incognitoOnSurface  => const Color(0xFFEDEDED);
-  Color get incognitoAccent     => const Color(0xFF8F72D4);
-  Color get incognitoStroke     => const Color(0xFF2E2E35);
+  Color get incognitoAccent     => const Color(0xFFFF9CBB);
+  Color get incognitoStroke     => const Color(0xFF5A5C80);
 
   // ─── UTILITÁRIOS ─────────────────────────────────────────
 
@@ -509,6 +509,55 @@ class AppTheme extends StatelessWidget {
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
+      cardTheme: CardTheme(
+        color: c.cardBackground,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
+          side: BorderSide(color: c.strokeCard),
+        ),
+      ),
+      dialogTheme: DialogTheme(
+        backgroundColor: c.surface,
+        elevation: 16,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: c.floatingSurface,
+        modalBackgroundColor: c.floatingSurface,
+        elevation: 16,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(kRadiusXLarge),
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: c.controlInputActive,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
+          borderSide: BorderSide(color: c.outline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
+          borderSide: BorderSide(color: c.outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(kRadiusXLarge),
+          borderSide: BorderSide(color: c.primary, width: 1.5),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: c.floatingSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusCircle),
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 

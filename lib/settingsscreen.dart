@@ -477,7 +477,7 @@ class _ProfileHeader extends StatelessWidget {
       padding: EdgeInsets.all(kSpaceL + kSpaceXXS),
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(kRadiusLarge),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
       ),
       child: Row(
         children: [

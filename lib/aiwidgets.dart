@@ -359,7 +359,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
             child: Container(
               decoration: BoxDecoration(
                 color: _previewBg(),
-                borderRadius: BorderRadius.circular(kRadiusLarge),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -653,7 +653,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                 height: kSpaceXS,
                 decoration: BoxDecoration(
                   color: _label(),
-                  borderRadius: BorderRadius.circular(kRadiusSmall),
+                  borderRadius: BorderRadius.circular(kRadiusCircle),
                 ),
               ),
             ),
@@ -681,7 +681,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                       decoration: BoxDecoration(
                         color: active ? _primary() : _chipInactiveBg(),
                         border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
-                        borderRadius: BorderRadius.circular(kRadiusLarge),
+                        borderRadius: BorderRadius.circular(kRadiusXLarge),
                       ),
                       child: AppIcon(t.icon, size: 17, color: active ? s.onPrimary : _chipInactiveText()),
                     ),
@@ -699,7 +699,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
               s: s,
               controller: _titleController,
               fillColor: _inputBg(),
-              radius: kRadiusLarge,
+              radius: kRadiusXLarge,
               contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
             ),
             SizedBox(height: kSpaceM),
@@ -724,7 +724,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           height: 26,
                           decoration: BoxDecoration(
                             color: item.color,
-                            borderRadius: BorderRadius.circular(kRadiusMedium),
+                            borderRadius: BorderRadius.circular(kRadiusXLarge),
                           ),
                         ),
                       ),
@@ -735,7 +735,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           controller: _labelControllers[index],
                           onChanged: (v) => item.label = v,
                           fillColor: _inputBg(),
-                          radius: kRadiusMedium,
+                          radius: kRadiusXLarge,
                           contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
                         ),
                       ),
@@ -749,7 +749,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.right,
                           fillColor: _inputBg(),
-                          radius: kRadiusMedium,
+                          radius: kRadiusXLarge,
                           contentPadding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceS),
                         ),
                       ),
@@ -781,7 +781,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                 padding: EdgeInsets.symmetric(vertical: kSpaceS + kSpaceXXS),
                 decoration: BoxDecoration(
                   border: Border.all(color: _chipInactiveBorder(), width: 1),
-                  borderRadius: BorderRadius.circular(kRadiusLarge),
+                  borderRadius: BorderRadius.circular(kRadiusXLarge),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1170,7 +1170,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                 final active = pair.key == _currentPairKey;
                 return FluentListCard(
                   s: widget.s,
-                  radius: BorderRadius.circular(kRadiusLarge),
+                  radius: BorderRadius.circular(kRadiusXLarge),
                   label: pair.label,
                   subtitle: pair.sub,
                   onTap: () => Navigator.pop(context, pair.key),
@@ -1217,7 +1217,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
             child: Container(
               decoration: BoxDecoration(
                 color: widget.s.surface,
-                borderRadius: BorderRadius.circular(kRadiusLarge),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -1242,7 +1242,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                               padding: EdgeInsets.symmetric(horizontal: kSpaceS, vertical: kSpaceXXS),
                               decoration: BoxDecoration(
                                 color: widget.s.subtleFillHover,
-                                borderRadius: BorderRadius.circular(kRadiusMedium),
+                                borderRadius: BorderRadius.circular(kRadiusXLarge),
                               ),
                               child: Text(
                                 pair.badge,
@@ -1314,7 +1314,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                               padding: EdgeInsets.symmetric(vertical: kSpaceS),
                               decoration: BoxDecoration(
                                 color: active ? widget.s.subtleFillHover : Colors.transparent,
-                                borderRadius: BorderRadius.circular(kRadiusMedium),
+                                borderRadius: BorderRadius.circular(kRadiusXLarge),
                               ),
                               alignment: Alignment.center,
                               child: Text(
@@ -1510,7 +1510,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             controller: nameCtrl,
             hint: 'Nome do evento',
             fillColor: s.subtleFillHover,
-            radius: kRadiusLarge,
+            radius: kRadiusXLarge,
             contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
           ),
           SizedBox(height: kSpaceS + kSpaceXXS),
@@ -1519,7 +1519,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             controller: timeCtrl,
             hint: 'Hora (ex: 14:00)',
             fillColor: s.subtleFillHover,
-            radius: kRadiusLarge,
+            radius: kRadiusXLarge,
             contentPadding: EdgeInsets.symmetric(horizontal: kSpaceM, vertical: kSpaceM),
           ),
           SizedBox(height: kSpaceL),
@@ -1615,7 +1615,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             child: Container(
               decoration: BoxDecoration(
                 color: _previewBg(),
-                borderRadius: BorderRadius.circular(kRadiusLarge),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -1852,7 +1852,7 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
       decoration: BoxDecoration(
         color: s.cardBackground,
         border: Border.all(color: s.outline.withOpacity(0.4), width: 1.5),
-        borderRadius: BorderRadius.circular(kRadiusLarge),
+        borderRadius: BorderRadius.circular(kRadiusXLarge),
         boxShadow: s.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
@@ -2174,7 +2174,7 @@ Widget build(BuildContext context) {
   final padding = isRoot
       ? EdgeInsets.symmetric(horizontal: kSpaceXXL, vertical: kSpaceM)
       : EdgeInsets.symmetric(horizontal: kSpaceL, vertical: kSpaceS + kSpaceXXS);
-  final borderRadius = isRoot ? kRadiusLarge : kRadiusXLarge;
+  final borderRadius = isRoot ? kRadiusXLarge : kRadiusXLarge;
 
   return Container(
     padding: padding,
@@ -2752,7 +2752,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
             child: Container(
               decoration: BoxDecoration(
                 color: s.surface,
-                borderRadius: BorderRadius.circular(kRadiusLarge),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -2872,7 +2872,7 @@ class _LegendItem extends StatelessWidget {
           height: 2,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(kRadiusSmall),
+            borderRadius: BorderRadius.circular(kRadiusCircle),
           ),
         ),
         SizedBox(width: kSpaceXS),
@@ -3410,7 +3410,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
             child: Container(
               decoration: BoxDecoration(
                 color: _previewBg,
-                borderRadius: BorderRadius.circular(kRadiusLarge),
+                borderRadius: BorderRadius.circular(kRadiusXLarge),
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
