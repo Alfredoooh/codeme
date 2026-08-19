@@ -1,7 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -15,6 +14,7 @@ import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
+import 'home/home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,8 +54,19 @@ class CraftLabApp extends StatelessWidget {
         return MaterialApp(
           title: 'CraftLab',
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.buildTheme(isDark: false),
-          darkTheme: AppTheme.buildTheme(isDark: true),
+          theme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.light,
+            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6)),
+          ),
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF2F7BF6),
+              brightness: Brightness.dark,
+            ),
+          ),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
           builder: (_, child) => ColoredBox(color: s.surface, child: child!),
           home: const AuthGate(),
@@ -74,28 +85,27 @@ class CraftLabApp extends StatelessWidget {
 
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
-  @override
-  State<RootShell> createState() => _RootShellState();
+  @override State<RootShell> createState() => _RootShellState();
 }
 
 class _RootShellState extends State<RootShell>
     with ThemeReactive<RootShell>, SingleTickerProviderStateMixin {
   late final AnimationController _drawerCtrl = AnimationController(
     vsync: this,
-    duration: kDurationSlower,
+    duration: _drawerAnim,
     value: 0.0,
   );
 
   bool get _drawerOpen => _drawerCtrl.value > 0.5;
 
-  AppTab _tab = AppTab.ai;
+  AppTab     _tab        = AppTab.ai;
   EditorType _editorType = EditorType.docs;
-  bool _hasMessages = false;
+  bool       _hasMessages = false;
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer() => _drawerCtrl.animateTo(1.0, curve: kFluentStandard);
-  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: kFluentStandard);
+  void _openDrawer()  => _drawerCtrl.animateTo(1.0, curve: _drawerCurve);
+  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: _drawerCurve);
   void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
 
   @override
@@ -110,13 +120,20 @@ class _RootShellState extends State<RootShell>
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
   }
 
+  void _goHome() {
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => HomeScreen(
+        onOpenDocument: _onOpenFromHome,
+      ),
+    ));
+  }
+
   void _selectTab(AppTab t) {
     _closeDrawer();
     if (t != _tab) setState(() => _tab = t);
   }
 
   void _setEditorType(EditorType t) => setState(() => _editorType = t);
-
   void _onMessageSent() {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
@@ -128,10 +145,8 @@ class _RootShellState extends State<RootShell>
   void _onConversationAction(ConversationAction action) {
     setState(() {
       _pendingConversationAction = action;
-      if (action == ConversationAction.newChat ||
-          action == ConversationAction.incognito) {
-        _hasMessages =
-            action == ConversationAction.newChat ? false : _hasMessages;
+      if (action == ConversationAction.newChat || action == ConversationAction.incognito) {
+        _hasMessages = action == ConversationAction.newChat ? false : _hasMessages;
       }
     });
   }
@@ -148,16 +163,28 @@ class _RootShellState extends State<RootShell>
     setState(() => _pendingConversationLoad = null);
   }
 
+  /// Quando a IA cria um canvas, apenas carregamos o item no
+  /// controller. A navegação para o editor NÃO é automática — o
+  /// utilizador toca no card do documento para abrir.
   void _onCanvasCreated(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
   }
 
+  /// Callback vindo da HomeScreen quando o utilizador toca num
+  /// template ou ficheiro de projeto. Aqui a navegação é sempre feita,
+  /// porque é resultado de um toque explícito do utilizador.
+  void _onOpenFromHome(LocalCanvasItem item) {
+    editTabController.requestLoadLocal(item);
+    setState(() {
+      _editorType = item.kind.editorType;
+      _tab = AppTab.edit;
+    });
+  }
+
   String get _tabTitle {
     switch (_tab) {
-      case AppTab.ai:
-        return '';
-      case AppTab.edit:
-        return _editorType.label;
+      case AppTab.ai:   return '';
+      case AppTab.edit: return _editorType.label;
     }
   }
 
@@ -169,8 +196,7 @@ class _RootShellState extends State<RootShell>
           aiTabKey: _aiTabKey,
           onFirstMessage: _onMessageSent,
           externalAction: _pendingConversationAction,
-          onExternalActionConsumed: () =>
-              setState(() => _pendingConversationAction = null),
+          onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
           initialConversationId: _pendingConversationLoad,
           onConversationLoadConsumed: _onConversationLoadConsumed,
           onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
@@ -181,8 +207,9 @@ class _RootShellState extends State<RootShell>
     }
   }
 
-  static const double _drawerWidth = 304;
-  static const double _drawerRadius = 30.0;
+  static const double _drawerWidth = 280;
+  static const Duration _drawerAnim = Duration(milliseconds: 320);
+  static const Curve _drawerCurve = Curves.easeOutCubic;
 
   @override
   Widget build(BuildContext context) {
@@ -194,18 +221,16 @@ class _RootShellState extends State<RootShell>
             Positioned.fill(
               top: 0,
               child: AnimatedSwitcher(
-                duration: kDurationSlow,
-                switchInCurve: kFluentDecelerate,
-                switchOutCurve: kFluentAccelerate,
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: kCupertinoOut,
+                switchOutCurve: kCupertinoIn,
                 transitionBuilder: (child, anim) =>
                     FadeTransition(opacity: anim, child: child),
                 child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
               ),
             ),
             Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
+              top: 0, left: 0, right: 0,
               child: AnimatedBuilder(
                 animation: _AiTabHeaderRefresh.of(context),
                 builder: (_, __) {
@@ -241,17 +266,14 @@ class _RootShellState extends State<RootShell>
               headerBackground: s.surface,
               trailing: _tab == AppTab.edit
                   ? EditTypeButton(
-                      s: s,
-                      current: _editorType,
-                      onSelect: _setEditorType,
-                    )
+                      s: s, current: _editorType, onSelect: _setEditorType)
                   : null,
             ),
             Expanded(
               child: AnimatedSwitcher(
-                duration: kDurationSlow,
-                switchInCurve: kFluentDecelerate,
-                switchOutCurve: kFluentAccelerate,
+                duration: const Duration(milliseconds: 220),
+                switchInCurve:  kCupertinoOut,
+                switchOutCurve: kCupertinoIn,
                 transitionBuilder: (child, anim) =>
                     FadeTransition(opacity: anim, child: child),
                 child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
@@ -259,113 +281,130 @@ class _RootShellState extends State<RootShell>
             ),
           ]);
 
-    return Scaffold(
-      backgroundColor: s.pageBackground,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragStart: (_) => _drawerCtrl.stop(),
-              onHorizontalDragUpdate: (details) {
-                final delta = details.delta.dx / _drawerWidth;
-                _drawerCtrl.value =
-                    (_drawerCtrl.value + delta).clamp(0.0, 1.0);
-              },
-              onHorizontalDragEnd: (details) {
-                final velocity = details.velocity.pixelsPerSecond.dx;
-                final shouldOpen = velocity > 300 ||
-                    (velocity.abs() <= 300 && _drawerCtrl.value > 0.5);
-                _drawerCtrl.animateTo(
-                  shouldOpen ? 1.0 : 0.0,
-                  curve: Curves.easeOutCubic,
-                  duration: const Duration(milliseconds: 280),
-                );
-              },
-              child: AbsorbPointer(
-                absorbing: _drawerOpen,
-                child: bodyContent,
+    return RootShellNavigation(
+      switchToEditTab: (type) {
+        setState(() {
+          _editorType = type;
+          _tab = AppTab.edit;
+        });
+      },
+      child: Scaffold(
+        backgroundColor: s.surface,
+        body: Stack(
+          children: [
+            // Drawer — sempre montado, sempre fixo na mesma posição
+            // por baixo do conteúdo. Nunca se move; é revelado quando
+            // o conteúdo por cima desliza para a direita.
+            Positioned(
+              top: 0, bottom: 0, left: 0,
+              width: _drawerWidth,
+              child: Material(
+                color: s.surface,
+                child: AnimatedBuilder(
+                  animation: _AiTabHeaderRefresh.of(context),
+                  builder: (_, __) => AppDrawer(
+                    s: s,
+                    onClose: _closeDrawer,
+                    onSettings: _openSettings,
+                    onGoHome: _goHome,
+                    currentTab: _tab,
+                    onSelectTab: _selectTab,
+                    onOpenConversation: _onOpenConversation,
+                    onNewChat: () =>
+                        _onConversationAction(ConversationAction.newChat),
+                    activeConversationId: _aiTabKey.currentState?.conversationId,
+                  ),
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _drawerCtrl,
-              builder: (_, __) {
-                final t = _drawerCtrl.value;
-                return IgnorePointer(
-                  ignoring: t <= 0.01,
-                  child: GestureDetector(
-                    onTap: _closeDrawer,
-                    behavior: HitTestBehavior.opaque,
-                    child: ColoredBox(
-                      color: Colors.black.withOpacity(0.22 * t),
-                    ),
-                  ),
-                );
+            // Conteúdo principal — segue o dedo em tempo real durante o
+            // arraste (via _drawerCtrl.value, 0.0 a 1.0), com encolhimento
+            // progressivo e cantos que se arredondam conforme o drawer
+            // abre. AnimatedBuilder reconstrói só este bloco a cada tick
+            // do controller, seja por gesto ou por animateTo/fling.
+            GestureDetector(
+              behavior: HitTestBehavior.deferToChild,
+              onHorizontalDragStart: (_) {
+                _drawerCtrl.stop();
               },
-            ),
-          ),
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            width: _drawerWidth,
-            child: AnimatedBuilder(
-              animation: Listenable.merge([
-                _drawerCtrl,
-                _AiTabHeaderRefresh.of(context),
-              ]),
-              builder: (_, __) {
-                final t = _drawerCtrl.value;
-                return Transform.translate(
-                  offset: Offset(-_drawerWidth * (1.0 - t), 0),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onHorizontalDragStart: (_) => _drawerCtrl.stop(),
-                    onHorizontalDragUpdate: (details) {
-                      final delta = details.delta.dx / _drawerWidth;
-                      _drawerCtrl.value =
-                          (_drawerCtrl.value + delta).clamp(0.0, 1.0);
-                    },
-                    onHorizontalDragEnd: (details) {
-                      final velocity = details.velocity.pixelsPerSecond.dx;
-                      final shouldRemainOpen = velocity > 300 ||
-                          (velocity.abs() <= 300 && _drawerCtrl.value > 0.5);
-                      _drawerCtrl.animateTo(
-                        shouldRemainOpen ? 1.0 : 0.0,
-                        curve: Curves.easeOutCubic,
-                        duration: const Duration(milliseconds: 280),
-                      );
-                    },
-                    child: Material(
-                      color: s.surface,
-                      elevation: 16,
-                      shadowColor: Colors.black.withOpacity(0.18),
-                      borderRadius: const BorderRadius.only(
-                        topRight: Radius.circular(_drawerRadius),
-                        bottomRight: Radius.circular(_drawerRadius),
+              onHorizontalDragUpdate: (d) {
+                final delta = d.delta.dx / _drawerWidth;
+                _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+              },
+              onHorizontalDragEnd: (d) {
+                final velocity = d.velocity.pixelsPerSecond.dx;
+                // Fling rápido decide a direção mesmo a meio do gesto;
+                // sem fling, decide pela posição (mais de metade aberto).
+                if (velocity.abs() > 300) {
+                  if (velocity > 0) {
+                    _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                  } else {
+                    _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                  }
+                } else if (_drawerCtrl.value > 0.5) {
+                  _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                } else {
+                  _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                }
+              },
+              child: AnimatedBuilder(
+                animation: _drawerCtrl,
+                builder: (_, child) {
+                  final t = _drawerCtrl.value;
+                  final radius = 24.0 * t;
+                  final scale = 1.0 - (0.06 * t);
+                  return Transform(
+                    transform: Matrix4.identity()
+                      ..translate(_drawerWidth * t, 0.0)
+                      ..scale(scale),
+                    alignment: Alignment.center,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(radius),
+                        boxShadow: t > 0
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.18 * t),
+                                  blurRadius: 24,
+                                  offset: const Offset(-4, 0),
+                                ),
+                              ]
+                            : const [],
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: AppDrawer(
-                      s: s,
-                      onClose: _closeDrawer,
-                      onSettings: _openSettings,
-                      currentTab: _tab,
-                      onSelectTab: _selectTab,
-                      onOpenConversation: _onOpenConversation,
-                      onNewChat: () =>
-                          _onConversationAction(ConversationAction.newChat),
-                        activeConversationId:
-                            _aiTabKey.currentState?.conversationId,
-                      ),
+                      child: child,
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+                child: AbsorbPointer(
+                  absorbing: _drawerOpen,
+                  child: bodyContent,
+                ),
+              ),
             ),
-          ),
-        ],
+            // Área tocável sobre o conteúdo deslocado, quando o drawer
+            // está aberto — agora reativa ao _drawerCtrl dentro de um
+            // AnimatedBuilder, para não ficar "presa" durante animações.
+            Positioned(
+              top: 0, bottom: 0,
+              left: _drawerWidth, right: 0,
+              child: AnimatedBuilder(
+                animation: _drawerCtrl,
+                builder: (_, child) {
+                  final open = _drawerCtrl.value > 0.01;
+                  return IgnorePointer(
+                    ignoring: !open,
+                    child: child,
+                  );
+                },
+                child: GestureDetector(
+                  onTap: _closeDrawer,
+                  behavior: HitTestBehavior.translucent,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -398,8 +437,7 @@ class AiTabHost extends StatefulWidget {
     this.onHasMessagesChanged,
     this.onCanvasCreated,
   });
-  @override
-  State<AiTabHost> createState() => _AiTabHostState();
+  @override State<AiTabHost> createState() => _AiTabHostState();
 }
 
 class _AiTabHostState extends State<AiTabHost> {
@@ -412,27 +450,42 @@ class _AiTabHostState extends State<AiTabHost> {
     }
   }
 
+  void _goToEditTab(EditorType type) {
+    RootShellNavigation.of(context)?.switchToEditTab(type);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AiTab(
-      key: widget.aiTabKey,
-      onFirstMessage: widget.onFirstMessage,
-      externalAction: widget.externalAction,
-      onExternalActionConsumed: widget.onExternalActionConsumed,
-      initialConversationId: widget.initialConversationId,
-      onHasMessagesChanged: widget.onHasMessagesChanged,
-      onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
-      onCanvasCreated: widget.onCanvasCreated,
+    return AiTabHostNavigation(
+      goToEditTab: _goToEditTab,
+      child: AiTab(
+        key: widget.aiTabKey,
+        onFirstMessage: widget.onFirstMessage,
+        externalAction: widget.externalAction,
+        onExternalActionConsumed: widget.onExternalActionConsumed,
+        initialConversationId: widget.initialConversationId,
+        onHasMessagesChanged: widget.onHasMessagesChanged,
+        onHeaderStateChanged: () => _AiTabHeaderRefresh.of(context).ping(),
+        onCanvasCreated: widget.onCanvasCreated,
+      ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// APP HEADER
-// Progressive blur estilo Apple: BackdropFilter com ImageFilter.blur
-// num gradiente semi-transparente — blur forte no topo, dissolve
-// para completamente transparente na base.
-// ══════════════════════════════════════════════════════════════
+class RootShellNavigation extends InheritedWidget {
+  final ValueChanged<EditorType> switchToEditTab;
+  const RootShellNavigation({
+    super.key,
+    required this.switchToEditTab,
+    required super.child,
+  });
+
+  static RootShellNavigation? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<RootShellNavigation>();
+
+  @override
+  bool updateShouldNotify(RootShellNavigation oldWidget) => true;
+}
 
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
@@ -453,62 +506,47 @@ class _AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = MediaQuery.of(context).padding.top;
-
     final content = Padding(
       padding: EdgeInsets.only(
-        top: topPadding + kSpaceXS,
-        bottom: kSpaceS + kSpaceXXS,
-        left: kSpaceXS,
-        right: kSpaceS + kSpaceXXS,
+        top: MediaQuery.of(context).padding.top + 6,
+        bottom: 10, left: 6, right: 10,
       ),
-      child: Row(
-        children: [
-          AppTap(
-            onTap: onMenu,
-            s: s,
-            child: AppIcon('menu.svg', color: s.onSurface, size: 20),
-          ),
-          SizedBox(width: kSpaceS),
-          if (title.isNotEmpty)
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: kTypeBodyLarge,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
+      child: Row(children: [
+        AppTap(
+          onTap: onMenu, s: s,
+          child: AppIcon('menu.svg', color: s.onSurface, size: 20),
+        ),
+        const SizedBox(width: 8),
+        if (title.isNotEmpty)
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: s.onSurface,
             ),
-          const Spacer(),
-          if (trailing != null) trailing!,
-        ],
-      ),
+          ),
+        const Spacer(),
+        if (trailing != null) trailing!,
+      ]),
     );
 
-    // Modo opaco — tab de editor, sem blur
     if (!transparent) {
       return Container(color: headerBackground, child: content);
     }
 
-    // Modo transparente (tab AI) — progressive blur estilo Apple
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                headerBackground.withOpacity(s.isDark ? 0.82 : 0.88),
-                headerBackground.withOpacity(0.0),
-              ],
-              stops: const [0.55, 1.0],
-            ),
-          ),
-          child: content,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            headerBackground,
+            headerBackground.withOpacity(0.0),
+          ],
         ),
       ),
+      child: content,
     );
   }
 }

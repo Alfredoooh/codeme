@@ -631,7 +631,7 @@ class MathInline extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
             decoration: BoxDecoration(
               border: Border.all(color: s.onSurface, width: 1),
-              borderRadius: BorderRadius.circular(kRadiusSmall),
+              borderRadius: BorderRadius.zero,
             ),
             child: Text(content, style: baseStyle),
           ));
@@ -660,7 +660,7 @@ class MathInline extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: s.hover,
-        borderRadius: BorderRadius.circular(kRadiusXLarge),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1011,7 +1011,7 @@ class _RichTextBlockParser {
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
                     color: s.outline,
-                    borderRadius: BorderRadius.circular(kRadiusMedium), // pontas curvas
+                    borderRadius: BorderRadius.circular(2), // pontas curvas
                   ),
                 ),
                 Expanded(
@@ -1234,7 +1234,7 @@ class _AiTable extends StatelessWidget {
     final body = rows.length > 1 ? rows.sublist(1) : <List<String>>[];
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(kRadiusSmall),
+      borderRadius: BorderRadius.zero,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
@@ -1449,7 +1449,7 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(kRadiusXLarge),
+        borderRadius: BorderRadius.circular(32),
       ),
       child: Stack(
         children: [

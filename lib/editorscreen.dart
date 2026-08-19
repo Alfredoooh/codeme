@@ -91,74 +91,6 @@ class EditTabController extends ChangeNotifier {
 final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
-// EDITOR PAGE SCREEN — tela própria do editor, empurrada via
-// Navigator.push (não mais uma aba dentro do RootShell). Dona do
-// seu próprio EditorType local e do botão de voltar nativo.
-// ══════════════════════════════════════════════════════════════
-
-class EditorPageScreen extends StatefulWidget {
-  final EditorType initialType;
-  const EditorPageScreen({super.key, required this.initialType});
-  @override State<EditorPageScreen> createState() => _EditorPageScreenState();
-}
-
-class _EditorPageScreenState extends State<EditorPageScreen> {
-  late EditorType _editorType = widget.initialType;
-
-  void _setEditorType(EditorType t) => setState(() => _editorType = t);
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    return Material(
-      color: s.surface,
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: s.surface,
-              padding: EdgeInsets.only(
-                top: kSpaceXS,
-                bottom: kSpaceS + kSpaceXXS,
-                left: kSpaceXS,
-                right: kSpaceS + kSpaceXXS,
-              ),
-              child: Row(
-                children: [
-                  AppTap(
-                    onTap: () => Navigator.pop(context),
-                    s: s,
-                    child: AppIcon('back.svg', color: s.onSurface, size: 20),
-                  ),
-                  SizedBox(width: kSpaceS),
-                  Text(
-                    _editorType.label,
-                    style: TextStyle(
-                      fontSize: kTypeBodyLarge,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  EditTypeButton(
-                    s: s,
-                    current: _editorType,
-                    onSelect: _setEditorType,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: EditorScreen(editorType: _editorType),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // EDITOR SCREEN — dispose explícito dos WebViews adicionado.
 // ══════════════════════════════════════════════════════════════
 
@@ -447,7 +379,7 @@ Future<String?> showAiEditModal(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             decoration: BoxDecoration(
               color: s.floatingSurface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(kRadiusXLarge)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               boxShadow: s.floatingShadow,
             ),
             child: Column(
@@ -483,7 +415,7 @@ Future<String?> showAiEditModal(
                     filled: true,
                     fillColor: s.hover,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(kRadiusXLarge),
+                      borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -499,7 +431,7 @@ Future<String?> showAiEditModal(
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: s.primary,
-                      borderRadius: BorderRadius.circular(kRadiusCircle),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -591,7 +523,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(kRadiusXLarge),
+                  borderRadius: BorderRadius.circular(28),
                   boxShadow: s.floatingShadow,
                 ),
                 child: Column(
@@ -669,7 +601,7 @@ class _TypeOptionState extends State<_TypeOption> {
                 : widget.selected
                     ? widget.s.primaryContainer.withOpacity(0.5)
                     : Colors.transparent,
-            borderRadius: BorderRadius.circular(kRadiusCircle),
+            borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
             EditorTypeIcon(widget.type.svgAsset, size: 18),

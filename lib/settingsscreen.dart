@@ -1,9 +1,5 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/settingsscreen.dart
-// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'colors.dart';
@@ -11,14 +7,16 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 
+// ══════════════════════════════════════════════════════════════
+// SETTINGS SCREEN
+// ══════════════════════════════════════════════════════════════
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  @override State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen>
-    with ThemeReactive<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<SettingsScreen> {
   bool _refreshing = false;
 
   @override
@@ -34,9 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     super.dispose();
   }
 
-  void _onAuthChanged() {
-    if (mounted) setState(() {});
-  }
+  void _onAuthChanged() { if (mounted) setState(() {}); }
 
   Future<void> _refreshMe() async {
     final token = authController.token;
@@ -47,21 +43,23 @@ class _SettingsScreenState extends State<SettingsScreen>
       authController.user = AppUser.fromJson(me);
       await SessionManager.updateUser(authController.user!);
       authController.notifyListeners();
-    } catch (_) {}
+    } catch (_) {
+      // Sem sorte agora — mantém o que já estava carregado localmente.
+    }
     if (mounted) setState(() => _refreshing = false);
   }
 
   void _confirmLogout(BuildContext context, AppColorScheme s) {
-    showFluentBottomSheet(
+    showModalBottomSheet(
       context: context,
-      s: s,
-      child: _ConfirmActionSheet(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _ConfirmActionSheet(
         s: s,
-        message:
-            'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
+        message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
         confirmLabel: 'Terminar sessão',
         onConfirm: () {
-          Navigator.pop(context);
+          Navigator.pop(ctx);
           _logoutNow(context);
         },
       ),
@@ -76,10 +74,11 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _editName(BuildContext context, AppColorScheme s) {
-    showFluentBottomSheet(
+    showModalBottomSheet(
       context: context,
-      s: s,
-      child: _EditFieldSheet(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar nome',
         label: 'Nome',
@@ -102,10 +101,11 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _editPassword(BuildContext context, AppColorScheme s) {
-    showFluentBottomSheet(
+    showModalBottomSheet(
       context: context,
-      s: s,
-      child: _EditFieldSheet(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar palavra-passe',
         label: 'Nova palavra-passe',
@@ -123,16 +123,17 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
-    showFluentBottomSheet(
+    showModalBottomSheet(
       context: context,
-      s: s,
-      child: _ConfirmActionSheet(
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _ConfirmActionSheet(
         s: s,
         message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
         confirmLabel: 'Eliminar tudo',
         destructive: true,
         onConfirm: () async {
-          Navigator.pop(context);
+          Navigator.pop(ctx);
           final token = authController.token;
           if (token == null) return;
           await ConversationsApiService.deleteAll(token);
@@ -146,14 +147,18 @@ class _SettingsScreenState extends State<SettingsScreen>
     final s = AppTheme.of(context);
     final user = authController.user;
 
+    // ══════════════════════════════════════════════════════════
+    // FIX: status bar presa. AnnotatedRegion respeita o z-order de
+    // rota e aplica o estilo ao topo da pilha, sem depender de
+    // chamadas imperativas que ficam "por baixo" desta rota nova.
+    // ══════════════════════════════════════════════════════════
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness:
-            s.isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarDividerColor: Colors.transparent,
       ),
       child: Material(
@@ -161,277 +166,196 @@ class _SettingsScreenState extends State<SettingsScreen>
         child: ColoredBox(
           color: s.pageBackground,
           child: SafeArea(
-            child: Stack(
-              children: [
-                // ── Conteúdo scrollável ──────────────────────────
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: kSpaceXXXL + kSpaceXXL + kSpaceXXS),
-                    Expanded(
-                      child: RefreshIndicator(
-                        color: s.primary,
-                        backgroundColor: s.cardBackground,
-                        onRefresh: _refreshMe,
-                        child: ListView(
-                          padding: EdgeInsets.fromLTRB(
-                            kSpaceXL,
-                            kSpaceS,
-                            kSpaceXL,
-                            kSpaceM,
-                          ),
-                          children: [
-                            _ProfileHeader(
-                              s: s,
-                              user: user,
-                              loading: _refreshing,
-                            ),
-                            SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(s: s, label: 'Aparência'),
-                            SizedBox(height: kSpaceS + kSpaceXXS),
-                            FluentListGroup(
-                              s: s,
-                              builders: [
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Modo escuro',
-                                  onTap: () {},
-                                  trailing: AppSwitch(
-                                    value: appTheme.isDark,
-                                    s: s,
-                                    onChanged: (_) => appTheme.toggleDark(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(s: s, label: 'Conta'),
-                            SizedBox(height: kSpaceS + kSpaceXXS),
-                            FluentListGroup(
-                              s: s,
-                              builders: [
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Nome',
-                                  onTap: () => _editName(context, s),
-                                  trailing: Text(
-                                    'Alterar',
-                                    style: TextStyle(
-                                      fontSize: kTypeBody,
-                                      color: s.primary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Email',
-                                  onTap: () {},
-                                  trailing: Text(
-                                    user?.email ?? '—',
-                                    style: TextStyle(
-                                      fontSize: kTypeBody,
-                                      color: s.onSurfaceVariant,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Palavra-passe',
-                                  onTap: () => _editPassword(context, s),
-                                  trailing: Text(
-                                    'Alterar',
-                                    style: TextStyle(
-                                      fontSize: kTypeBody,
-                                      color: s.primary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Créditos',
-                                  onTap: () {},
-                                  trailing: Text(
-                                    '${user?.credits ?? 0}',
-                                    style: TextStyle(
-                                      fontSize: kTypeBody,
-                                      color: s.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(s: s, label: 'Dados'),
-                            SizedBox(height: kSpaceS + kSpaceXXS),
-                            FluentListGroup(
-                              s: s,
-                              builders: [
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Eliminar todas as conversas',
-                                  labelColor: s.error,
-                                  onTap: () =>
-                                      _confirmDeleteAllConversations(context, s),
-                                  trailing: const SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: kSpaceXXL + kSpaceXS),
-                            FluentSectionLabel(s: s, label: 'Sobre'),
-                            SizedBox(height: kSpaceS + kSpaceXXS),
-                            FluentListGroup(
-                              s: s,
-                              builders: [
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Versão',
-                                  onTap: () {},
-                                  trailing: Text(
-                                    '1.0.0',
-                                    style: TextStyle(
-                                      fontSize: kTypeBody,
-                                      color: s.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Termos de serviço',
-                                  onTap: () {},
-                                  trailing: const SizedBox.shrink(),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Política de privacidade',
-                                  onTap: () {},
-                                  trailing: const SizedBox.shrink(),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Enviar feedback',
-                                  onTap: () {},
-                                  trailing: const SizedBox.shrink(),
-                                ),
-                                (radius) => FluentListCard(
-                                  s: s,
-                                  radius: radius,
-                                  label: 'Ajuda e suporte',
-                                  onTap: () {},
-                                  trailing: const SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: kSpaceXXXL * 2 + kSpaceXXL + kSpaceXXS),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            child: Stack(children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: 52 + 6),
+                  Expanded(
+                    child: RefreshIndicator(
+                      color: s.primary,
+                      backgroundColor: s.cardBackground,
+                      onRefresh: _refreshMe,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                        children: [
+                          _ProfileHeader(s: s, user: user, loading: _refreshing),
 
-                // ── Header com progressive blur ──────────────────
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: ClipRect(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: kSpaceS),
-                        height: kSpaceXXXL + kSpaceXL,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              s.pageBackground.withOpacity(s.isDark ? 0.82 : 0.88),
-                              s.pageBackground.withOpacity(0.0),
-                            ],
-                            stops: const [0.60, 1.0],
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            AppTap(
-                              onTap: () => Navigator.pop(context),
+                          const SizedBox(height: 28),
+
+                          _SectionLabel(s: s, label: 'Aparência'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
                               s: s,
-                              child: AppIcon(
-                                'back.svg',
-                                color: s.onSurface,
-                                size: 20,
+                              label: 'Modo escuro',
+                              onTap: () {},
+                              trailing: AppSwitch(
+                                value: appTheme.isDark,
+                                s: s,
+                                onChanged: (_) => appTheme.toggleDark(),
                               ),
                             ),
-                            SizedBox(width: kSpaceS),
-                            Text(
-                              'Definições',
-                              style: TextStyle(
-                                fontSize: kTypeBodyLarge,
-                                fontWeight: FontWeight.w600,
-                                color: s.onSurface,
-                              ),
+                          ]),
+
+                          const SizedBox(height: 28),
+
+                          _SectionLabel(s: s, label: 'Conta'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
+                              s: s,
+                              label: 'Nome',
+                              onTap: () => _editName(context, s),
+                              trailing: Text('Alterar',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.primary,
+                                      fontWeight: FontWeight.w500)),
                             ),
-                          ],
-                        ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Email',
+                              onTap: () {},
+                              trailing: Text(user?.email ?? '—',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Palavra-passe',
+                              onTap: () => _editPassword(context, s),
+                              trailing: Text('Alterar',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.primary,
+                                      fontWeight: FontWeight.w500)),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Créditos',
+                              onTap: () {},
+                              trailing: Text('${user?.credits ?? 0}',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant)),
+                            ),
+                          ]),
+
+                          const SizedBox(height: 28),
+
+                          _SectionLabel(s: s, label: 'Dados'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
+                              s: s,
+                              label: 'Eliminar todas as conversas',
+                              labelColor: s.error,
+                              onTap: () => _confirmDeleteAllConversations(context, s),
+                              trailing: const SizedBox.shrink(),
+                            ),
+                          ]),
+
+                          const SizedBox(height: 28),
+
+                          _SectionLabel(s: s, label: 'Sobre'),
+                          const SizedBox(height: 10),
+                          _SettingsGroup(s: s, rows: [
+                            _SettingsRow(
+                              s: s,
+                              label: 'Versão',
+                              onTap: () {},
+                              trailing: Text('1.0.0',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant)),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Termos de serviço',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Política de privacidade',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Enviar feedback',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              label: 'Ajuda e suporte',
+                              onTap: () {},
+                              trailing: const SizedBox.shrink(),
+                            ),
+                          ]),
+
+                          const SizedBox(height: 90),
+                        ],
                       ),
                     ),
                   ),
-                ),
+                ],
+              ),
 
-                // ── Footer com progressive blur + botão logout ───
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: ClipRect(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        padding: EdgeInsets.fromLTRB(
-                          kSpaceXL,
-                          kSpaceXXL + kSpaceXS,
-                          kSpaceXL,
-                          kSpaceL,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              s.pageBackground.withOpacity(s.isDark ? 0.82 : 0.88),
-                              s.pageBackground.withOpacity(0.0),
-                            ],
-                            stops: const [0.55, 1.0],
-                          ),
-                        ),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: FluentButton(
-                            s: s,
-                            label: 'Terminar sessão',
-                            onTap: () => _confirmLogout(context, s),
-                            style: FluentButtonStyle.destructive,
-                          ),
-                        ),
-                      ),
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
                     ),
                   ),
+                  child: Row(children: [
+                    AppTap(
+                      onTap: () => Navigator.pop(context),
+                      s: s,
+                      child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('Definições',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: s.onSurface)),
+                  ]),
                 ),
-              ],
-            ),
+              ),
+
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
+                    ),
+                  ),
+                  child: _LogoutButton(
+                      s: s, onTap: () => _confirmLogout(context, s)),
+                ),
+              ),
+            ]),
           ),
         ),
       ),
@@ -445,11 +369,7 @@ class _ProfileHeader extends StatelessWidget {
   final AppColorScheme s;
   final AppUser? user;
   final bool loading;
-  const _ProfileHeader({
-    required this.s,
-    required this.user,
-    required this.loading,
-  });
+  const _ProfileHeader({required this.s, required this.user, required this.loading});
 
   Uint8List? _decodeAvatar(String raw) {
     try {
@@ -474,91 +394,232 @@ class _ProfileHeader extends StatelessWidget {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Container(
-      padding: EdgeInsets.all(kSpaceL + kSpaceXXS),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(kRadiusXLarge),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: kSpaceXXXL + kSpaceXXL,
-            height: kSpaceXXXL + kSpaceXXL,
-            alignment: Alignment.center,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: s.primary,
-              shape: BoxShape.circle,
-            ),
-            child: avatarBytes != null
-                ? Image.memory(
-                    avatarBytes,
-                    width: kSpaceXXXL + kSpaceXXL,
-                    height: kSpaceXXXL + kSpaceXXL,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Text(
-                      initial,
+      child: Row(children: [
+        Container(
+          width: 56, height: 56,
+          alignment: Alignment.center,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
+          child: avatarBytes != null
+              ? Image.memory(
+                  avatarBytes,
+                  width: 56, height: 56,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Text(initial,
                       style: TextStyle(
-                        color: s.onPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: kTypeSubtitle,
-                      ),
-                    ),
-                  )
-                : Text(
-                    initial,
-                    style: TextStyle(
+                          color: s.onPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 22)),
+                )
+              : Text(initial,
+                  style: TextStyle(
                       color: s.onPrimary,
                       fontWeight: FontWeight.w700,
-                      fontSize: kTypeSubtitle,
-                    ),
-                  ),
-          ),
-          SizedBox(width: kSpaceL - kSpaceXXS),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
+                      fontSize: 22)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(name,
                   style: TextStyle(
-                    fontSize: kTypeBodyLarge,
-                    fontWeight: FontWeight.w700,
-                    color: s.onSurface,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (email.isNotEmpty) ...[
-                  SizedBox(height: kSpaceXS),
-                  Text(
-                    email,
-                    style: TextStyle(
-                      fontSize: kTypeBody,
-                      color: s.onSurfaceVariant,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: s.onSurface),
+                  overflow: TextOverflow.ellipsis),
+              if (email.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(email,
+                    style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
+                    overflow: TextOverflow.ellipsis),
               ],
+            ],
+          ),
+        ),
+        if (loading)
+          SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
             ),
           ),
-          if (loading)
-            FluentShimmer(
-              s: s,
-              width: kSpaceL,
-              height: kSpaceL,
-            ),
-        ],
+      ]),
+    );
+  }
+}
+
+// ── Componentes internos ──────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  const _SectionLabel({required this.s, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Text(label,
+      style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: s.onSurfaceVariant,
+          letterSpacing: 0.5));
+}
+
+// ── Grupo de cards ───────────────────────────────────────────
+
+class _SettingsGroup extends StatelessWidget {
+  final AppColorScheme s;
+  final List<_SettingsRow> rows;
+  const _SettingsGroup({required this.s, required this.rows});
+
+  static const double _outerRadius = 16;
+  static const double _innerRadius = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      children.add(_SettingsCard(
+        s: s,
+        radius: _radiusFor(i, rows.length),
+        child: rows[i],
+      ));
+      if (i != rows.length - 1) children.add(const SizedBox(height: 2));
+    }
+    return Column(children: children);
+  }
+
+  BorderRadius _radiusFor(int index, int count) {
+    if (count == 1) return BorderRadius.circular(_outerRadius);
+    final isFirst = index == 0;
+    final isLast  = index == count - 1;
+    return BorderRadius.only(
+      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  final AppColorScheme s;
+  final BorderRadius radius;
+  final Widget child;
+  const _SettingsCard({
+    required this.s,
+    required this.radius,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
+}
+
+class _SettingsRow extends StatefulWidget {
+  final AppColorScheme s;
+  final String label;
+  final Widget trailing;
+  final Color? labelColor;
+  final VoidCallback onTap;
+  const _SettingsRow(
+      {required this.s,
+      required this.label,
+      required this.trailing,
+      required this.onTap,
+      this.labelColor});
+  @override State<_SettingsRow> createState() => _SettingsRowState();
+}
+
+class _SettingsRowState extends State<_SettingsRow> {
+  bool _p = false;
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown:   (_) => setState(() => _p = true),
+        onTapCancel: ()  => setState(() => _p = false),
+        onTapUp:     (_) => setState(() => _p = false),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          color: _p ? widget.s.hover : Colors.transparent,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(widget.label,
+                  style: TextStyle(
+                      fontSize: 15,
+                      color: widget.labelColor ?? widget.s.onSurface)),
+              widget.trailing,
+            ],
+          ),
+        ),
+      );
+}
+
+// ── Botão terminar sessão ───────────────────────────────────
+// Cores Fluent 2 (Cranberry) via s.error / s.onError.
+
+class _LogoutButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _LogoutButton({required this.s, required this.onTap});
+  @override State<_LogoutButton> createState() => _LogoutButtonState();
+}
+
+class _LogoutButtonState extends State<_LogoutButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.error,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text('Terminar sessão',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: s.onError)),
+        ),
       ),
     );
   }
 }
 
-// ── Sheet de confirmação genérico ────────────────────────────────
-// NOTA: este widget é passado como `child` de showFluentBottomSheet,
-// que já envolve tudo num FluentBottomSheet — por isso aqui
-// retornamos apenas o conteúdo, sem FluentBottomSheet adicional.
+// ── Sheet de confirmação genérico (Sim / Não) ─────────────────
+// Fundo agora usa s.floatingSurface (derivado da paleta real, em
+// vez do hardcode 0xFF2C2C2E que destoava no tema escuro), e o
+// texto da mensagem ficou mais discreto (13px em vez de 15px).
 
 class _ConfirmActionSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -575,52 +636,115 @@ class _ConfirmActionSheet extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: kTypeBody,
-            fontWeight: FontWeight.w500,
-            color: s.onSurface,
+  Widget build(BuildContext context) => Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+            decoration: BoxDecoration(
+              color: s.floatingSurface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: s.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: s.outline,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: s.onSurface),
+                ),
+                const SizedBox(height: 20),
+                Row(children: [
+                  Expanded(
+                    child: _SheetActionButton(
+                      s: s,
+                      label: 'Cancelar',
+                      filled: false,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SheetActionButton(
+                      s: s,
+                      label: confirmLabel,
+                      filled: destructive,
+                      onTap: onConfirm,
+                    ),
+                  ),
+                ]),
+              ],
+            ),
           ),
         ),
-        SizedBox(height: kSpaceXL),
-        Row(
-          children: [
-            Expanded(
-              child: FluentButton(
-                s: s,
-                label: 'Cancelar',
-                onTap: () => Navigator.pop(context),
-                style: FluentButtonStyle.secondary,
-              ),
+      );
+}
+
+class _SheetActionButton extends StatefulWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+  const _SheetActionButton(
+      {required this.s,
+      required this.label,
+      required this.filled,
+      required this.onTap});
+  @override State<_SheetActionButton> createState() => _SheetActionButtonState();
+}
+
+class _SheetActionButtonState extends State<_SheetActionButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.filled ? s.error : s.hover,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: widget.filled ? s.onError : s.onSurface,
             ),
-            SizedBox(width: kSpaceS + kSpaceXXS),
-            Expanded(
-              child: FluentButton(
-                s: s,
-                label: confirmLabel,
-                onTap: onConfirm,
-                style: destructive
-                    ? FluentButtonStyle.destructive
-                    : FluentButtonStyle.primary,
-              ),
-            ),
-          ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
 
 // ── Sheet de edição de campo simples (nome / palavra-passe) ────
-// NOTA: este widget é passado como `child` de showFluentBottomSheet,
-// que já envolve tudo num FluentBottomSheet — por isso aqui
-// retornamos apenas o conteúdo, sem FluentBottomSheet adicional.
 
 class _EditFieldSheet extends StatefulWidget {
   final AppColorScheme s;
@@ -642,8 +766,7 @@ class _EditFieldSheet extends StatefulWidget {
     this.minLength = 1,
   });
 
-  @override
-  State<_EditFieldSheet> createState() => _EditFieldSheetState();
+  @override State<_EditFieldSheet> createState() => _EditFieldSheetState();
 }
 
 class _EditFieldSheetState extends State<_EditFieldSheet> {
@@ -667,10 +790,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
           : 'Este campo não pode ficar vazio');
       return;
     }
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
+    setState(() { _saving = true; _error = null; });
     try {
       await widget.onSave(value);
       if (mounted) Navigator.pop(context);
@@ -685,64 +805,132 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.title,
-          style: TextStyle(
-            fontSize: kTypeBodyLarge,
-            fontWeight: FontWeight.w700,
-            color: s.onSurface,
+    return Material(
+      type: MaterialType.transparency,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            decoration: BoxDecoration(
+              color: s.floatingSurface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: s.floatingShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36, height: 4,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    decoration: BoxDecoration(
+                      color: s.outline,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                Text(widget.title,
+                    style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: s.onSurface)),
+                const SizedBox(height: 16),
+                Text(widget.label,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurfaceVariant)),
+                const SizedBox(height: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    color: s.cardBackground,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: _error != null ? s.error : s.outline.withOpacity(0.5)),
+                  ),
+                  child: TextField(
+                    controller: _ctrl,
+                    autofocus: true,
+                    obscureText: widget.obscure ? _obscureNow : false,
+                    style: TextStyle(fontSize: 15, color: s.onSurface),
+                    cursorColor: s.primary,
+                    onSubmitted: (_) => _save(),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                      hintText: widget.hint,
+                      hintStyle: TextStyle(
+                          fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
+                      suffixIcon: widget.obscure
+                          ? GestureDetector(
+                              onTap: () => setState(() => _obscureNow = !_obscureNow),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: AppIcon(
+                                  _obscureNow ? 'eye.svg' : 'eye_off.svg',
+                                  color: s.onSurfaceVariant,
+                                  size: 18,
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: TextStyle(fontSize: 12, color: s.error)),
+                ],
+                const SizedBox(height: 20),
+                Row(children: [
+                  Expanded(
+                    child: _SheetActionButton(
+                      s: s,
+                      label: 'Cancelar',
+                      filled: false,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _saving ? null : _save,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: s.primary.withOpacity(_saving ? 0.6 : 1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: _saving
+                            ? SizedBox(
+                                width: 18, height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation(s.onPrimary),
+                                ),
+                              )
+                            : Text('Guardar',
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: s.onPrimary)),
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
           ),
         ),
-        SizedBox(height: kSpaceL),
-        FluentTextField(
-          s: s,
-          controller: _ctrl,
-          label: widget.label,
-          hint: widget.hint,
-          obscure: widget.obscure ? _obscureNow : false,
-          error: _error,
-          autofocus: true,
-          onSubmitted: (_) => _save(),
-          suffixIcon: widget.obscure
-              ? AppTap(
-                  onTap: () =>
-                      setState(() => _obscureNow = !_obscureNow),
-                  s: s,
-                  child: AppIcon(
-                    _obscureNow ? 'eye.svg' : 'eye_off.svg',
-                    color: s.onSurfaceVariant,
-                    size: 18,
-                  ),
-                )
-              : null,
-        ),
-        SizedBox(height: kSpaceXL),
-        Row(
-          children: [
-            Expanded(
-              child: FluentButton(
-                s: s,
-                label: 'Cancelar',
-                onTap: () => Navigator.pop(context),
-                style: FluentButtonStyle.secondary,
-              ),
-            ),
-            SizedBox(width: kSpaceS + kSpaceXXS),
-            Expanded(
-              child: FluentButton(
-                s: s,
-                label: 'Guardar',
-                onTap: _saving ? null : _save,
-                style: FluentButtonStyle.primary,
-              ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }
