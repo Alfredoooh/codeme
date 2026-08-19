@@ -55,6 +55,7 @@ import 'dart:ui' as ui;
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
+import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // FUNÇÃO AUXILIAR _parseColor
@@ -341,10 +342,8 @@ class _AiChartWidgetState extends State<AiChartWidget>
   Color _primary()       => widget.s.primary;
 
   Future<void> _openOptions() async {
-    final result = await showModalBottomSheet(
+    final result = await showAppSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _ChartOptionsSheet(
         initialType: _chartType,
         initialTitle: _title,
@@ -635,31 +634,16 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
   Color _primary()      => widget.s.primary;
 
   Future<void> _pickColor(int index) async {
-    final selected = await showModalBottomSheet<Color>(
+    final selected = await showAppSheet<Color>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _sheetBg(),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: _label(),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Escolher cor', style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
+            Text('Escolher cor',
+                style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
@@ -710,246 +694,224 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
-            decoration: BoxDecoration(
-              color: _sheetBg(),
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: widget.s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: _label(),
-                      borderRadius: BorderRadius.circular(3),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Opções do gráfico',
+                style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 14),
+            Text('Tipo de gráfico',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            Row(
+              children: _chartTypes.map((t) {
+                final active = _draftType == t.key;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _draftType = t.key),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: active ? _primary() : _chipInactiveBg(),
+                        border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: AppIcon(t.icon, size: 17, color: active ? widget.s.onPrimary : _chipInactiveText()),
                     ),
                   ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
+            Text('Título',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _titleController,
+              style: TextStyle(color: _inputText(), fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: _inputBg(),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _inputBorder()),
                 ),
-                const SizedBox(height: 16),
-                Text('Opções do gráfico',
-                    style: TextStyle(color: _inputText(), fontSize: 15, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 14),
-                Text('Tipo de gráfico',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-                Row(
-                  children: _chartTypes.map((t) {
-                    final active = _draftType == t.key;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _draftType = t.key),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: active ? _primary() : _chipInactiveBg(),
-                            border: Border.all(color: active ? _primary() : _chipInactiveBorder()),
-                            borderRadius: BorderRadius.circular(14),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _inputBorder()),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _primary()),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Valores',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _draftData.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => _pickColor(index),
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: item.color,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
                           ),
-                          child: AppIcon(t.icon, size: 17, color: active ? widget.s.onPrimary : _chipInactiveText()),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _labelControllers[index],
+                              onChanged: (v) => item.label = v,
+                              style: TextStyle(color: _inputText(), fontSize: 13),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: _inputBg(),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _primary()),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 64,
+                            child: TextField(
+                              controller: _valueControllers[index],
+                              onChanged: (v) => item.value = double.tryParse(v) ?? 0,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(color: _inputText(), fontSize: 13),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: _inputBg(),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _inputBorder()),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(color: _primary()),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => _removeRow(index),
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _chipInactiveBg(),
+                              ),
+                              child: AppIcon('close.svg', size: 12, color: _chipInactiveText()),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 14),
-                Text('Título',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _titleController,
-                  style: TextStyle(color: _inputText(), fontSize: 14),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: _inputBg(),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _inputBorder()),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _inputBorder()),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: _primary()),
-                    ),
-                  ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _addRow,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: _chipInactiveBorder(), width: 1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 14),
-                Text('Valores',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _label(), letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: _draftData.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final item = entry.value;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () => _pickColor(index),
-                                child: Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    color: item.color,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: _labelControllers[index],
-                                  onChanged: (v) => item.label = v,
-                                  style: TextStyle(color: _inputText(), fontSize: 13),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: _inputBg(),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _primary()),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 64,
-                                child: TextField(
-                                  controller: _valueControllers[index],
-                                  onChanged: (v) => item.value = double.tryParse(v) ?? 0,
-                                  keyboardType: TextInputType.number,
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(color: _inputText(), fontSize: 13),
-                                  decoration: InputDecoration(
-                                    filled: true,
-                                    fillColor: _inputBg(),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _inputBorder()),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: _primary()),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              GestureDetector(
-                                onTap: () => _removeRow(index),
-                                child: Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _chipInactiveBg(),
-                                  ),
-                                  child: AppIcon('close.svg', size: 12, color: _chipInactiveText()),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: _addRow,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _chipInactiveBorder(), width: 1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AppIcon('add.svg', size: 12, color: _label()),
-                        const SizedBox(width: 6),
-                        Text('Adicionar valor',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _label())),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _chipInactiveBg(),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: _chipInactiveBorder()),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text('Cancelar',
-                              style: TextStyle(color: _chipInactiveText(), fontSize: 14, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context, {
-                            'type': _draftType,
-                            'title': _titleController.text.trim().isEmpty ? 'Dados' : _titleController.text.trim(),
-                            'data': _draftData,
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _primary(),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text('Aplicar',
-                              style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                    ),
+                    AppIcon('add.svg', size: 12, color: _label()),
+                    const SizedBox(width: 6),
+                    Text('Adicionar valor',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _label())),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _chipInactiveBg(),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: _chipInactiveBorder()),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Cancelar',
+                          style: TextStyle(color: _chipInactiveText(), fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context, {
+                        'type': _draftType,
+                        'title': _titleController.text.trim().isEmpty ? 'Dados' : _titleController.text.trim(),
+                        'data': _draftData,
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _primary(),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Aplicar',
+                          style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1275,36 +1237,21 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   }
 
   Future<void> _openPairSelector() async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showAppSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: widget.s.cardBackground,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: widget.s.onSurfaceVariant,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
             Text(
               'Escolher par',
               style: TextStyle(color: widget.s.onSurface, fontSize: 15, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
-            Flexible(
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
               child: ListView(
                 shrinkWrap: true,
                 children: _pairs.map((pair) {
@@ -1659,77 +1606,62 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final s = widget.s;
     final nameCtrl = TextEditingController();
     final timeCtrl = TextEditingController();
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Material(
-          type: MaterialType.transparency,
-          child: SafeArea(
-            top: false,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: s.floatingShadow,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Novo evento · $_selectedKey',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtrl,
+                style: TextStyle(color: s.onSurface),
+                decoration: InputDecoration(
+                  hintText: 'Nome do evento',
+                  hintStyle: TextStyle(color: s.onSurfaceVariant),
+                  filled: true, fillColor: s.hover,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: SheetGrabber(s: s)),
-                  Text('Novo evento · $_selectedKey',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: nameCtrl,
-                    style: TextStyle(color: s.onSurface),
-                    decoration: InputDecoration(
-                      hintText: 'Nome do evento',
-                      hintStyle: TextStyle(color: s.onSurfaceVariant),
-                      filled: true, fillColor: s.hover,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: timeCtrl,
-                    style: TextStyle(color: s.onSurface),
-                    decoration: InputDecoration(
-                      hintText: 'Hora (ex: 14:00)',
-                      hintStyle: TextStyle(color: s.onSurfaceVariant),
-                      filled: true, fillColor: s.hover,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () {
-                      if (nameCtrl.text.trim().isEmpty) return;
-                      setState(() {
-                        _events.putIfAbsent(_selectedKey, () => []).add((
-                          name: nameCtrl.text.trim(),
-                          time: timeCtrl.text.trim(),
-                          color: const Color(0xFF6F5AF6),
-                        ));
-                      });
-                      Navigator.pop(ctx);
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-                      child: Text('Adicionar', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 10),
+              TextField(
+                controller: timeCtrl,
+                style: TextStyle(color: s.onSurface),
+                decoration: InputDecoration(
+                  hintText: 'Hora (ex: 14:00)',
+                  hintStyle: TextStyle(color: s.onSurfaceVariant),
+                  filled: true, fillColor: s.hover,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () {
+                  if (nameCtrl.text.trim().isEmpty) return;
+                  setState(() {
+                    _events.putIfAbsent(_selectedKey, () => []).add((
+                      name: nameCtrl.text.trim(),
+                      time: timeCtrl.text.trim(),
+                      color: const Color(0xFF6F5AF6),
+                    ));
+                  });
+                  Navigator.pop(ctx);
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
+                  child: Text('Adicionar', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2344,42 +2276,42 @@ class _MindMapNodeWidget extends StatelessWidget {
   const _MindMapNodeWidget({required this.node, required this.s});
 
   @override
-Widget build(BuildContext context) {
-  final isRoot = node.isRoot;
-  final bgColor = node.color;
-  final textColor = isRoot
-      ? const Color(0xFF4A3B00)
-      : Colors.white;
-  final fontSize = isRoot ? 15.0 : 12.0;
-  final padding = isRoot
-      ? const EdgeInsets.symmetric(horizontal: 26, vertical: 14)
-      : const EdgeInsets.symmetric(horizontal: 18, vertical: 10);
-  final borderRadius = isRoot ? 14.0 : 20.0;
+  Widget build(BuildContext context) {
+    final isRoot = node.isRoot;
+    final bgColor = node.color;
+    final textColor = isRoot
+        ? const Color(0xFF4A3B00)
+        : Colors.white;
+    final fontSize = isRoot ? 15.0 : 12.0;
+    final padding = isRoot
+        ? const EdgeInsets.symmetric(horizontal: 26, vertical: 14)
+        : const EdgeInsets.symmetric(horizontal: 18, vertical: 10);
+    final borderRadius = isRoot ? 14.0 : 20.0;
 
-  return Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(borderRadius),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.1),
-          blurRadius: 5,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    ),
-    child: Text(
-      node.label,
-      softWrap: false,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w700,
-        color: textColor,
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-    ),
-  );
-}
+      child: Text(
+        node.label,
+        softWrap: false,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+          color: textColor,
+        ),
+      ),
+    );
+  }
 }
 
 class _MindMapPainter extends CustomPainter {
@@ -2782,10 +2714,8 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
   }
 
   Future<void> _openEditSheet() async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await showAppSheet<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _MathTypeSheet(
         currentType: _currentType,
         functionDefs: _functionDefs,
@@ -3116,119 +3046,96 @@ class _MathTypeSheetState extends State<_MathTypeSheet> {
   @override
   Widget build(BuildContext context) {
     final types = widget.functionDefs.keys.toList();
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
-          decoration: BoxDecoration(
-            color: widget.s.cardBackground,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: widget.s.floatingShadow,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Editar gráfico',
+            style: TextStyle(
+              color: widget.s.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
+          const SizedBox(height: 14),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.2,
+            children: types.map((key) {
+              final def = widget.functionDefs[key]!;
+              final active = key == _pendingType;
+              return GestureDetector(
+                onTap: () => setState(() => _pendingType = key),
                 child: Container(
-                  width: 36,
-                  height: 4,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: widget.s.onSurfaceVariant,
-                    borderRadius: BorderRadius.circular(3),
+                    color: active ? widget.s.primary : widget.s.hover,
+                    border: Border.all(
+                      color: active ? widget.s.primary : widget.s.outline,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    def.label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: active ? widget.s.onPrimary : widget.s.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: widget.s.hover,
+                      border: Border.all(color: widget.s.outline),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(color: widget.s.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Editar gráfico',
-                style: TextStyle(
-                  color: widget.s.onSurface,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context, _pendingType),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: widget.s.primary,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Aplicar',
+                      style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 2.2,
-                children: types.map((key) {
-                  final def = widget.functionDefs[key]!;
-                  final active = key == _pendingType;
-                  return GestureDetector(
-                    onTap: () => setState(() => _pendingType = key),
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: active ? widget.s.primary : widget.s.hover,
-                        border: Border.all(
-                          color: active ? widget.s.primary : widget.s.outline,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        def.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: active ? widget.s.onPrimary : widget.s.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: widget.s.hover,
-                          border: Border.all(color: widget.s.outline),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          'Cancelar',
-                          style: TextStyle(color: widget.s.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context, _pendingType),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: widget.s.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          'Aplicar',
-                          style: TextStyle(color: widget.s.onPrimary, fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

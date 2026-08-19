@@ -6,6 +6,7 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
+import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
@@ -50,10 +51,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _confirmLogout(BuildContext context, AppColorScheme s) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _ConfirmActionSheet(
         s: s,
         message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
@@ -74,10 +73,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _editName(BuildContext context, AppColorScheme s) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar nome',
@@ -101,10 +98,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _editPassword(BuildContext context, AppColorScheme s) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar palavra-passe',
@@ -123,10 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _ConfirmActionSheet(
         s: s,
         message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
@@ -617,9 +610,8 @@ class _LogoutButtonState extends State<_LogoutButton> {
 }
 
 // ── Sheet de confirmação genérico (Sim / Não) ─────────────────
-// Fundo agora usa s.floatingSurface (derivado da paleta real, em
-// vez do hardcode 0xFF2C2C2E que destoava no tema escuro), e o
-// texto da mensagem ficou mais discreto (13px em vez de 15px).
+// Agora sem Material/Container externo — o CupertinoSheetRoute
+// fornece a moldura e o grabber nativos.
 
 class _ConfirmActionSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -636,62 +628,44 @@ class _ConfirmActionSheet extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36, height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: s.outline,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: s.onSurface),
-                ),
-                const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: 'Cancelar',
-                      filled: false,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: confirmLabel,
-                      filled: destructive,
-                      onTap: onConfirm,
-                    ),
-                  ),
-                ]),
-              ],
-            ),
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: s.onSurface),
           ),
-        ),
-      );
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(
+              child: _SheetActionButton(
+                s: s,
+                label: 'Cancelar',
+                filled: false,
+                onTap: () => Navigator.pop(context),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SheetActionButton(
+                s: s,
+                label: confirmLabel,
+                filled: destructive,
+                onTap: onConfirm,
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
 }
 
 class _SheetActionButton extends StatefulWidget {
@@ -745,6 +719,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
 }
 
 // ── Sheet de edição de campo simples (nome / palavra-passe) ────
+// Agora sem Container externo, margem, sombra e grabber manual.
 
 class _EditFieldSheet extends StatefulWidget {
   final AppColorScheme s;
@@ -805,130 +780,108 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Material(
-      type: MaterialType.transparency,
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title,
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface)),
+            const SizedBox(height: 16),
+            Text(widget.label,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: s.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: _error != null ? s.error : s.outline.withOpacity(0.5)),
+              ),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                obscureText: widget.obscure ? _obscureNow : false,
+                style: TextStyle(fontSize: 15, color: s.onSurface),
+                cursorColor: s.primary,
+                onSubmitted: (_) => _save(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  hintText: widget.hint,
+                  hintStyle: TextStyle(
+                      fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
+                  suffixIcon: widget.obscure
+                      ? GestureDetector(
+                          onTap: () => setState(() => _obscureNow = !_obscureNow),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: AppIcon(
+                              _obscureNow ? 'eye.svg' : 'eye_off.svg',
+                              color: s.onSurfaceVariant,
+                              size: 18,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: TextStyle(fontSize: 12, color: s.error)),
+            ],
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: _SheetActionButton(
+                  s: s,
+                  label: 'Cancelar',
+                  filled: false,
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _saving ? null : _save,
                   child: Container(
-                    width: 36, height: 4,
-                    margin: const EdgeInsets.only(bottom: 18),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: s.outline,
+                      color: s.primary.withOpacity(_saving ? 0.6 : 1),
                       borderRadius: BorderRadius.circular(999),
                     ),
+                    child: _saving
+                        ? SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              valueColor: AlwaysStoppedAnimation(s.onPrimary),
+                            ),
+                          )
+                        : Text('Guardar',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: s.onPrimary)),
                   ),
                 ),
-                Text(widget.title,
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: s.onSurface)),
-                const SizedBox(height: 16),
-                Text(widget.label,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurfaceVariant)),
-                const SizedBox(height: 6),
-                Container(
-                  decoration: BoxDecoration(
-                    color: s.cardBackground,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: _error != null ? s.error : s.outline.withOpacity(0.5)),
-                  ),
-                  child: TextField(
-                    controller: _ctrl,
-                    autofocus: true,
-                    obscureText: widget.obscure ? _obscureNow : false,
-                    style: TextStyle(fontSize: 15, color: s.onSurface),
-                    cursorColor: s.primary,
-                    onSubmitted: (_) => _save(),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                      hintText: widget.hint,
-                      hintStyle: TextStyle(
-                          fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
-                      suffixIcon: widget.obscure
-                          ? GestureDetector(
-                              onTap: () => setState(() => _obscureNow = !_obscureNow),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: AppIcon(
-                                  _obscureNow ? 'eye.svg' : 'eye_off.svg',
-                                  color: s.onSurfaceVariant,
-                                  size: 18,
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_error!, style: TextStyle(fontSize: 12, color: s.error)),
-                ],
-                const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: 'Cancelar',
-                      filled: false,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _saving ? null : _save,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: s.primary.withOpacity(_saving ? 0.6 : 1),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: _saving
-                            ? SizedBox(
-                                width: 18, height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  valueColor: AlwaysStoppedAnimation(s.onPrimary),
-                                ),
-                              )
-                            : Text('Guardar',
-                                style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: s.onPrimary)),
-                      ),
-                    ),
-                  ),
-                ]),
-              ],
-            ),
-          ),
+              ),
+            ]),
+          ],
         ),
       ),
     );

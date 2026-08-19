@@ -14,7 +14,6 @@ import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
-import 'home/home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,10 +76,9 @@ class CraftLabApp extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer estilo "push" com gesto contínuo.
-// O drawer fica sempre fixo por baixo; o conteúdo principal desliza
-// para a direita conforme o dedo, com encolhimento e cantos que
-// arredondam proporcionalmente ao progresso do gesto.
+// ROOT SHELL — drawer tradicional (overlay push, tela cheia)
+// O drawer entra deslizando da esquerda por cima do conteúdo.
+// O conteúdo principal apenas sofre um leve deslocamento horizontal.
 // ══════════════════════════════════════════════════════════════
 
 class RootShell extends StatefulWidget {
@@ -118,14 +116,6 @@ class _RootShellState extends State<RootShell>
     _closeDrawer();
     Navigator.of(context)
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
-  }
-
-  void _goHome() {
-    Navigator.of(context).push(CupertinoPageRoute(
-      builder: (_) => HomeScreen(
-        onOpenDocument: _onOpenFromHome,
-      ),
-    ));
   }
 
   void _selectTab(AppTab t) {
@@ -170,17 +160,6 @@ class _RootShellState extends State<RootShell>
     editTabController.requestLoadLocal(item);
   }
 
-  /// Callback vindo da HomeScreen quando o utilizador toca num
-  /// template ou ficheiro de projeto. Aqui a navegação é sempre feita,
-  /// porque é resultado de um toque explícito do utilizador.
-  void _onOpenFromHome(LocalCanvasItem item) {
-    editTabController.requestLoadLocal(item);
-    setState(() {
-      _editorType = item.kind.editorType;
-      _tab = AppTab.edit;
-    });
-  }
-
   String get _tabTitle {
     switch (_tab) {
       case AppTab.ai:   return '';
@@ -207,7 +186,6 @@ class _RootShellState extends State<RootShell>
     }
   }
 
-  static const double _drawerWidth = 280;
   static const Duration _drawerAnim = Duration(milliseconds: 320);
   static const Curve _drawerCurve = Curves.easeOutCubic;
 
@@ -215,6 +193,7 @@ class _RootShellState extends State<RootShell>
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final isAiTab = _tab == AppTab.ai;
+    final _drawerWidth = MediaQuery.of(context).size.width;
 
     final bodyContent = isAiTab
         ? Stack(children: [
@@ -292,36 +271,8 @@ class _RootShellState extends State<RootShell>
         backgroundColor: s.surface,
         body: Stack(
           children: [
-            // Drawer — sempre montado, sempre fixo na mesma posição
-            // por baixo do conteúdo. Nunca se move; é revelado quando
-            // o conteúdo por cima desliza para a direita.
-            Positioned(
-              top: 0, bottom: 0, left: 0,
-              width: _drawerWidth,
-              child: Material(
-                color: s.surface,
-                child: AnimatedBuilder(
-                  animation: _AiTabHeaderRefresh.of(context),
-                  builder: (_, __) => AppDrawer(
-                    s: s,
-                    onClose: _closeDrawer,
-                    onSettings: _openSettings,
-                    onGoHome: _goHome,
-                    currentTab: _tab,
-                    onSelectTab: _selectTab,
-                    onOpenConversation: _onOpenConversation,
-                    onNewChat: () =>
-                        _onConversationAction(ConversationAction.newChat),
-                    activeConversationId: _aiTabKey.currentState?.conversationId,
-                  ),
-                ),
-              ),
-            ),
-            // Conteúdo principal — segue o dedo em tempo real durante o
-            // arraste (via _drawerCtrl.value, 0.0 a 1.0), com encolhimento
-            // progressivo e cantos que se arredondam conforme o drawer
-            // abre. AnimatedBuilder reconstrói só este bloco a cada tick
-            // do controller, seja por gesto ou por animateTo/fling.
+            // Conteúdo principal — sofre leve deslocamento horizontal
+            // quando o drawer abre (efeito push subtil).
             GestureDetector(
               behavior: HitTestBehavior.deferToChild,
               onHorizontalDragStart: (_) {
@@ -333,8 +284,6 @@ class _RootShellState extends State<RootShell>
               },
               onHorizontalDragEnd: (d) {
                 final velocity = d.velocity.pixelsPerSecond.dx;
-                // Fling rápido decide a direção mesmo a meio do gesto;
-                // sem fling, decide pela posição (mais de metade aberto).
                 if (velocity.abs() > 300) {
                   if (velocity > 0) {
                     _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
@@ -351,55 +300,63 @@ class _RootShellState extends State<RootShell>
                 animation: _drawerCtrl,
                 builder: (_, child) {
                   final t = _drawerCtrl.value;
-                  final radius = 24.0 * t;
-                  final scale = 1.0 - (0.06 * t);
-                  return Transform(
-                    transform: Matrix4.identity()
-                      ..translate(_drawerWidth * t, 0.0)
-                      ..scale(scale),
-                    alignment: Alignment.center,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(radius),
-                        boxShadow: t > 0
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.18 * t),
-                                  blurRadius: 24,
-                                  offset: const Offset(-4, 0),
-                                ),
-                              ]
-                            : const [],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: child,
-                    ),
+                  return Transform.translate(
+                    offset: Offset(_drawerWidth * 0.25 * t, 0),
+                    child: child,
                   );
                 },
-                child: AbsorbPointer(
-                  absorbing: _drawerOpen,
-                  child: bodyContent,
-                ),
+                child: bodyContent,
               ),
             ),
-            // Área tocável sobre o conteúdo deslocado, quando o drawer
-            // está aberto — agora reativa ao _drawerCtrl dentro de um
-            // AnimatedBuilder, para não ficar "presa" durante animações.
+            // Drawer — entra deslizando da esquerda por cima de tudo.
             Positioned(
-              top: 0, bottom: 0,
-              left: _drawerWidth, right: 0,
+              top: 0, bottom: 0, left: 0,
+              width: _drawerWidth,
               child: AnimatedBuilder(
                 animation: _drawerCtrl,
                 builder: (_, child) {
-                  final open = _drawerCtrl.value > 0.01;
-                  return IgnorePointer(
-                    ignoring: !open,
+                  final t = _drawerCtrl.value;
+                  return Transform.translate(
+                    offset: Offset(-_drawerWidth * (1.0 - t), 0),
                     child: child,
                   );
                 },
                 child: GestureDetector(
-                  onTap: _closeDrawer,
-                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragUpdate: (d) {
+                    final delta = d.delta.dx / _drawerWidth;
+                    _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+                  },
+                  onHorizontalDragEnd: (d) {
+                    final velocity = d.velocity.pixelsPerSecond.dx;
+                    if (velocity.abs() > 300) {
+                      if (velocity > 0) {
+                        _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                      } else {
+                        _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                      }
+                    } else if (_drawerCtrl.value > 0.5) {
+                      _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                    } else {
+                      _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                    }
+                  },
+                  child: Material(
+                    color: s.surface,
+                    child: AnimatedBuilder(
+                      animation: _AiTabHeaderRefresh.of(context),
+                      builder: (_, __) => AppDrawer(
+                        s: s,
+                        onClose: _closeDrawer,
+                        onSettings: _openSettings,
+                        currentTab: _tab,
+                        onSelectTab: _selectTab,
+                        onOpenConversation: _onOpenConversation,
+                        onNewChat: () =>
+                            _onConversationAction(ConversationAction.newChat),
+                        activeConversationId: _aiTabKey.currentState?.conversationId,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

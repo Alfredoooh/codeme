@@ -17,6 +17,7 @@ import 'aiwidgets.dart';
 import 'widgets.dart';
 import 'exportservice.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
+import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning), já
@@ -2591,44 +2592,30 @@ Future<void> showSelectTextSheet(
   AppColorScheme s, {
   required String text,
 }) {
-  return showModalBottomSheet(
+  return showAppSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            boxShadow: s.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: SheetGrabber(s: s)),
-              Text('Selecionar texto',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-              const SizedBox(height: 12),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: SelectableText(
-                    text,
-                    style: TextStyle(fontSize: 15, color: s.onSurface, height: 1.5),
-                  ),
-                ),
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Selecionar texto',
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+            ),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                text,
+                style: TextStyle(fontSize: 15, color: s.onSurface, height: 1.5),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     ),
   );
@@ -2644,68 +2631,56 @@ Future<void> showAttachedFilesSheet(
   required List<AttachedFile> files,
   required ValueChanged<String> onRemove,
 }) {
-  return showModalBottomSheet(
+  return showAppSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setModalState) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Row(children: [
-                  AppIcon('attached.svg', color: s.onSurface, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Anexos desta mensagem',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                  ),
-                ]),
-                const SizedBox(height: 12),
-                if (files.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text('Sem anexos.',
-                          style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: files.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final f = files[i];
-                        return _AttachedFileRow(
-                          s: s,
-                          file: f,
-                          onRemove: () {
-                            onRemove(f.id);
-                            setModalState(() {});
-                            if (files.length <= 1) Navigator.pop(ctx);
-                          },
-                        );
+      builder: (ctx, setModalState) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              AppIcon('attached.svg', color: s.onSurface, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Anexos desta mensagem',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            if (files.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text('Sem anexos.',
+                      style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: files.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final f = files[i];
+                    return _AttachedFileRow(
+                      s: s,
+                      file: f,
+                      onRemove: () {
+                        onRemove(f.id);
+                        setModalState(() {});
+                        if (files.length <= 1) Navigator.pop(ctx);
                       },
-                    ),
-                  ),
-              ],
-            ),
-          ),
+                    );
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     ),
@@ -3177,65 +3152,53 @@ Future<void> showCanvasSheet(
   required List<LocalCanvasItem> canvases,
   required ValueChanged<LocalCanvasItem> onOpenCanvas,
 }) {
-  return showModalBottomSheet(
+  return showAppSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            boxShadow: s.floatingShadow,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: SheetGrabber(s: s)),
-              Row(children: [
-                AppIcon('cards.svg', color: s.onSurface, size: 18),
-                const SizedBox(width: 8),
-                Text('Canvas desta conversa',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-              ]),
-              const SizedBox(height: 12),
-              if (canvases.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Center(
-                    child: Text('Ainda não há documentos nesta conversa.',
-                        style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-                  ),
-                )
-              else
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: canvases.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final item = canvases[canvases.length - 1 - i];
-                      return _CanvasCard(
-                        s: s,
-                        item: item,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          onOpenCanvas(item);
-                        },
-                      );
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            AppIcon('cards.svg', color: s.onSurface, size: 18),
+            const SizedBox(width: 8),
+            Text('Canvas desta conversa',
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+          ]),
+          const SizedBox(height: 12),
+          if (canvases.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('Ainda não há documentos nesta conversa.',
+                    style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: canvases.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) {
+                  final item = canvases[canvases.length - 1 - i];
+                  return _CanvasCard(
+                    s: s,
+                    item: item,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      onOpenCanvas(item);
                     },
-                  ),
-                ),
-            ],
-          ),
-        ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     ),
   );
@@ -3312,10 +3275,8 @@ Future<void> showVoiceRecordSheet(
   AppColorScheme s, {
   required ValueChanged<String> onTranscribed,
 }) {
-  return showModalBottomSheet(
+  return showAppSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (ctx) => _VoiceRecordSheetContent(
       s: s,
       onTranscribed: onTranscribed,
@@ -3375,78 +3336,66 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-          decoration: BoxDecoration(
-            color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            boxShadow: s.floatingShadow,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _recording ? 'A ouvir...' : 'A transcrever...',
+            style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: s.onSurface),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SheetGrabber(s: s),
-              Text(
-                _recording ? 'A ouvir...' : 'A transcrever...',
+          const SizedBox(height: 6),
+          Text(
+            _formattedTime,
+            style: TextStyle(
+                fontSize: 13, color: s.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, child) {
+              final scale = _recording
+                  ? 1.0 + (_pulse.value * 0.12)
+                  : 1.0;
+              return Transform.scale(scale: scale, child: child);
+            },
+            child: Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(
+                color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: s.error, width: 1.5),
+              ),
+              child: _recording
+                  ? AppIcon('mic.svg', size: 30, color: s.error)
+                  : AppIcon('mic_none.svg', size: 30, color: s.error),
+            ),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: _recording ? _stopAndTranscribe : null,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                _recording ? 'Concluir' : 'A processar...',
                 style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: s.onSurface),
+                    color: s.onPrimary),
               ),
-              const SizedBox(height: 6),
-              Text(
-                _formattedTime,
-                style: TextStyle(
-                    fontSize: 13, color: s.onSurfaceVariant),
-              ),
-              const SizedBox(height: 24),
-              AnimatedBuilder(
-                animation: _pulse,
-                builder: (_, child) {
-                  final scale = _recording
-                      ? 1.0 + (_pulse.value * 0.12)
-                      : 1.0;
-                  return Transform.scale(scale: scale, child: child);
-                },
-                child: Container(
-                  width: 76, height: 76,
-                  decoration: BoxDecoration(
-                    color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: s.error, width: 1.5),
-                  ),
-                  child: _recording
-                      ? AppIcon('mic.svg', size: 30, color: s.error)
-                      : AppIcon('mic_none.svg', size: 30, color: s.error),
-                ),
-              ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: _recording ? _stopAndTranscribe : null,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.primary,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _recording ? 'Concluir' : 'A processar...',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: s.onPrimary),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

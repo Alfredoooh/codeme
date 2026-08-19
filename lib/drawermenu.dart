@@ -12,6 +12,7 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import 'chat_search.dart';
+import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // TABS
@@ -181,7 +182,6 @@ class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onClose;
   final VoidCallback onSettings;
-  final VoidCallback onGoHome;
   final AppTab currentTab;
   final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
@@ -193,7 +193,6 @@ class AppDrawer extends StatefulWidget {
     required this.s,
     required this.onClose,
     required this.onSettings,
-    required this.onGoHome,
     required this.currentTab,
     required this.onSelectTab,
     this.onOpenConversation,
@@ -255,11 +254,6 @@ class _AppDrawerState extends State<AppDrawer> {
     ));
   }
 
-  void _goHome() {
-    _closeDrawer();
-    widget.onGoHome();
-  }
-
   void _openConversation(ConversationItem item) {
     widget.onOpenConversation?.call(item.id);
     _closeDrawer();
@@ -289,10 +283,8 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
-    showModalBottomSheet(
+    showAppSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (ctx) => _DeleteConversationSheet(
         s: widget.s,
         title: item.title,
@@ -330,6 +322,15 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   Row(children: [
+                    // Botão Nova Conversa (substitui o home.svg removido no Bloco 1)
+                    if (widget.onNewChat != null)
+                      AppTap(
+                        onTap: widget.onNewChat!,
+                        s: s,
+                        size: 32,
+                        child: AppIcon('add.svg', color: s.onSurfaceVariant, size: 17),
+                      ),
+                    const SizedBox(width: 2),
                     AppTap(
                       onTap: () => _openSearch(context),
                       s: s,
@@ -337,11 +338,12 @@ class _AppDrawerState extends State<AppDrawer> {
                       child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
                     ),
                     const SizedBox(width: 2),
+                    // Botão fechar (X) para fechar o drawer facilmente
                     AppTap(
-                      onTap: _goHome,
+                      onTap: _closeDrawer,
                       s: s,
                       size: 32,
-                      child: AppIcon('home.svg', color: s.onSurfaceVariant, size: 17),
+                      child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 16),
                     ),
                   ]),
                 ],
@@ -823,6 +825,10 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
   }
 }
 
+// ── Sheet de confirmação de eliminação ────────────────────────
+// Agora sem Material/Container externo e sem grabber manual,
+// usa o CupertinoSheetRoute (showAppSheet) fornecido.
+
 class _DeleteConversationSheet extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -834,55 +840,44 @@ class _DeleteConversationSheet extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Text(
-                  'Eliminar "$title"?',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: s.onSurface),
-                ),
-                const SizedBox(height: 20),
-                Row(children: [
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: 'Cancelar',
-                      filled: false,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _SheetActionButton(
-                      s: s,
-                      label: 'Eliminar',
-                      filled: true,
-                      onTap: onConfirm,
-                    ),
-                  ),
-                ]),
-              ],
-            ),
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Eliminar "$title"?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: s.onSurface),
           ),
-        ),
-      );
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(
+              child: _SheetActionButton(
+                s: s,
+                label: 'Cancelar',
+                filled: false,
+                onTap: () => Navigator.pop(context),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SheetActionButton(
+                s: s,
+                label: 'Eliminar',
+                filled: true,
+                onTap: onConfirm,
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
 }
 
 class _SheetActionButton extends StatefulWidget {
@@ -935,6 +930,10 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
   }
 }
 
+// ── Sheet de renomeação ────────────────────────────────────────
+// Agora usa showAppSheet (CupertinoSheetRoute) e remove o
+// Container/decoração externa e o SheetGrabber manual.
+
 Future<void> showRenameSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -944,75 +943,60 @@ Future<void> showRenameSheet(
   String hint = 'Título da conversa',
 }) {
   final ctrl = TextEditingController(text: currentTitle);
-  return showModalBottomSheet(
+  return showAppSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
     builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: Material(
-        type: MaterialType.transparency,
-        child: SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: BoxDecoration(
-              color: s.floatingSurface,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: s.floatingShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: SheetGrabber(s: s)),
-                Text(title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  style: TextStyle(fontSize: 15, color: s.onSurface),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: hint,
-                    hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-                    filled: true,
-                    fillColor: s.hover,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                  onSubmitted: (v) {
-                    Navigator.pop(ctx);
-                    onConfirm(v.trim());
-                  },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: TextStyle(fontSize: 15, color: s.onSurface),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: hint,
+                hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                filled: true,
+                fillColor: s.hover,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    onConfirm(ctrl.text.trim());
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: s.primary,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text('Confirmar',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
-                  ),
-                ),
-              ],
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+              onSubmitted: (v) {
+                Navigator.pop(ctx);
+                onConfirm(v.trim());
+              },
             ),
-          ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(ctx);
+                onConfirm(ctrl.text.trim());
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: s.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text('Confirmar',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
+              ),
+            ),
+          ],
         ),
       ),
     ),

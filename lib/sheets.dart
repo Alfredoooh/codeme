@@ -2,13 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'widgets.dart';
+import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // BASE BOTTOM SHEET
 // ══════════════════════════════════════════════════════════════
-// CONFIRMADO (Bloco D): já está colado às bordas — sem margin,
-// borderRadius só no topo (12), consistente com o padrão pedido.
-// Nada alterado aqui.
+// Agora usa showAppSheet (CupertinoSheetRoute). O grabber manual foi
+// removido — o CupertinoSheetRoute já desenha o dele.
 
 Future<T?> showCraftBottomSheet<T>({
   required BuildContext context,
@@ -16,41 +16,31 @@ Future<T?> showCraftBottomSheet<T>({
   required Widget child,
   String? title,
 }) {
-  return showModalBottomSheet<T>(
+  return showAppSheet<T>(
     context: context,
-    backgroundColor: s.cardBackground,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
-    builder: (_) => SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 4),
-              width: 36, height: 4,
-              decoration: BoxDecoration(
-                color: s.outline.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(2),
+    builder: (_) => ColoredBox(
+      color: s.cardBackground,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Text(title,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface)),
               ),
-            ),
-          ),
-          if (title != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text(title,
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurface)),
-            ),
-            const SizedBox(height: 4),
+              const SizedBox(height: 4),
+            ],
+            child,
+            const SizedBox(height: 12),
           ],
-          child,
-          const SizedBox(height: 12),
-        ],
+        ),
       ),
     ),
   );
@@ -119,25 +109,74 @@ Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
   );
 }
 
-void _urlDialog(BuildContext context, AppColorScheme s) {
+// ══════════════════════════════════════════════════════════════
+// URL DIALOG — convertido para showAppSheet
+// ══════════════════════════════════════════════════════════════
+
+Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
   final ctrl = TextEditingController();
-  showCupertinoDialog(
+  return showAppSheet<void>(
     context: context,
-    builder: (ctx) => CupertinoAlertDialog(
-      title: const Text('URL da imagem'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: CupertinoTextField(
-            controller: ctrl, placeholder: 'https://', autofocus: true),
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('URL da imagem',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 12),
+          CupertinoTextField(
+            controller: ctrl,
+            placeholder: 'https://',
+            autofocus: true,
+            style: TextStyle(fontSize: 15, color: s.onSurface),
+            decoration: BoxDecoration(
+              color: s.cardBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: s.outline.withOpacity(0.5)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: s.outline.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('Cancelar',
+                      style: TextStyle(color: s.onSurface)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: s.primary,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('Inserir',
+                      style: TextStyle(
+                          color: s.onPrimary,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
+          ]),
+        ],
       ),
-      actions: [
-        CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar')),
-        CupertinoDialogAction(
-            onPressed: () => Navigator.pop(ctx), child: const Text('Inserir')),
-      ],
     ),
   );
 }
