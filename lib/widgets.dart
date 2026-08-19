@@ -981,6 +981,8 @@ class _FluentListCardState extends State<FluentListCard> {
           decoration: BoxDecoration(
             color: _p ? s.subtleFillPressed : s.cardBackground,
             borderRadius: widget.radius,
+            boxShadow: s.cardShadow,
+            border: Border.all(color: s.strokeCard),
           ),
           child: Row(
             children: [
@@ -1165,8 +1167,8 @@ class _FluentSectionLabel extends StatelessWidget {
         style: TextStyle(
           fontSize: kTypeCaption,
           fontWeight: FontWeight.w600,
-          color: s.onSurfaceVariant,
-          letterSpacing: 0.4,
+          color: s.onSurfaceTertiary,
+          letterSpacing: 0.6,
         ),
       );
 }

@@ -36,11 +36,11 @@ const Curve kFluentAccelerate = Cubic(0.9,  0.0,  1.0,  1.0);
 // DURAÇÕES DE ANIMAÇÃO (Fluent Motion)
 // ─────────────────────────────────────────────────────────────
 
-const Duration kDurationFast     = Duration(milliseconds: 83);
-const Duration kDurationNormal   = Duration(milliseconds: 167);
-const Duration kDurationSlow     = Duration(milliseconds: 250);
-const Duration kDurationSlower   = Duration(milliseconds: 333);
-const Duration kDurationPage     = Duration(milliseconds: 400);
+const Duration kDurationFast     = Duration(milliseconds: 120);
+const Duration kDurationNormal   = Duration(milliseconds: 200);
+const Duration kDurationSlow     = Duration(milliseconds: 260);
+const Duration kDurationSlower   = Duration(milliseconds: 320);
+const Duration kDurationPage     = Duration(milliseconds: 360);
 
 // ─────────────────────────────────────────────────────────────
 // BORDER RADIUS TOKENS (Fluent)
@@ -48,9 +48,9 @@ const Duration kDurationPage     = Duration(milliseconds: 400);
 
 const double kRadiusNone     = 0.0;
 const double kRadiusSmall    = 8.0;
-const double kRadiusMedium   = 12.0;
+const double kRadiusMedium   = 10.0;
 const double kRadiusLarge    = 18.0;
-const double kRadiusXLarge   = 26.0;
+const double kRadiusXLarge   = 28.0;
 const double kRadiusCircle   = 9999.0;
 
 // ─────────────────────────────────────────────────────────────
@@ -90,28 +90,28 @@ class AppColorScheme {
   // ─── ACCENT / PRIMARY ────────────────────────────────────
 
   /// Accent Default — cor de destaque principal (azul Fluent)
-  Color get primary              => isDark ? const Color(0xFF7EC8FF) : const Color(0xFF5B5CE2);
+  Color get primary              => isDark ? const Color(0xFF6FB3A3) : const Color(0xFF3D8B7D);
 
   /// Texto/ícone sobre superfície accent
-  Color get onPrimary            => isDark ? const Color(0xFF061724) : const Color(0xFFFFFFFF);
+  Color get onPrimary            => isDark ? const Color(0xFF18201F) : const Color(0xFFFFFFFF);
 
   /// Accent Light 3 / Dark 3 — fundo de containers de destaque (chips, badges)
-  Color get primaryContainer     => isDark ? const Color(0xFF274A68) : const Color(0xFFE7E7FF);
+  Color get primaryContainer     => isDark ? const Color(0xFF315B52) : const Color(0xFFE2F0ED);
 
   /// Texto sobre primaryContainer
-  Color get onPrimaryContainer   => isDark ? const Color(0xFFCFE4FA) : const Color(0xFF0C3B5E);
+  Color get onPrimaryContainer   => isDark ? const Color(0xFFC1E2DA) : const Color(0xFF245B50);
 
   /// Accent Light 2 — hover sobre accent (botão primário hovered)
-  Color get primaryHover         => isDark ? const Color(0xFF9AD6FF) : const Color(0xFF7475F0);
+  Color get primaryHover         => isDark ? const Color(0xFF86C4B6) : const Color(0xFF4C9C8D);
 
   /// Accent Light 1 — pressed sobre accent
-  Color get primaryPressed       => isDark ? const Color(0xFF3B90E8) : const Color(0xFF0E5BA8);
+  Color get primaryPressed       => isDark ? const Color(0xFF5B9F90) : const Color(0xFF347A6E);
 
   /// Accent Dark 1 — estado desativado / subtle accent
-  Color get primarySubtle        => isDark ? const Color(0xFF1E4C7A) : const Color(0xFFBDD7EF);
+  Color get primarySubtle        => isDark ? const Color(0xFF294B45) : const Color(0xFFC9E4DF);
 
   /// Accent secundário (usado em gráficos, highlights adicionais)
-  Color get secondary            => isDark ? const Color(0xFFFFB86B) : const Color(0xFFFF7A59);
+  Color get secondary            => isDark ? const Color(0xFFF0A500) : const Color(0xFFFF9500);
   Color get onSecondary          => isDark ? const Color(0xFF012B4A) : const Color(0xFFFFFFFF);
   Color get secondaryContainer   => isDark ? const Color(0xFF003A5C) : const Color(0xFFDCEEFC);
   Color get onSecondaryContainer => isDark ? const Color(0xFFB8D9F5) : const Color(0xFF003A5C);
@@ -119,25 +119,25 @@ class AppColorScheme {
   // ─── NEUTRAL BACKGROUNDS (Fluent Layers) ─────────────────
 
   /// Solid Background — fundo de toda a app (Layer 0)
-  Color get solidBackground      => isDark ? const Color(0xFF20243A) : const Color(0xFFFFF8F2);
+  Color get solidBackground      => isDark ? const Color(0xFF1C1D1F) : const Color(0xFFF2F2F7);
 
   /// Page Background — fundo de conteúdo principal (Layer 1)
-  Color get pageBackground       => isDark ? const Color(0xFF252A44) : const Color(0xFFFFF4EC);
+  Color get pageBackground       => isDark ? const Color(0xFF1C1D1F) : const Color(0xFFF2F2F7);
 
   /// Card Background — fundo de cards, painéis, superfícies elevadas (Layer 2)
-  Color get cardBackground      => isDark ? const Color(0xFF333956) : const Color(0xFFFFFFFF);
+  Color get cardBackground      => isDark ? const Color(0xFF26282B) : const Color(0xFFFFFFFF);
 
   /// Surface — superfície de diálogos, menus, flyouts (Layer 3)
-  Color get surface              => isDark ? const Color(0xFF3A4161) : const Color(0xFFFFFCFA);
+  Color get surface              => isDark ? const Color(0xFF26282B) : const Color(0xFFF2F2F7);
 
   /// Floating Surface — tooltips, menus suspensos (Layer 4)
-  Color get floatingSurface      => isDark ? const Color(0xFF454B6B) : const Color(0xFFFFFFFF);
+  Color get floatingSurface      => isDark ? const Color(0xFF2E3134) : const Color(0xFFFFFFFF);
 
   /// Layer Subtle — fundo alternado em listas, tabelas (faixa zebra)
-  Color get layerSubtle          => isDark ? const Color(0xFF2D3350) : const Color(0xFFFFEEE5);
+  Color get layerSubtle          => isDark ? const Color(0xFF232527) : const Color(0xFFF2F2F7);
 
   /// Layer Default — camada de item selecionado em listas
-  Color get layerDefault         => isDark ? const Color(0xFF323232) : const Color(0xFFFFFFFF);
+  Color get layerDefault         => isDark ? const Color(0xFF2E3134) : const Color(0xFFFFFFFF);
 
   /// Acrylic Background (blur host fallback, sem suporte nativo Flutter)
   Color get acrylicBackground    => isDark
@@ -147,13 +147,13 @@ class AppColorScheme {
   // ─── FILL COLORS ─────────────────────────────────────────
 
   /// Control Default — fundo de inputs, botões secundários
-  Color get controlDefault       => isDark ? const Color(0x1AFFFFFF) : const Color(0xFFFFFFFF);
+  Color get controlDefault       => isDark ? const Color(0xFF2E3134) : const Color(0xFFF2F2F7);
 
   /// Control Secondary — fundo de checkboxes, radios (estado off)
-  Color get controlSecondary     => isDark ? const Color(0x0FFFFFFF) : const Color(0xFFF6F6F6);
+  Color get controlSecondary     => isDark ? const Color(0xFF35373A) : const Color(0xFFE5E5EA);
 
   /// Control Tertiary — fundo de toggle/slider track (inativo)
-  Color get controlTertiary      => isDark ? const Color(0x09FFFFFF) : const Color(0xFFF0F0F0);
+  Color get controlTertiary      => isDark ? const Color(0xFF3A3D40) : const Color(0xFFE5E5EA);
 
   /// Control Quaternary — fundo desativado de controles
   Color get controlQuaternary    => isDark ? const Color(0x06FFFFFF) : const Color(0xFFE6E6E6);
@@ -162,30 +162,30 @@ class AppColorScheme {
   Color get controlDisabled      => isDark ? const Color(0x0AFFFFFF) : const Color(0xFFF6F6F6);
 
   /// Control Input Active — fundo de input com foco / text field ativo
-  Color get controlInputActive   => isDark ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+  Color get controlInputActive   => isDark ? const Color(0xFF232527) : const Color(0xFFFFFFFF);
 
   /// Subtle Fill Default — fundo de hover sobre item de lista
   Color get subtleFillDefault    => const Color(0x00000000); // transparente
-  Color get subtleFillHover      => isDark ? const Color(0x16FFFFFF) : const Color(0x09000000);
-  Color get subtleFillPressed    => isDark ? const Color(0x0DFFFFFF) : const Color(0x06000000);
+  Color get subtleFillHover      => isDark ? const Color(0x263A3D40) : const Color(0xFFE5E5EA);
+  Color get subtleFillPressed    => isDark ? const Color(0x403A3D40) : const Color(0xFFD1D1D6);
   Color get subtleFillDisabled   => const Color(0x00000000);
 
   /// Accent Fill — variantes de fill colorido para botões accent
-  Color get accentFillDefault    => isDark ? const Color(0xFF479EF5) : const Color(0xFF0F6CBD);
-  Color get accentFillHover      => isDark ? const Color(0xFF62ABFF) : const Color(0xFF1176C1);
-  Color get accentFillPressed    => isDark ? const Color(0xFF3789DE) : const Color(0xFF1579C5);
+  Color get accentFillDefault    => isDark ? const Color(0xFF6FB3A3) : const Color(0xFF3D8B7D);
+  Color get accentFillHover      => isDark ? const Color(0xFF86C4B6) : const Color(0xFF4C9C8D);
+  Color get accentFillPressed    => isDark ? const Color(0xFF5B9F90) : const Color(0xFF347A6E);
   Color get accentFillDisabled   => isDark ? const Color(0x29FFFFFF) : const Color(0x29000000);
 
   // ─── TEXT / ON-SURFACE COLORS ────────────────────────────
 
   /// Texto primário sobre superfície
-  Color get onSurface            => isDark ? const Color(0xFFFFFBF7) : const Color(0xFF302A3D);
+  Color get onSurface            => isDark ? const Color(0xFFF2F2F0) : const Color(0xFF000000);
 
   /// Texto secundário (metadados, labels de apoio)
-  Color get onSurfaceVariant     => isDark ? const Color(0xFFD8D9E8) : const Color(0xFF6A6175);
+  Color get onSurfaceVariant     => isDark ? const Color(0xFFB4B6B9) : const Color(0xFF3C3C43);
 
   /// Texto terciário (placeholders, hints)
-  Color get onSurfaceTertiary    => isDark ? const Color(0xFF898989) : const Color(0xFF767676);
+  Color get onSurfaceTertiary    => isDark ? const Color(0xFF8F9194) : const Color(0xFF8E8E93);
 
   /// Texto desativado
   Color get onSurfaceDisabled    => isDark ? const Color(0x5DFFFFFF) : const Color(0x5D000000);
@@ -209,8 +209,8 @@ class AppColorScheme {
   Color get strokeFocusInner     => isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 
   /// Outline padrão (campos, borders gerais)
-  Color get outline              => isDark ? const Color(0xFF5C6486) : const Color(0xFFF0D9CF);
-  Color get outlineVariant       => isDark ? const Color(0xFF4A5170) : const Color(0xFFF7E7DF);
+  Color get outline              => isDark ? const Color(0xFF3A3D40) : const Color(0xFFC7C7CC);
+  Color get outlineVariant       => isDark ? const Color(0xFF35373A) : const Color(0xFFE5E5EA);
 
   /// Control Stroke — borda de controles interativos (input, button)
   Color get controlStroke        => isDark ? const Color(0x1AFFFFFF) : const Color(0x0F000000);
@@ -259,16 +259,16 @@ class AppColorScheme {
 
   // ─── SEMANTIC: ERROR ─────────────────────────────────────
 
-  Color get error              => isDark ? const Color(0xFFDC626D) : const Color(0xFFC50F1F);
+  Color get error              => isDark ? const Color(0xFFE05E5E) : const Color(0xFFFF3B30);
   Color get onError            => isDark ? const Color(0xFF3B0509) : const Color(0xFFFFFFFF);
   Color get errorContainer     => isDark ? const Color(0xFF6E0811) : const Color(0xFFEEACB2);
   Color get onErrorContainer   => isDark ? const Color(0xFFF6D1D5) : const Color(0xFF3B0509);
-  Color get errorHover         => isDark ? const Color(0xFFE37B83) : const Color(0xFFB00E1A);
+  Color get errorHover         => isDark ? const Color(0xFFEF9797) : const Color(0xFFFF6258);
   Color get errorSubtle        => isDark ? const Color(0xFF4A1417) : const Color(0xFFFDE7E9);
 
   // ─── SEMANTIC: WARNING ───────────────────────────────────
 
-  Color get warning            => isDark ? const Color(0xFFFFD166) : const Color(0xFF9D5D00);
+  Color get warning            => isDark ? const Color(0xFFF0A500) : const Color(0xFFFF9500);
   Color get onWarning          => isDark ? const Color(0xFF3D2900) : const Color(0xFFFFFFFF);
   Color get warningContainer   => isDark ? const Color(0xFF4A3400) : const Color(0xFFFFF4CE);
   Color get onWarningContainer => isDark ? const Color(0xFFFFE792) : const Color(0xFF4A3400);
@@ -276,7 +276,7 @@ class AppColorScheme {
 
   // ─── SEMANTIC: SUCCESS ───────────────────────────────────
 
-  Color get success            => isDark ? const Color(0xFF9FD89F) : const Color(0xFF107C10);
+  Color get success            => isDark ? const Color(0xFF6FDCAE) : const Color(0xFF34C759);
   Color get onSuccess          => isDark ? const Color(0xFF063006) : const Color(0xFFFFFFFF);
   Color get successContainer   => isDark ? const Color(0xFF0A3E0A) : const Color(0xFFDFF6DD);
   Color get onSuccessContainer => isDark ? const Color(0xFFC8F0C8) : const Color(0xFF0A3E0A);
@@ -284,9 +284,9 @@ class AppColorScheme {
 
   // ─── SEMANTIC: INFO ──────────────────────────────────────
 
-  Color get info               => isDark ? const Color(0xFF68C6FF) : const Color(0xFF0072C6);
+  Color get info               => isDark ? const Color(0xFF6FB3A3) : const Color(0xFF3D8B7D);
   Color get onInfo             => isDark ? const Color(0xFF002B50) : const Color(0xFFFFFFFF);
-  Color get infoContainer      => isDark ? const Color(0xFF003665) : const Color(0xFFCCEAFF);
+  Color get infoContainer      => isDark ? const Color(0xFF315B52) : const Color(0xFFE2F0ED);
   Color get onInfoContainer    => isDark ? const Color(0xFF99D5FF) : const Color(0xFF003665);
   Color get infoSubtle         => isDark ? const Color(0xFF002244) : const Color(0xFFE5F3FF);
 
@@ -312,14 +312,14 @@ class AppColorScheme {
 
   // ─── NAVIGATION BAR / SHELL ──────────────────────────────
 
-  Color get navBarBg           => isDark ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+  Color get navBarBg           => isDark ? const Color(0xFF26282B) : const Color(0xFFFFFFFF);
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF616161);
   Color get navIconActive      => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF0F6CBD);
   Color get navLabelActive     => isDark ? const Color(0xFFCFE4FA) : const Color(0xFF0C3B5E);
   Color get navIndicatorBg     => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEBF3FC);
 
   /// Shell nav rail (lateral, estilo Windows)
-  Color get navRailBg          => isDark ? const Color(0xFF2A304D) : const Color(0xFFFFF0E7);
+  Color get navRailBg          => isDark ? const Color(0xFF26282B) : const Color(0xFFF2F2F7);
   Color get navRailItemHover   => isDark ? const Color(0x14FFFFFF) : const Color(0x08000000);
   Color get navRailItemActive  => isDark ? const Color(0x1FFFFFFF) : const Color(0xFFEBF3FC);
 
@@ -334,42 +334,42 @@ class AppColorScheme {
   // ─── APP-SPECIFIC TOKENS (Nexa / CraftLab) ───────────────
 
   /// Tab "Projetos" / CraftLab brand — pill fixo azul
-  Color get projectsTabBg      => const Color(0xFF5B5CE2);
+  Color get projectsTabBg      => const Color(0xFF3D8B7D);
   Color get projectsTabFg      => const Color(0xFFFFFFFF);
 
   /// Área de preview A4 no DocumentWidgetCard
-  Color get previewBackdrop    => isDark ? const Color(0xFF1E1E1E) : const Color(0xFFDEDEDE);
+  Color get previewBackdrop    => isDark ? const Color(0xFF232527) : const Color(0xFFF2F2F7);
 
   /// Container da barra de ações do DocumentWidgetCard
-  Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE5E5EA);
+  Color get downloadButtonBg   => isDark ? const Color(0xFF2E3134) : const Color(0xFFE5E5EA);
 
   /// Canvas / whiteboard background
-  Color get canvasBackground   => isDark ? const Color(0xFF20243A) : const Color(0xFFFFFBF8);
-  Color get canvasGrid         => isDark ? const Color(0xFF4A5170) : const Color(0xFFF3DDD3);
+  Color get canvasBackground   => isDark ? const Color(0xFF1C1D1F) : const Color(0xFFF2F2F7);
+  Color get canvasGrid         => isDark ? const Color(0xFF35373A) : const Color(0xFFE5E5EA);
 
   /// Shimmer (skeleton loading)
-  Color get shimmerBase        => isDark ? const Color(0xFF39405F) : const Color(0xFFFFE5D9);
-  Color get shimmerHighlight   => isDark ? const Color(0xFF505878) : const Color(0xFFFFF8F4);
+  Color get shimmerBase        => isDark ? const Color(0xFF2E3134) : const Color(0xFFE5E5EA);
+  Color get shimmerHighlight   => isDark ? const Color(0xFF3A3D40) : const Color(0xFFF2F2F7);
 
   /// AI process pill
   Color get processPillBg      => isDark ? const Color(0xFF304460) : const Color(0xFFEAF0FF);
-  Color get processPillFg      => isDark ? const Color(0xFF9BD5FF) : const Color(0xFF5B5CE2);
+  Color get processPillFg      => isDark ? const Color(0xFF86C4B6) : const Color(0xFF3D8B7D);
   Color get processPillBorder  => isDark ? const Color(0xFF2A3F5A) : const Color(0xFFBDD7EF);
 
   /// Chat message bubbles
-  Color get bubbleUser         => isDark ? const Color(0xFF4B5E96) : const Color(0xFF5B5CE2);
+  Color get bubbleUser         => isDark ? const Color(0xFF315B52) : const Color(0xFF3D8B7D);
   Color get bubbleUserFg       => const Color(0xFFFFFFFF);
-  Color get bubbleAssistant    => isDark ? const Color(0xFF3A4161) : const Color(0xFFFFFFFF);
-  Color get bubbleAssistantFg  => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF1A1A1A);
+  Color get bubbleAssistant    => isDark ? const Color(0xFF2E3134) : const Color(0xFFFFFFFF);
+  Color get bubbleAssistantFg  => isDark ? const Color(0xFFF2F2F0) : const Color(0xFF000000);
 
   // ─── INCOGNITO ───────────────────────────────────────────
 
-  Color get incognitoBackground => const Color(0xFF25243A);
-  Color get incognitoSurface    => const Color(0xFF343451);
-  Color get incognitoCardBg     => const Color(0xFF414260);
+  Color get incognitoBackground => const Color(0xFF1C1D1F);
+  Color get incognitoSurface    => const Color(0xFF26282B);
+  Color get incognitoCardBg     => const Color(0xFF2E3134);
   Color get incognitoOnSurface  => const Color(0xFFEDEDED);
-  Color get incognitoAccent     => const Color(0xFFFF9CBB);
-  Color get incognitoStroke     => const Color(0xFF5A5C80);
+  Color get incognitoAccent     => const Color(0xFF6FB3A3);
+  Color get incognitoStroke     => const Color(0xFF3A3D40);
 
   // ─── UTILITÁRIOS ─────────────────────────────────────────
 
@@ -505,7 +505,7 @@ class AppTheme extends StatelessWidget {
       scaffoldBackgroundColor: c.pageBackground,
       cardColor: c.cardBackground,
       dividerColor: c.strokeDivider,
-      fontFamily: 'Segoe UI',
+      fontFamily: 'Roboto',
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
@@ -553,10 +553,43 @@ class AppTheme extends StatelessWidget {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: c.floatingSurface,
+        contentTextStyle: TextStyle(color: c.onSurface),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kRadiusCircle),
         ),
         behavior: SnackBarBehavior.floating,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStatePropertyAll(c.cardBackground),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected)
+              ? c.primary
+              : c.controlTertiary;
+        }),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected)
+              ? c.primary
+              : c.controlSecondary;
+        }),
+        checkColor: WidgetStatePropertyAll(c.onPrimary),
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusSmall),
+        ),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected)
+              ? c.primary
+              : c.controlSecondary;
+        }),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: c.primary,
+        linearTrackColor: c.controlTertiary,
       ),
     );
   }
