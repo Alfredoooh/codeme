@@ -509,7 +509,7 @@ class AppTheme extends StatelessWidget {
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: c.cardBackground,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -518,7 +518,7 @@ class AppTheme extends StatelessWidget {
           side: BorderSide(color: c.strokeCard),
         ),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: c.surface,
         elevation: 16,
         shape: RoundedRectangleBorder(
