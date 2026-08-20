@@ -1,17 +1,27 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/chat_search.dart
 // ══════════════════════════════════════════════════════════════
+// ATUALIZAÇÃO: layout invertido — a barra de pesquisa (com ícone de
+// lupa, campo de texto e botão X para fechar) fica fixa em baixo do
+// ecrã, dentro de um container arredondado escuro (estilo da imagem
+// de referência), e a lista de resultados cresce por cima dela,
+// ocupando o espaço restante acima. Aberto via fade puro
+// (PageRouteBuilder em drawermenu.dart), nunca em slide. CORRIGIDO:
+// ícones exclusivamente CupertinoIcons — nenhum Icons (Material) e
+// nenhum SVG neste ficheiro.
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
 
 // ══════════════════════════════════════════════════════════════
 // CHAT SEARCH SCREEN — ecrã dedicado à pesquisa de conversas.
-// Aberto sempre a partir do ícone de pesquisar no drawer, com
-// navegação Cupertino (CupertinoPageRoute, empurrado pelo próprio
-// AppDrawer). Não pertence a HomeScreen nem à bottom tab bar — é um
-// ecrã solto de topo, independente, tal como SettingsScreen.
+// Aberto sempre a partir do botão de pesquisa ao lado do pill de
+// utilizador no drawer, com transição de fade puro (sem slide). Não
+// pertence a HomeScreen nem à bottom tab bar — é um ecrã solto de
+// topo, independente, tal como SettingsScreen.
 // ══════════════════════════════════════════════════════════════
 
 class ChatSearchScreen extends StatefulWidget {
@@ -68,6 +78,10 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     Navigator.of(context).maybePop();
   }
 
+  void _close() {
+    Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -79,54 +93,6 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 16, 8),
-              child: Row(children: [
-                AppTap(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  s: s,
-                  size: 40,
-                  child: AppIcon('back.svg', color: s.onSurface, size: 20),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: s.hover,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(children: [
-                      AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _ctrl,
-                          focusNode: _focus,
-                          onChanged: (v) => setState(() => _query = v),
-                          style: TextStyle(fontSize: 14.5, color: s.onSurface),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            hintText: 'Pesquisar conversas...',
-                            hintStyle: TextStyle(fontSize: 14.5, color: s.onSurfaceVariant),
-                          ),
-                        ),
-                      ),
-                      if (_query.isNotEmpty)
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            _ctrl.clear();
-                            _query = '';
-                          }),
-                          child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 14),
-                        ),
-                    ]),
-                  ),
-                ),
-              ]),
-            ),
             Expanded(
               child: conversationsController.loading && conversationsController.items.isEmpty
                   ? Center(
@@ -140,16 +106,19 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                     )
                   : results.isEmpty
                       ? Center(
-                          child: Text(
-                            _query.isEmpty ? 'Sem conversas ainda' : 'Sem resultados para "$_query"',
-                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                          child: SelectionContainer.disabled(
+                            child: Text(
+                              _query.isEmpty ? 'Sem conversas ainda' : 'Sem resultados para "$_query"',
+                              style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                            ),
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
+                          reverse: true,
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                           itemCount: results.length,
                           itemBuilder: (_, i) {
-                            final item = results[i];
+                            final item = results[results.length - 1 - i];
                             return _SearchResultTile(
                               s: s,
                               item: item,
@@ -157,6 +126,65 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                             );
                           },
                         ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Row(children: [
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: s.cardBackground,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: s.cardShadow,
+                    ),
+                    child: Row(children: [
+                      Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _ctrl,
+                          focusNode: _focus,
+                          onChanged: (v) => setState(() => _query = v),
+                          style: TextStyle(fontSize: 15, color: s.onSurface),
+                          cursorColor: s.primary,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'Pesquisar conversas...',
+                            hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                      if (_query.isNotEmpty)
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => setState(() {
+                            _ctrl.clear();
+                            _query = '';
+                          }),
+                          child: Icon(CupertinoIcons.mic, color: s.onSurfaceVariant, size: 19),
+                        ),
+                    ]),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _close,
+                  child: Container(
+                    width: 48, height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.cardBackground,
+                      shape: BoxShape.circle,
+                      boxShadow: s.cardShadow,
+                    ),
+                    child: Icon(CupertinoIcons.xmark, color: s.onSurfaceVariant, size: 19),
+                  ),
+                ),
+              ]),
             ),
           ],
         ),
@@ -189,26 +217,29 @@ class _SearchResultTileState extends State<_SearchResultTile> {
         margin: const EdgeInsets.symmetric(vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          color: _h ? s.hover : s.cardBackground,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: s.cardShadow,
         ),
         child: Row(children: [
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.item.title,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              if (widget.item.preview.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(widget.item.preview,
-                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ]),
+            child: SelectionContainer.disabled(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(widget.item.title,
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (widget.item.preview.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(widget.item.preview,
+                      style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ]),
+            ),
           ),
           if (widget.item.pinned) ...[
             const SizedBox(width: 8),
-            AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+            Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
           ],
         ]),
       ),

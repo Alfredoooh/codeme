@@ -1,11 +1,16 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
-// REVERTIDO: popup de conversas volta ao OverlayEntry manual.
-// Cards de conversa só com título (sem preview). Menu de opções
-// da conta agora é sólido, com barrier customizado e cantos
-// curvos, cancelar 100% arredondado. CupertinoIcons requer
-// cupertino_icons no pubspec.yaml (ver nota acima).
+// ATUALIZAÇÃO: sombras subtis nos cards; botões isolados do header
+// (e o novo botão de pesquisa) sempre dentro de um container visível;
+// pill "IA" removido (única tab, sempre ativa, sem necessidade de
+// seletor); botão de pesquisar saiu do header e passou para o lado
+// do pill de utilizador, que agora é mais alto (padrão Apple); a
+// tela de pesquisa deixou de abrir em slide (CupertinoPageRoute) e
+// passa a abrir com fade puro via PageRouteBuilder; correção do
+// sublinhado amarelo (spellcheck do WebView/SO) envolvendo os
+// textos afetados com SelectionContainer.disabled. CupertinoIcons
+// requer cupertino_icons no pubspec.yaml (ver nota acima).
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -211,10 +216,6 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
-  static const List<AppTab> _navigableTabs = [
-    AppTab.ai,
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -250,7 +251,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _openSearch(BuildContext context) {
     _closeDrawer();
-    Navigator.of(context).push(CupertinoPageRoute(
+    Navigator.of(context).push(_FadePageRoute(
       builder: (_) => ChatSearchScreen(
         s: widget.s,
         onOpenConversation: (id) {
@@ -335,13 +336,7 @@ class _AppDrawerState extends State<AppDrawer> {
                         icon: CupertinoIcons.add,
                         onTap: widget.onNewChat!,
                       ),
-                    const SizedBox(width: 6),
-                    _HeaderIconButton(
-                      s: s,
-                      icon: CupertinoIcons.search,
-                      onTap: () => _openSearch(context),
-                    ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     _HeaderIconButton(
                       s: s,
                       icon: CupertinoIcons.xmark,
@@ -352,22 +347,7 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: _GroupedRows(
-                s: s,
-                children: [
-                  for (final tab in _navigableTabs)
-                    _DrawerTabTile(
-                      s: s,
-                      tab: tab,
-                      selected: widget.currentTab == tab,
-                      onTap: () => widget.onSelectTab(tab),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 12, 10),
+              padding: const EdgeInsets.fromLTRB(24, 6, 12, 10),
               child: Text(
                 'CONVERSAS',
                 style: TextStyle(
@@ -383,7 +363,17 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: _AccountPill(s: s, onOpenSettings: widget.onSettings),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: _AccountPill(s: s, onOpenSettings: widget.onSettings)),
+                  const SizedBox(width: 10),
+                  _SearchSideButton(
+                    s: s,
+                    onTap: () => _openSearch(context),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -483,7 +473,28 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Ícone do header (nova conversa / pesquisar / fechar) ──────
+// ── Rota de transição por fade puro, sem slide, usada para abrir
+// a tela de pesquisa a partir do drawer. ────────────────────────
+
+class _FadePageRoute<T> extends PageRouteBuilder<T> {
+  final WidgetBuilder builder;
+  _FadePageRoute({required this.builder})
+      : super(
+          opaque: true,
+          transitionDuration: const Duration(milliseconds: 240),
+          reverseTransitionDuration: const Duration(milliseconds: 200),
+          pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+              child: child,
+            );
+          },
+        );
+}
+
+// ── Ícone do header (nova conversa / fechar) — sempre dentro de
+// um container circular visível, não só ao pressionar. ─────────
 
 class _HeaderIconButton extends StatefulWidget {
   final AppColorScheme s;
@@ -506,20 +517,58 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        width: 34, height: 34,
+        width: 36, height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _p ? s.hover : Colors.transparent,
+          color: _p ? s.pressed : s.cardBackground,
           shape: BoxShape.circle,
+          boxShadow: s.cardShadow,
         ),
-        child: Icon(widget.icon, color: s.onSurfaceVariant, size: 19),
+        child: Icon(widget.icon, color: s.onSurfaceVariant, size: 18),
+      ),
+    );
+  }
+}
+
+// ── Botão de pesquisa isolado, ao lado do pill de utilizador —
+// mesmo estilo circular sólido em container do botão back de
+// referência (imagem 2). ────────────────────────────────────────
+
+class _SearchSideButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _SearchSideButton({required this.s, required this.onTap});
+  @override State<_SearchSideButton> createState() => _SearchSideButtonState();
+}
+
+class _SearchSideButtonState extends State<_SearchSideButton> {
+  bool _p = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        width: 52, height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _p ? s.pressed : s.cardBackground,
+          shape: BoxShape.circle,
+          boxShadow: s.cardShadow,
+        ),
+        child: Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 21),
       ),
     );
   }
 }
 
 // ── Grupo de linhas — raio grande nas pontas externas, raio
-// interno visível nas junções. ─────────────────────────────────
+// interno visível nas junções, sombra subtil no conjunto. ──────
 
 class _GroupedRows extends StatelessWidget {
   final AppColorScheme s;
@@ -564,77 +613,21 @@ class _RowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(color: s.cardBackground, borderRadius: radius),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: radius,
+          boxShadow: s.cardShadow,
+        ),
         clipBehavior: Clip.antiAlias,
         child: child,
       );
 }
 
-// ── Drawer tab tile ─────────────────────────────────────────
-
-class _DrawerTabTile extends StatefulWidget {
-  final AppColorScheme s;
-  final AppTab tab;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _DrawerTabTile({
-    required this.s,
-    required this.tab,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  State<_DrawerTabTile> createState() => _DrawerTabTileState();
-}
-
-class _DrawerTabTileState extends State<_DrawerTabTile> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s   = widget.s;
-    final sel = widget.selected;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        color: _pressed ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(children: [
-          AppIcon(
-            sel ? widget.tab.svgFilled : widget.tab.svg,
-            color: sel ? s.navLabelActive : s.onSurfaceVariant,
-            size: 19,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              widget.tab.label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                color: sel ? s.navLabelActive : s.onSurface,
-              ),
-            ),
-          ),
-          if (sel)
-            Icon(CupertinoIcons.checkmark, color: s.primary, size: 16),
-        ]),
-      ),
-    );
-  }
-}
-
-// ── Conversa individual — voltou ao popup OverlayEntry manual,
-// como estava antes. Só mostra o título, sem preview da última
-// mensagem. Long-press e botão de opções abrem o mesmo popup. ─
+// ── Conversa individual — popup OverlayEntry manual. Só mostra o
+// título, sem preview da última mensagem. Long-press e botão de
+// opções abrem o mesmo popup. Texto envolvido em
+// SelectionContainer.disabled para impedir que o WebView/SO trate
+// o texto como conteúdo verificável e sublinhe a amarelo. ──────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -730,13 +723,15 @@ class _ConvTileState extends State<_ConvTile> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(children: [
                   Expanded(
-                    child: Text(widget.item.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
-                          color: widget.active ? s.navLabelActive : s.onSurface,
-                        ),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: SelectionContainer.disabled(
+                      child: Text(widget.item.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                            color: widget.active ? s.navLabelActive : s.onSurface,
+                          ),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
                   ),
                   if (widget.item.pinned) ...[
                     const SizedBox(width: 6),
@@ -753,7 +748,7 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ── Popup de opções da conversa — OverlayEntry manual, ancorado
-// via LayerLink, exatamente como estava antes do CupertinoContextMenu.
+// via LayerLink. ────────────────────────────────────────────────
 
 void showConversationOptionsPopup(
   BuildContext context,
@@ -896,8 +891,10 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
         child: Row(children: [
           Icon(widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
-          Text(widget.label,
-              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+          SelectionContainer.disabled(
+            child: Text(widget.label,
+                style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+          ),
         ]),
       ),
     );
@@ -923,13 +920,15 @@ class _DeleteConversationSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Eliminar "$title"?',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: s.onSurface),
+          SelectionContainer.disabled(
+            child: Text(
+              'Eliminar "$title"?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: s.onSurface),
+            ),
           ),
           const SizedBox(height: 20),
           Row(children: [
@@ -993,12 +992,14 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
             color: widget.filled ? s.error : s.hover,
             borderRadius: BorderRadius.circular(999),
           ),
-          child: Text(
-            widget.label,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: widget.filled ? s.onError : s.onSurface,
+          child: SelectionContainer.disabled(
+            child: Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: widget.filled ? s.onError : s.onSurface,
+              ),
             ),
           ),
         ),
@@ -1028,8 +1029,10 @@ Future<void> showRenameSheet(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+            SelectionContainer.disabled(
+              child: Text(title,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
@@ -1066,9 +1069,11 @@ Future<void> showRenameSheet(
                   color: s.primary,
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text('Confirmar',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
+                child: SelectionContainer.disabled(
+                  child: Text('Confirmar',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
+                ),
               ),
             ),
           ],
@@ -1079,10 +1084,12 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — botão de opções abre um menu estilizado sólido
-// (não translúcido, não "vidro" do iOS puro), com escurecimento
-// de fundo controlado via s.barrier, cantos curvos no card de
-// opções e botão Cancelar 100% arredondado.
+// ACCOUNT PILL — mais alto (padrão Apple), botão de opções abre um
+// menu estilizado sólido, com escurecimento de fundo controlado
+// via s.barrier, cantos curvos no card de opções e botão Cancelar
+// 100% arredondado. Textos do menu envolvidos em
+// SelectionContainer.disabled para eliminar o sublinhado amarelo
+// de spellcheck do WebView/SO.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1211,13 +1218,16 @@ class _AccountPillState extends State<_AccountPill> {
                           decoration: BoxDecoration(
                             color: s.cardBackground,
                             borderRadius: BorderRadius.circular(999),
+                            boxShadow: s.cardShadow,
                           ),
-                          child: Text(
-                            'Cancelar',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: s.primary,
+                          child: SelectionContainer.disabled(
+                            child: Text(
+                              'Cancelar',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: s.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -1242,11 +1252,13 @@ class _AccountPillState extends State<_AccountPill> {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Container(
+      height: 60,
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(999),
+        boxShadow: s.cardShadow,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(children: [
         Expanded(
           child: GestureDetector(
@@ -1258,25 +1270,27 @@ class _AccountPillState extends State<_AccountPill> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               padding: const EdgeInsets.symmetric(
-                  horizontal: 6, vertical: 4),
+                  horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
                 color: _p ? s.hover : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Row(children: [
                 Container(
-                  width: 32, height: 32,
+                  width: 40, height: 40,
                   alignment: Alignment.center,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                       color: s.primary, shape: BoxShape.circle),
-                  child: _buildAvatarContent(s, avatar, initial, size: 32, fontSize: 14),
+                  child: _buildAvatarContent(s, avatar, initial, size: 40, fontSize: 16),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(name,
-                      style: TextStyle(fontSize: 14, color: s.onSurface),
-                      overflow: TextOverflow.ellipsis),
+                  child: SelectionContainer.disabled(
+                    child: Text(name,
+                        style: TextStyle(fontSize: 15, color: s.onSurface),
+                        overflow: TextOverflow.ellipsis),
+                  ),
                 ),
               ]),
             ),
@@ -1286,13 +1300,13 @@ class _AccountPillState extends State<_AccountPill> {
           behavior: HitTestBehavior.opaque,
           onTap: () => _openOptions(context),
           child: Container(
-            width: 36, height: 36,
+            width: 40, height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: s.hover,
               shape: BoxShape.circle,
             ),
-            child: Icon(CupertinoIcons.ellipsis, color: s.onSurfaceVariant, size: 18),
+            child: Icon(CupertinoIcons.ellipsis, color: s.onSurfaceVariant, size: 19),
           ),
         ),
       ]),
@@ -1301,7 +1315,8 @@ class _AccountPillState extends State<_AccountPill> {
 }
 
 // ── Card sólido de opções — cantos curvos consistentes com os
-// cards de conversa (_GroupedRows), sem transparência/blur. ────
+// cards de conversa (_GroupedRows), sombra subtil, sem
+// transparência/blur. ───────────────────────────────────────────
 
 class _SolidActionCard extends StatelessWidget {
   final AppColorScheme s;
@@ -1314,6 +1329,7 @@ class _SolidActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(20),
+        boxShadow: s.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -1368,9 +1384,11 @@ class _SolidActionRowState extends State<_SolidActionRow> {
           children: [
             Icon(widget.icon, size: 19, color: color),
             const SizedBox(width: 10),
-            Text(
-              widget.label,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: color),
+            SelectionContainer.disabled(
+              child: Text(
+                widget.label,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: color),
+              ),
             ),
           ],
         ),
