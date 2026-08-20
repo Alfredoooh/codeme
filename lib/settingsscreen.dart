@@ -825,12 +825,12 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                             padding: const EdgeInsets.all(12),
                             // ✅ substituído AppIcon por HugeIcon
                             child: HugeIcon(
-                              icon: _obscureNow
-                                  ? HugeIcons.strokeRoundedEye
-                                  : HugeIcons.strokeRoundedEyeOff,
-                              color: s.onSurfaceVariant,
-                              size: 18,
-                            ),
+  icon: _obscureNow
+      ? HugeIcons.strokeRoundedEye
+      : HugeIcons.strokeRoundedViewOffSlash,
+  color: s.onSurfaceVariant,
+  size: 18,
+),
                           ),
                         )
                       : null,
