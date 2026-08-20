@@ -1,13 +1,12 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZADO: tema claro/escuro alinhado com settingsscreen.dart
-// Uso de s.pageBackground no fundo, remoção de sombra no pill,
-// ajuste no estado normal dos botões de cabeçalho.
+// ATUALIZADO: CupertinoContextMenu no long-press das conversas e
+// CupertinoActionSheet no botão de opções do pill de utilizador,
+// curvas mais acentuadas nos cards, ícones CupertinoIcons.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:hugeicons/hugeicons.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -181,8 +180,6 @@ final ConversationsController conversationsController = ConversationsController(
 
 // ══════════════════════════════════════════════════════════════
 // DRAWER — renderizado dentro do painel deslizante em main.dart
-// Alinhado com settingsscreen.dart: fundo pageBackground,
-// cartões cardBackground, hover nos pressionamentos, sem sombras.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -266,20 +263,6 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeDrawer();
   }
 
-  void _openConvPopup(BuildContext context, LayerLink anchorLink, ConversationItem item) {
-    showConversationOptionsPopup(
-      context,
-      widget.s,
-      anchorLink: anchorLink,
-      item: item,
-      onOpen: () => _openConversation(item),
-      onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
-      onArchive: () => conversationsController.archive(item.id, !item.archived),
-      onRename: () => _openRenamePopup(context, item),
-      onDelete: () => _confirmDeletePopup(context, item),
-    );
-  }
-
   void _openRenamePopup(BuildContext context, ConversationItem item) {
     showRenameSheet(
       context,
@@ -310,7 +293,7 @@ class _AppDrawerState extends State<AppDrawer> {
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
     return Material(
-      color: s.pageBackground, // ✅ alinhado com settings
+      color: s.pageBackground,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -333,19 +316,19 @@ class _AppDrawerState extends State<AppDrawer> {
                     if (widget.onNewChat != null)
                       _HeaderIconButton(
                         s: s,
-                        icon: HugeIcons.strokeRoundedAdd01,
+                        icon: CupertinoIcons.add,
                         onTap: widget.onNewChat!,
                       ),
                     const SizedBox(width: 6),
                     _HeaderIconButton(
                       s: s,
-                      icon: HugeIcons.strokeRoundedSearch01,
+                      icon: CupertinoIcons.search,
                       onTap: () => _openSearch(context),
                     ),
                     const SizedBox(width: 6),
                     _HeaderIconButton(
                       s: s,
-                      icon: HugeIcons.strokeRoundedCancel01,
+                      icon: CupertinoIcons.xmark,
                       onTap: _closeDrawer,
                     ),
                   ]),
@@ -380,7 +363,7 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             Expanded(
-              child: _buildConvBody(s, pinned, others),
+              child: _buildConvBody(context, s, pinned, others),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -393,6 +376,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   Widget _buildConvBody(
+    BuildContext context,
     AppColorScheme s,
     List<ConversationItem> pinned,
     List<ConversationItem> others,
@@ -435,7 +419,7 @@ class _AppDrawerState extends State<AppDrawer> {
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: Row(children: [
-              HugeIcon(icon: HugeIcons.strokeRoundedPin, color: s.onSurfaceVariant, size: 13),
+              Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
               const SizedBox(width: 6),
               Text('Fixadas',
                   style: TextStyle(
@@ -454,9 +438,11 @@ class _AppDrawerState extends State<AppDrawer> {
                   item: item,
                   active: item.id == widget.activeConversationId,
                   onTap: () => _openConversation(item),
-                  onOptions: (link) => _openConvPopup(context, link, item),
-                  onArchive: () => conversationsController.archive(item.id, true),
-                  onDelete: () => conversationsController.delete(item.id),
+                  onOpen: () => _openConversation(item),
+                  onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
+                  onArchive: () => conversationsController.archive(item.id, !item.archived),
+                  onRename: () => _openRenamePopup(context, item),
+                  onDelete: () => _confirmDeletePopup(context, item),
                 ),
             ],
           ),
@@ -472,9 +458,11 @@ class _AppDrawerState extends State<AppDrawer> {
                   item: item,
                   active: item.id == widget.activeConversationId,
                   onTap: () => _openConversation(item),
-                  onOptions: (link) => _openConvPopup(context, link, item),
-                  onArchive: () => conversationsController.archive(item.id, true),
-                  onDelete: () => conversationsController.delete(item.id),
+                  onOpen: () => _openConversation(item),
+                  onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
+                  onArchive: () => conversationsController.archive(item.id, !item.archived),
+                  onRename: () => _openRenamePopup(context, item),
+                  onDelete: () => _confirmDeletePopup(context, item),
                 ),
             ],
           ),
@@ -510,24 +498,26 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
         width: 34, height: 34,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _p ? s.hover : Colors.transparent, // ✅ melhor feedback
+          color: _p ? s.hover : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        child: HugeIcon(icon: widget.icon, color: s.onSurfaceVariant, size: 17),
+        child: Icon(widget.icon, color: s.onSurfaceVariant, size: 19),
       ),
     );
   }
 }
 
-// ── Grupo de linhas — mesma lógica de raio do _SettingsGroup ──
+// ── Grupo de linhas — raio maior nas pontas externas, raio
+// interno também mais visível nas junções, mesma lógica de antes
+// mas com curvas mais acentuadas em toda a escala. ─────────────
 
 class _GroupedRows extends StatelessWidget {
   final AppColorScheme s;
   final List<Widget> children;
   const _GroupedRows({required this.s, required this.children});
 
-  static const double _outerRadius = 16;
-  static const double _innerRadius = 2;
+  static const double _outerRadius = 20;
+  static const double _innerRadius = 6;
 
   @override
   Widget build(BuildContext context) {
@@ -625,38 +615,44 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
             ),
           ),
           if (sel)
-            HugeIcon(icon: HugeIcons.strokeRoundedTick01, color: s.primary, size: 16),
+            Icon(CupertinoIcons.checkmark, color: s.primary, size: 16),
         ]),
       ),
     );
   }
 }
 
-// ── Conversa individual com swipe e popup ────────────────────
+// ── Conversa individual — long-press abre CupertinoContextMenu
+// nativo, com preview do próprio tile levantado e ações por
+// baixo. Swipe continua a funcionar para arquivar/eliminar
+// rápido sem precisar abrir o menu. ────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool active;
   final VoidCallback onTap;
-  final ValueChanged<LayerLink> onOptions;
+  final VoidCallback onOpen;
+  final VoidCallback onTogglePin;
   final VoidCallback onArchive;
+  final VoidCallback onRename;
   final VoidCallback onDelete;
   const _ConvTile({
     required this.s,
     required this.item,
     required this.active,
     required this.onTap,
-    required this.onOptions,
+    required this.onOpen,
+    required this.onTogglePin,
     required this.onArchive,
+    required this.onRename,
     required this.onDelete,
   });
   @override State<_ConvTile> createState() => _ConvTileState();
 }
 
-class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixin {
+class _ConvTileState extends State<_ConvTile> {
   bool _h = false;
-  final LayerLink _anchorLink = LayerLink();
 
   double _dragDx = 0;
   bool _resolved = false;
@@ -684,6 +680,38 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
     }
   }
 
+  Widget _buildTileContent(AppColorScheme s, {bool insideContextMenu = false}) {
+    return Container(
+      color: insideContextMenu
+          ? s.cardBackground
+          : (widget.active ? s.navIndicatorBg : (_h ? s.hover : Colors.transparent)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(widget.item.title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                  color: widget.active ? s.navLabelActive : s.onSurface,
+                ),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            if (widget.item.preview.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(widget.item.preview,
+                  style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          ]),
+        ),
+        if (widget.item.pinned) ...[
+          const SizedBox(width: 6),
+          Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
+        ],
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -692,8 +720,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
         : _dragDx > 0
             ? s.primary
             : Colors.transparent;
-    final icon = _dragDx < 0 ? HugeIcons.strokeRoundedDelete02 : HugeIcons.strokeRoundedArchive02;
-    final iconColor = _dragDx < 0 ? s.onError : s.onPrimary;
+    final swipeIcon = _dragDx < 0 ? CupertinoIcons.delete_solid : CupertinoIcons.archivebox_fill;
+    final swipeIconColor = _dragDx < 0 ? s.onError : s.onPrimary;
 
     return AnimatedOpacity(
       opacity: _resolved ? 0.0 : 1.0,
@@ -705,206 +733,78 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
               alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               color: swipeBg,
-              child: HugeIcon(icon: icon, color: iconColor, size: 18),
+              child: Icon(swipeIcon, color: swipeIconColor, size: 18),
             ),
           ),
         Transform.translate(
           offset: Offset(_dragDx, 0),
-          child: CompositedTransformTarget(
-            link: _anchorLink,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown:   (_) => setState(() => _h = true),
-              onTapCancel: ()  => setState(() => _h = false),
-              onTapUp:     (_) => setState(() => _h = false),
-              onTap: widget.onTap,
-              onLongPress: () => widget.onOptions(_anchorLink),
-              onHorizontalDragUpdate: _onDragUpdate,
-              onHorizontalDragEnd: _onDragEnd,
-              child: Container(
-                color: widget.active
-                    ? s.navIndicatorBg
-                    : (_h ? s.hover : Colors.transparent),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(widget.item.title,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
-                            color: widget.active ? s.navLabelActive : s.onSurface,
-                          ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (widget.item.preview.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(widget.item.preview,
-                            style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ],
-                    ]),
-                  ),
-                  if (widget.item.pinned) ...[
-                    const SizedBox(width: 6),
-                    HugeIcon(icon: HugeIcons.strokeRoundedPin, color: s.onSurfaceVariant, size: 13),
-                  ],
-                ]),
+          child: GestureDetector(
+            onHorizontalDragUpdate: _onDragUpdate,
+            onHorizontalDragEnd: _onDragEnd,
+            child: CupertinoContextMenu(
+              actions: [
+                CupertinoContextMenuAction(
+                  trailingIcon: CupertinoIcons.arrow_up_right_square,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onOpen();
+                  },
+                  child: const Text('Abrir conversa'),
+                ),
+                CupertinoContextMenuAction(
+                  trailingIcon: widget.item.pinned
+                      ? CupertinoIcons.pin_slash
+                      : CupertinoIcons.pin,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onTogglePin();
+                  },
+                  child: Text(widget.item.pinned ? 'Desafixar' : 'Fixar'),
+                ),
+                CupertinoContextMenuAction(
+                  trailingIcon: CupertinoIcons.archivebox,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onArchive();
+                  },
+                  child: const Text('Arquivar'),
+                ),
+                CupertinoContextMenuAction(
+                  trailingIcon: CupertinoIcons.pencil,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onRename();
+                  },
+                  child: const Text('Renomear'),
+                ),
+                CupertinoContextMenuAction(
+                  isDestructiveAction: true,
+                  trailingIcon: CupertinoIcons.delete,
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onDelete();
+                  },
+                  child: const Text('Eliminar'),
+                ),
+              ],
+              previewBuilder: (ctx, animation, child) => Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                clipBehavior: Clip.antiAlias,
+                child: _buildTileContent(s, insideContextMenu: true),
+              ),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown:   (_) => setState(() => _h = true),
+                onTapCancel: ()  => setState(() => _h = false),
+                onTapUp:     (_) => setState(() => _h = false),
+                onTap: widget.onTap,
+                child: _buildTileContent(s),
               ),
             ),
           ),
         ),
       ]),
-    );
-  }
-}
-
-// ── Popup de opções da conversa ──────────────────────────────
-
-void showConversationOptionsPopup(
-  BuildContext context,
-  AppColorScheme s, {
-  required LayerLink anchorLink,
-  required ConversationItem item,
-  required VoidCallback onOpen,
-  required VoidCallback onTogglePin,
-  required VoidCallback onArchive,
-  required VoidCallback onRename,
-  required VoidCallback onDelete,
-}) {
-  late OverlayEntry entry;
-  final controller = AnimationController(
-    vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 190),
-  );
-
-  void close() {
-    controller.reverse().then((_) {
-      entry.remove();
-      controller.dispose();
-    });
-  }
-
-  entry = OverlayEntry(builder: (ctx) {
-    const width = 232.0;
-
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      CompositedTransformFollower(
-        link: anchorLink,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.bottomLeft,
-        followerAnchor: Alignment.topLeft,
-        offset: const Offset(0, 6),
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: Alignment.topLeft,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ConvPopupRow(
-                    s: s, icon: HugeIcons.strokeRoundedSent, label: 'Abrir conversa',
-                    onTap: () { close(); onOpen(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: HugeIcons.strokeRoundedPin,
-                    label: item.pinned ? 'Desafixar' : 'Fixar',
-                    onTap: () { close(); onTogglePin(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: HugeIcons.strokeRoundedArchive02,
-                    label: item.archived ? 'Desarquivar' : 'Arquivar',
-                    onTap: () { close(); onArchive(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: HugeIcons.strokeRoundedEdit02, label: 'Renomear',
-                    onTap: () { close(); onRename(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, icon: HugeIcons.strokeRoundedDelete02, label: 'Eliminar',
-                    destructive: true,
-                    onTap: () { close(); onDelete(); },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  });
-
-  Overlay.of(context).insert(entry);
-  controller.forward();
-}
-
-class _ConvPopupRow extends StatefulWidget {
-  final AppColorScheme s;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-  const _ConvPopupRow({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-  @override State<_ConvPopupRow> createState() => _ConvPopupRowState();
-}
-
-class _ConvPopupRowState extends State<_ConvPopupRow> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final color = widget.destructive ? widget.s.error : widget.s.onSurface;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _h ? widget.s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(children: [
-          HugeIcon(icon: widget.icon, size: 18, color: color),
-          const SizedBox(width: 10),
-          Text(widget.label,
-              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
-        ]),
-      ),
     );
   }
 }
@@ -1084,7 +984,10 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — alinhado com o settings (sem sombra)
+// ACCOUNT PILL — pill continua com borderRadius 999 (já é
+// totalmente redondo). Botão de opções agora abre um
+// CupertinoActionSheet nativo, mesmo conjunto de ações visual
+// que o CupertinoContextMenu das conversas.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1144,6 +1047,64 @@ class _AccountPillState extends State<_AccountPill> {
     );
   }
 
+  void _openOptions(BuildContext context) {
+    final s = widget.s;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              appTheme.toggleDark();
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(s.isDark ? CupertinoIcons.sun_max : CupertinoIcons.moon, size: 18),
+                const SizedBox(width: 8),
+                Text(s.isDark ? 'Modo claro' : 'Modo escuro'),
+              ],
+            ),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              widget.onOpenSettings();
+            },
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(CupertinoIcons.settings, size: 18),
+                SizedBox(width: 8),
+                Text('Definições'),
+              ],
+            ),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              authController.logout();
+            },
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(CupertinoIcons.square_arrow_right, size: 18),
+                SizedBox(width: 8),
+                Text('Terminar sessão'),
+              ],
+            ),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -1156,7 +1117,6 @@ class _AccountPillState extends State<_AccountPill> {
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(999),
-        // boxShadow removido para alinhar com settings
       ),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: Row(children: [
@@ -1194,198 +1154,20 @@ class _AccountPillState extends State<_AccountPill> {
             ),
           ),
         ),
-        _AccountQuickMenuButton(s: s, onOpenSettings: widget.onOpenSettings),
-      ]),
-    );
-  }
-}
-
-class _AccountQuickMenuButton extends StatefulWidget {
-  final AppColorScheme s;
-  final VoidCallback onOpenSettings;
-  const _AccountQuickMenuButton(
-      {required this.s, required this.onOpenSettings});
-  @override
-  State<_AccountQuickMenuButton> createState() =>
-      _AccountQuickMenuButtonState();
-}
-
-class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
-    with SingleTickerProviderStateMixin {
-  OverlayEntry? _ov;
-  late AnimationController _ac;
-  final GlobalKey _anchorKey = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
-  }
-
-  @override
-  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
-
-  void _toggle() => _ov == null ? _open() : _close();
-
-  void _open() {
-    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz  = box.size;
-    _ac.forward(from: 0);
-
-    _ov = OverlayEntry(builder: (ctx) {
-      final s = widget.s;
-      return Stack(children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: _close,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.transparent),
-          ),
-        ),
-        Positioned(
-          bottom: MediaQuery.of(ctx).size.height - off.dy + 6,
-          left: off.dx + sz.width - 220,
-          child: AnimatedBuilder(
-            animation: _ac,
-            builder: (_, child) => Opacity(
-              opacity: CurvedAnimation(
-                      parent: _ac,
-                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                  .value,
-              child: Transform.scale(
-                scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
-                    .value,
-                alignment: Alignment.bottomRight,
-                child: child,
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Container(
-                width: 220,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: s.floatingShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _AccountQuickOption(
-                      s: s,
-                      icon: HugeIcons.strokeRoundedMoon02,
-                      label: s.isDark ? 'Modo claro' : 'Modo escuro',
-                      onTap: () { appTheme.toggleDark(); _close(); },
-                    ),
-                    _AccountQuickOption(
-                      s: s,
-                      icon: HugeIcons.strokeRoundedSettings02,
-                      label: 'Definições',
-                      onTap: () { widget.onOpenSettings(); _close(); },
-                    ),
-                    _AccountQuickOption(
-                      s: s,
-                      icon: HugeIcons.strokeRoundedLogout03,
-                      label: 'Terminar sessão',
-                      destructive: true,
-                      onTap: () {
-                        _close();
-                        authController.logout();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ]);
-    });
-    Overlay.of(context).insert(_ov!);
-    setState(() {});
-  }
-
-  void _close() {
-    _ac.reverse().then((_) {
-      _ov?.remove();
-      _ov = null;
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: _anchorKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: IgnorePointer(
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openOptions(context),
           child: Container(
             width: 36, height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: widget.s.hover,
+              color: s.hover,
               shape: BoxShape.circle,
             ),
-            child: HugeIcon(
-              icon: HugeIcons.strokeRoundedMoreHorizontal,
-              color: widget.s.onSurfaceVariant,
-              size: 19,
-            ),
+            child: Icon(CupertinoIcons.ellipsis, color: s.onSurfaceVariant, size: 18),
           ),
         ),
-      );
-}
-
-class _AccountQuickOption extends StatefulWidget {
-  final AppColorScheme s;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-  const _AccountQuickOption({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-  @override State<_AccountQuickOption> createState() => _AccountQuickOptionState();
-}
-
-class _AccountQuickOptionState extends State<_AccountQuickOption> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final color = widget.destructive ? s.error : s.onSurface;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(children: [
-          HugeIcon(icon: widget.icon, color: color, size: 18),
-          const SizedBox(width: 10),
-          Text(widget.label,
-              style: TextStyle(
-                fontSize: 14,
-                color: color,
-                fontWeight: FontWeight.normal,
-              )),
-        ]),
-      ),
+      ]),
     );
   }
 }
