@@ -1,12 +1,15 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
+// ATUALIZADO: bordas sólidas mais grossas + somente HugeIcons
+// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:hugeicons/hugeicons.dart'; // ✅ adicionado
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
@@ -14,16 +17,58 @@ import 'editorscreen.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'aiwidgets.dart';
-import 'widgets.dart';
 import 'exportservice.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
 import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
-// AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning), já
-// mapeados para os providers deepseekFlash/deepseekPro/deepseekReasoning
-// definidos em api_service.dart. Os labels "DeepSeek V4" antigos foram
-// substituídos pelos nomes pedidos: Flash (padrão), Pro, Raciocínio.
+// HELPER: mapeia nomes antigos de assets para HugeIcons
+// ══════════════════════════════════════════════════════════════
+IconData _hugeIconFromAsset(String asset) {
+  switch (asset) {
+    case 'add.svg':            return HugeIcons.strokeRoundedAdd01;
+    case 'send.svg':           return HugeIcons.strokeRoundedSent;
+    case 'record.svg':         return HugeIcons.strokeRoundedMic01;
+    case 'stop_button.svg':    return HugeIcons.strokeRoundedStop;
+    case 'thumb_up.svg':       return HugeIcons.strokeRoundedThumbsUp;
+    case 'thumb_down.svg':     return HugeIcons.strokeRoundedThumbsDown;
+    case 'copy.svg':           return HugeIcons.strokeRoundedCopy01;
+    case 'refresh.svg':        return HugeIcons.strokeRoundedRefresh;
+    case 'chevron_right.svg':  return HugeIcons.strokeRoundedArrowRight01;
+    case 'chevron_down.svg':   return HugeIcons.strokeRoundedArrowDown01;
+    case 'close.svg':          return HugeIcons.strokeRoundedCancel01;
+    case 'attached.svg':       return HugeIcons.strokeRoundedAttachment01;
+    case 'file.svg':           return HugeIcons.strokeRoundedFile01;
+    case 'image.svg':          return HugeIcons.strokeRoundedImage01;
+    case 'camera.svg':         return HugeIcons.strokeRoundedCamera01;
+    case 'globe.svg':          return HugeIcons.strokeRoundedGlobe02;
+    case 'widgets.svg':        return HugeIcons.strokeRoundedWidgets;
+    case 'cards.svg':          return HugeIcons.strokeRoundedCards;
+    case 'more_filled.svg':    return HugeIcons.strokeRoundedMoreHorizontal;
+    case 'check.svg':          return HugeIcons.strokeRoundedTick01;
+    case 'incognito_filled.svg': return HugeIcons.strokeRoundedIncognito;
+    case 'edit.svg':           return HugeIcons.strokeRoundedEdit02;
+    case 'trash.svg':          return HugeIcons.strokeRoundedDelete02;
+    case 'text_select.svg':    return HugeIcons.strokeRoundedTextSelection;
+    case 'mic.svg':            return HugeIcons.strokeRoundedMic01;
+    case 'mic_none.svg':       return HugeIcons.strokeRoundedMicOff01;
+    case 'newchat.svg':        return HugeIcons.strokeRoundedMessageAdd01;
+    case 'incognito.svg':      return HugeIcons.strokeRoundedIncognito;
+    default:                   return HugeIcons.strokeRoundedHelpCircle;
+  }
+}
+
+IconData _hugeIconForEditorType(EditorType type) {
+  switch (type) {
+    case EditorType.docs:       return HugeIcons.strokeRoundedDocument01;
+    case EditorType.sheets:     return HugeIcons.strokeRoundedTable01;
+    case EditorType.slides:     return HugeIcons.strokeRoundedPresentation01;
+    case EditorType.whiteboard: return HugeIcons.strokeRoundedWhiteboard01;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning)
 // ══════════════════════════════════════════════════════════════
 
 enum AiModel { deepseekFlash, deepseekPro, deepseekReasoning }
@@ -527,7 +572,11 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
           ),
           child: Row(children: [
             if (e.svgIcon != null) ...[
-              AppIcon(e.svgIcon!, color: color, size: 18),
+              HugeIcon(
+                icon: _hugeIconFromAsset(e.svgIcon!),
+                color: color,
+                size: 18,
+              ),
               const SizedBox(width: 10),
             ],
             Expanded(
@@ -549,7 +598,11 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
               ),
             ),
             if (e.selected)
-              AppIcon('check.svg', color: s.primary, size: 16),
+              HugeIcon(
+                icon: HugeIcons.strokeRoundedTick01,
+                color: s.primary,
+                size: 16,
+              ),
           ]),
         ),
       ),
@@ -827,7 +880,11 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
             child: AppTap(
               onTap: () {},
               s: widget.s,
-              child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+              child: HugeIcon(
+                icon: _hugeIconFromAsset('more_filled.svg'),
+                color: widget.s.onSurface,
+                size: 20,
+              ),
             ),
           ),
         ),
@@ -879,7 +936,11 @@ class _MenuActionRowState extends State<_MenuActionRow> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            AppIcon(widget.icon, size: 18, color: color),
+            HugeIcon(
+              icon: _hugeIconFromAsset(widget.icon),
+              size: 18,
+              color: color,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -923,7 +984,11 @@ class _MenuSwitchRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(children: [
-        AppIcon(icon, size: 18, color: s.onSurface),
+        HugeIcon(
+          icon: _hugeIconFromAsset(icon),
+          size: 18,
+          color: s.onSurface,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -972,7 +1037,7 @@ class SimpleCanvasCard extends StatelessWidget {
           color: s.cardBackground,
           borderRadius: BorderRadius.circular(16),
           boxShadow: s.cardShadow,
-          border: Border.all(color: s.outline.withOpacity(0.08)),
+          border: Border.all(color: s.outline, width: 1.2), // ✅ borda sólida mais grossa
         ),
         child: Row(
           children: [
@@ -984,7 +1049,11 @@ class SimpleCanvasCard extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: EditorTypeIcon(item.kind.editorType.svgAsset, size: 20),
+              child: HugeIcon(
+                icon: _hugeIconForEditorType(item.kind.editorType),
+                size: 20,
+                color: s.onSurface,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1012,7 +1081,11 @@ class SimpleCanvasCard extends StatelessWidget {
                 ],
               ),
             ),
-            AppIcon('chevron_right.svg', color: s.onSurfaceVariant, size: 16),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowRight01,
+              color: s.onSurfaceVariant,
+              size: 16,
+            ),
           ],
         ),
       ),
@@ -1878,11 +1951,10 @@ class _IncognitoState extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     return Center(
-      child: AppIcon(
-        'incognito_filled.svg',
+      child: HugeIcon(
+        icon: HugeIcons.strokeRoundedIncognito,
         color: s.onSurface,
         size: 72,
-        useColorAsset: false,
       ),
     );
   }
@@ -2132,7 +2204,11 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
           color: _h ? s.hover : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        child: AppIcon(widget.asset, color: s.onSurfaceVariant, size: 16),
+        child: HugeIcon(
+          icon: _hugeIconFromAsset(widget.asset),
+          color: s.onSurfaceVariant,
+          size: 16,
+        ),
       ),
     );
   }
@@ -2289,7 +2365,7 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
       decoration: BoxDecoration(
         color: s.hover.withOpacity(0.4),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: s.outline.withOpacity(0.2)),
+        border: Border.all(color: s.outline, width: 1.2), // ✅ borda sólida mais grossa
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2313,7 +2389,11 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: AppIcon('chevron_down.svg', size: 14, color: s.onSurfaceVariant),
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedArrowDown01,
+                    size: 14,
+                    color: s.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -2573,7 +2653,11 @@ class _MessageActionRowState extends State<_MessageActionRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          AppIcon(widget.icon, size: 18, color: color),
+          HugeIcon(
+            icon: _hugeIconFromAsset(widget.icon),
+            size: 18,
+            color: color,
+          ),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
@@ -2641,7 +2725,11 @@ Future<void> showAttachedFilesSheet(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              AppIcon('attached.svg', color: s.onSurface, size: 18),
+              HugeIcon(
+                icon: HugeIcons.strokeRoundedAttachment01,
+                color: s.onSurface,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Anexos desta mensagem',
@@ -2707,6 +2795,7 @@ class _AttachedFileRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: s.hover,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: s.outline, width: 1.0), // ✅ borda sólida
         ),
         child: Row(children: [
           if (_isImage)
@@ -2722,7 +2811,11 @@ class _AttachedFileRow extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: AppIcon('attached.svg', color: s.onPrimaryContainer, size: 18),
+              child: HugeIcon(
+                icon: HugeIcons.strokeRoundedAttachment01,
+                color: s.onPrimaryContainer,
+                size: 18,
+              ),
             ),
           const SizedBox(width: 10),
           Expanded(
@@ -2742,7 +2835,11 @@ class _AttachedFileRow extends StatelessWidget {
               width: 28, height: 28,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: s.error.withOpacity(0.12), shape: BoxShape.circle),
-              child: AppIcon('close.svg', color: s.error, size: 14),
+              child: HugeIcon(
+                icon: HugeIcons.strokeRoundedCancel01,
+                color: s.error,
+                size: 14,
+              ),
             ),
           ),
         ]),
@@ -2810,6 +2907,9 @@ class _ChatInput extends StatelessWidget {
         color: s.isDark ? s.cardBackground : s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
         boxShadow: floatingShadow,
+        border: incognito
+            ? null
+            : Border.all(color: s.outline, width: 1.5), // ✅ borda sólida mais grossa no modo normal
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2863,7 +2963,11 @@ class _ChatInput extends StatelessWidget {
                         color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: AppIcon('add.svg', color: s.onSurface, size: 22),
+                      child: HugeIcon(
+                        icon: HugeIcons.strokeRoundedAdd01,
+                        color: s.onSurface,
+                        size: 22,
+                      ),
                     ),
                   ),
                 ),
@@ -2907,8 +3011,11 @@ class _ChatInput extends StatelessWidget {
                       color: s.primary.withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: AppIcon('record.svg',
-                        color: s.onSurfaceVariant, size: 20),
+                    child: HugeIcon(
+                      icon: HugeIcons.strokeRoundedMic01,
+                      color: s.onSurfaceVariant,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2922,7 +3029,11 @@ class _ChatInput extends StatelessWidget {
                         shape: BoxShape.circle),
                     child: sending
                         ? _SpinningIcon(asset: 'stop_button.svg', color: s.onPrimary)
-                        : AppIcon('send.svg', color: s.onPrimary, size: 20),
+                        : HugeIcon(
+                            icon: HugeIcons.strokeRoundedSent,
+                            color: s.onPrimary,
+                            size: 20,
+                          ),
                   ),
                 ),
               ],
@@ -2964,7 +3075,11 @@ class _SpinningIconState extends State<_SpinningIcon>
   @override
   Widget build(BuildContext context) => RotationTransition(
         turns: _c,
-        child: AppIcon(widget.asset, color: widget.color, size: 18),
+        child: HugeIcon(
+          icon: _hugeIconFromAsset(widget.asset),
+          color: widget.color,
+          size: 18,
+        ),
       );
 }
 
@@ -2987,7 +3102,11 @@ class _AttachedToolPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              EditorTypeIcon(type.svgAsset, size: 13),
+              HugeIcon(
+                icon: _hugeIconForEditorType(type),
+                size: 13,
+                color: s.onPrimaryContainer,
+              ),
               const SizedBox(width: 4),
               Text(type.label,
                   style: TextStyle(
@@ -2997,8 +3116,11 @@ class _AttachedToolPill extends StatelessWidget {
               const SizedBox(width: 4),
               GestureDetector(
                 onTap: onClear,
-                child: AppIcon('close.svg',
-                    color: s.onPrimaryContainer, size: 9),
+                child: HugeIcon(
+                  icon: HugeIcons.strokeRoundedCancel01,
+                  color: s.onPrimaryContainer,
+                  size: 9,
+                ),
               ),
             ],
           ),
@@ -3027,7 +3149,11 @@ class _AttachedFilesPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AppIcon('attached.svg', color: fg, size: 13),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedAttachment01,
+              color: fg,
+              size: 13,
+            ),
             const SizedBox(width: 4),
             Text('$count anexo${count == 1 ? '' : 's'}',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
@@ -3161,7 +3287,11 @@ Future<void> showCanvasSheet(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            AppIcon('cards.svg', color: s.onSurface, size: 18),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedCards,
+              color: s.onSurface,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Text('Canvas desta conversa',
                 style: TextStyle(
@@ -3233,6 +3363,7 @@ class _CanvasCardState extends State<_CanvasCard> {
           color: _h ? s.hover : s.cardBackground,
           borderRadius: BorderRadius.circular(16),
           boxShadow: s.cardShadow,
+          border: Border.all(color: s.outline, width: 1.2), // ✅ borda sólida mais grossa
         ),
         child: Row(children: [
           Container(
@@ -3242,7 +3373,11 @@ class _CanvasCardState extends State<_CanvasCard> {
               color: s.primaryContainer.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: EditorTypeIcon(_editorType.svgAsset, size: 20),
+            child: HugeIcon(
+              icon: _hugeIconForEditorType(_editorType),
+              size: 20,
+              color: s.onSurface,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -3259,7 +3394,11 @@ class _CanvasCardState extends State<_CanvasCard> {
               ],
             ),
           ),
-          AppIcon('chevron_right.svg', color: s.onSurfaceVariant, size: 14),
+          HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowRight01,
+            color: s.onSurfaceVariant,
+            size: 14,
+          ),
         ]),
       ),
     );
@@ -3371,8 +3510,16 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                 border: Border.all(color: s.error, width: 1.5),
               ),
               child: _recording
-                  ? AppIcon('mic.svg', size: 30, color: s.error)
-                  : AppIcon('mic_none.svg', size: 30, color: s.error),
+                  ? HugeIcon(
+                      icon: HugeIcons.strokeRoundedMic01,
+                      size: 30,
+                      color: s.error,
+                    )
+                  : HugeIcon(
+                      icon: HugeIcons.strokeRoundedMicOff01,
+                      size: 30,
+                      color: s.error,
+                    ),
             ),
           ),
           const SizedBox(height: 24),
