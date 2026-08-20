@@ -20,9 +20,9 @@ class AppColorScheme {
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
   Color get pageBackground     => isDark ? const Color(0xFF12121) : const Color(0xFFF7F7F9);
-  Color get cardBackground     => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
+  Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
 
-  Color get floatingSurface    => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
+  Color get floatingSurface    => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
 
   Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFDCDCE0);
   Color get outlineVariant     => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFECECEE);
