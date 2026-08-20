@@ -101,7 +101,7 @@ class EditorScreen extends StatefulWidget {
   @override State<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends State<EditorScreen> {
+class _EditorScreenState extends State<EditorScreen> with ThemeReactive<EditorScreen> {
   final Map<EditorType, InAppWebViewController?> _controllers = {
     for (final t in EditorType.values) t: null,
   };

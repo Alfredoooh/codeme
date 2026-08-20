@@ -1182,7 +1182,7 @@ class AiTab extends StatefulWidget {
   @override State<AiTab> createState() => AiTabState();
 }
 
-class AiTabState extends State<AiTab> {
+class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final TextEditingController _ctrl   = TextEditingController();
   final ScrollController       _scroll = ScrollController();
   final List<ChatMessage>      _msgs  = [];
