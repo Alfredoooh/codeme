@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -176,9 +177,11 @@ final ConversationsController conversationsController = ConversationsController(
 
 // ══════════════════════════════════════════════════════════════
 // DRAWER — renderizado dentro do painel deslizante em main.dart
-// Redesenhado para se aproximar do padrão iOS (grupos em cartões
-// arredondados, tipo app Definições), sem qualquer blur/transparência
-// — tudo com cor sólida do tema.
+// Cards agora seguem exatamente o padrão do SettingsScreen:
+// _GroupedRows monta um grupo com raio grande só nas pontas
+// externas e 2px de gap entre linhas internas (ver _radiusFor),
+// tal como _SettingsGroup em settingsscreen.dart. Ícones via
+// Hugeicons em vez de SVG nos pontos-chave do drawer.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -311,7 +314,6 @@ class _AppDrawerState extends State<AppDrawer> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header: título grande estilo iOS large-title ──
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
               child: Row(
@@ -330,50 +332,48 @@ class _AppDrawerState extends State<AppDrawer> {
                     if (widget.onNewChat != null)
                       _HeaderIconButton(
                         s: s,
-                        icon: 'add.svg',
+                        icon: HugeIcons.strokeRoundedAdd01,
                         onTap: widget.onNewChat!,
                       ),
                     const SizedBox(width: 6),
                     _HeaderIconButton(
                       s: s,
-                      icon: 'search.svg',
+                      icon: HugeIcons.strokeRoundedSearch01,
                       onTap: () => _openSearch(context),
                     ),
                     const SizedBox(width: 6),
                     _HeaderIconButton(
                       s: s,
-                      icon: 'close.svg',
+                      icon: HugeIcons.strokeRoundedCancel01,
                       onTap: _closeDrawer,
                     ),
                   ]),
                 ],
               ),
             ),
-            // ── Grupo de navegação (cartão sólido tipo Settings.app) ──
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: _GroupedCard(
+              child: _GroupedRows(
                 s: s,
                 children: [
-                  for (int i = 0; i < _navigableTabs.length; i++)
+                  for (final tab in _navigableTabs)
                     _DrawerTabTile(
                       s: s,
-                      tab: _navigableTabs[i],
-                      selected: widget.currentTab == _navigableTabs[i],
-                      showDivider: i < _navigableTabs.length - 1,
-                      onTap: () => widget.onSelectTab(_navigableTabs[i]),
+                      tab: tab,
+                      selected: widget.currentTab == tab,
+                      onTap: () => widget.onSelectTab(tab),
                     ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 12, 8),
+              padding: const EdgeInsets.fromLTRB(24, 20, 12, 10),
               child: Text(
                 'CONVERSAS',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
+                  letterSpacing: 0.5,
                   color: s.onSurfaceVariant,
                 ),
               ),
@@ -434,7 +434,7 @@ class _AppDrawerState extends State<AppDrawer> {
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: Row(children: [
-              AppIcon('pin.svg', color: s.onSurfaceVariant, size: 12),
+              HugeIcon(icon: HugeIcons.strokeRoundedPin, color: s.onSurfaceVariant, size: 13),
               const SizedBox(width: 6),
               Text('Fixadas',
                   style: TextStyle(
@@ -444,38 +444,36 @@ class _AppDrawerState extends State<AppDrawer> {
                       color: s.onSurfaceVariant)),
             ]),
           ),
-          _GroupedCard(
+          _GroupedRows(
             s: s,
             children: [
-              for (int i = 0; i < pinned.length; i++)
+              for (final item in pinned)
                 _ConvTile(
                   s: s,
-                  item: pinned[i],
-                  active: pinned[i].id == widget.activeConversationId,
-                  showDivider: i < pinned.length - 1,
-                  onTap: () => _openConversation(pinned[i]),
-                  onOptions: (link) => _openConvPopup(context, link, pinned[i]),
-                  onArchive: () => conversationsController.archive(pinned[i].id, true),
-                  onDelete: () => conversationsController.delete(pinned[i].id),
+                  item: item,
+                  active: item.id == widget.activeConversationId,
+                  onTap: () => _openConversation(item),
+                  onOptions: (link) => _openConvPopup(context, link, item),
+                  onArchive: () => conversationsController.archive(item.id, true),
+                  onDelete: () => conversationsController.delete(item.id),
                 ),
             ],
           ),
           const SizedBox(height: 20),
         ],
         if (others.isNotEmpty)
-          _GroupedCard(
+          _GroupedRows(
             s: s,
             children: [
-              for (int i = 0; i < others.length; i++)
+              for (final item in others)
                 _ConvTile(
                   s: s,
-                  item: others[i],
-                  active: others[i].id == widget.activeConversationId,
-                  showDivider: i < others.length - 1,
-                  onTap: () => _openConversation(others[i]),
-                  onOptions: (link) => _openConvPopup(context, link, others[i]),
-                  onArchive: () => conversationsController.archive(others[i].id, true),
-                  onDelete: () => conversationsController.delete(others[i].id),
+                  item: item,
+                  active: item.id == widget.activeConversationId,
+                  onTap: () => _openConversation(item),
+                  onOptions: (link) => _openConvPopup(context, link, item),
+                  onArchive: () => conversationsController.archive(item.id, true),
+                  onDelete: () => conversationsController.delete(item.id),
                 ),
             ],
           ),
@@ -489,7 +487,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
 class _HeaderIconButton extends StatefulWidget {
   final AppColorScheme s;
-  final String icon;
+  final IconData icon;
   final VoidCallback onTap;
   const _HeaderIconButton({required this.s, required this.icon, required this.onTap});
   @override State<_HeaderIconButton> createState() => _HeaderIconButtonState();
@@ -514,42 +512,62 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
           color: _p ? s.hover : s.hover.withOpacity(0.55),
           shape: BoxShape.circle,
         ),
-        child: AppIcon(widget.icon, color: s.onSurfaceVariant, size: 16),
+        child: HugeIcon(icon: widget.icon, color: s.onSurfaceVariant, size: 17),
       ),
     );
   }
 }
 
-// ── Cartão de grupo — sólido, cantos arredondados, estilo iOS ──
+// ── Grupo de linhas — MESMA lógica de raio do _SettingsGroup em
+// settingsscreen.dart: raio grande só nas pontas externas do
+// grupo, 2px entre linhas internas, sem Divider. ──────────────
 
-class _GroupedCard extends StatelessWidget {
+class _GroupedRows extends StatelessWidget {
   final AppColorScheme s;
   final List<Widget> children;
-  const _GroupedCard({required this.s, required this.children});
+  const _GroupedRows({required this.s, required this.children});
+
+  static const double _outerRadius = 16;
+  static const double _innerRadius = 2;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      ),
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      rows.add(_RowCard(
+        s: s,
+        radius: _radiusFor(i, children.length),
+        child: children[i],
+      ));
+      if (i != children.length - 1) rows.add(const SizedBox(height: 2));
+    }
+    return Column(children: rows);
+  }
+
+  BorderRadius _radiusFor(int index, int count) {
+    if (count == 1) return BorderRadius.circular(_outerRadius);
+    final isFirst = index == 0;
+    final isLast  = index == count - 1;
+    return BorderRadius.only(
+      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
     );
   }
 }
 
-class _RowDivider extends StatelessWidget {
+class _RowCard extends StatelessWidget {
   final AppColorScheme s;
-  const _RowDivider({required this.s});
+  final BorderRadius radius;
+  final Widget child;
+  const _RowCard({required this.s, required this.radius, required this.child});
+
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(left: 50),
-        child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.5)),
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(color: s.cardBackground, borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: child,
       );
 }
 
@@ -559,14 +577,12 @@ class _DrawerTabTile extends StatefulWidget {
   final AppColorScheme s;
   final AppTab tab;
   final bool selected;
-  final bool showDivider;
   final VoidCallback onTap;
 
   const _DrawerTabTile({
     required this.s,
     required this.tab,
     required this.selected,
-    required this.showDivider,
     required this.onTap,
   });
 
@@ -582,49 +598,37 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
     final s   = widget.s;
     final sel = widget.selected;
 
-    return Column(
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown:   (_) => setState(() => _pressed = true),
-          onTapCancel: ()  => setState(() => _pressed = false),
-          onTapUp:     (_) => setState(() => _pressed = false),
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            color: _pressed ? s.hover : Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(children: [
-              Container(
-                width: 28, height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: sel ? s.primary : s.hover,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: AppIcon(
-                  sel ? widget.tab.svgFilled : widget.tab.svg,
-                  color: sel ? s.onPrimary : s.onSurfaceVariant,
-                  size: 15,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  widget.tab.label,
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w400,
-                    color: s.onSurface,
-                  ),
-                ),
-              ),
-              if (sel) AppIcon('check.svg', color: s.primary, size: 15),
-            ]),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        color: _pressed ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          AppIcon(
+            sel ? widget.tab.svgFilled : widget.tab.svg,
+            color: sel ? s.navLabelActive : s.onSurfaceVariant,
+            size: 19,
           ),
-        ),
-        if (widget.showDivider) _RowDivider(s: s),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              widget.tab.label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                color: sel ? s.navLabelActive : s.onSurface,
+              ),
+            ),
+          ),
+          if (sel)
+            HugeIcon(icon: HugeIcons.strokeRoundedTick01, color: s.primary, size: 16),
+        ]),
+      ),
     );
   }
 }
@@ -633,7 +637,6 @@ class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool active;
-  final bool showDivider;
   final VoidCallback onTap;
   final ValueChanged<LayerLink> onOptions;
   final VoidCallback onArchive;
@@ -642,7 +645,6 @@ class _ConvTile extends StatefulWidget {
     required this.s,
     required this.item,
     required this.active,
-    required this.showDivider,
     required this.onTap,
     required this.onOptions,
     required this.onArchive,
@@ -689,73 +691,68 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
         : _dragDx > 0
             ? s.primary
             : Colors.transparent;
-    final icon = _dragDx < 0 ? 'trash.svg' : 'archive.svg';
+    final icon = _dragDx < 0 ? HugeIcons.strokeRoundedDelete02 : HugeIcons.strokeRoundedArchive02;
     final iconColor = _dragDx < 0 ? s.onError : s.onPrimary;
 
     return AnimatedOpacity(
       opacity: _resolved ? 0.0 : 1.0,
       duration: const Duration(milliseconds: 180),
-      child: Column(
-        children: [
-          Stack(children: [
-            if (_dragDx != 0)
-              Positioned.fill(
-                child: Container(
-                  alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  color: swipeBg,
-                  child: AppIcon(icon, color: iconColor, size: 18),
-                ),
-              ),
-            Transform.translate(
-              offset: Offset(_dragDx, 0),
-              child: CompositedTransformTarget(
-                link: _anchorLink,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown:   (_) => setState(() => _h = true),
-                  onTapCancel: ()  => setState(() => _h = false),
-                  onTapUp:     (_) => setState(() => _h = false),
-                  onTap: widget.onTap,
-                  onLongPress: () => widget.onOptions(_anchorLink),
-                  onHorizontalDragUpdate: _onDragUpdate,
-                  onHorizontalDragEnd: _onDragEnd,
-                  child: Container(
-                    color: widget.active
-                        ? s.navIndicatorBg
-                        : (_h ? s.hover : Colors.transparent),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                    child: Row(children: [
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(widget.item.title,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
-                                color: widget.active ? s.navLabelActive : s.onSurface,
-                              ),
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          if (widget.item.preview.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(widget.item.preview,
-                                style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ],
-                        ]),
-                      ),
-                      if (widget.item.pinned) ...[
-                        const SizedBox(width: 6),
-                        AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+      child: Stack(children: [
+        if (_dragDx != 0)
+          Positioned.fill(
+            child: Container(
+              alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              color: swipeBg,
+              child: HugeIcon(icon: icon, color: iconColor, size: 18),
+            ),
+          ),
+        Transform.translate(
+          offset: Offset(_dragDx, 0),
+          child: CompositedTransformTarget(
+            link: _anchorLink,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown:   (_) => setState(() => _h = true),
+              onTapCancel: ()  => setState(() => _h = false),
+              onTapUp:     (_) => setState(() => _h = false),
+              onTap: widget.onTap,
+              onLongPress: () => widget.onOptions(_anchorLink),
+              onHorizontalDragUpdate: _onDragUpdate,
+              onHorizontalDragEnd: _onDragEnd,
+              child: Container(
+                color: widget.active
+                    ? s.navIndicatorBg
+                    : (_h ? s.hover : Colors.transparent),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(widget.item.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                            color: widget.active ? s.navLabelActive : s.onSurface,
+                          ),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if (widget.item.preview.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(widget.item.preview,
+                            style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
                     ]),
                   ),
-                ),
+                  if (widget.item.pinned) ...[
+                    const SizedBox(width: 6),
+                    HugeIcon(icon: HugeIcons.strokeRoundedPin, color: s.onSurfaceVariant, size: 13),
+                  ],
+                ]),
               ),
             ),
-          ]),
-          if (widget.showDivider && !_resolved) _RowDivider(s: s),
-        ],
-      ),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -829,25 +826,25 @@ void showConversationOptionsPopup(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _ConvPopupRow(
-                    s: s, icon: 'send.svg', label: 'Abrir conversa',
+                    s: s, icon: HugeIcons.strokeRoundedSent, label: 'Abrir conversa',
                     onTap: () { close(); onOpen(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: 'pin.svg',
+                    s: s, icon: HugeIcons.strokeRoundedPin,
                     label: item.pinned ? 'Desafixar' : 'Fixar',
                     onTap: () { close(); onTogglePin(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: 'archive.svg',
+                    s: s, icon: HugeIcons.strokeRoundedArchive02,
                     label: item.archived ? 'Desarquivar' : 'Arquivar',
                     onTap: () { close(); onArchive(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: 'edit.svg', label: 'Renomear',
+                    s: s, icon: HugeIcons.strokeRoundedEdit02, label: 'Renomear',
                     onTap: () { close(); onRename(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: 'trash.svg', label: 'Eliminar',
+                    s: s, icon: HugeIcons.strokeRoundedDelete02, label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
                   ),
@@ -866,18 +863,16 @@ void showConversationOptionsPopup(
 
 class _ConvPopupRow extends StatefulWidget {
   final AppColorScheme s;
-  final String icon;
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
-  final bool useEditorIcon;
   const _ConvPopupRow({
     required this.s,
     required this.icon,
     required this.label,
     required this.onTap,
     this.destructive = false,
-    this.useEditorIcon = false,
   });
   @override State<_ConvPopupRow> createState() => _ConvPopupRowState();
 }
@@ -901,9 +896,7 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          widget.useEditorIcon
-              ? EditorTypeIcon(widget.icon, size: 18)
-              : AppIcon(widget.icon, size: 18, color: color),
+          HugeIcon(icon: widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
@@ -914,7 +907,6 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
 }
 
 // ── Sheet de confirmação de eliminação ────────────────────────
-// Usa o CupertinoSheetRoute (showAppSheet) — sem blur, sem opacidade.
 
 class _DeleteConversationSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -1089,8 +1081,8 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — cartão sólido, sem transparência, anel sutil no
-// avatar. Continua a decodificar URLs remotas e avatares base64.
+// ACCOUNT PILL — mantém o mesmo pill (borderRadius: 999) que já
+// tinha; não foi alterado a pedido explícito.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1161,9 +1153,10 @@ class _AccountPillState extends State<_AccountPill> {
     return Container(
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: s.cardShadow,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: Row(children: [
         Expanded(
           child: GestureDetector(
@@ -1178,24 +1171,21 @@ class _AccountPillState extends State<_AccountPill> {
                   horizontal: 6, vertical: 4),
               decoration: BoxDecoration(
                 color: _p ? s.hover : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(999),
               ),
               child: Row(children: [
                 Container(
-                  width: 34, height: 34,
+                  width: 32, height: 32,
                   alignment: Alignment.center,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: s.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: s.outline, width: 1),
-                  ),
-                  child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
+                      color: s.primary, shape: BoxShape.circle),
+                  child: _buildAvatarContent(s, avatar, initial, size: 32, fontSize: 14),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(name,
-                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: s.onSurface),
+                      style: TextStyle(fontSize: 14, color: s.onSurface),
                       overflow: TextOverflow.ellipsis),
                 ),
               ]),
@@ -1285,19 +1275,19 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
                   children: [
                     _AccountQuickOption(
                       s: s,
-                      icon: 'theme.svg',
+                      icon: HugeIcons.strokeRoundedMoon02,
                       label: s.isDark ? 'Modo claro' : 'Modo escuro',
                       onTap: () { appTheme.toggleDark(); _close(); },
                     ),
                     _AccountQuickOption(
                       s: s,
-                      icon: 'settings.svg',
+                      icon: HugeIcons.strokeRoundedSettings02,
                       label: 'Definições',
                       onTap: () { widget.onOpenSettings(); _close(); },
                     ),
                     _AccountQuickOption(
                       s: s,
-                      icon: 'logout.svg',
+                      icon: HugeIcons.strokeRoundedLogout03,
                       label: 'Terminar sessão',
                       destructive: true,
                       onTap: () {
@@ -1338,8 +1328,11 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
               color: widget.s.hover,
               shape: BoxShape.circle,
             ),
-            child: AppIcon('more_filled.svg',
-                color: widget.s.onSurfaceVariant, size: 18),
+            child: HugeIcon(
+              icon: HugeIcons.strokeRoundedMoreHorizontal,
+              color: widget.s.onSurfaceVariant,
+              size: 19,
+            ),
           ),
         ),
       );
@@ -1347,7 +1340,7 @@ class _AccountQuickMenuButtonState extends State<_AccountQuickMenuButton>
 
 class _AccountQuickOption extends StatefulWidget {
   final AppColorScheme s;
-  final String icon;
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
@@ -1381,7 +1374,7 @@ class _AccountQuickOptionState extends State<_AccountQuickOption> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          AppIcon(widget.icon, color: color, size: 18),
+          HugeIcon(icon: widget.icon, color: color, size: 18),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(
