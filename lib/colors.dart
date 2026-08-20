@@ -1,45 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/colors.dart
-//
-// FIX (tema instantâneo): AppTheme.of(context) continua a ler
-// diretamente o ChangeNotifier global appTheme (sem lookup na
-// árvore), mas agora appTheme é exposto também via um segundo
-// mecanismo que os StatefulWidgets fora do subtree imediato do
-// AnimatedBuilder em AppTheme podem escutar diretamente:
-// appTheme.addListener(...) no initState de cada tela raiz
-// (RootShell, EditTab, SettingsScreen, etc.), chamando setState()
-// nesse listener. Isto está implementado em main.dart/edittab.dart/
-// settingsscreen.dart — aqui só é preciso garantir que appTheme
-// continua um singleton ChangeNotifier estável, o que já era o caso.
-//
-// ── ATUALIZAÇÃO (Card universal de widget / DocumentWidgetCard) ──
-// Adicionadas duas cores novas a AppColorScheme, usadas pelo card de
-// documento (preview A4 em stack + barra de ações): `previewBackdrop`
-// (fundo cinza atrás do stack de páginas, área de preview) e
-// `downloadButtonBg` (fundo do container cinza que embrulha o botão
-// pill azul + botão circular de download, conforme pedido explícito:
-// "o botão de baixar está dentro de um container cinza mas tem que
-// variar conforme o tema"). Ambas seguem o mesmo padrão de todas as
-// outras cores deste ficheiro: getter computado a partir de isDark,
-// nunca um valor fixo usado diretamente fora daqui.
-//
-// ── ATUALIZAÇÃO (paleta Apple/Cupertino) ──────────────────────────
-// primary/error/success/warning passam a usar os valores exatos do
-// systemBlue/systemRed/systemGreen/systemOrange da Apple (fonte:
-// código-fonte de CupertinoColors do próprio Flutter). As superfícies
-// escuras (pageBackground/surface/cardBackground/floatingSurface,
-// incognitoBackground/incognitoSurface) seguem a mesma progressão de
-// cinzentos que a Apple usa entre systemBackground e
-// secondarySystemBackground em dark mode — mas nunca descem abaixo de
-// RGB 26 em nenhum canal (limite de 90% de escuridão / luminosidade
-// mínima de 10%, pedido explícito do utilizador — a Apple usa preto
-// puro #000000 em systemBackground.dark, o que violaria esse limite,
-// por isso o valor aqui é clampado para #1A1A1A). As cores de acento
-// (primary/error/success/warning) NÃO levam este clamp por canal: são
-// valores de matiz exatos da Apple, e ajustar cada canal individual-
-// mente distorceria a cor (ex.: o R=10 do systemBlue faz parte de ser
-// azul — forçá-lo a 26 tingia o azul para um tom mais acinzentado).
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -51,27 +9,31 @@ class AppColorScheme {
   final bool isDark;
   const AppColorScheme(this.isDark);
 
+  // Apple System Blue
   Color get primary            => isDark ? const Color(0xFF0A84FF) : const Color(0xFF007AFF);
-  Color get onPrimary          => isDark ? const Color(0xFF061724) : const Color(0xFFFFFFFF);
-  Color get primaryContainer   => isDark ? const Color(0xFF0C3B5E) : const Color(0xFFEBF3FC);
-  Color get onPrimaryContainer => isDark ? const Color(0xFFCFE4FA) : const Color(0xFF0C3B5E);
+  Color get onPrimary          => isDark ? const Color(0xFF001A33) : const Color(0xFFFFFFFF);
+  Color get primaryContainer   => isDark ? const Color(0xFF0D2847) : const Color(0xFFE5F1FF);
+  Color get onPrimaryContainer => isDark ? const Color(0xFFCFE4FF) : const Color(0xFF0D2847);
 
+  // Apple System Gray palette (surfaces)
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-  Color get onSurface          => isDark ? const Color(0xFFEDEDED) : const Color(0xFF1B1B1B);
-  Color get onSurfaceVariant   => isDark ? const Color(0xFFB8B8B8) : const Color(0xFF616161);
-  Color get pageBackground     => isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF6F7F9);
+  Color get onSurface          => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+  Color get onSurfaceVariant   => isDark ? const Color(0xFF8E8E93) : const Color(0xFF6E6E73);
+  Color get pageBackground     => isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
   Color get cardBackground     => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
-  Color get floatingSurface    => isDark ? const Color(0xFF363638) : const Color(0xFFFFFFFF);
+  Color get floatingSurface    => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
-  Color get outline            => isDark ? const Color(0xFF4E4E4E) : const Color(0xFFD1D1D1);
-  Color get outlineVariant     => isDark ? const Color(0xFF3E3E3E) : const Color(0xFFE5E5E5);
+  Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFD1D1D6);
+  Color get outlineVariant     => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE5E5EA);
 
+  // Apple System Red
   Color get error              => isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30);
-  Color get onError            => isDark ? const Color(0xFF3B0509) : const Color(0xFFFFFFFF);
-  Color get errorContainer     => isDark ? const Color(0xFF6E0811) : const Color(0xFFEEACB2);
-  Color get onErrorContainer   => isDark ? const Color(0xFFF6D1D5) : const Color(0xFF3B0509);
+  Color get onError            => isDark ? const Color(0xFF330705) : const Color(0xFFFFFFFF);
+  Color get errorContainer     => isDark ? const Color(0xFF5C1A16) : const Color(0xFFFFD8D5);
+  Color get onErrorContainer   => isDark ? const Color(0xFFFFD8D5) : const Color(0xFF5C1A16);
 
+  // Apple System Green / Orange
   Color get success            => isDark ? const Color(0xFF30D158) : const Color(0xFF34C759);
   Color get warning            => isDark ? const Color(0xFFFF9F0A) : const Color(0xFFFF9500);
 
@@ -79,13 +41,13 @@ class AppColorScheme {
   Color get hover              => isDark ? const Color(0x16FFFFFF) : const Color(0x08000000);
   Color get pressed            => isDark ? const Color(0x22FFFFFF) : const Color(0x10000000);
 
-  Color get navBarBg           => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
+  Color get navBarBg           => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF9F9F9);
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
-  Color get navIconActive      => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF0F6CBD);
-  Color get navLabelActive     => isDark ? const Color(0xFFCFE4FA) : const Color(0xFF0C3B5E);
-  Color get navIndicatorBg     => isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEBF3FC);
+  Color get navIconActive      => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF007AFF);
+  Color get navLabelActive     => isDark ? const Color(0xFFCFE4FF) : const Color(0xFF0D2847);
+  Color get navIndicatorBg     => isDark ? const Color(0xFF2C3E50) : const Color(0xFFE5F1FF);
 
-  Color get projectsTabBg      => const Color(0xFF0F6CBD);
+  Color get projectsTabBg      => const Color(0xFF007AFF);
   Color get projectsTabFg      => const Color(0xFFFFFFFF);
 
   /// Fundo da área de preview (grande, topo) do DocumentWidgetCard —
@@ -93,7 +55,7 @@ class AppColorScheme {
   /// Cinza claro neutro em light, cinza escuro neutro em dark — nunca
   /// a mesma cor do cardBackground, para dar profundidade visual ao
   /// preview tal como a imagem de referência (Image 1) mostra.
-  Color get previewBackdrop    => isDark ? const Color(0xFF262626) : const Color(0xFFE3E3E3);
+  Color get previewBackdrop    => isDark ? const Color(0xFF242426) : const Color(0xFFE5E5EA);
 
   /// Fundo do container que embrulha a barra de ações do
   /// DocumentWidgetCard (botão pill "Abrir direto no editor" + botão
@@ -116,9 +78,9 @@ class AppColorScheme {
       ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
       : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 3))];
 
-  Color get incognitoBackground => const Color(0xFF1A1A1A);
-  Color get incognitoSurface    => const Color(0xFF222224);
-  Color get incognitoOnSurface  => const Color(0xFFEDEDED);
+  Color get incognitoBackground => const Color(0xFF000000);
+  Color get incognitoSurface    => const Color(0xFF1C1C1E);
+  Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
 }
 
 // ══════════════════════════════════════════════════════════════
