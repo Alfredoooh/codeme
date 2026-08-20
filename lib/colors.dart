@@ -48,6 +48,11 @@ class AppColorScheme {
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
   Color get pageBackground     => isDark ? const Color(0xFF121212) : const Color(0xFFF7F7F9);
+
+  /// Fundo dos cards no tema claro é agora branco puro absoluto —
+  /// pedido explícito do utilizador para diferenciar claramente do
+  /// pageBackground (que continua ligeiramente acinzentado) e dar
+  /// aquele "brilho" de card sólido tipo iOS. Dark mode inalterado.
   Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
 
   Color get floatingSurface    => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
@@ -82,7 +87,7 @@ class AppColorScheme {
   /// onde a InAppWebView em miniatura / stack de páginas A4 aparece.
   /// Cinza claro neutro em light, cinza escuro neutro em dark — nunca
   /// a mesma cor do cardBackground, para dar profundidade visual ao
-  /// preview tal como a imagem de referência (Image 1) mostra.
+  /// preview tal como a imagem de referência mostra.
   Color get previewBackdrop    => isDark ? const Color(0xFF242426) : const Color(0xFFEFEFF1);
 
   /// Fundo do container que embrulha a barra de ações do
@@ -92,36 +97,31 @@ class AppColorScheme {
   Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
 
   /// Sombra de cards e botões isolados (drawer, contas, resultados
-  /// de pesquisa, settings). Em modo claro a sombra é visível mas
-  /// contida (0.10 de opacidade, blur 14 + reforço de contorno a
-  /// 0.06/blur 3) — dá definição real ao card sobre o
-  /// pageBackground quase branco, sem ficar pesada. Dark mode
-  /// inalterado.
+  /// de pesquisa, settings). REDUZIDA a pedido do utilizador — em
+  /// modo claro passa a ser quase imperceptível (0.05/blur 8, sem
+  /// segunda camada de reforço), só o suficiente para separar o
+  /// card branco puro do pageBackground sem parecer "flutuante
+  /// pesado". Dark mode também reduzido proporcionalmente.
   List<BoxShadow> get cardShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]
-      : [
-          BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 14, offset: const Offset(0, 4)),
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 3,  offset: const Offset(0, 1)),
-        ];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 7, offset: const Offset(0, 1))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))];
 
   List<BoxShadow> get floatingShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 6))]
-      : [
-          BoxShadow(color: Colors.black.withOpacity(0.14), blurRadius: 22, offset: const Offset(0, 8)),
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1)),
-        ];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 14, offset: const Offset(0, 5))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.09), blurRadius: 16, offset: const Offset(0, 5))];
 
   /// Sombra reduzida — usada nos cards de lista de settings, para
   /// não competir visualmente com o cardShadow "profundo" do drawer
   /// (pedido explícito: mesmo estilo dos cards do drawer, mas sem
-  /// sombra tão profunda).
+  /// sombra tão profunda). Já era a mais leve; acompanhou a redução
+  /// geral proporcionalmente.
   List<BoxShadow> get cardShadowSoft => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 6, offset: const Offset(0, 1))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.16), blurRadius: 4, offset: const Offset(0, 1))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 5, offset: const Offset(0, 1))];
 
   List<BoxShadow> get navBarShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 3))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 12, offset: const Offset(0, 3))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 2))];
 
   Color get incognitoBackground => const Color(0xFF121212);
   Color get incognitoSurface    => const Color(0xFF1C1C1E);

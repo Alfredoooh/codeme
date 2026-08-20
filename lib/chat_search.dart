@@ -1,14 +1,15 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/chat_search.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: layout invertido — a barra de pesquisa (com ícone de
-// lupa, campo de texto e botão X para fechar) fica fixa em baixo do
-// ecrã, dentro de um container arredondado escuro (estilo da imagem
-// de referência), e a lista de resultados cresce por cima dela,
-// ocupando o espaço restante acima. Aberto via fade puro
-// (PageRouteBuilder em drawermenu.dart), nunca em slide. CORRIGIDO:
-// ícones exclusivamente CupertinoIcons — nenhum Icons (Material) e
-// nenhum SVG neste ficheiro.
+// ATUALIZAÇÃO: cores alinhadas ao drawer (pageBackground em vez de
+// s.surface como fundo, cards com cardShadow reduzido igual ao
+// drawer); barra de pesquisa + botão de fechar agora sobem
+// automaticamente com o teclado, usando o viewInsets.bottom do
+// MediaQuery para nunca ficarem escondidos atrás dele;
+// CupertinoScrollbar fino (estilo Apple) na lista de resultados.
+// Aberto via fade puro (PageRouteBuilder em drawermenu.dart), nunca
+// em slide. Ícones exclusivamente CupertinoIcons — nenhum Icons
+// (Material) e nenhum SVG neste ficheiro.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -87,9 +88,15 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     final s = widget.s;
     final results = _results;
 
+    // Altura do teclado — usada para empurrar a barra de pesquisa
+    // e o botão de fechar para cima, exatamente até acima dele,
+    // em vez de ficarem escondidos atrás.
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Material(
-      color: s.surface,
+      color: s.pageBackground,
       child: SafeArea(
+        bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -113,78 +120,97 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          reverse: true,
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                          itemCount: results.length,
-                          itemBuilder: (_, i) {
-                            final item = results[results.length - 1 - i];
-                            return _SearchResultTile(
-                              s: s,
-                              item: item,
-                              onTap: () => _openConversation(item.id),
-                            );
-                          },
-                        ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(children: [
-                Expanded(
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: s.cardBackground,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: s.cardShadow,
-                    ),
-                    child: Row(children: [
-                      Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _ctrl,
-                          focusNode: _focus,
-                          onChanged: (v) => setState(() => _query = v),
-                          style: TextStyle(fontSize: 15, color: s.onSurface),
-                          cursorColor: s.primary,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            hintText: 'Pesquisar conversas...',
-                            hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                      : CupertinoScrollbar(
+                          thickness: 3,
+                          thicknessWhileDragging: 5.5,
+                          radius: const Radius.circular(3),
+                          radiusWhileDragging: const Radius.circular(3),
+                          child: ListView.builder(
+                            reverse: true,
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                            itemCount: results.length,
+                            itemBuilder: (_, i) {
+                              final item = results[results.length - 1 - i];
+                              return _SearchResultTile(
+                                s: s,
+                                item: item,
+                                onTap: () => _openConversation(item.id),
+                              );
+                            },
                           ),
                         ),
+            ),
+            // Barra de pesquisa + botão fechar — sobem junto com o
+            // teclado via AnimatedPadding ligado ao viewInsets.bottom,
+            // e mantêm o SafeArea inferior por baixo (bottom: false
+            // acima, aplicado manualmente aqui).
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.only(
+                bottom: keyboardInset > 0
+                    ? keyboardInset + 8
+                    : MediaQuery.of(context).padding.bottom + 12,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Row(children: [
+                  Expanded(
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: s.cardBackground,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: s.cardShadow,
                       ),
-                      if (_query.isNotEmpty)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => setState(() {
-                            _ctrl.clear();
-                            _query = '';
-                          }),
-                          child: Icon(CupertinoIcons.mic, color: s.onSurfaceVariant, size: 19),
+                      child: Row(children: [
+                        Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _ctrl,
+                            focusNode: _focus,
+                            onChanged: (v) => setState(() => _query = v),
+                            style: TextStyle(fontSize: 15, color: s.onSurface),
+                            cursorColor: s.primary,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              hintText: 'Pesquisar conversas...',
+                              hintStyle: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                            ),
+                          ),
                         ),
-                    ]),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _close,
-                  child: Container(
-                    width: 48, height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: s.cardBackground,
-                      shape: BoxShape.circle,
-                      boxShadow: s.cardShadow,
+                        if (_query.isNotEmpty)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => setState(() {
+                              _ctrl.clear();
+                              _query = '';
+                            }),
+                            child: Icon(CupertinoIcons.mic, color: s.onSurfaceVariant, size: 19),
+                          ),
+                      ]),
                     ),
-                    child: Icon(CupertinoIcons.xmark, color: s.onSurfaceVariant, size: 19),
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _close,
+                    child: Container(
+                      width: 48, height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: s.cardBackground,
+                        shape: BoxShape.circle,
+                        boxShadow: s.cardShadow,
+                      ),
+                      child: Icon(CupertinoIcons.xmark, color: s.onSurfaceVariant, size: 19),
+                    ),
+                  ),
+                ]),
+              ),
             ),
           ],
         ),

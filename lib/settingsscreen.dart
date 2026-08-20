@@ -1,18 +1,19 @@
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: avatar centrado no topo (sem card, estilo
-// ChatGPT); botão de voltar em container circular igual ao header
-// do drawer; cards no mesmo estilo do drawer mas com sombra mais
-// suave (cardShadowSoft); ícones exclusivamente CupertinoIcons;
-// nova seção "Geral" com Memória (para onde "eliminar todas as
-// conversas" se mudou — deixou de estar solto na primeira tela) e
-// Área de trabalho (placeholder visual, sem lógica ainda); a linha
-// "Modo escuro" com AppSwitch foi substituída por uma tela dedicada
-// "Aparência" com 3 pills 100% arredondados (Claro / Escuro /
-// Automático) e um slider de tamanho de fonte no estilo Material
-// Design Expressive, com pré-visualização ao vivo (por agora sem
-// ligar a um controlador global de escala de texto — só visual).
+// ATUALIZAÇÃO: todas as navegações internas (Aparência, Memória,
+// Área de trabalho) agora usam CupertinoPageRoute em vez do
+// PageRouteBuilder com fade puro — dá a transição de slide nativa
+// iOS, incluindo o gesto de arrastar da borda para voltar. Resto
+// inalterado: avatar centrado no topo (sem card, estilo ChatGPT);
+// botão de voltar em container circular igual ao header do drawer;
+// cards no mesmo estilo do drawer mas com sombra mais suave
+// (cardShadowSoft); ícones exclusivamente CupertinoIcons; seção
+// "Geral" com Memória (para onde "eliminar todas as conversas" se
+// mudou) e Área de trabalho; tela "Aparência" com 3 pills 100%
+// arredondados (Claro / Escuro / Automático) e slider de tamanho de
+// fonte no estilo Material Design Expressive, com pré-visualização
+// ao vivo.
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
@@ -148,41 +149,28 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     );
   }
 
+  // ── Navegações internas — todas via CupertinoPageRoute agora,
+  // no lugar do PageRouteBuilder com fade puro anterior. Dá slide
+  // nativo iOS e o gesto de arrastar da borda esquerda para voltar,
+  // de graça. ────────────────────────────────────────────────────
+
   void _openAppearance(BuildContext context, AppColorScheme s) {
-    Navigator.of(context).push(PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => const _AppearanceScreen(),
-      transitionsBuilder: (_, anim, __, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-        child: child,
-      ),
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => const _AppearanceScreen(),
     ));
   }
 
   void _openMemory(BuildContext context, AppColorScheme s) {
-    Navigator.of(context).push(PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => _MemoryScreen(
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => _MemoryScreen(
         onDeleteAllConversations: () => _confirmDeleteAllConversations(context, s),
-      ),
-      transitionsBuilder: (_, anim, __, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-        child: child,
       ),
     ));
   }
 
   void _openWorkspace(BuildContext context) {
-    Navigator.of(context).push(PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, __, ___) => const _WorkspaceScreen(),
-      transitionsBuilder: (_, anim, __, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-        child: child,
-      ),
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => const _WorkspaceScreen(),
     ));
   }
 
@@ -561,10 +549,10 @@ class _SectionLabel extends StatelessWidget {
           letterSpacing: 0.5));
 }
 
-// ── Grupo de cards — mesmo estilo visual do drawer (_GroupedRows):
-// raio grande nas pontas externas, raio interno pequeno nas
-// junções — mas com cardShadowSoft, não cardShadow, para não
-// competir com a profundidade do drawer. ────────────────────────
+// ── Grupo de cards — mesmo estilo visual do drawer: raio grande
+// nas pontas externas, raio interno pequeno nas junções — mas com
+// cardShadowSoft, não cardShadow, para não competir com a
+// profundidade do drawer. ────────────────────────────────────────
 
 class _SettingsGroup extends StatelessWidget {
   final AppColorScheme s;
@@ -1000,7 +988,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 // fonte no estilo Material Design Expressive: trilho grosso,
 // thumb em barra vertical destacada, valores mínimo/máximo com
 // terminações arredondadas, e um cartão de pré-visualização ao
-// vivo por baixo — réplica fiel da imagem de referência enviada.
+// vivo por baixo.
 // ══════════════════════════════════════════════════════════════
 
 class _AppearanceScreen extends StatefulWidget {
@@ -1177,8 +1165,7 @@ class _ThemeModePillButtonState extends State<_ThemeModePillButton> {
 
 // ── Card de tamanho de fonte: slider Material Expressive (trilho
 // grosso arredondado, thumb em barra vertical destacada) com
-// pré-visualização ao vivo (balão de pergunta + resposta), réplica
-// da imagem de referência enviada. ───────────────────────────────
+// pré-visualização ao vivo (balão de pergunta + resposta). ───────
 
 class _FontSizeCard extends StatelessWidget {
   final AppColorScheme s;
@@ -1239,7 +1226,7 @@ class _FontSizeCard extends StatelessWidget {
 // ── Slider estilo Material Design Expressive: trilho espesso com
 // pontas 100% arredondadas dividido em duas metades (preenchida /
 // vazia) por um thumb em forma de barra vertical, sem círculo
-// tradicional — fiel à imagem de referência. ────────────────────
+// tradicional. ────────────────────────────────────────────────────
 
 class _ExpressiveSlider extends StatefulWidget {
   final AppColorScheme s;

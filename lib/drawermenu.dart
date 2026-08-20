@@ -1,16 +1,20 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: sombras subtis nos cards; botões isolados do header
-// (e o novo botão de pesquisa) sempre dentro de um container visível;
-// pill "IA" removido (única tab, sempre ativa, sem necessidade de
-// seletor); botão de pesquisar saiu do header e passou para o lado
-// do pill de utilizador, que agora é mais alto (padrão Apple); a
-// tela de pesquisa deixou de abrir em slide (CupertinoPageRoute) e
-// passa a abrir com fade puro via PageRouteBuilder; correção do
-// sublinhado amarelo (spellcheck do WebView/SO) envolvendo os
-// textos afetados com SelectionContainer.disabled. CupertinoIcons
-// requer cupertino_icons no pubspec.yaml (ver nota acima).
+// ATUALIZAÇÃO: cards de lista das conversas REMOVIDOS — passa a
+// usar linhas soltas com divisor fino que NÃO chega até à borda da
+// tela (estilo Grok), com padding lateral igual ao texto; botão de
+// opções (⋮) por linha e long-press abrem o mesmo popup, ancorado
+// SEMPRE na posição exata (x,y) do toque/gesto, nunca fixo; botão
+// de pesquisa ao lado do pill de conta agora tem a mesma altura do
+// pill (60); CupertinoScrollbar fino (estilo Apple) na lista;
+// sombras reduzidas via colors.dart (cardShadow); menu de conta
+// mantém a linha única "Modo claro/escuro" (sem toggle — o toggle
+// de 3 estados vive exclusivamente em settings.dart/Aparência).
+// Entrada para Settings (via onSettings) permanece delegada ao
+// pai — quem decide a rota concreta (CupertinoPageRoute) é
+// main.dart, que já foi atualizado para tal. CupertinoIcons requer
+// cupertino_icons no pubspec.yaml.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -266,11 +270,16 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeDrawer();
   }
 
-  void _openConvPopup(BuildContext context, LayerLink anchorLink, ConversationItem item) {
-    showConversationOptionsPopup(
+  /// Abre o popup ancorado exatamente na posição global (x,y) onde
+  /// o dedo tocou — seja vindo do TapDown do botão de opções (⋮) ou
+  /// do LongPressStart na linha inteira. Já não depende de
+  /// CompositedTransform/LayerLink porque a posição é sempre a do
+  /// gesto, não a da linha.
+  void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
+    showConversationOptionsPopupAt(
       context,
       widget.s,
-      anchorLink: anchorLink,
+      position: globalPos,
       item: item,
       onOpen: () => _openConversation(item),
       onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
@@ -359,7 +368,7 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             Expanded(
-              child: _buildConvBody(s, pinned, others),
+              child: _buildConvBody(context, s, pinned, others),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -382,6 +391,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   Widget _buildConvBody(
+    BuildContext context,
     AppColorScheme s,
     List<ConversationItem> pinned,
     List<ConversationItem> others,
@@ -417,58 +427,67 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
       );
     }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      children: [
-        if (pinned.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            child: Row(children: [
-              Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
-              const SizedBox(width: 6),
-              Text('Fixadas',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                      color: s.onSurfaceVariant)),
-            ]),
-          ),
-          _GroupedRows(
-            s: s,
-            children: [
-              for (final item in pinned)
-                _ConvTile(
-                  s: s,
-                  item: item,
-                  active: item.id == widget.activeConversationId,
-                  onTap: () => _openConversation(item),
-                  onOptions: (link) => _openConvPopup(context, link, item),
-                  onArchive: () => conversationsController.archive(item.id, true),
-                  onDelete: () => conversationsController.delete(item.id),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
+
+    // Lista solta com divisores — sem cards, sem fundo agrupado.
+    // Envolvida num CupertinoScrollbar fino (estilo Apple).
+    return CupertinoScrollbar(
+      thickness: 3,
+      thicknessWhileDragging: 5.5,
+      radius: const Radius.circular(3),
+      radiusWhileDragging: const Radius.circular(3),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+        children: [
+          if (pinned.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 6),
+              child: Row(children: [
+                Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
+                const SizedBox(width: 6),
+                Text('Fixadas',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                        color: s.onSurfaceVariant)),
+              ]),
+            ),
+            _LooseRows(
+              s: s,
+              children: [
+                for (final item in pinned)
+                  _ConvTile(
+                    s: s,
+                    item: item,
+                    active: item.id == widget.activeConversationId,
+                    onTap: () => _openConversation(item),
+                    onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+                    onArchive: () => conversationsController.archive(item.id, true),
+                    onDelete: () => conversationsController.delete(item.id),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+          ],
+          if (others.isNotEmpty)
+            _LooseRows(
+              s: s,
+              children: [
+                for (final item in others)
+                  _ConvTile(
+                    s: s,
+                    item: item,
+                    active: item.id == widget.activeConversationId,
+                    onTap: () => _openConversation(item),
+                    onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+                    onArchive: () => conversationsController.archive(item.id, true),
+                    onDelete: () => conversationsController.delete(item.id),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 8),
         ],
-        if (others.isNotEmpty)
-          _GroupedRows(
-            s: s,
-            children: [
-              for (final item in others)
-                _ConvTile(
-                  s: s,
-                  item: item,
-                  active: item.id == widget.activeConversationId,
-                  onTap: () => _openConversation(item),
-                  onOptions: (link) => _openConvPopup(context, link, item),
-                  onArchive: () => conversationsController.archive(item.id, true),
-                  onDelete: () => conversationsController.delete(item.id),
-                ),
-            ],
-          ),
-        const SizedBox(height: 8),
-      ],
+      ),
     );
   }
 }
@@ -531,8 +550,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
 }
 
 // ── Botão de pesquisa isolado, ao lado do pill de utilizador —
-// mesmo estilo circular sólido em container do botão back de
-// referência (imagem 2). ────────────────────────────────────────
+// agora com a MESMA altura do pill (60), não mais pequeno. ─────
 
 class _SearchSideButton extends StatefulWidget {
   final AppColorScheme s;
@@ -554,87 +572,59 @@ class _SearchSideButtonState extends State<_SearchSideButton> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        width: 52, height: 52,
+        width: 60, height: 60,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _p ? s.pressed : s.cardBackground,
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 21),
+        child: Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 22),
       ),
     );
   }
 }
 
-// ── Grupo de linhas — raio grande nas pontas externas, raio
-// interno visível nas junções, sombra subtil no conjunto. ──────
+// ── Grupo de linhas soltas — sem card/fundo agrupado. Cada linha
+// tem um Divider fino entre si, que NÃO chega até à borda da tela
+// (padding lateral igual ao do texto da linha), estilo Grok. A
+// última linha não tem divider abaixo. ──────────────────────────
 
-class _GroupedRows extends StatelessWidget {
+class _LooseRows extends StatelessWidget {
   final AppColorScheme s;
   final List<Widget> children;
-  const _GroupedRows({required this.s, required this.children});
-
-  static const double _outerRadius = 20;
-  static const double _innerRadius = 6;
+  const _LooseRows({required this.s, required this.children});
 
   @override
   Widget build(BuildContext context) {
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
-      rows.add(_RowCard(
-        s: s,
-        radius: _radiusFor(i, children.length),
-        child: children[i],
-      ));
-      if (i != children.length - 1) rows.add(const SizedBox(height: 2));
+      rows.add(children[i]);
+      if (i != children.length - 1) {
+        rows.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Divider(height: 1, thickness: 1, color: s.outlineVariant),
+        ));
+      }
     }
     return Column(children: rows);
   }
-
-  BorderRadius _radiusFor(int index, int count) {
-    if (count == 1) return BorderRadius.circular(_outerRadius);
-    final isFirst = index == 0;
-    final isLast  = index == count - 1;
-    return BorderRadius.only(
-      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
-      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
-    );
-  }
 }
 
-class _RowCard extends StatelessWidget {
-  final AppColorScheme s;
-  final BorderRadius radius;
-  final Widget child;
-  const _RowCard({required this.s, required this.radius, required this.child});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: radius,
-          boxShadow: s.cardShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: child,
-      );
-}
-
-// ── Conversa individual — popup OverlayEntry manual. Só mostra o
-// título, sem preview da última mensagem. Long-press e botão de
-// opções abrem o mesmo popup. Texto envolvido em
-// SelectionContainer.disabled para impedir que o WebView/SO trate
-// o texto como conteúdo verificável e sublinhe a amarelo. ──────
+// ── Conversa individual — sem card/fundo, apenas linha solta.
+// Long-press E o botão de opções (⋮) abrem o popup ancorado
+// exatamente na posição (x,y) do toque — para isso capturamos a
+// posição global tanto do TapDown do botão como do
+// LongPressStart do GestureDetector da linha inteira. Texto
+// envolvido em SelectionContainer.disabled para impedir sublinhado
+// amarelo de spellcheck. ─────────────────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool active;
   final VoidCallback onTap;
-  final ValueChanged<LayerLink> onOptions;
+  final ValueChanged<Offset> onOptionsAt;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
   const _ConvTile({
@@ -642,7 +632,7 @@ class _ConvTile extends StatefulWidget {
     required this.item,
     required this.active,
     required this.onTap,
-    required this.onOptions,
+    required this.onOptionsAt,
     required this.onArchive,
     required this.onDelete,
   });
@@ -651,7 +641,6 @@ class _ConvTile extends StatefulWidget {
 
 class _ConvTileState extends State<_ConvTile> {
   bool _h = false;
-  final LayerLink _anchorLink = LayerLink();
 
   double _dragDx = 0;
   bool _resolved = false;
@@ -705,40 +694,49 @@ class _ConvTileState extends State<_ConvTile> {
           ),
         Transform.translate(
           offset: Offset(_dragDx, 0),
-          child: CompositedTransformTarget(
-            link: _anchorLink,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown:   (_) => setState(() => _h = true),
-              onTapCancel: ()  => setState(() => _h = false),
-              onTapUp:     (_) => setState(() => _h = false),
-              onTap: widget.onTap,
-              onLongPress: () => widget.onOptions(_anchorLink),
-              onHorizontalDragUpdate: _onDragUpdate,
-              onHorizontalDragEnd: _onDragEnd,
-              child: Container(
-                color: widget.active
-                    ? s.navIndicatorBg
-                    : (_h ? s.hover : Colors.transparent),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(children: [
-                  Expanded(
-                    child: SelectionContainer.disabled(
-                      child: Text(widget.item.title,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
-                            color: widget.active ? s.navLabelActive : s.onSurface,
-                          ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown:   (_) => setState(() => _h = true),
+            onTapCancel: ()  => setState(() => _h = false),
+            onTapUp:     (_) => setState(() => _h = false),
+            onTap: widget.onTap,
+            onLongPressStart: (d) => widget.onOptionsAt(d.globalPosition),
+            onHorizontalDragUpdate: _onDragUpdate,
+            onHorizontalDragEnd: _onDragEnd,
+            child: Container(
+              color: widget.active
+                  ? s.navIndicatorBg
+                  : (_h ? s.hover : Colors.transparent),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(children: [
+                Expanded(
+                  child: SelectionContainer.disabled(
+                    child: Text(widget.item.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                          color: widget.active ? s.navLabelActive : s.onSurface,
+                        ),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
-                  if (widget.item.pinned) ...[
-                    const SizedBox(width: 6),
-                    Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
-                  ],
-                ]),
-              ),
+                ),
+                if (widget.item.pinned) ...[
+                  const SizedBox(width: 6),
+                  Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
+                  const SizedBox(width: 6),
+                ],
+                // Botão de opções — captura a posição global do
+                // próprio toque (TapDown) para ancorar o popup ali,
+                // não na linha inteira.
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) => widget.onOptionsAt(d.globalPosition),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                    child: Icon(CupertinoIcons.ellipsis, color: s.onSurfaceVariant, size: 17),
+                  ),
+                ),
+              ]),
             ),
           ),
         ),
@@ -748,12 +746,14 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ── Popup de opções da conversa — OverlayEntry manual, ancorado
-// via LayerLink. ────────────────────────────────────────────────
+// exatamente na posição (x,y) global do toque que o disparou. O
+// popup ajusta-se automaticamente para não sair da tela (flip para
+// a esquerda/cima quando necessário). ───────────────────────────
 
-void showConversationOptionsPopup(
+void showConversationOptionsPopupAt(
   BuildContext context,
   AppColorScheme s, {
-  required LayerLink anchorLink,
+  required Offset position,
   required ConversationItem item,
   required VoidCallback onOpen,
   required VoidCallback onTogglePin,
@@ -774,9 +774,25 @@ void showConversationOptionsPopup(
     });
   }
 
-  entry = OverlayEntry(builder: (ctx) {
-    const width = 232.0;
+  final screenSize = MediaQuery.of(context).size;
+  const width = 232.0;
+  const estimatedHeight = 230.0;
 
+  // Decide o quadrante de abertura consoante a posição do toque,
+  // para o popup nunca sair da tela — mesma ideia de um
+  // CupertinoContextMenu / long-press menu nativo.
+  final openLeft = position.dx + width > screenSize.width - 12;
+  final openUp = position.dy + estimatedHeight > screenSize.height - 12;
+
+  final left = openLeft ? (position.dx - width).clamp(8.0, screenSize.width - width - 8) : position.dx.clamp(8.0, screenSize.width - width - 8);
+  final top = openUp ? (position.dy - estimatedHeight).clamp(8.0, screenSize.height - estimatedHeight - 8) : position.dy.clamp(8.0, screenSize.height - estimatedHeight - 8);
+
+  final alignment = Alignment(
+    openLeft ? 1.0 : -1.0,
+    openUp ? 1.0 : -1.0,
+  );
+
+  entry = OverlayEntry(builder: (ctx) {
     return Stack(children: [
       Positioned.fill(
         child: GestureDetector(
@@ -785,12 +801,9 @@ void showConversationOptionsPopup(
           child: Container(color: Colors.transparent),
         ),
       ),
-      CompositedTransformFollower(
-        link: anchorLink,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.bottomLeft,
-        followerAnchor: Alignment.topLeft,
-        offset: const Offset(0, 6),
+      Positioned(
+        left: left,
+        top: top,
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -798,10 +811,10 @@ void showConversationOptionsPopup(
                     parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
                 .value,
             child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
+              scale: Tween(begin: 0.9, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: Alignment.topLeft,
+              alignment: alignment,
               child: child,
             ),
           ),
@@ -1084,12 +1097,13 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — mais alto (padrão Apple), botão de opções abre um
-// menu estilizado sólido, com escurecimento de fundo controlado
-// via s.barrier, cantos curvos no card de opções e botão Cancelar
-// 100% arredondado. Textos do menu envolvidos em
-// SelectionContainer.disabled para eliminar o sublinhado amarelo
-// de spellcheck do WebView/SO.
+// ACCOUNT PILL — mantém a linha única "Modo claro/escuro" (sem
+// toggle — isso vive exclusivamente na tela Aparência do
+// settings.dart). Botão de opções abre um menu estilizado sólido,
+// com escurecimento de fundo via s.barrier, cantos curvos e botão
+// Cancelar 100% arredondado. Textos envolvidos em
+// SelectionContainer.disabled para eliminar sublinhado amarelo de
+// spellcheck do WebView/SO.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1314,9 +1328,8 @@ class _AccountPillState extends State<_AccountPill> {
   }
 }
 
-// ── Card sólido de opções — cantos curvos consistentes com os
-// cards de conversa (_GroupedRows), sombra subtil, sem
-// transparência/blur. ───────────────────────────────────────────
+// ── Card sólido de opções — cantos curvos, sombra reduzida via
+// colors.dart, sem transparência/blur. ──────────────────────────
 
 class _SolidActionCard extends StatelessWidget {
   final AppColorScheme s;
