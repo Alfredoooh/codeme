@@ -67,7 +67,7 @@ class CraftLabApp extends StatelessWidget {
             ),
           ),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
-          builder: (_, child) => ColoredBox(color: s.surface, child: child!),
+          builder: (_, child) => ColoredBox(color: s.sheetBackdrop, child: child!),
           home: const AuthGate(),
         );
       }),

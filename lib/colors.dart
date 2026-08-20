@@ -17,8 +17,8 @@ class AppColorScheme {
 
   // Apple System Gray palette (surfaces)
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-  Color get onSurface          => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF1C1C1E);
-  Color get onSurfaceVariant   => isDark ? const Color(0xFF8E8E93) : const Color(0xFF6E6E73);
+  Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
+  Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
   Color get pageBackground     => isDark ? const Color(0xFF000000) : const Color(0xFFF7F7F9);
   Color get cardBackground     => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
@@ -81,6 +81,12 @@ class AppColorScheme {
   Color get incognitoBackground => const Color(0xFF000000);
   Color get incognitoSurface    => const Color(0xFF1C1C1E);
   Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
+
+  /// Fundo do "encolhimento" atrás de um CupertinoSheetRoute.
+  /// Tem de ser SEMPRE escuro profundo, independente do tema —
+  /// nunca ligado a isDark. É o que aparece nas bordas/cantos da
+  /// tela que fica visível por trás do modal quando esta encolhe.
+  Color get sheetBackdrop => const Color(0xFF0B0B0D);
 }
 
 // ══════════════════════════════════════════════════════════════
