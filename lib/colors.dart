@@ -19,7 +19,7 @@ class AppColorScheme {
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF000000) : const Color(0xFFF7F7F9);
+  Color get pageBackground     => isDark ? const Color(0xFF12121) : const Color(0xFFF7F7F9);
   Color get cardBackground     => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
   Color get floatingSurface    => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
@@ -78,7 +78,7 @@ class AppColorScheme {
       ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
       : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 3))];
 
-  Color get incognitoBackground => const Color(0xFF000000);
+  Color get incognitoBackground => const Color(0xFF121212);
   Color get incognitoSurface    => const Color(0xFF1C1C1E);
   Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
 
