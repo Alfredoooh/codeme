@@ -176,6 +176,9 @@ final ConversationsController conversationsController = ConversationsController(
 
 // ══════════════════════════════════════════════════════════════
 // DRAWER — renderizado dentro do painel deslizante em main.dart
+// Redesenhado para se aproximar do padrão iOS (grupos em cartões
+// arredondados, tipo app Definições), sem qualquer blur/transparência
+// — tudo com cor sólida do tema.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -284,8 +287,8 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
     showAppSheet(
-  context,
-  builder: (ctx) => _DeleteConversationSheet(
+      context,
+      builder: (ctx) => _DeleteConversationSheet(
         s: widget.s,
         title: item.title,
         onConfirm: () {
@@ -308,68 +311,69 @@ class _AppDrawerState extends State<AppDrawer> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header: título grande estilo iOS large-title ──
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'Menu',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: -0.4,
                       color: s.onSurface,
                     ),
                   ),
                   Row(children: [
-                    // Botão Nova Conversa (substitui o home.svg removido no Bloco 1)
                     if (widget.onNewChat != null)
-                      AppTap(
-                        onTap: widget.onNewChat!,
+                      _HeaderIconButton(
                         s: s,
-                        size: 32,
-                        child: AppIcon('add.svg', color: s.onSurfaceVariant, size: 17),
+                        icon: 'add.svg',
+                        onTap: widget.onNewChat!,
                       ),
-                    const SizedBox(width: 2),
-                    AppTap(
+                    const SizedBox(width: 6),
+                    _HeaderIconButton(
+                      s: s,
+                      icon: 'search.svg',
                       onTap: () => _openSearch(context),
-                      s: s,
-                      size: 32,
-                      child: AppIcon('search.svg', color: s.onSurfaceVariant, size: 16),
                     ),
-                    const SizedBox(width: 2),
-                    // Botão fechar (X) para fechar o drawer facilmente
-                    AppTap(
-                      onTap: _closeDrawer,
+                    const SizedBox(width: 6),
+                    _HeaderIconButton(
                       s: s,
-                      size: 32,
-                      child: AppIcon('close.svg', color: s.onSurfaceVariant, size: 16),
+                      icon: 'close.svg',
+                      onTap: _closeDrawer,
                     ),
                   ]),
                 ],
               ),
             ),
+            // ── Grupo de navegação (cartão sólido tipo Settings.app) ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: _GroupedCard(
+                s: s,
                 children: [
-                  for (final tab in _navigableTabs)
+                  for (int i = 0; i < _navigableTabs.length; i++)
                     _DrawerTabTile(
                       s: s,
-                      tab: tab,
-                      selected: widget.currentTab == tab,
-                      onTap: () => widget.onSelectTab(tab),
+                      tab: _navigableTabs[i],
+                      selected: widget.currentTab == _navigableTabs[i],
+                      showDivider: i < _navigableTabs.length - 1,
+                      onTap: () => widget.onSelectTab(_navigableTabs[i]),
                     ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+              padding: const EdgeInsets.fromLTRB(24, 20, 12, 8),
               child: Text(
-                'Conversas',
+                'CONVERSAS',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
                   color: s.onSurfaceVariant,
                 ),
               ),
@@ -378,7 +382,7 @@ class _AppDrawerState extends State<AppDrawer> {
               child: _buildConvBody(s, pinned, others),
             ),
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: _AccountPill(s: s, onOpenSettings: widget.onSettings),
             ),
           ],
@@ -424,48 +428,56 @@ class _AppDrawerState extends State<AppDrawer> {
       );
     }
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         if (pinned.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: Row(children: [
-              AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
+              AppIcon('pin.svg', color: s.onSurfaceVariant, size: 12),
               const SizedBox(width: 6),
               Text('Fixadas',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
                       color: s.onSurfaceVariant)),
             ]),
           ),
-          for (final item in pinned)
-            _ConvTile(
-              s: s,
-              item: item,
-              active: item.id == widget.activeConversationId,
-              onTap: () => _openConversation(item),
-              onOptions: (link) => _openConvPopup(context, link, item),
-              onArchive: () => conversationsController.archive(item.id, true),
-              onDelete: () => conversationsController.delete(item.id),
-            ),
-          if (others.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
-            )
-          else
-            const SizedBox(height: 8),
-        ],
-        for (final item in others)
-          _ConvTile(
+          _GroupedCard(
             s: s,
-            item: item,
-            active: item.id == widget.activeConversationId,
-            onTap: () => _openConversation(item),
-            onOptions: (link) => _openConvPopup(context, link, item),
-            onArchive: () => conversationsController.archive(item.id, true),
-            onDelete: () => conversationsController.delete(item.id),
+            children: [
+              for (int i = 0; i < pinned.length; i++)
+                _ConvTile(
+                  s: s,
+                  item: pinned[i],
+                  active: pinned[i].id == widget.activeConversationId,
+                  showDivider: i < pinned.length - 1,
+                  onTap: () => _openConversation(pinned[i]),
+                  onOptions: (link) => _openConvPopup(context, link, pinned[i]),
+                  onArchive: () => conversationsController.archive(pinned[i].id, true),
+                  onDelete: () => conversationsController.delete(pinned[i].id),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+        if (others.isNotEmpty)
+          _GroupedCard(
+            s: s,
+            children: [
+              for (int i = 0; i < others.length; i++)
+                _ConvTile(
+                  s: s,
+                  item: others[i],
+                  active: others[i].id == widget.activeConversationId,
+                  showDivider: i < others.length - 1,
+                  onTap: () => _openConversation(others[i]),
+                  onOptions: (link) => _openConvPopup(context, link, others[i]),
+                  onArchive: () => conversationsController.archive(others[i].id, true),
+                  onDelete: () => conversationsController.delete(others[i].id),
+                ),
+            ],
           ),
         const SizedBox(height: 8),
       ],
@@ -473,18 +485,88 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Drawer tab tile ───────────────────────────────────────────
+// ── Ícone do header (nova conversa / pesquisar / fechar) ──────
+
+class _HeaderIconButton extends StatefulWidget {
+  final AppColorScheme s;
+  final String icon;
+  final VoidCallback onTap;
+  const _HeaderIconButton({required this.s, required this.icon, required this.onTap});
+  @override State<_HeaderIconButton> createState() => _HeaderIconButtonState();
+}
+
+class _HeaderIconButtonState extends State<_HeaderIconButton> {
+  bool _p = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        width: 34, height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _p ? s.hover : s.hover.withOpacity(0.55),
+          shape: BoxShape.circle,
+        ),
+        child: AppIcon(widget.icon, color: s.onSurfaceVariant, size: 16),
+      ),
+    );
+  }
+}
+
+// ── Cartão de grupo — sólido, cantos arredondados, estilo iOS ──
+
+class _GroupedCard extends StatelessWidget {
+  final AppColorScheme s;
+  final List<Widget> children;
+  const _GroupedCard({required this.s, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _RowDivider extends StatelessWidget {
+  final AppColorScheme s;
+  const _RowDivider({required this.s});
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(left: 50),
+        child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.5)),
+      );
+}
+
+// ── Drawer tab tile — linha dentro do cartão de navegação ──────
 
 class _DrawerTabTile extends StatefulWidget {
   final AppColorScheme s;
   final AppTab tab;
   final bool selected;
+  final bool showDivider;
   final VoidCallback onTap;
 
   const _DrawerTabTile({
     required this.s,
     required this.tab,
     required this.selected,
+    required this.showDivider,
     required this.onTap,
   });
 
@@ -500,40 +582,49 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
     final s   = widget.s;
     final sel = widget.selected;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: kCupertinoOut,
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: sel
-              ? s.navIndicatorBg
-              : (_pressed ? s.hover : Colors.transparent),
-          borderRadius: BorderRadius.circular(999),
+    return Column(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown:   (_) => setState(() => _pressed = true),
+          onTapCancel: ()  => setState(() => _pressed = false),
+          onTapUp:     (_) => setState(() => _pressed = false),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            color: _pressed ? s.hover : Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(children: [
+              Container(
+                width: 28, height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: sel ? s.primary : s.hover,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: AppIcon(
+                  sel ? widget.tab.svgFilled : widget.tab.svg,
+                  color: sel ? s.onPrimary : s.onSurfaceVariant,
+                  size: 15,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.tab.label,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w400,
+                    color: s.onSurface,
+                  ),
+                ),
+              ),
+              if (sel) AppIcon('check.svg', color: s.primary, size: 15),
+            ]),
+          ),
         ),
-        child: Row(children: [
-          AppIcon(
-            sel ? widget.tab.svgFilled : widget.tab.svg,
-            color: sel ? s.navLabelActive : s.onSurfaceVariant,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            widget.tab.label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-              color: sel ? s.navLabelActive : s.onSurface,
-            ),
-          ),
-        ]),
-      ),
+        if (widget.showDivider) _RowDivider(s: s),
+      ],
     );
   }
 }
@@ -542,6 +633,7 @@ class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool active;
+  final bool showDivider;
   final VoidCallback onTap;
   final ValueChanged<LayerLink> onOptions;
   final VoidCallback onArchive;
@@ -550,6 +642,7 @@ class _ConvTile extends StatefulWidget {
     required this.s,
     required this.item,
     required this.active,
+    required this.showDivider,
     required this.onTap,
     required this.onOptions,
     required this.onArchive,
@@ -591,7 +684,7 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final bg = _dragDx < 0
+    final swipeBg = _dragDx < 0
         ? s.error
         : _dragDx > 0
             ? s.primary
@@ -602,72 +695,67 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
     return AnimatedOpacity(
       opacity: _resolved ? 0.0 : 1.0,
       duration: const Duration(milliseconds: 180),
-      child: Stack(children: [
-        if (_dragDx != 0)
-          Positioned.fill(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: AppIcon(icon, color: iconColor, size: 18),
-            ),
-          ),
-        Transform.translate(
-          offset: Offset(_dragDx, 0),
-          child: CompositedTransformTarget(
-            link: _anchorLink,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown:   (_) => setState(() => _h = true),
-              onTapCancel: ()  => setState(() => _h = false),
-              onTapUp:     (_) => setState(() => _h = false),
-              onTap: widget.onTap,
-              onLongPress: () => widget.onOptions(_anchorLink),
-              onHorizontalDragUpdate: _onDragUpdate,
-              onHorizontalDragEnd: _onDragEnd,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: widget.active
-                      ? s.navIndicatorBg
-                      : (_h ? s.hover : s.surface),
-                  borderRadius: BorderRadius.circular(10),
+      child: Column(
+        children: [
+          Stack(children: [
+            if (_dragDx != 0)
+              Positioned.fill(
+                child: Container(
+                  alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  color: swipeBg,
+                  child: AppIcon(icon, color: iconColor, size: 18),
                 ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(widget.item.title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: widget.active ? FontWeight.w600 : FontWeight.normal,
-                            color: widget.active ? s.navLabelActive : s.onSurface,
-                          ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (widget.item.preview.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(widget.item.preview,
-                            style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            Transform.translate(
+              offset: Offset(_dragDx, 0),
+              child: CompositedTransformTarget(
+                link: _anchorLink,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown:   (_) => setState(() => _h = true),
+                  onTapCancel: ()  => setState(() => _h = false),
+                  onTapUp:     (_) => setState(() => _h = false),
+                  onTap: widget.onTap,
+                  onLongPress: () => widget.onOptions(_anchorLink),
+                  onHorizontalDragUpdate: _onDragUpdate,
+                  onHorizontalDragEnd: _onDragEnd,
+                  child: Container(
+                    color: widget.active
+                        ? s.navIndicatorBg
+                        : (_h ? s.hover : Colors.transparent),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(widget.item.title,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                                color: widget.active ? s.navLabelActive : s.onSurface,
+                              ),
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          if (widget.item.preview.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(widget.item.preview,
+                                style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ]),
+                      ),
+                      if (widget.item.pinned) ...[
+                        const SizedBox(width: 6),
+                        AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
                       ],
                     ]),
                   ),
-                  if (widget.item.pinned) ...[
-                    const SizedBox(width: 6),
-                    AppIcon('pin.svg', color: s.onSurfaceVariant, size: 13),
-                  ],
-                ]),
+                ),
               ),
             ),
-          ),
-        ),
-      ]),
+          ]),
+          if (widget.showDivider && !_resolved) _RowDivider(s: s),
+        ],
+      ),
     );
   }
 }
@@ -826,8 +914,7 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
 }
 
 // ── Sheet de confirmação de eliminação ────────────────────────
-// Agora sem Material/Container externo e sem grabber manual,
-// usa o CupertinoSheetRoute (showAppSheet) fornecido.
+// Usa o CupertinoSheetRoute (showAppSheet) — sem blur, sem opacidade.
 
 class _DeleteConversationSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -931,8 +1018,6 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
 }
 
 // ── Sheet de renomeação ────────────────────────────────────────
-// Agora usa showAppSheet (CupertinoSheetRoute) e remove o
-// Container/decoração externa e o SheetGrabber manual.
 
 Future<void> showRenameSheet(
   BuildContext context,
@@ -1004,7 +1089,8 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — avatar corrigido para URLs remotas e base64
+// ACCOUNT PILL — cartão sólido, sem transparência, anel sutil no
+// avatar. Continua a decodificar URLs remotas e avatares base64.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1075,10 +1161,9 @@ class _AccountPillState extends State<_AccountPill> {
     return Container(
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadow,
+        borderRadius: BorderRadius.circular(16),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(children: [
         Expanded(
           child: GestureDetector(
@@ -1093,21 +1178,24 @@ class _AccountPillState extends State<_AccountPill> {
                   horizontal: 6, vertical: 4),
               decoration: BoxDecoration(
                 color: _p ? s.hover : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(children: [
                 Container(
-                  width: 32, height: 32,
+                  width: 34, height: 34,
                   alignment: Alignment.center,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                      color: s.primary, shape: BoxShape.circle),
-                  child: _buildAvatarContent(s, avatar, initial, size: 32, fontSize: 14),
+                    color: s.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: s.outline, width: 1),
+                  ),
+                  child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(name,
-                      style: TextStyle(fontSize: 14, color: s.onSurface),
+                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: s.onSurface),
                       overflow: TextOverflow.ellipsis),
                 ),
               ]),
