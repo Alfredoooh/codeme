@@ -742,66 +742,60 @@ class _ConvTileState extends State<_ConvTile> {
             onHorizontalDragUpdate: _onDragUpdate,
             onHorizontalDragEnd: _onDragEnd,
             child: CupertinoContextMenu(
-              actions: [
-                CupertinoContextMenuAction(
-                  trailingIcon: CupertinoIcons.arrow_up_right_square,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onOpen();
-                  },
-                  child: const Text('Abrir conversa'),
-                ),
-                CupertinoContextMenuAction(
-                  trailingIcon: widget.item.pinned
-                      ? CupertinoIcons.pin_slash
-                      : CupertinoIcons.pin,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onTogglePin();
-                  },
-                  child: Text(widget.item.pinned ? 'Desafixar' : 'Fixar'),
-                ),
-                CupertinoContextMenuAction(
-                  trailingIcon: CupertinoIcons.archivebox,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onArchive();
-                  },
-                  child: const Text('Arquivar'),
-                ),
-                CupertinoContextMenuAction(
-                  trailingIcon: CupertinoIcons.pencil,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onRename();
-                  },
-                  child: const Text('Renomear'),
-                ),
-                CupertinoContextMenuAction(
-                  isDestructiveAction: true,
-                  trailingIcon: CupertinoIcons.delete,
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onDelete();
-                  },
-                  child: const Text('Eliminar'),
-                ),
-              ],
-              previewBuilder: (ctx, animation, child) => Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                clipBehavior: Clip.antiAlias,
-                child: _buildTileContent(s, insideContextMenu: true),
-              ),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown:   (_) => setState(() => _h = true),
-                onTapCancel: ()  => setState(() => _h = false),
-                onTapUp:     (_) => setState(() => _h = false),
-                onTap: widget.onTap,
-                child: _buildTileContent(s),
-              ),
-            ),
+  actions: [
+    CupertinoContextMenuAction(
+      trailingIcon: CupertinoIcons.arrow_up_right_square,
+      onPressed: () {
+        Navigator.pop(context);
+        widget.onOpen();
+      },
+      child: const Text('Abrir conversa'),
+    ),
+    CupertinoContextMenuAction(
+      trailingIcon: widget.item.pinned
+          ? CupertinoIcons.pin_slash
+          : CupertinoIcons.pin,
+      onPressed: () {
+        Navigator.pop(context);
+        widget.onTogglePin();
+      },
+      child: Text(widget.item.pinned ? 'Desafixar' : 'Fixar'),
+    ),
+    CupertinoContextMenuAction(
+      trailingIcon: CupertinoIcons.archivebox,
+      onPressed: () {
+        Navigator.pop(context);
+        widget.onArchive();
+      },
+      child: const Text('Arquivar'),
+    ),
+    CupertinoContextMenuAction(
+      trailingIcon: CupertinoIcons.pencil,
+      onPressed: () {
+        Navigator.pop(context);
+        widget.onRename();
+      },
+      child: const Text('Renomear'),
+    ),
+    CupertinoContextMenuAction(
+      isDestructiveAction: true,
+      trailingIcon: CupertinoIcons.delete,
+      onPressed: () {
+        Navigator.pop(context);
+        widget.onDelete();
+      },
+      child: const Text('Eliminar'),
+    ),
+  ],
+  child: GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTapDown:   (_) => setState(() => _h = true),
+    onTapCancel: ()  => setState(() => _h = false),
+    onTapUp:     (_) => setState(() => _h = false),
+    onTap: widget.onTap,
+    child: _buildTileContent(s, insideContextMenu: true),
+  ),
+),
           ),
         ),
       ]),
