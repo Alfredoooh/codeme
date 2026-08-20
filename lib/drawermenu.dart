@@ -1,6 +1,10 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
+// ATUALIZADO: tema claro/escuro alinhado com settingsscreen.dart
+// Uso de s.pageBackground no fundo, remoção de sombra no pill,
+// ajuste no estado normal dos botões de cabeçalho.
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -177,11 +181,8 @@ final ConversationsController conversationsController = ConversationsController(
 
 // ══════════════════════════════════════════════════════════════
 // DRAWER — renderizado dentro do painel deslizante em main.dart
-// Cards agora seguem exatamente o padrão do SettingsScreen:
-// _GroupedRows monta um grupo com raio grande só nas pontas
-// externas e 2px de gap entre linhas internas (ver _radiusFor),
-// tal como _SettingsGroup em settingsscreen.dart. Ícones via
-// Hugeicons em vez de SVG nos pontos-chave do drawer.
+// Alinhado com settingsscreen.dart: fundo pageBackground,
+// cartões cardBackground, hover nos pressionamentos, sem sombras.
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -309,7 +310,7 @@ class _AppDrawerState extends State<AppDrawer> {
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
 
     return Material(
-      color: s.surface,
+      color: s.pageBackground, // ✅ alinhado com settings
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -509,7 +510,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
         width: 34, height: 34,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _p ? s.hover : s.hover.withOpacity(0.55),
+          color: _p ? s.hover : Colors.transparent, // ✅ melhor feedback
           shape: BoxShape.circle,
         ),
         child: HugeIcon(icon: widget.icon, color: s.onSurfaceVariant, size: 17),
@@ -518,9 +519,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
   }
 }
 
-// ── Grupo de linhas — MESMA lógica de raio do _SettingsGroup em
-// settingsscreen.dart: raio grande só nas pontas externas do
-// grupo, 2px entre linhas internas, sem Divider. ──────────────
+// ── Grupo de linhas — mesma lógica de raio do _SettingsGroup ──
 
 class _GroupedRows extends StatelessWidget {
   final AppColorScheme s;
@@ -571,7 +570,7 @@ class _RowCard extends StatelessWidget {
       );
 }
 
-// ── Drawer tab tile — linha dentro do cartão de navegação ──────
+// ── Drawer tab tile ─────────────────────────────────────────
 
 class _DrawerTabTile extends StatefulWidget {
   final AppColorScheme s;
@@ -632,6 +631,8 @@ class _DrawerTabTileState extends State<_DrawerTabTile> {
     );
   }
 }
+
+// ── Conversa individual com swipe e popup ────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -756,6 +757,8 @@ class _ConvTileState extends State<_ConvTile> with SingleTickerProviderStateMixi
     );
   }
 }
+
+// ── Popup de opções da conversa ──────────────────────────────
 
 void showConversationOptionsPopup(
   BuildContext context,
@@ -1081,8 +1084,7 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — mantém o mesmo pill (borderRadius: 999) que já
-// tinha; não foi alterado a pedido explícito.
+// ACCOUNT PILL — alinhado com o settings (sem sombra)
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1154,7 +1156,7 @@ class _AccountPillState extends State<_AccountPill> {
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadow,
+        // boxShadow removido para alinhar com settings
       ),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: Row(children: [

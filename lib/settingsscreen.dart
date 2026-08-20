@@ -1,16 +1,16 @@
+// ══════════════════════════════════════════════════════════════
+// SETTINGS SCREEN (atualizado com HugeIcons)
+// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+import 'package:hugeicons/hugeicons.dart'; // ✅ adicionado
 import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import 'app_sheet.dart';
-
-// ══════════════════════════════════════════════════════════════
-// SETTINGS SCREEN
-// ══════════════════════════════════════════════════════════════
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -140,11 +140,6 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     final s = AppTheme.of(context);
     final user = authController.user;
 
-    // ══════════════════════════════════════════════════════════
-    // FIX: status bar presa. AnnotatedRegion respeita o z-order de
-    // rota e aplica o estilo ao topo da pilha, sem depender de
-    // chamadas imperativas que ficam "por baixo" desta rota nova.
-    // ══════════════════════════════════════════════════════════
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -318,7 +313,12 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                     AppTap(
                       onTap: () => Navigator.pop(context),
                       s: s,
-                      child: AppIcon('back.svg', color: s.onSurface, size: 20),
+                      // ✅ substituído AppIcon por HugeIcon
+                      child: HugeIcon(
+                        icon: HugeIcons.strokeRoundedArrowLeft01,
+                        color: s.onSurface,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text('Definições',
@@ -565,7 +565,6 @@ class _SettingsRowState extends State<_SettingsRow> {
 }
 
 // ── Botão terminar sessão ───────────────────────────────────
-// Cores Fluent 2 (Cranberry) via s.error / s.onError.
 
 class _LogoutButton extends StatefulWidget {
   final AppColorScheme s;
@@ -610,8 +609,6 @@ class _LogoutButtonState extends State<_LogoutButton> {
 }
 
 // ── Sheet de confirmação genérico (Sim / Não) ─────────────────
-// Agora sem Material/Container externo — o CupertinoSheetRoute
-// fornece a moldura e o grabber nativos.
 
 class _ConfirmActionSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -719,7 +716,6 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
 }
 
 // ── Sheet de edição de campo simples (nome / palavra-passe) ────
-// Agora sem Container externo, margem, sombra e grabber manual.
 
 class _EditFieldSheet extends StatefulWidget {
   final AppColorScheme s;
@@ -827,8 +823,11 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                           onTap: () => setState(() => _obscureNow = !_obscureNow),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            child: AppIcon(
-                              _obscureNow ? 'eye.svg' : 'eye_off.svg',
+                            // ✅ substituído AppIcon por HugeIcon
+                            child: HugeIcon(
+                              icon: _obscureNow
+                                  ? HugeIcons.strokeRoundedEye
+                                  : HugeIcons.strokeRoundedEyeOff,
                               color: s.onSurfaceVariant,
                               size: 18,
                             ),
