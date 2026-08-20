@@ -343,7 +343,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
 
   Future<void> _openOptions() async {
     final result = await showAppSheet(
-      context: context,
+      context,
       builder: (ctx) => _ChartOptionsSheet(
         initialType: _chartType,
         initialTitle: _title,
@@ -635,7 +635,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
 
   Future<void> _pickColor(int index) async {
     final selected = await showAppSheet<Color>(
-      context: context,
+      context,
       builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
@@ -1238,7 +1238,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
 
   Future<void> _openPairSelector() async {
     final selected = await showAppSheet<String>(
-      context: context,
+      context,
       builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
         child: Column(
@@ -1607,7 +1607,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final nameCtrl = TextEditingController();
     final timeCtrl = TextEditingController();
     showAppSheet(
-      context: context,
+      context,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Padding(
@@ -2715,7 +2715,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
 
   Future<void> _openEditSheet() async {
     final selected = await showAppSheet<String>(
-      context: context,
+      context,
       builder: (ctx) => _MathTypeSheet(
         currentType: _currentType,
         functionDefs: _functionDefs,

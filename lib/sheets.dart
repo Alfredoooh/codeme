@@ -17,7 +17,7 @@ Future<T?> showCraftBottomSheet<T>({
   String? title,
 }) {
   return showAppSheet<T>(
-    context: context,
+    context,
     builder: (_) => ColoredBox(
       color: s.cardBackground,
       child: SafeArea(
@@ -116,7 +116,7 @@ Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
 Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
   final ctrl = TextEditingController();
   return showAppSheet<void>(
-    context: context,
+    context,
     builder: (ctx) => Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(

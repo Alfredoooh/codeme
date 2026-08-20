@@ -368,7 +368,7 @@ Future<String?> showAiEditModal(
 }) {
   final ctrl = TextEditingController();
   return showAppSheet<String>(
-    context: context,
+    context,
     builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
       child: Padding(

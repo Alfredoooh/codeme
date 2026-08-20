@@ -284,8 +284,8 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
     showAppSheet(
-      context: context,
-      builder: (ctx) => _DeleteConversationSheet(
+  context,
+  builder: (ctx) => _DeleteConversationSheet(
         s: widget.s,
         title: item.title,
         onConfirm: () {
@@ -944,7 +944,7 @@ Future<void> showRenameSheet(
 }) {
   final ctrl = TextEditingController(text: currentTitle);
   return showAppSheet<void>(
-    context: context,
+    context,
     builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
       child: Padding(

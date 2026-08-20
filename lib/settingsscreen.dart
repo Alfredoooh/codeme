@@ -52,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
   void _confirmLogout(BuildContext context, AppColorScheme s) {
     showAppSheet(
-      context: context,
+      context,
       builder: (ctx) => _ConfirmActionSheet(
         s: s,
         message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
@@ -74,7 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
   void _editName(BuildContext context, AppColorScheme s) {
     showAppSheet(
-      context: context,
+      context,
       builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar nome',
@@ -99,7 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
   void _editPassword(BuildContext context, AppColorScheme s) {
     showAppSheet(
-      context: context,
+      context,
       builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar palavra-passe',
@@ -119,7 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
     showAppSheet(
-      context: context,
+      context,
       builder: (ctx) => _ConfirmActionSheet(
         s: s,
         message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',

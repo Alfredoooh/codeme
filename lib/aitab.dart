@@ -2593,7 +2593,7 @@ Future<void> showSelectTextSheet(
   required String text,
 }) {
   return showAppSheet<void>(
-    context: context,
+    context,
     builder: (ctx) => Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(
@@ -2632,7 +2632,7 @@ Future<void> showAttachedFilesSheet(
   required ValueChanged<String> onRemove,
 }) {
   return showAppSheet<void>(
-    context: context,
+    context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setModalState) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -3153,7 +3153,7 @@ Future<void> showCanvasSheet(
   required ValueChanged<LocalCanvasItem> onOpenCanvas,
 }) {
   return showAppSheet<void>(
-    context: context,
+    context,
     builder: (ctx) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
@@ -3276,7 +3276,7 @@ Future<void> showVoiceRecordSheet(
   required ValueChanged<String> onTranscribed,
 }) {
   return showAppSheet<void>(
-    context: context,
+    context,
     builder: (ctx) => _VoiceRecordSheetContent(
       s: s,
       onTranscribed: onTranscribed,
