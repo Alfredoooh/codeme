@@ -42,9 +42,9 @@ IconData _hugeIconFromAsset(String asset) {
     case 'image.svg':          return HugeIcons.strokeRoundedImage01;
     case 'camera.svg':         return HugeIcons.strokeRoundedCamera01;
     case 'globe.svg':          return HugeIcons.strokeRoundedGlobe02;
-    case 'widgets.svg':        return HugeIcons.strokeRoundedWidgets;
+    case 'widgets.svg':        return HugeIcons.strokeRoundedDashboardSquare01;
     case 'cards.svg':          return HugeIcons.strokeRoundedCards;
-    case 'more_filled.svg':    return HugeIcons.strokeRoundedMoreHorizontal;
+    case 'more_filled.svg':    return HugeIcons.strokeRoundedIdentityCard;
     case 'check.svg':          return HugeIcons.strokeRoundedTick01;
     case 'incognito_filled.svg': return HugeIcons.strokeRoundedIncognito;
     case 'edit.svg':           return HugeIcons.strokeRoundedEdit02;
@@ -60,10 +60,10 @@ IconData _hugeIconFromAsset(String asset) {
 
 IconData _hugeIconForEditorType(EditorType type) {
   switch (type) {
-    case EditorType.docs:       return HugeIcons.strokeRoundedDocument01;
+    case EditorType.docs:       return HugeIcons.strokeRoundedFile01;
     case EditorType.sheets:     return HugeIcons.strokeRoundedTable01;
     case EditorType.slides:     return HugeIcons.strokeRoundedPresentation01;
-    case EditorType.whiteboard: return HugeIcons.strokeRoundedWhiteboard01;
+    case EditorType.whiteboard: return HugeIcons.strokeRoundedPencilEdit02;
   }
 }
 
