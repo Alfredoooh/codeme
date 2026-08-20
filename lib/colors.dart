@@ -1,9 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const Curve kCupertino    = Cubic(0.25, 0.1,  0.25, 1.0);
 const Curve kCupertinoIn  = Cubic(0.42, 0.0,  1.0,  1.0);
 const Curve kCupertinoOut = Cubic(0.0,  0.0,  0.58, 1.0);
+
+// ══════════════════════════════════════════════════════════════
+// MODO DE TEMA — três estados reais: claro, escuro, automático.
+// "Automático" acompanha o Brightness do sistema operativo e
+// atualiza-se sozinho quando o utilizador muda o tema do telemóvel
+// enquanto a app está aberta (via SchedulerBinding platform
+// dispatcher callback, sem precisar reabrir a app).
+// ══════════════════════════════════════════════════════════════
+
+enum AppThemeMode { light, dark, system }
+
+extension AppThemeModeX on AppThemeMode {
+  String get storageValue => const {
+        AppThemeMode.light:  'light',
+        AppThemeMode.dark:   'dark',
+        AppThemeMode.system: 'system',
+      }[this]!;
+
+  static AppThemeMode fromStorage(String? raw) {
+    switch (raw) {
+      case 'light':  return AppThemeMode.light;
+      case 'dark':   return AppThemeMode.dark;
+      case 'system':
+      default:       return AppThemeMode.system;
+    }
+  }
+}
 
 class AppColorScheme {
   final bool isDark;
@@ -64,13 +92,11 @@ class AppColorScheme {
   Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
 
   /// Sombra de cards e botões isolados (drawer, contas, resultados
-  /// de pesquisa). CORRIGIDO: em modo claro a sombra estava a
-  /// 0.04 de opacidade — praticamente invisível contra um card
-  /// branco puro sobre pageBackground quase branco. Subida para
-  /// 0.10 de opacidade com blurRadius maior e leve spread negativo
-  /// via segunda camada mais rasteira, para dar definição real ao
-  /// card sem ficar pesada/exagerada. Dark mode inalterado — já
-  /// estava correto.
+  /// de pesquisa, settings). Em modo claro a sombra é visível mas
+  /// contida (0.10 de opacidade, blur 14 + reforço de contorno a
+  /// 0.06/blur 3) — dá definição real ao card sobre o
+  /// pageBackground quase branco, sem ficar pesada. Dark mode
+  /// inalterado.
   List<BoxShadow> get cardShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]
       : [
@@ -84,6 +110,14 @@ class AppColorScheme {
           BoxShadow(color: Colors.black.withOpacity(0.14), blurRadius: 22, offset: const Offset(0, 8)),
           BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1)),
         ];
+
+  /// Sombra reduzida — usada nos cards de lista de settings, para
+  /// não competir visualmente com o cardShadow "profundo" do drawer
+  /// (pedido explícito: mesmo estilo dos cards do drawer, mas sem
+  /// sombra tão profunda).
+  List<BoxShadow> get cardShadowSoft => isDark
+      ? [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 6, offset: const Offset(0, 1))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))];
 
   List<BoxShadow> get navBarShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 4))]
@@ -102,39 +136,84 @@ class AppColorScheme {
 
 // ══════════════════════════════════════════════════════════════
 // THEME NOTIFIER — fonte única de verdade, global, sem árvore.
+// Agora com 3 modos reais: light / dark / system. Em modo system,
+// isDark é derivado do Brightness atual da plataforma e atualiza-se
+// sozinho em runtime via PlatformDispatcher.onPlatformBrightness
+// ChangedCallback, sem precisar reiniciar a app nem navegar.
 // ══════════════════════════════════════════════════════════════
 
 class AppThemeNotifier extends ChangeNotifier {
-  static const _kDarkKey = 'app_theme_is_dark';
+  static const _kModeKey = 'app_theme_mode';
 
-  bool isDark = false;
+  AppThemeMode mode = AppThemeMode.system;
   bool isIncognito = false;
+
+  /// Resolve o Brightness atual do sistema operativo diretamente do
+  /// PlatformDispatcher — não depende de um BuildContext, por isso
+  /// pode ser lido a partir do ChangeNotifier global sem árvore.
+  bool get _systemIsDark =>
+      SchedulerBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+
+  /// Valor efetivo consumido por AppTheme.of(context) — resolve
+  /// "system" para o Brightness real do SO em tempo real.
+  bool get isDark {
+    switch (mode) {
+      case AppThemeMode.light:  return false;
+      case AppThemeMode.dark:   return true;
+      case AppThemeMode.system: return _systemIsDark;
+    }
+  }
+
+  AppThemeNotifier() {
+    // Regista-se para saber quando o utilizador muda o tema do
+    // telemóvel enquanto a app está aberta, e só reage a isso
+    // quando o modo ativo é "system" — caso contrário o notify
+    // seria desnecessário (o tema já está fixo por escolha do
+    // utilizador).
+    SchedulerBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
+      if (mode == AppThemeMode.system) notifyListeners();
+    };
+  }
 
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      isDark = prefs.getBool(_kDarkKey) ?? false;
+      final raw = prefs.getString(_kModeKey);
+      if (raw != null) {
+        mode = AppThemeModeX.fromStorage(raw);
+      } else {
+        // Migração: instalações antigas guardavam só um bool.
+        final legacyDark = prefs.getBool('app_theme_is_dark');
+        if (legacyDark != null) {
+          mode = legacyDark ? AppThemeMode.dark : AppThemeMode.light;
+        }
+      }
       notifyListeners();
     } catch (_) {}
   }
 
-  void toggleDark() {
-    isDark = !isDark;
+  void setMode(AppThemeMode value) {
+    if (mode == value) return;
+    mode = value;
     notifyListeners();
     _persist();
   }
 
+  /// Mantido por compatibilidade com chamadas existentes
+  /// (appTheme.toggleDark() em drawermenu.dart) — alterna
+  /// diretamente entre claro e escuro, saindo do modo automático.
+  void toggleDark() {
+    setMode(isDark ? AppThemeMode.light : AppThemeMode.dark);
+  }
+
   void setDark(bool value) {
-    if (isDark == value) return;
-    isDark = value;
-    notifyListeners();
-    _persist();
+    setMode(value ? AppThemeMode.dark : AppThemeMode.light);
   }
 
   Future<void> _persist() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kDarkKey, isDark);
+      await prefs.setString(_kModeKey, mode.storageValue);
     } catch (_) {}
   }
 

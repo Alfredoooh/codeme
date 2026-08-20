@@ -1,11 +1,24 @@
 // ══════════════════════════════════════════════════════════════
-// SETTINGS SCREEN (atualizado com HugeIcons)
+// SETTINGS SCREEN
+// ══════════════════════════════════════════════════════════════
+// ATUALIZAÇÃO: avatar centrado no topo (sem card, estilo
+// ChatGPT); botão de voltar em container circular igual ao header
+// do drawer; cards no mesmo estilo do drawer mas com sombra mais
+// suave (cardShadowSoft); ícones exclusivamente CupertinoIcons;
+// nova seção "Geral" com Memória (para onde "eliminar todas as
+// conversas" se mudou — deixou de estar solto na primeira tela) e
+// Área de trabalho (placeholder visual, sem lógica ainda); a linha
+// "Modo escuro" com AppSwitch foi substituída por uma tela dedicada
+// "Aparência" com 3 pills 100% arredondados (Claro / Escuro /
+// Automático) e um slider de tamanho de fonte no estilo Material
+// Design Expressive, com pré-visualização ao vivo (por agora sem
+// ligar a um controlador global de escala de texto — só visual).
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
-import 'package:hugeicons/hugeicons.dart'; // ✅ adicionado
 import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
@@ -135,6 +148,44 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     );
   }
 
+  void _openAppearance(BuildContext context, AppColorScheme s) {
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => const _AppearanceScreen(),
+      transitionsBuilder: (_, anim, __, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+        child: child,
+      ),
+    ));
+  }
+
+  void _openMemory(BuildContext context, AppColorScheme s) {
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => _MemoryScreen(
+        onDeleteAllConversations: () => _confirmDeleteAllConversations(context, s),
+      ),
+      transitionsBuilder: (_, anim, __, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+        child: child,
+      ),
+    ));
+  }
+
+  void _openWorkspace(BuildContext context) {
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => const _WorkspaceScreen(),
+      transitionsBuilder: (_, anim, __, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+        child: child,
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -169,20 +220,34 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                         children: [
                           _ProfileHeader(s: s, user: user, loading: _refreshing),
 
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 32),
 
-                          _SectionLabel(s: s, label: 'Aparência'),
+                          _SectionLabel(s: s, label: 'Geral'),
                           const SizedBox(height: 10),
                           _SettingsGroup(s: s, rows: [
                             _SettingsRow(
                               s: s,
-                              label: 'Modo escuro',
-                              onTap: () {},
-                              trailing: AppSwitch(
-                                value: appTheme.isDark,
-                                s: s,
-                                onChanged: (_) => appTheme.toggleDark(),
-                              ),
+                              icon: CupertinoIcons.paintbrush_fill,
+                              label: 'Aparência',
+                              onTap: () => _openAppearance(context, s),
+                              trailing: Icon(CupertinoIcons.chevron_forward,
+                                  size: 16, color: s.onSurfaceVariant),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              icon: CupertinoIcons.rectangle_stack_fill,
+                              label: 'Memória',
+                              onTap: () => _openMemory(context, s),
+                              trailing: Icon(CupertinoIcons.chevron_forward,
+                                  size: 16, color: s.onSurfaceVariant),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              icon: CupertinoIcons.briefcase_fill,
+                              label: 'Área de trabalho',
+                              onTap: () => _openWorkspace(context),
+                              trailing: Icon(CupertinoIcons.chevron_forward,
+                                  size: 16, color: s.onSurfaceVariant),
                             ),
                           ]),
 
@@ -193,6 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                           _SettingsGroup(s: s, rows: [
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.person_fill,
                               label: 'Nome',
                               onTap: () => _editName(context, s),
                               trailing: Text('Alterar',
@@ -203,6 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.mail_solid,
                               label: 'Email',
                               onTap: () {},
                               trailing: Text(user?.email ?? '—',
@@ -213,6 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.lock_fill,
                               label: 'Palavra-passe',
                               onTap: () => _editPassword(context, s),
                               trailing: Text('Alterar',
@@ -223,6 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.sparkles,
                               label: 'Créditos',
                               onTap: () {},
                               trailing: Text('${user?.credits ?? 0}',
@@ -234,25 +303,12 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
                           const SizedBox(height: 28),
 
-                          _SectionLabel(s: s, label: 'Dados'),
-                          const SizedBox(height: 10),
-                          _SettingsGroup(s: s, rows: [
-                            _SettingsRow(
-                              s: s,
-                              label: 'Eliminar todas as conversas',
-                              labelColor: s.error,
-                              onTap: () => _confirmDeleteAllConversations(context, s),
-                              trailing: const SizedBox.shrink(),
-                            ),
-                          ]),
-
-                          const SizedBox(height: 28),
-
                           _SectionLabel(s: s, label: 'Sobre'),
                           const SizedBox(height: 10),
                           _SettingsGroup(s: s, rows: [
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.info_circle_fill,
                               label: 'Versão',
                               onTap: () {},
                               trailing: Text('1.0.0',
@@ -262,24 +318,28 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.doc_text_fill,
                               label: 'Termos de serviço',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.shield_fill,
                               label: 'Política de privacidade',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.chat_bubble_text_fill,
                               label: 'Enviar feedback',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
                             ),
                             _SettingsRow(
                               s: s,
+                              icon: CupertinoIcons.question_circle_fill,
                               label: 'Ajuda e suporte',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
@@ -297,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
               Positioned(
                 top: 0, left: 0, right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   height: 52,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -310,17 +370,11 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                     ),
                   ),
                   child: Row(children: [
-                    AppTap(
-                      onTap: () => Navigator.pop(context),
+                    _CircularBackButton(
                       s: s,
-                      // ✅ substituído AppIcon por HugeIcon
-                      child: HugeIcon(
-                        icon: HugeIcons.strokeRoundedArrowLeft01,
-                        color: s.onSurface,
-                        size: 20,
-                      ),
+                      onTap: () => Navigator.pop(context),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Text('Definições',
                         style: TextStyle(
                             fontSize: 16,
@@ -356,7 +410,44 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 }
 
-// ── Cabeçalho com avatar, nome e email reais ────────────────────
+// ── Botão de voltar em container circular — idêntico ao
+// _HeaderIconButton do drawer (fundo sólido sempre visível, não só
+// ao pressionar, com sombra própria). ───────────────────────────
+
+class _CircularBackButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _CircularBackButton({required this.s, required this.onTap});
+  @override State<_CircularBackButton> createState() => _CircularBackButtonState();
+}
+
+class _CircularBackButtonState extends State<_CircularBackButton> {
+  bool _p = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        width: 36, height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _p ? s.pressed : s.cardBackground,
+          shape: BoxShape.circle,
+          boxShadow: s.cardShadow,
+        ),
+        child: Icon(CupertinoIcons.back, color: s.onSurface, size: 18),
+      ),
+    );
+  }
+}
+
+// ── Cabeçalho — avatar centrado, sem card, estilo ChatGPT. ──────
 
 class _ProfileHeader extends StatelessWidget {
   final AppColorScheme s;
@@ -379,72 +470,77 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = user?.name ?? 'Utilizador';
-    final email = user?.email ?? '';
     final avatarRaw = user?.avatar;
     final avatarBytes = (avatarRaw != null && avatarRaw.isNotEmpty)
         ? _decodeAvatar(avatarRaw)
         : null;
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(children: [
-        Container(
-          width: 56, height: 56,
-          alignment: Alignment.center,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
-          child: avatarBytes != null
-              ? Image.memory(
-                  avatarBytes,
-                  width: 56, height: 56,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Text(initial,
+    return Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 88, height: 88,
+              alignment: Alignment.center,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
+              child: avatarBytes != null
+                  ? Image.memory(
+                      avatarBytes,
+                      width: 88, height: 88,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Text(initial,
+                          style: TextStyle(
+                              color: s.onPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 32)),
+                    )
+                  : Text(initial,
                       style: TextStyle(
                           color: s.onPrimary,
                           fontWeight: FontWeight.w700,
-                          fontSize: 22)),
-                )
-              : Text(initial,
-                  style: TextStyle(
-                      color: s.onPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 22)),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(name,
-                  style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: s.onSurface),
-                  overflow: TextOverflow.ellipsis),
-              if (email.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(email,
-                    style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
-                    overflow: TextOverflow.ellipsis),
-              ],
-            ],
-          ),
-        ),
-        if (loading)
-          SizedBox(
-            width: 16, height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
+                          fontSize: 32)),
             ),
-          ),
-      ]),
+            if (loading)
+              Positioned.fill(
+                child: Container(
+                  decoration: const BoxDecoration(shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              right: -2, bottom: -2,
+              child: Container(
+                width: 30, height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: s.cardBackground,
+                  shape: BoxShape.circle,
+                  boxShadow: s.cardShadow,
+                ),
+                child: Icon(CupertinoIcons.pencil, size: 14, color: s.onSurface),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(name,
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: s.onSurface),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis),
+      ],
     );
   }
 }
@@ -465,15 +561,18 @@ class _SectionLabel extends StatelessWidget {
           letterSpacing: 0.5));
 }
 
-// ── Grupo de cards ───────────────────────────────────────────
+// ── Grupo de cards — mesmo estilo visual do drawer (_GroupedRows):
+// raio grande nas pontas externas, raio interno pequeno nas
+// junções — mas com cardShadowSoft, não cardShadow, para não
+// competir com a profundidade do drawer. ────────────────────────
 
 class _SettingsGroup extends StatelessWidget {
   final AppColorScheme s;
   final List<_SettingsRow> rows;
   const _SettingsGroup({required this.s, required this.rows});
 
-  static const double _outerRadius = 16;
-  static const double _innerRadius = 2;
+  static const double _outerRadius = 20;
+  static const double _innerRadius = 6;
 
   @override
   Widget build(BuildContext context) {
@@ -516,7 +615,8 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: radius),
+            borderRadius: radius,
+            boxShadow: s.cardShadowSoft),
         clipBehavior: Clip.antiAlias,
         child: child,
       );
@@ -524,12 +624,14 @@ class _SettingsCard extends StatelessWidget {
 
 class _SettingsRow extends StatefulWidget {
   final AppColorScheme s;
+  final IconData icon;
   final String label;
   final Widget trailing;
   final Color? labelColor;
   final VoidCallback onTap;
   const _SettingsRow(
       {required this.s,
+      required this.icon,
       required this.label,
       required this.trailing,
       required this.onTap,
@@ -540,28 +642,33 @@ class _SettingsRow extends StatefulWidget {
 class _SettingsRowState extends State<_SettingsRow> {
   bool _p = false;
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   (_) => setState(() => _p = true),
-        onTapCancel: ()  => setState(() => _p = false),
-        onTapUp:     (_) => setState(() => _p = false),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          color: _p ? widget.s.hover : Colors.transparent,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(widget.label,
-                  style: TextStyle(
-                      fontSize: 15,
-                      color: widget.labelColor ?? widget.s.onSurface)),
-              widget.trailing,
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final color = widget.labelColor ?? s.onSurface;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        color: _p ? s.hover : Colors.transparent,
+        child: Row(
+          children: [
+            Icon(widget.icon, size: 19, color: widget.labelColor ?? s.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(widget.label,
+                  style: TextStyle(fontSize: 15, color: color)),
+            ),
+            widget.trailing,
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 // ── Botão terminar sessão ───────────────────────────────────
@@ -823,14 +930,13 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                           onTap: () => setState(() => _obscureNow = !_obscureNow),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            // ✅ substituído AppIcon por HugeIcon
-                            child: HugeIcon(
-  icon: _obscureNow
-      ? HugeIcons.strokeRoundedEye
-      : HugeIcons.strokeRoundedViewOffSlash,
-  color: s.onSurfaceVariant,
-  size: 18,
-),
+                            child: Icon(
+                              _obscureNow
+                                  ? CupertinoIcons.eye_fill
+                                  : CupertinoIcons.eye_slash_fill,
+                              color: s.onSurfaceVariant,
+                              size: 18,
+                            ),
                           ),
                         )
                       : null,
@@ -881,6 +987,470 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
               ),
             ]),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// APARÊNCIA — tela dedicada com os 3 pills (Claro / Escuro /
+// Automático) 100% arredondados, mesmo raio do pill de utilizador
+// do drawer (BorderRadius.circular(999)), e o slider de tamanho de
+// fonte no estilo Material Design Expressive: trilho grosso,
+// thumb em barra vertical destacada, valores mínimo/máximo com
+// terminações arredondadas, e um cartão de pré-visualização ao
+// vivo por baixo — réplica fiel da imagem de referência enviada.
+// ══════════════════════════════════════════════════════════════
+
+class _AppearanceScreen extends StatefulWidget {
+  const _AppearanceScreen();
+  @override State<_AppearanceScreen> createState() => _AppearanceScreenState();
+}
+
+class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive<_AppearanceScreen> {
+  // Só visual/pré-visualização por agora — não liga a um
+  // controlador global de escala de texto da app.
+  double _fontScale = 0.35;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Row(children: [
+                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  const SizedBox(width: 12),
+                  Text('Aparência',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: s.onSurface)),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _ThemeModePills(s: s),
+              ),
+              const SizedBox(height: 28),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text('Tamanho do texto',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurfaceVariant)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _FontSizeCard(
+                  s: s,
+                  value: _fontScale,
+                  onChanged: (v) => setState(() => _fontScale = v),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeModePills extends StatelessWidget {
+  final AppColorScheme s;
+  const _ThemeModePills({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: s.cardShadowSoft,
+      ),
+      child: Row(children: [
+        Expanded(
+          child: _ThemeModePillButton(
+            s: s,
+            icon: CupertinoIcons.sun_max_fill,
+            label: 'Claro',
+            selected: appTheme.mode == AppThemeMode.light,
+            onTap: () => appTheme.setMode(AppThemeMode.light),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _ThemeModePillButton(
+            s: s,
+            icon: CupertinoIcons.moon_fill,
+            label: 'Escuro',
+            selected: appTheme.mode == AppThemeMode.dark,
+            onTap: () => appTheme.setMode(AppThemeMode.dark),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: _ThemeModePillButton(
+            s: s,
+            icon: CupertinoIcons.gear_alt_fill,
+            label: 'Automático',
+            selected: appTheme.mode == AppThemeMode.system,
+            onTap: () => appTheme.setMode(AppThemeMode.system),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ThemeModePillButton extends StatefulWidget {
+  final AppColorScheme s;
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ThemeModePillButton({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  @override State<_ThemeModePillButton> createState() => _ThemeModePillButtonState();
+}
+
+class _ThemeModePillButtonState extends State<_ThemeModePillButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final sel = widget.selected;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: sel ? s.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 20, color: sel ? s.onPrimary : s.onSurfaceVariant),
+              const SizedBox(height: 6),
+              Text(widget.label,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                      color: sel ? s.onPrimary : s.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Card de tamanho de fonte: slider Material Expressive (trilho
+// grosso arredondado, thumb em barra vertical destacada) com
+// pré-visualização ao vivo (balão de pergunta + resposta), réplica
+// da imagem de referência enviada. ───────────────────────────────
+
+class _FontSizeCard extends StatelessWidget {
+  final AppColorScheme s;
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _FontSizeCard({required this.s, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    // Escala visual de pré-visualização: 0.0 → 0.85x, 1.0 → 1.35x
+    final previewScale = 0.85 + (value * 0.5);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 22),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: s.cardShadowSoft,
+      ),
+      child: Column(children: [
+        _ExpressiveSlider(s: s, value: value, onChanged: onChanged),
+        const SizedBox(height: 28),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: s.hover,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text('Qual é a verdade do universo?',
+                style: TextStyle(
+                    fontSize: 14 * previewScale,
+                    color: s.onSurface)),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('O Universo é um vasto sistema de leis e mistérios.',
+              style: TextStyle(
+                  fontSize: 14 * previewScale,
+                  color: s.onSurface,
+                  height: 1.35)),
+        ),
+        const SizedBox(height: 18),
+        Text('PRÉ-VISUALIZAR',
+            style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: s.onSurfaceVariant)),
+      ]),
+    );
+  }
+}
+
+// ── Slider estilo Material Design Expressive: trilho espesso com
+// pontas 100% arredondadas dividido em duas metades (preenchida /
+// vazia) por um thumb em forma de barra vertical, sem círculo
+// tradicional — fiel à imagem de referência. ────────────────────
+
+class _ExpressiveSlider extends StatefulWidget {
+  final AppColorScheme s;
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _ExpressiveSlider({required this.s, required this.value, required this.onChanged});
+  @override State<_ExpressiveSlider> createState() => _ExpressiveSliderState();
+}
+
+class _ExpressiveSliderState extends State<_ExpressiveSlider> {
+  static const double _trackHeight = 44;
+  static const double _thumbWidth = 5;
+  static const double _thumbHeight = 60;
+  static const double _gap = 6;
+
+  double _dragValue = 0;
+  bool _dragging = false;
+
+  double get _effectiveValue => _dragging ? _dragValue : widget.value;
+
+  void _handlePan(double dx, double width) {
+    final usable = width - _thumbWidth;
+    final clamped = (dx / usable).clamp(0.0, 1.0);
+    setState(() => _dragValue = clamped);
+    widget.onChanged(clamped);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      final v = _effectiveValue;
+      final thumbX = (v * (width - _thumbWidth)).clamp(0.0, width - _thumbWidth);
+
+      return GestureDetector(
+        onPanStart: (d) {
+          setState(() { _dragging = true; _dragValue = widget.value; });
+          _handlePan(d.localPosition.dx, width);
+        },
+        onPanUpdate: (d) => _handlePan(d.localPosition.dx, width),
+        onPanEnd: (_) => setState(() => _dragging = false),
+        onTapUp: (d) {
+          setState(() { _dragging = true; });
+          _handlePan(d.localPosition.dx, width);
+          setState(() => _dragging = false);
+        },
+        child: SizedBox(
+          height: _thumbHeight,
+          width: width,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            clipBehavior: Clip.none,
+            children: [
+              // Trilho vazio (fundo completo)
+              Positioned(
+                top: (_thumbHeight - _trackHeight) / 2,
+                left: 0, right: 0,
+                child: Container(
+                  height: _trackHeight,
+                  decoration: BoxDecoration(
+                    color: s.hover,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              // Trilho preenchido (até ao thumb, com pequeno gap)
+              Positioned(
+                top: (_thumbHeight - _trackHeight) / 2,
+                left: 0,
+                width: (thumbX - _gap).clamp(0.0, width),
+                child: Container(
+                  height: _trackHeight,
+                  decoration: BoxDecoration(
+                    color: s.primary,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              // Thumb — barra vertical destacada, sem círculo
+              Positioned(
+                left: thumbX,
+                top: 0,
+                child: Container(
+                  width: _thumbWidth,
+                  height: _thumbHeight,
+                  decoration: BoxDecoration(
+                    color: s.onSurface,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MEMÓRIA — para onde "eliminar todas as conversas" se mudou.
+// Deixou de estar solto na primeira tela de Definições.
+// ══════════════════════════════════════════════════════════════
+
+class _MemoryScreen extends StatelessWidget {
+  final VoidCallback onDeleteAllConversations;
+  const _MemoryScreen({required this.onDeleteAllConversations});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Row(children: [
+                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  const SizedBox(width: 12),
+                  Text('Memória',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: s.onSurface)),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Gere os dados de conversas guardados na tua conta.',
+                  style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant, height: 1.4),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _SettingsGroup(s: s, rows: [
+                  _SettingsRow(
+                    s: s,
+                    icon: CupertinoIcons.trash_fill,
+                    label: 'Eliminar todas as conversas',
+                    labelColor: s.error,
+                    onTap: onDeleteAllConversations,
+                    trailing: const SizedBox.shrink(),
+                  ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ÁREA DE TRABALHO — placeholder só visual por agora, sem lógica
+// de múltiplas áreas de trabalho ligada ainda.
+// ══════════════════════════════════════════════════════════════
+
+class _WorkspaceScreen extends StatelessWidget {
+  const _WorkspaceScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Row(children: [
+                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  const SizedBox(width: 12),
+                  Text('Área de trabalho',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: s.onSurface)),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _SettingsGroup(s: s, rows: [
+                  _SettingsRow(
+                    s: s,
+                    icon: CupertinoIcons.person_fill,
+                    label: 'Pessoal',
+                    onTap: () {},
+                    trailing: Icon(CupertinoIcons.checkmark_circle_fill,
+                        size: 18, color: s.primary),
+                  ),
+                ]),
+              ),
+            ],
+          ),
         ),
       ),
     );
