@@ -63,9 +63,20 @@ class AppColorScheme {
   /// container tem de variar com o tema, nunca fixo.
   Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
 
+  /// Sombra de cards e botões isolados (drawer, contas, resultados
+  /// de pesquisa). CORRIGIDO: em modo claro a sombra estava a
+  /// 0.04 de opacidade — praticamente invisível contra um card
+  /// branco puro sobre pageBackground quase branco. Subida para
+  /// 0.10 de opacidade com blurRadius maior e leve spread negativo
+  /// via segunda camada mais rasteira, para dar definição real ao
+  /// card sem ficar pesada/exagerada. Dark mode inalterado — já
+  /// estava correto.
   List<BoxShadow> get cardShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 1))];
+      : [
+          BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 14, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 3,  offset: const Offset(0, 1)),
+        ];
 
   List<BoxShadow> get floatingShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 18, offset: const Offset(0, 6))]
