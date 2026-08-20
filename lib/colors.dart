@@ -17,15 +17,15 @@ class AppColorScheme {
 
   // Apple System Gray palette (surfaces)
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-  Color get onSurface          => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+  Color get onSurface          => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF8E8E93) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
+  Color get pageBackground     => isDark ? const Color(0xFF000000) : const Color(0xFFF7F7F9);
   Color get cardBackground     => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
   Color get floatingSurface    => isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFFFFFF);
 
-  Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFD1D1D6);
-  Color get outlineVariant     => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE5E5EA);
+  Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFDCDCE0);
+  Color get outlineVariant     => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFECECEE);
 
   // Apple System Red
   Color get error              => isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30);
@@ -41,7 +41,7 @@ class AppColorScheme {
   Color get hover              => isDark ? const Color(0x16FFFFFF) : const Color(0x08000000);
   Color get pressed            => isDark ? const Color(0x22FFFFFF) : const Color(0x10000000);
 
-  Color get navBarBg           => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF9F9F9);
+  Color get navBarBg           => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFBFBFC);
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
   Color get navIconActive      => isDark ? const Color(0xFFFFFFFF) : const Color(0xFF007AFF);
   Color get navLabelActive     => isDark ? const Color(0xFFCFE4FF) : const Color(0xFF0D2847);
@@ -55,13 +55,13 @@ class AppColorScheme {
   /// Cinza claro neutro em light, cinza escuro neutro em dark — nunca
   /// a mesma cor do cardBackground, para dar profundidade visual ao
   /// preview tal como a imagem de referência (Image 1) mostra.
-  Color get previewBackdrop    => isDark ? const Color(0xFF242426) : const Color(0xFFE5E5EA);
+  Color get previewBackdrop    => isDark ? const Color(0xFF242426) : const Color(0xFFEFEFF1);
 
   /// Fundo do container que embrulha a barra de ações do
   /// DocumentWidgetCard (botão pill "Abrir direto no editor" + botão
   /// circular de download). Pedido explícito do utilizador: este
   /// container tem de variar com o tema, nunca fixo.
-  Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE5E5EA);
+  Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
 
   List<BoxShadow> get cardShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 10, offset: const Offset(0, 2))]
