@@ -43,7 +43,7 @@ IconData _hugeIconFromAsset(String asset) {
     case 'camera.svg':         return HugeIcons.strokeRoundedCamera01;
     case 'globe.svg':          return HugeIcons.strokeRoundedGlobe02;
     case 'widgets.svg':        return HugeIcons.strokeRoundedDashboardSquare01;
-    case 'cards.svg':          return HugeIcons.strokeRoundedCards;
+    case 'cards.svg':          return HugeIcons.strokeRoundedIdentityCard;
     case 'more_filled.svg':    return HugeIcons.strokeRoundedIdentityCard;
     case 'check.svg':          return HugeIcons.strokeRoundedTick01;
     case 'incognito_filled.svg': return HugeIcons.strokeRoundedIncognito;
@@ -3288,7 +3288,7 @@ Future<void> showCanvasSheet(
         children: [
           Row(children: [
             HugeIcon(
-              icon: HugeIcons.strokeRoundedCards,
+              icon: HugeIcons.strokeRoundedIdentityCard,
               color: s.onSurface,
               size: 18,
             ),
