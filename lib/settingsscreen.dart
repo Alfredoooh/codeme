@@ -1,24 +1,24 @@
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: appbar (topo) e container do botão "Terminar sessão"
-// (fundo) agora usam gradiente TRANSPARENTE de verdade — antes o
-// gradiente ia de s.pageBackground opaco até s.pageBackground
-// transparente, o que na prática pintava uma faixa sólida atrás do
-// texto; agora vai de s.pageBackground.withOpacity(0.85) (só o
-// suficiente para dar legibilidade ao texto sobre o conteúdo que
-// passa por baixo ao fazer scroll) até totalmente transparente, com
-// blur leve via BackdropFilter — efeito "vidro fosco" real, igual
-// ao container do botão de logout, que passou a usar o mesmo
-// approach. Tela Aparência: pills Claro/Escuro/Automático
-// substituídos por um segmented control REAL no tamanho iOS nativo
-// (~36px de altura, texto sem ícone verticalizado) em vez dos
-// botões grandes de ~70px anteriores. CupertinoPageRoute mantido em
-// todas as navegações internas.
+// CORREÇÃO: appbar VOLTOU ao gradiente progressivo puro — o blur
+// (BackdropFilter) da versão anterior foi removido, nunca devia ter
+// sido adicionado; agora usa exatamente o mesmo padrão que o
+// bottombar do botão "Terminar sessão" já usava e que ficou
+// intocado (LinearGradient de s.pageBackground opaco até
+// transparente, sem qualquer filtro). Segmented control
+// Claro/Escuro/Automático: bordas 100% arredondadas
+// (BorderRadius.circular(999) tanto no container quanto no thumb
+// deslizante) e o thumb selecionado agora usa s.primary (cor de
+// marca) com texto em s.onPrimary, em vez do cinza/branco neutro
+// anterior. Slider de tamanho de fonte: grossura geral reduzida
+// (trilho e thumb mais finos), e a ponta do trilho preenchido que
+// encosta no thumb passou a ser quase reta (radius pequeno) em vez
+// de總 arredondada — só o lado esquerdo (início do trilho) mantém
+// o arredondamento cheio.
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
@@ -339,68 +339,57 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                 ],
               ),
 
-              // ── Appbar transparente de verdade — vidro fosco
-              // leve (blur) + opacidade parcial só para legibilidade
-              // do texto, nunca uma faixa sólida da cor de fundo. ──
+              // ── Appbar — gradiente progressivo PURO, sem blur.
+              // Exatamente o mesmo padrão do bottombar abaixo, que
+              // nunca foi mexido. ─────────────────────────────────
               Positioned(
                 top: 0, left: 0, right: 0,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            s.pageBackground.withOpacity(0.82),
-                            s.pageBackground.withOpacity(0.0),
-                          ],
-                        ),
-                      ),
-                      child: Row(children: [
-                        _CircularBackButton(
-                          s: s,
-                          onTap: () => Navigator.pop(context),
-                        ),
-                        const SizedBox(width: 12),
-                        Text('Definições',
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: s.onSurface)),
-                      ]),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
                     ),
                   ),
+                  child: Row(children: [
+                    _CircularBackButton(
+                      s: s,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 12),
+                    Text('Definições',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: s.onSurface)),
+                  ]),
                 ),
               ),
 
-              // ── Bottombar — mesmo approach de vidro fosco do
-              // appbar, para o container do botão "Terminar sessão"
-              // ficar consistente com o topo. ─────────────────────
+              // ── Bottombar — inalterado, gradiente progressivo
+              // puro, tal como sempre esteve. ─────────────────────
               Positioned(
                 left: 0, right: 0, bottom: 0,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            s.pageBackground.withOpacity(0.82),
-                            s.pageBackground.withOpacity(0.0),
-                          ],
-                        ),
-                      ),
-                      child: _LogoutButton(
-                          s: s, onTap: () => _confirmLogout(context, s)),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
                     ),
                   ),
+                  child: _LogoutButton(
+                      s: s, onTap: () => _confirmLogout(context, s)),
                 ),
               ),
             ]),
@@ -989,9 +978,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APARÊNCIA — segmented control REAL no tamanho iOS nativo
-// (~36px), substituindo os pills grandes anteriores. Slider de
-// tamanho de fonte mantido.
+// APARÊNCIA
 // ══════════════════════════════════════════════════════════════
 
 class _AppearanceScreen extends StatefulWidget {
@@ -1056,11 +1043,10 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
   }
 }
 
-// ── Segmented control real, tamanho iOS nativo: ~36px de altura,
-// thumb deslizante animado atrás do texto selecionado, sem ícones
-// verticalizados — apenas o label, exatamente como o controlo do
-// UIKit/SwiftUI. Substituição direta dos _ThemeModePillButton
-// anteriores, que eram ~70px e desproporcionalmente grandes. ─────
+// ── Segmented control — 100% arredondado (container E thumb usam
+// BorderRadius.circular(999), não mais um raio pequeno de 7-9px),
+// thumb selecionado usa a cor PRIMÁRIA da app (s.primary) com texto
+// em s.onPrimary, em vez do cinza/branco neutro anterior. ────────
 
 class _ThemeSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
@@ -1081,7 +1067,7 @@ class _ThemeSegmentedControl extends StatelessWidget {
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: s.hover,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         final segmentWidth = constraints.maxWidth / _options.length;
@@ -1095,8 +1081,8 @@ class _ThemeSegmentedControl extends StatelessWidget {
             width: segmentWidth,
             child: Container(
               decoration: BoxDecoration(
-                color: s.cardBackground,
-                borderRadius: BorderRadius.circular(7),
+                color: s.primary,
+                borderRadius: BorderRadius.circular(999),
                 boxShadow: s.cardShadow,
               ),
             ),
@@ -1114,7 +1100,7 @@ class _ThemeSegmentedControl extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: appTheme.mode == mode ? FontWeight.w600 : FontWeight.w500,
-                          color: appTheme.mode == mode ? s.onSurface : s.onSurfaceVariant,
+                          color: appTheme.mode == mode ? s.onPrimary : s.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -1128,9 +1114,7 @@ class _ThemeSegmentedControl extends StatelessWidget {
   }
 }
 
-// ── Card de tamanho de fonte: slider Material Expressive (trilho
-// grosso arredondado, thumb em barra vertical destacada) com
-// pré-visualização ao vivo. ────────────────────────────────────────
+// ── Card de tamanho de fonte ──────────────────────────────────
 
 class _FontSizeCard extends StatelessWidget {
   final AppColorScheme s;
@@ -1187,6 +1171,13 @@ class _FontSizeCard extends StatelessWidget {
   }
 }
 
+// ── Slider de tamanho de fonte — grossura geral reduzida (trilho
+// e thumb mais finos que antes). A ponta do trilho preenchido que
+// fica do lado ESQUERDO (início) mantém-se 100% arredondada; a
+// ponta do lado DIREITO — a que encosta directamente no thumb —
+// passa a ser quase reta (raio pequeno, 3px), só uma leve
+// suavização, não um círculo completo. ───────────────────────────
+
 class _ExpressiveSlider extends StatefulWidget {
   final AppColorScheme s;
   final double value;
@@ -1196,10 +1187,13 @@ class _ExpressiveSlider extends StatefulWidget {
 }
 
 class _ExpressiveSliderState extends State<_ExpressiveSlider> {
-  static const double _trackHeight = 44;
-  static const double _thumbWidth = 5;
-  static const double _thumbHeight = 60;
-  static const double _gap = 6;
+  // Grossura geral reduzida — trilho e thumb mais finos que a
+  // versão anterior (que tinha 44/60).
+  static const double _trackHeight = 26;
+  static const double _thumbWidth = 4;
+  static const double _thumbHeight = 38;
+  static const double _gap = 2;
+  static const double _filledEndRadius = 3;
 
   double _dragValue = 0;
   bool _dragging = false;
@@ -1220,6 +1214,7 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
       final width = constraints.maxWidth;
       final v = _effectiveValue;
       final thumbX = (v * (width - _thumbWidth)).clamp(0.0, width - _thumbWidth);
+      final filledWidth = (thumbX - _gap).clamp(0.0, width);
 
       return GestureDetector(
         onPanStart: (d) {
@@ -1240,6 +1235,8 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
             alignment: Alignment.centerLeft,
             clipBehavior: Clip.none,
             children: [
+              // Trilho vazio (fundo completo) — mantém-se 100%
+              // arredondado nas duas pontas, é o container inteiro.
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
                 left: 0, right: 0,
@@ -1251,18 +1248,27 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
                   ),
                 ),
               ),
+              // Trilho preenchido — ponta ESQUERDA (início) 100%
+              // arredondada; ponta DIREITA (encostada no thumb)
+              // quase reta, só _filledEndRadius de suavização.
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
                 left: 0,
-                width: (thumbX - _gap).clamp(0.0, width),
+                width: filledWidth,
                 child: Container(
                   height: _trackHeight,
                   decoration: BoxDecoration(
                     color: s.primary,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(999),
+                      bottomLeft: const Radius.circular(999),
+                      topRight: const Radius.circular(_filledEndRadius),
+                      bottomRight: const Radius.circular(_filledEndRadius),
+                    ),
                   ),
                 ),
               ),
+              // Thumb — barra vertical fina, sem círculo
               Positioned(
                 left: thumbX,
                 top: 0,
