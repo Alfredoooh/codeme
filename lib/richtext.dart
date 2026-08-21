@@ -2,14 +2,25 @@
 // FILE: lib/richtext.dart
 // ══════════════════════════════════════════════════════════════
 //
-// Parser de rich text melhorado — suporta:
+// Parser de rich text — suporta:
 //   • Markdown (negrito, itálico, riscado, código inline, links)
 //   • Tabelas markdown e widgets de tabela
-//   • Blocos de código com card completo
+//   • Blocos de código com card completo (MANTÉM cor — syntax
+//     highlighting nunca foi removido, só o texto normal em prosa
+//     deixou de usar cores no _RichTextBlockParser)
+//   • Blocos de gráfico ```chart{...json...}``` — bar, line, point,
+//     estilo Apple Health/Design HIG, com cor própria por gráfico.
+//     Enquanto a fence ainda não fechou (streaming), NADA aparece
+//     no lugar — nem JSON cru, nem placeholder — exatamente como
+//     já acontecia com blocos de código normais. Quando fecha, o
+//     gráfico entra com fade + scale suave.
 //   • Matemática LaTeX-like: frações, raízes, super/subscritos,
 //     símbolos, letras gregas, operadores, setas, etc.
 //   • Comandos LaTeX adicionais: \text, \mathbf, \mathcal, etc.
-//   • Emojis shortcodes
+//   • ZERO emojis — kEmojiShortcodes foi esvaziado por pedido
+//     explícito do utilizador; a tabela fica vazia (não removida)
+//     para não quebrar quem ainda chama _substituteEmojis noutro
+//     ponto do código.
 //   • Widgets inline (quando ativados)
 // ══════════════════════════════════════════════════════════════
 
@@ -151,50 +162,16 @@ String? _toSubscriptUnicode(String s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EMOJI SHORTCODES — expandido
+// EMOJI SHORTCODES — ESVAZIADO por pedido explícito do utilizador
+// (odeia emojis). A tabela fica vazia em vez de removida para não
+// quebrar nenhuma outra parte do código que ainda a referencie —
+// o loop que a consome simplesmente não encontra nada para trocar.
 // ══════════════════════════════════════════════════════════════
 
-const Map<String, String> kEmojiShortcodes = {
-  ':smile:': '😄', ':grin:': '😁', ':joy:': '😂', ':wink:': '😉',
-  ':blush:': '😊', ':heart:': '❤️', ':thumbsup:': '👍',
-  ':thumbsdown:': '👎', ':fire:': '🔥', ':star:': '⭐',
-  ':check:': '✅', ':x:': '❌', ':warning:': '⚠️',
-  ':rocket:': '🚀', ':tada:': '🎉', ':eyes:': '👀',
-  ':thinking:': '🤔', ':clap:': '👏', ':pray:': '🙏',
-  ':100:': '💯', ':bulb:': '💡', ':lock:': '🔒', ':key:': '🔑',
-  ':bell:': '🔔', ':gear:': '⚙️', ':wave:': '👋',
-  ':point_right:': '👉', ':point_left:': '👈', ':muscle:': '💪',
-  ':zap:': '⚡', ':sparkles:': '✨', ':package:': '📦',
-  ':book:': '📖', ':memo:': '📝', ':chart:': '📊',
-  ':calendar:': '📅', ':clock:': '🕐', ':mag:': '🔍',
-  ':email:': '📧', ':phone:': '📱', ':computer:': '💻',
-  ':link:': '🔗', ':pushpin:': '📌', ':white_check_mark:': '✅',
-  ':coffee:': '☕', ':beer:': '🍺', ':wine:': '🍷', ':pizza:': '🍕',
-  ':apple:': '🍎', ':banana:': '🍌', ':grapes:': '🍇', ':watermelon:': '🍉',
-  ':sunny:': '☀️', ':cloud:': '☁️', ':rain:': '🌧️', ':snow:': '❄️',
-  ':dog:': '🐶', ':cat:': '🐱', ':mouse:': '🐭', ':rabbit:': '🐰',
-  ':fox:': '🦊', ':bear:': '🐻', ':panda:': '🐼', ':lion:': '🦁',
-  ':tiger:': '🐯', ':monkey:': '🐵', ':chicken:': '🐔', ':penguin:': '🐧',
-  ':bird:': '🐦', ':fish:': '🐟', ':dolphin:': '🐬', ':whale:': '🐳',
-  ':octopus:': '🐙', ':bee:': '🐝', ':butterfly:': '🦋', ':snail:': '🐌',
-  ':earth_africa:': '🌍', ':earth_americas:': '🌎', ':earth_asia:': '🌏',
-  ':moon:': '🌙', ':crescent_moon:': '🌙', ':new_moon:': '🌑',
-  ':full_moon:': '🌕', ':star2:': '🌟', ':dizzy:': '💫',
-  ':boom:': '💥', ':collision:': '💥', ':exclamation:': '❗',
-  ':question:': '❓', ':grey_exclamation:': '❕', ':grey_question:': '❔',
-  ':anger:': '💢', ':sweat_drops:': '💦', ':dash:': '💨',
-  ':ok_hand:': '👌', ':raised_hands:': '🙌', ':punch:': '👊',
-  ':v:': '✌️', ':metal:': '🤘', ':call_me_hand:': '🤙',
-  ':handshake:': '🤝', ':crossed_fingers:': '🤞', ':fingers_crossed:': '🤞',
-  ':brain:': '🧠', ':lungs:': '🫁', ':heartbeat:': '💓',
-  ':dna:': '🧬', ':microbe:': '🦠', ':pill:': '💊',
-  ':syringe:': '💉', ':stethoscope:': '🩺', ':thermometer:': '🌡️',
-  ':mask:': '😷', ':sneezing_face:': '🤧', ':sick:': '🤒',
-  ':bandage:': '🩹', ':ambulance:': '🚑', ':hospital:': '🏥',
-};
+const Map<String, String> kEmojiShortcodes = {};
 
 // ══════════════════════════════════════════════════════════════
-// PARSER DE EXPRESSÕES MATEMÁTICAS (LaTeX-like) — reforçado
+// PARSER DE EXPRESSÕES MATEMÁTICAS (LaTeX-like)
 // ══════════════════════════════════════════════════════════════
 
 sealed class _MathAtom {}
@@ -785,6 +762,635 @@ MathBlockParseResult _extractMathBlocks(String raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// GRÁFICOS MARKDOWN-NATIVOS — bloco ```chart{...json...}```
+// ══════════════════════════════════════════════════════════════
+// Formato esperado dentro da fence:
+// {
+//   "type": "bar" | "line" | "point",
+//   "title": "Passos esta semana",       (opcional)
+//   "subtitle": "Média: 1.577",          (opcional)
+//   "color": "orange",                    (opcional — ver _chartColor)
+//   "labels": ["Sat","Sun","Mon", ...],   (eixo X)
+//   "values": [1500, 200, 180, ...]       (eixo Y — números)
+// }
+//
+// Enquanto a fence ```chart ... ``` ainda não fechou (streaming em
+// curso), o bloco inteiro fica invisível — o parser estrutural só
+// reconhece um bloco de código depois de encontrar a fence de
+// fecho, exatamente como já acontecia com blocos ``` normais. Não
+// há JSON cru nem placeholder visível durante a escrita.
+// ══════════════════════════════════════════════════════════════
+
+class ChartSpec {
+  final String type; // bar | line | point
+  final String? title;
+  final String? subtitle;
+  final String colorName;
+  final List<String> labels;
+  final List<double> values;
+
+  const ChartSpec({
+    required this.type,
+    required this.labels,
+    required this.values,
+    this.title,
+    this.subtitle,
+    this.colorName = 'blue',
+  });
+
+  static ChartSpec? tryParse(String rawJson) {
+    try {
+      // Parser tolerante manual — evita depender de dart:convert
+      // falhar duro com vírgulas finais ou aspas simples que a IA
+      // por vezes gera; tenta primeiro o caminho estrito e, se
+      // falhar, normaliza vírgulas finais antes de tentar de novo.
+      Map<String, dynamic>? decoded = _tryDecode(rawJson);
+      if (decoded == null) {
+        final cleaned = rawJson.replaceAll(RegExp(r',(\s*[}\]])'), r'$1');
+        decoded = _tryDecode(cleaned);
+      }
+      if (decoded == null) return null;
+
+      final type = (decoded['type']?.toString() ?? 'bar').toLowerCase();
+      if (type != 'bar' && type != 'line' && type != 'point') return null;
+
+      final rawLabels = decoded['labels'];
+      final rawValues = decoded['values'];
+      if (rawLabels is! List || rawValues is! List) return null;
+      if (rawLabels.isEmpty || rawValues.isEmpty) return null;
+
+      final labels = rawLabels.map((e) => e.toString()).toList();
+      final values = <double>[];
+      for (final v in rawValues) {
+        if (v is num) {
+          values.add(v.toDouble());
+        } else {
+          final parsed = double.tryParse(v.toString());
+          if (parsed == null) return null;
+          values.add(parsed);
+        }
+      }
+      if (values.isEmpty) return null;
+
+      return ChartSpec(
+        type: type,
+        title: decoded['title']?.toString(),
+        subtitle: decoded['subtitle']?.toString(),
+        colorName: decoded['color']?.toString() ?? 'blue',
+        labels: labels,
+        values: values,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Map<String, dynamic>? _tryDecode(String raw) {
+    try {
+      final decoded = _jsonDecodeSafe(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// Pequeno wrapper para isolar dart:convert num único ponto — usa
+// jsonDecode da própria dart:convert, já disponível via
+// flutter/services indiretamente. Declarado aqui para clareza.
+dynamic _jsonDecodeSafe(String raw) {
+  return const JsonDecoderShim().convert(raw);
+}
+
+// Shim mínimo em vez de importar dart:convert inteiro só para um
+// decode — mantém o ficheiro consistente com o resto do projeto,
+// que já não importava dart:convert aqui anteriormente.
+class JsonDecoderShim {
+  const JsonDecoderShim();
+  dynamic convert(String input) {
+    return _JsonParser(input).parse();
+  }
+}
+
+class _JsonParser {
+  final String s;
+  int i = 0;
+  _JsonParser(this.s);
+
+  dynamic parse() {
+    _skipWs();
+    final v = _parseValue();
+    _skipWs();
+    return v;
+  }
+
+  void _skipWs() {
+    while (i < s.length && (s[i] == ' ' || s[i] == '\n' || s[i] == '\t' || s[i] == '\r')) {
+      i++;
+    }
+  }
+
+  dynamic _parseValue() {
+    _skipWs();
+    if (i >= s.length) throw const FormatException('unexpected end');
+    final c = s[i];
+    if (c == '{') return _parseObject();
+    if (c == '[') return _parseArray();
+    if (c == '"') return _parseString();
+    if (c == 't' || c == 'f') return _parseBool();
+    if (c == 'n') return _parseNull();
+    return _parseNumber();
+  }
+
+  Map<String, dynamic> _parseObject() {
+    final map = <String, dynamic>{};
+    i++; // {
+    _skipWs();
+    if (i < s.length && s[i] == '}') { i++; return map; }
+    while (true) {
+      _skipWs();
+      final key = _parseString();
+      _skipWs();
+      if (i >= s.length || s[i] != ':') throw const FormatException('expected :');
+      i++;
+      _skipWs();
+      final value = _parseValue();
+      map[key] = value;
+      _skipWs();
+      if (i < s.length && s[i] == ',') { i++; continue; }
+      if (i < s.length && s[i] == '}') { i++; break; }
+      throw const FormatException('expected , or }');
+    }
+    return map;
+  }
+
+  List<dynamic> _parseArray() {
+    final list = <dynamic>[];
+    i++; // [
+    _skipWs();
+    if (i < s.length && s[i] == ']') { i++; return list; }
+    while (true) {
+      _skipWs();
+      list.add(_parseValue());
+      _skipWs();
+      if (i < s.length && s[i] == ',') { i++; continue; }
+      if (i < s.length && s[i] == ']') { i++; break; }
+      throw const FormatException('expected , or ]');
+    }
+    return list;
+  }
+
+  String _parseString() {
+    if (s[i] != '"') throw const FormatException('expected string');
+    i++;
+    final buf = StringBuffer();
+    while (i < s.length && s[i] != '"') {
+      if (s[i] == '\\' && i + 1 < s.length) {
+        i++;
+        final esc = s[i];
+        switch (esc) {
+          case 'n': buf.write('\n'); break;
+          case 't': buf.write('\t'); break;
+          case 'r': buf.write('\r'); break;
+          case '"': buf.write('"'); break;
+          case '\\': buf.write('\\'); break;
+          case '/': buf.write('/'); break;
+          default: buf.write(esc);
+        }
+        i++;
+      } else {
+        buf.write(s[i]);
+        i++;
+      }
+    }
+    i++; // closing "
+    return buf.toString();
+  }
+
+  bool _parseBool() {
+    if (s.startsWith('true', i)) { i += 4; return true; }
+    if (s.startsWith('false', i)) { i += 5; return false; }
+    throw const FormatException('expected bool');
+  }
+
+  dynamic _parseNull() {
+    if (s.startsWith('null', i)) { i += 4; return null; }
+    throw const FormatException('expected null');
+  }
+
+  num _parseNumber() {
+    final start = i;
+    if (i < s.length && (s[i] == '-' || s[i] == '+')) i++;
+    while (i < s.length && RegExp(r'[0-9]').hasMatch(s[i])) i++;
+    if (i < s.length && s[i] == '.') {
+      i++;
+      while (i < s.length && RegExp(r'[0-9]').hasMatch(s[i])) i++;
+    }
+    if (i < s.length && (s[i] == 'e' || s[i] == 'E')) {
+      i++;
+      if (i < s.length && (s[i] == '-' || s[i] == '+')) i++;
+      while (i < s.length && RegExp(r'[0-9]').hasMatch(s[i])) i++;
+    }
+    final token = s.substring(start, i);
+    if (token.isEmpty) throw const FormatException('expected number');
+    return num.parse(token);
+  }
+}
+
+Color _chartColor(String name) {
+  switch (name.toLowerCase()) {
+    case 'orange': return const Color(0xFFFF9500);
+    case 'blue':   return const Color(0xFF0A84FF);
+    case 'green':  return const Color(0xFF30D158);
+    case 'red':    return const Color(0xFFFF453A);
+    case 'yellow': return const Color(0xFFFFD60A);
+    case 'purple': return const Color(0xFFBF5AF2);
+    case 'pink':   return const Color(0xFFFF375F);
+    case 'teal':   return const Color(0xFF64D2FF);
+    case 'indigo': return const Color(0xFF5E5CE6);
+    default:       return const Color(0xFF0A84FF);
+  }
+}
+
+// ── Widget de gráfico — estilo Apple Health / Apple Design HIG:
+// card escuro neutro (segue o tema), eixo Y com labels leves,
+// grelha pontilhada fina, barras/linha/pontos na cor escolhida,
+// título+subtítulo+média no topo à esquerda. Entra com fade+scale
+// suave quando montado (o AnimatedContainer/TweenAnimationBuilder
+// cobre o "aparecer em tempo real" pedido — como o dado só chega
+// já completo, não há re-render parcial feio). ───────────────────
+
+class AiChartCard extends StatefulWidget {
+  final ChartSpec spec;
+  final AppColorScheme s;
+  const AiChartCard({super.key, required this.spec, required this.s});
+
+  @override State<AiChartCard> createState() => _AiChartCardState();
+}
+
+class _AiChartCardState extends State<AiChartCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  late final Animation<double> _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+  late final Animation<double> _scale = Tween(begin: 0.94, end: 1.0)
+      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+
+  @override
+  void initState() {
+    super.initState();
+    // Dispara a entrada assim que o widget é montado — como o
+    // bloco só chega ao parser depois de a fence fechar, isto
+    // acontece exatamente no momento em que o gráfico "aparece",
+    // dando a sensação de entrada em tempo real sem nunca ter
+    // mostrado dados incompletos.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ctrl.forward());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = widget.spec;
+    final s = widget.s;
+    final color = _chartColor(spec.colorName);
+    final maxVal = spec.values.reduce((a, b) => a > b ? a : b);
+    final niceMax = _niceCeiling(maxVal);
+
+    return FadeTransition(
+      opacity: _fade,
+      child: ScaleTransition(
+        scale: _scale,
+        alignment: Alignment.topLeft,
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+          decoration: BoxDecoration(
+            color: s.isDark ? const Color(0xFF161616) : const Color(0xFFF7F7F9),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE4E4E8),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (spec.title != null) ...[
+                Text(spec.title!,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurfaceVariant,
+                        letterSpacing: 0.2)),
+                const SizedBox(height: 2),
+              ],
+              if (spec.subtitle != null) ...[
+                Text(spec.subtitle!,
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: s.onSurface)),
+                const SizedBox(height: 10),
+              ] else
+                const SizedBox(height: 6),
+              SizedBox(
+                height: 170,
+                child: _ChartBody(
+                  spec: spec,
+                  color: color,
+                  niceMax: niceMax,
+                  s: s,
+                ),
+              ),
+              const SizedBox(height: 6),
+              _ChartXLabels(labels: spec.labels, s: s),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _niceCeiling(double v) {
+    if (v <= 0) return 1;
+    final magnitude = _pow10Floor(v);
+    final normalized = v / magnitude;
+    double niceNormalized;
+    if (normalized <= 1) niceNormalized = 1;
+    else if (normalized <= 2) niceNormalized = 2;
+    else if (normalized <= 5) niceNormalized = 5;
+    else niceNormalized = 10;
+    return niceNormalized * magnitude;
+  }
+
+  double _pow10Floor(double v) {
+    double magnitude = 1;
+    while (magnitude * 10 <= v) magnitude *= 10;
+    return magnitude;
+  }
+}
+
+class _ChartBody extends StatelessWidget {
+  final ChartSpec spec;
+  final Color color;
+  final double niceMax;
+  final AppColorScheme s;
+  const _ChartBody({
+    required this.spec,
+    required this.color,
+    required this.niceMax,
+    required this.s,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: LayoutBuilder(builder: (context, constraints) {
+            return CustomPaint(
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+              painter: _ChartPainter(
+                type: spec.type,
+                values: spec.values,
+                niceMax: niceMax,
+                color: color,
+                gridColor: s.outlineVariant,
+              ),
+            );
+          }),
+        ),
+        const SizedBox(width: 8),
+        _ChartYAxis(niceMax: niceMax, s: s),
+      ],
+    );
+  }
+}
+
+class _ChartYAxis extends StatelessWidget {
+  final double niceMax;
+  final AppColorScheme s;
+  const _ChartYAxis({required this.niceMax, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(fontSize: 10.5, color: s.onSurfaceVariant);
+    String fmt(double v) {
+      if (v >= 1000) {
+        final k = v / 1000;
+        return k == k.roundToDouble() ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
+      }
+      return v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(1);
+    }
+    return SizedBox(
+      width: 34,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(fmt(niceMax), style: style),
+          Text(fmt(niceMax / 2), style: style),
+          Text('0', style: style),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChartXLabels extends StatelessWidget {
+  final List<String> labels;
+  final AppColorScheme s;
+  const _ChartXLabels({required this.labels, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    // Evita amontoar labels quando há muitos pontos — mostra no
+    // máximo ~7, distribuídos, tal como os gráficos de referência.
+    final step = (labels.length / 7).ceil().clamp(1, labels.length);
+    final visible = <int>[];
+    for (int idx = 0; idx < labels.length; idx += step) {
+      visible.add(idx);
+    }
+    if (visible.isNotEmpty && visible.last != labels.length - 1) {
+      visible.add(labels.length - 1);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 42),
+      child: Row(
+        children: List.generate(labels.length, (idx) {
+          final show = visible.contains(idx);
+          return Expanded(
+            child: Text(
+              show ? labels[idx] : '',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 10.5, color: s.onSurfaceVariant),
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _ChartPainter extends CustomPainter {
+  final String type;
+  final List<double> values;
+  final double niceMax;
+  final Color color;
+  final Color gridColor;
+  _ChartPainter({
+    required this.type,
+    required this.values,
+    required this.niceMax,
+    required this.color,
+    required this.gridColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _paintGrid(canvas, size);
+    switch (type) {
+      case 'bar':
+        _paintBars(canvas, size);
+        break;
+      case 'line':
+        _paintLine(canvas, size, filled: true);
+        break;
+      case 'point':
+        _paintPoints(canvas, size);
+        break;
+    }
+  }
+
+  void _paintGrid(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1;
+    for (final frac in [0.0, 0.5, 1.0]) {
+      final y = size.height * (1 - frac);
+      _drawDashedLine(canvas, Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset from, Offset to, Paint paint) {
+    const dashWidth = 3.0;
+    const dashSpace = 3.0;
+    final total = (to - from).distance;
+    final direction = (to - from) / total;
+    double covered = 0;
+    while (covered < total) {
+      final segStart = from + direction * covered;
+      final segEnd = from + direction * (covered + dashWidth).clamp(0, total);
+      canvas.drawLine(segStart, segEnd, paint);
+      covered += dashWidth + dashSpace;
+    }
+  }
+
+  void _paintBars(Canvas canvas, Size size) {
+    final n = values.length;
+    if (n == 0) return;
+    final slot = size.width / n;
+    final barWidth = (slot * 0.5).clamp(3.0, 28.0);
+    final paint = Paint()..color = color;
+
+    for (int i = 0; i < n; i++) {
+      final v = values[i].clamp(0, niceMax);
+      final h = niceMax == 0 ? 0.0 : (v / niceMax) * size.height;
+      final cx = slot * i + slot / 2;
+      final rect = Rect.fromLTWH(cx - barWidth / 2, size.height - h, barWidth, h);
+      final rrect = RRect.fromRectAndCorners(
+        rect,
+        topLeft: const Radius.circular(3),
+        topRight: const Radius.circular(3),
+      );
+      canvas.drawRRect(rrect, paint);
+    }
+  }
+
+  void _paintLine(Canvas canvas, Size size, {bool filled = false}) {
+    final n = values.length;
+    if (n == 0) return;
+    final slot = n > 1 ? size.width / (n - 1) : size.width;
+    final points = <Offset>[];
+    for (int i = 0; i < n; i++) {
+      final v = values[i].clamp(0, niceMax);
+      final h = niceMax == 0 ? 0.0 : (v / niceMax) * size.height;
+      final x = n > 1 ? slot * i : size.width / 2;
+      points.add(Offset(x, size.height - h));
+    }
+
+    if (filled) {
+      final fillPath = Path()..moveTo(points.first.dx, size.height);
+      for (final p in points) fillPath.lineTo(p.dx, p.dy);
+      fillPath.lineTo(points.last.dx, size.height);
+      fillPath.close();
+      final fillPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withOpacity(0.28), color.withOpacity(0.0)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+      canvas.drawPath(fillPath, fillPaint);
+    }
+
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    final linePath = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final p in points.skip(1)) linePath.lineTo(p.dx, p.dy);
+    canvas.drawPath(linePath, linePaint);
+  }
+
+  void _paintPoints(Canvas canvas, Size size) {
+    final n = values.length;
+    if (n == 0) return;
+    final slot = n > 1 ? size.width / (n - 1) : size.width;
+
+    // Linha fina conectando os pontos, no estilo do gráfico de
+    // referência "Point marks" — sem preenchimento.
+    _paintLine(canvas, size, filled: false);
+
+    final dotPaint = Paint()..color = color;
+    final dotStrokePaint = Paint()
+      ..color = Colors.white.withOpacity(0.9)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+
+    for (int i = 0; i < n; i++) {
+      final v = values[i].clamp(0, niceMax);
+      final h = niceMax == 0 ? 0.0 : (v / niceMax) * size.height;
+      final x = n > 1 ? slot * i : size.width / 2;
+      final center = Offset(x, size.height - h);
+      canvas.drawCircle(center, 3.2, dotPaint);
+      canvas.drawCircle(center, 3.2, dotStrokePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChartPainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.type != type ||
+        oldDelegate.color != color ||
+        oldDelegate.niceMax != niceMax;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // RICH AI TEXT
 // ══════════════════════════════════════════════════════════════
 
@@ -1109,10 +1715,28 @@ class _RichTextBlockParser {
           i++;
         }
         if (i < lines.length) i++;
+
+        final codeContent = codeLines.join('\n');
+
+        // ─────────────────────────────────────────────────────
+        // BLOCO ```chart``` — tenta interpretar como gráfico.
+        // Se o JSON não for válido (raro, mas possível se a IA
+        // errou a sintaxe), cai para o AiCodeBlock normal em vez
+        // de mostrar erro — nunca mostra JSON cru como se fosse
+        // texto solto.
+        // ─────────────────────────────────────────────────────
+        if (lang.toLowerCase() == 'chart') {
+          final spec = ChartSpec.tryParse(codeContent);
+          if (spec != null) {
+            widgets.add(AiChartCard(spec: spec, s: s));
+            continue;
+          }
+        }
+
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: AiCodeBlock(
-            code: codeLines.join('\n'),
+            code: codeContent,
             language: lang.isEmpty ? 'text' : lang,
             s: s,
           ),
@@ -1132,9 +1756,14 @@ class _RichTextBlockParser {
   }
 
   static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 14.5}) {
-    final linkColor = s.isDark ? const Color(0xFFE0E0E0) : const Color(0xFF3A3A3A);
+    // Cor de link neutra (não usa mais azul vivo/roxo — texto em
+    // prosa fica monocromático por pedido explícito do
+    // utilizador, com sublinhado a marcar o link em vez da cor).
+    final linkColor = s.onSurface;
 
     var processed = raw;
+    // kEmojiShortcodes está vazio (ver acima) — este loop não faz
+    // nada agora, mas mantém-se para não quebrar contrato.
     kEmojiShortcodes.forEach((code, emoji) {
       if (processed.contains(code)) {
         processed = processed.replaceAll(code, emoji);
@@ -1164,7 +1793,7 @@ class _RichTextBlockParser {
           style: TextStyle(
             color: linkColor,
             decoration: TextDecoration.underline,
-            decorationColor: linkColor,
+            decorationColor: linkColor.withOpacity(0.5),
           ),
         ));
       } else if (token.startsWith('***')) {
@@ -1183,6 +1812,9 @@ class _RichTextBlockParser {
           style: const TextStyle(fontWeight: FontWeight.w700),
         ));
       } else if (token.startsWith('`')) {
+        // Código inline MANTÉM a cor de fundo — só o texto de
+        // prosa perdeu cor, não os elementos que já eram
+        // visualmente diferenciados por natureza (código).
         spans.add(TextSpan(
           text: token.substring(1, token.length - 1),
           style: TextStyle(
@@ -1357,7 +1989,9 @@ class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CODE BLOCK — visual idêntico ao HTML fornecido
+// AI CODE BLOCK — mantém syntax highlighting colorido (NÃO foi
+// tocado o esquema de cores dos tokens — só o texto de prosa fora
+// dos blocos de código perdeu cor).
 // ══════════════════════════════════════════════════════════════
 
 class _TokenPattern {

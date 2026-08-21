@@ -1,22 +1,24 @@
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: todas as navegações internas (Aparência, Memória,
-// Área de trabalho) agora usam CupertinoPageRoute em vez do
-// PageRouteBuilder com fade puro — dá a transição de slide nativa
-// iOS, incluindo o gesto de arrastar da borda para voltar. Resto
-// inalterado: avatar centrado no topo (sem card, estilo ChatGPT);
-// botão de voltar em container circular igual ao header do drawer;
-// cards no mesmo estilo do drawer mas com sombra mais suave
-// (cardShadowSoft); ícones exclusivamente CupertinoIcons; seção
-// "Geral" com Memória (para onde "eliminar todas as conversas" se
-// mudou) e Área de trabalho; tela "Aparência" com 3 pills 100%
-// arredondados (Claro / Escuro / Automático) e slider de tamanho de
-// fonte no estilo Material Design Expressive, com pré-visualização
-// ao vivo.
+// ATUALIZAÇÃO: appbar (topo) e container do botão "Terminar sessão"
+// (fundo) agora usam gradiente TRANSPARENTE de verdade — antes o
+// gradiente ia de s.pageBackground opaco até s.pageBackground
+// transparente, o que na prática pintava uma faixa sólida atrás do
+// texto; agora vai de s.pageBackground.withOpacity(0.85) (só o
+// suficiente para dar legibilidade ao texto sobre o conteúdo que
+// passa por baixo ao fazer scroll) até totalmente transparente, com
+// blur leve via BackdropFilter — efeito "vidro fosco" real, igual
+// ao container do botão de logout, que passou a usar o mesmo
+// approach. Tela Aparência: pills Claro/Escuro/Automático
+// substituídos por um segmented control REAL no tamanho iOS nativo
+// (~36px de altura, texto sem ícone verticalizado) em vez dos
+// botões grandes de ~70px anteriores. CupertinoPageRoute mantido em
+// todas as navegações internas.
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
@@ -148,11 +150,6 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
       ),
     );
   }
-
-  // ── Navegações internas — todas via CupertinoPageRoute agora,
-  // no lugar do PageRouteBuilder com fade puro anterior. Dá slide
-  // nativo iOS e o gesto de arrastar da borda esquerda para voltar,
-  // de graça. ────────────────────────────────────────────────────
 
   void _openAppearance(BuildContext context, AppColorScheme s) {
     Navigator.of(context).push(CupertinoPageRoute(
@@ -342,52 +339,68 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                 ],
               ),
 
+              // ── Appbar transparente de verdade — vidro fosco
+              // leve (blur) + opacidade parcial só para legibilidade
+              // do texto, nunca uma faixa sólida da cor de fundo. ──
               Positioned(
                 top: 0, left: 0, right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        s.pageBackground,
-                        s.pageBackground.withOpacity(0.0),
-                      ],
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            s.pageBackground.withOpacity(0.82),
+                            s.pageBackground.withOpacity(0.0),
+                          ],
+                        ),
+                      ),
+                      child: Row(children: [
+                        _CircularBackButton(
+                          s: s,
+                          onTap: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 12),
+                        Text('Definições',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: s.onSurface)),
+                      ]),
                     ),
                   ),
-                  child: Row(children: [
-                    _CircularBackButton(
-                      s: s,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 12),
-                    Text('Definições',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: s.onSurface)),
-                  ]),
                 ),
               ),
 
+              // ── Bottombar — mesmo approach de vidro fosco do
+              // appbar, para o container do botão "Terminar sessão"
+              // ficar consistente com o topo. ─────────────────────
               Positioned(
                 left: 0, right: 0, bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        s.pageBackground,
-                        s.pageBackground.withOpacity(0.0),
-                      ],
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            s.pageBackground.withOpacity(0.82),
+                            s.pageBackground.withOpacity(0.0),
+                          ],
+                        ),
+                      ),
+                      child: _LogoutButton(
+                          s: s, onTap: () => _confirmLogout(context, s)),
                     ),
                   ),
-                  child: _LogoutButton(
-                      s: s, onTap: () => _confirmLogout(context, s)),
                 ),
               ),
             ]),
@@ -399,8 +412,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 }
 
 // ── Botão de voltar em container circular — idêntico ao
-// _HeaderIconButton do drawer (fundo sólido sempre visível, não só
-// ao pressionar, com sombra própria). ───────────────────────────
+// _HeaderIconButton do drawer. ───────────────────────────────────
 
 class _CircularBackButton extends StatefulWidget {
   final AppColorScheme s;
@@ -548,11 +560,6 @@ class _SectionLabel extends StatelessWidget {
           color: s.onSurfaceVariant,
           letterSpacing: 0.5));
 }
-
-// ── Grupo de cards — mesmo estilo visual do drawer: raio grande
-// nas pontas externas, raio interno pequeno nas junções — mas com
-// cardShadowSoft, não cardShadow, para não competir com a
-// profundidade do drawer. ────────────────────────────────────────
 
 class _SettingsGroup extends StatelessWidget {
   final AppColorScheme s;
@@ -982,13 +989,9 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APARÊNCIA — tela dedicada com os 3 pills (Claro / Escuro /
-// Automático) 100% arredondados, mesmo raio do pill de utilizador
-// do drawer (BorderRadius.circular(999)), e o slider de tamanho de
-// fonte no estilo Material Design Expressive: trilho grosso,
-// thumb em barra vertical destacada, valores mínimo/máximo com
-// terminações arredondadas, e um cartão de pré-visualização ao
-// vivo por baixo.
+// APARÊNCIA — segmented control REAL no tamanho iOS nativo
+// (~36px), substituindo os pills grandes anteriores. Slider de
+// tamanho de fonte mantido.
 // ══════════════════════════════════════════════════════════════
 
 class _AppearanceScreen extends StatefulWidget {
@@ -997,8 +1000,6 @@ class _AppearanceScreen extends StatefulWidget {
 }
 
 class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive<_AppearanceScreen> {
-  // Só visual/pré-visualização por agora — não liga a um
-  // controlador global de escala de texto da app.
   double _fontScale = 0.35;
 
   @override
@@ -1028,7 +1029,7 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
               const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _ThemeModePills(s: s),
+                child: _ThemeSegmentedControl(s: s),
               ),
               const SizedBox(height: 28),
               Padding(
@@ -1055,117 +1056,81 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
   }
 }
 
-class _ThemeModePills extends StatelessWidget {
+// ── Segmented control real, tamanho iOS nativo: ~36px de altura,
+// thumb deslizante animado atrás do texto selecionado, sem ícones
+// verticalizados — apenas o label, exatamente como o controlo do
+// UIKit/SwiftUI. Substituição direta dos _ThemeModePillButton
+// anteriores, que eram ~70px e desproporcionalmente grandes. ─────
+
+class _ThemeSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
-  const _ThemeModePills({required this.s});
+  const _ThemeSegmentedControl({required this.s});
+
+  static const _options = [
+    (AppThemeMode.light, 'Claro'),
+    (AppThemeMode.dark, 'Escuro'),
+    (AppThemeMode.system, 'Automático'),
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final selectedIndex = _options.indexWhere((o) => o.$1 == appTheme.mode);
+
     return Container(
-      padding: const EdgeInsets.all(6),
+      height: 36,
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadowSoft,
+        color: s.hover,
+        borderRadius: BorderRadius.circular(9),
       ),
-      child: Row(children: [
-        Expanded(
-          child: _ThemeModePillButton(
-            s: s,
-            icon: CupertinoIcons.sun_max_fill,
-            label: 'Claro',
-            selected: appTheme.mode == AppThemeMode.light,
-            onTap: () => appTheme.setMode(AppThemeMode.light),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final segmentWidth = constraints.maxWidth / _options.length;
+        return Stack(children: [
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            left: segmentWidth * selectedIndex.clamp(0, _options.length - 1),
+            top: 0,
+            bottom: 0,
+            width: segmentWidth,
+            child: Container(
+              decoration: BoxDecoration(
+                color: s.cardBackground,
+                borderRadius: BorderRadius.circular(7),
+                boxShadow: s.cardShadow,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: _ThemeModePillButton(
-            s: s,
-            icon: CupertinoIcons.moon_fill,
-            label: 'Escuro',
-            selected: appTheme.mode == AppThemeMode.dark,
-            onTap: () => appTheme.setMode(AppThemeMode.dark),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: _ThemeModePillButton(
-            s: s,
-            icon: CupertinoIcons.gear_alt_fill,
-            label: 'Automático',
-            selected: appTheme.mode == AppThemeMode.system,
-            onTap: () => appTheme.setMode(AppThemeMode.system),
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
-class _ThemeModePillButton extends StatefulWidget {
-  final AppColorScheme s;
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ThemeModePillButton({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  @override State<_ThemeModePillButton> createState() => _ThemeModePillButtonState();
-}
-
-class _ThemeModePillButtonState extends State<_ThemeModePillButton> {
-  bool _p = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final sel = widget.selected;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
-      child: AnimatedScale(
-        scale: _p ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: sel ? s.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          Row(
             children: [
-              Icon(widget.icon, size: 20, color: sel ? s.onPrimary : s.onSurfaceVariant),
-              const SizedBox(height: 6),
-              Text(widget.label,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      color: sel ? s.onPrimary : s.onSurfaceVariant)),
+              for (final (mode, label) in _options)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => appTheme.setMode(mode),
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: appTheme.mode == mode ? FontWeight.w600 : FontWeight.w500,
+                          color: appTheme.mode == mode ? s.onSurface : s.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-        ),
-      ),
+        ]);
+      }),
     );
   }
 }
 
 // ── Card de tamanho de fonte: slider Material Expressive (trilho
 // grosso arredondado, thumb em barra vertical destacada) com
-// pré-visualização ao vivo (balão de pergunta + resposta). ───────
+// pré-visualização ao vivo. ────────────────────────────────────────
 
 class _FontSizeCard extends StatelessWidget {
   final AppColorScheme s;
@@ -1175,7 +1140,6 @@ class _FontSizeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Escala visual de pré-visualização: 0.0 → 0.85x, 1.0 → 1.35x
     final previewScale = 0.85 + (value * 0.5);
 
     return Container(
@@ -1222,11 +1186,6 @@ class _FontSizeCard extends StatelessWidget {
     );
   }
 }
-
-// ── Slider estilo Material Design Expressive: trilho espesso com
-// pontas 100% arredondadas dividido em duas metades (preenchida /
-// vazia) por um thumb em forma de barra vertical, sem círculo
-// tradicional. ────────────────────────────────────────────────────
 
 class _ExpressiveSlider extends StatefulWidget {
   final AppColorScheme s;
@@ -1281,7 +1240,6 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
             alignment: Alignment.centerLeft,
             clipBehavior: Clip.none,
             children: [
-              // Trilho vazio (fundo completo)
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
                 left: 0, right: 0,
@@ -1293,7 +1251,6 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
                   ),
                 ),
               ),
-              // Trilho preenchido (até ao thumb, com pequeno gap)
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
                 left: 0,
@@ -1306,7 +1263,6 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
                   ),
                 ),
               ),
-              // Thumb — barra vertical destacada, sem círculo
               Positioned(
                 left: thumbX,
                 top: 0,
@@ -1328,8 +1284,7 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MEMÓRIA — para onde "eliminar todas as conversas" se mudou.
-// Deixou de estar solto na primeira tela de Definições.
+// MEMÓRIA
 // ══════════════════════════════════════════════════════════════
 
 class _MemoryScreen extends StatelessWidget {
@@ -1391,8 +1346,7 @@ class _MemoryScreen extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ÁREA DE TRABALHO — placeholder só visual por agora, sem lógica
-// de múltiplas áreas de trabalho ligada ainda.
+// ÁREA DE TRABALHO
 // ══════════════════════════════════════════════════════════════
 
 class _WorkspaceScreen extends StatelessWidget {
