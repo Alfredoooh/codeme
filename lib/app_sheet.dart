@@ -29,7 +29,37 @@ Future<T?> showAppSheet<T>(
     CupertinoSheetRoute<T>(
       builder: (sheetContext) => ColoredBox(
         color: AppTheme.of(sheetContext).surface,
-        child: builder(sheetContext),
+        // DefaultTextStyle força fonte default de plataforma (Roboto
+        // no Android) em vez da fonte de sistema iOS (San Francisco),
+        // que é a que o corretor ortográfico do iOS sublinha a
+        // amarelo. fontFamily: null diz ao Flutter para não impor
+        // nenhuma família específica — cai na default da plataforma.
+        child: DefaultTextStyle(
+          style: const TextStyle(
+            fontFamily: null,
+            color: CupertinoColors.label,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar: mesma barra cinzenta que a Apple usa nos
+              // seus próprios sheets (Maps, Apple Music). 36×5,
+              // radius 2.5 é o tamanho padrão que a Apple usa.
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 4),
+                child: Container(
+                  width: 36,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey4.resolveFrom(sheetContext),
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
+                ),
+              ),
+              Flexible(child: builder(sheetContext)),
+            ],
+          ),
+        ),
       ),
     ),
   );
