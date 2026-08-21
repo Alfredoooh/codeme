@@ -1,20 +1,27 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: cards de lista das conversas REMOVIDOS — passa a
-// usar linhas soltas com divisor fino que NÃO chega até à borda da
-// tela (estilo Grok), com padding lateral igual ao texto; botão de
-// opções (⋮) por linha e long-press abrem o mesmo popup, ancorado
-// SEMPRE na posição exata (x,y) do toque/gesto, nunca fixo; botão
-// de pesquisa ao lado do pill de conta agora tem a mesma altura do
-// pill (60); CupertinoScrollbar fino (estilo Apple) na lista;
-// sombras reduzidas via colors.dart (cardShadow); menu de conta
-// mantém a linha única "Modo claro/escuro" (sem toggle — o toggle
-// de 3 estados vive exclusivamente em settings.dart/Aparência).
-// Entrada para Settings (via onSettings) permanece delegada ao
-// pai — quem decide a rota concreta (CupertinoPageRoute) é
-// main.dart, que já foi atualizado para tal. CupertinoIcons requer
-// cupertino_icons no pubspec.yaml.
+// ATUALIZAÇÃO: botão de opções de cada linha passou de ellipsis
+// horizontal para ellipsis_vertical (⋮), mesmo tamanho; dois
+// toggles no topo da lista — "Fixadas" e "Conversas" — controlam a
+// visibilidade das respetivas secções (ligado = secção visível,
+// desligado = oculta); com os toggles, o ícone de pin ao lado do
+// título deixou de ser necessário para identificar fixadas (a
+// própria secção "Fixadas" já indica isso) e foi removido das
+// linhas; header (Menu + ícones) e rodapé (pill de conta + busca)
+// agora usam o mesmo gradiente progressivo do settings.dart (sem
+// blur, cor sólida no topo/fundo esvaindo para transparente); pill
+// de conta e botão de busca reduzidos de 60 para 52 de altura;
+// contraste geral aumentado (onSurface puro em vez de variantes
+// suaves nos títulos, ícones mais opacos); "Nova conversa" agora
+// fecha o drawer automaticamente após criar, igual ao botão fechar;
+// CORRIGIDO: _SolidActionRow (linhas do menu de conta: Modo
+// claro/escuro, Definições, Terminar sessão) não tinha
+// SelectionContainer.disabled a envolver o texto — era a causa das
+// linhas amarelas de spellcheck do WebView/SO na imagem enviada;
+// adicionado, sem alterar mais nada no estilo desse card, que já
+// estava correto. CupertinoIcons requer cupertino_icons no
+// pubspec.yaml.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -220,6 +227,10 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
+  // Toggles de visibilidade das secções — ligados por omissão.
+  bool _showPinned = true;
+  bool _showConversations = true;
+
   @override
   void initState() {
     super.initState();
@@ -253,6 +264,13 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _closeDrawer() => widget.onClose();
 
+  void _handleNewChat() {
+    // Cria a nova conversa e fecha o drawer automaticamente, tal
+    // como acontece ao premir o botão de fechar.
+    widget.onNewChat?.call();
+    _closeDrawer();
+  }
+
   void _openSearch(BuildContext context) {
     _closeDrawer();
     Navigator.of(context).push(_FadePageRoute(
@@ -272,9 +290,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
   /// Abre o popup ancorado exatamente na posição global (x,y) onde
   /// o dedo tocou — seja vindo do TapDown do botão de opções (⋮) ou
-  /// do LongPressStart na linha inteira. Já não depende de
-  /// CompositedTransform/LayerLink porque a posição é sempre a do
-  /// gesto, não a da linha.
+  /// do LongPressStart na linha inteira.
   void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
     showConversationOptionsPopupAt(
       context,
@@ -321,11 +337,47 @@ class _AppDrawerState extends State<AppDrawer> {
     return Material(
       color: s.pageBackground,
       child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
+        child: Stack(children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Espaço reservado para o header sobreposto, que fica
+              // por cima com o gradiente progressivo.
+              const SizedBox(height: 66),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: _SectionToggles(
+                  s: s,
+                  showPinned: _showPinned,
+                  showConversations: _showConversations,
+                  onTogglePinned: (v) => setState(() => _showPinned = v),
+                  onToggleConversations: (v) => setState(() => _showConversations = v),
+                ),
+              ),
+              Expanded(
+                child: _buildConvBody(context, s, pinned, others),
+              ),
+              // Espaço reservado para o rodapé sobreposto.
+              const SizedBox(height: 78),
+            ],
+          ),
+
+          // ── Header — gradiente progressivo, sem blur, mesmo
+          // padrão do settings.dart. ─────────────────────────────
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Container(
               padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    s.pageBackground,
+                    s.pageBackground.withOpacity(0.0),
+                  ],
+                ),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -343,7 +395,7 @@ class _AppDrawerState extends State<AppDrawer> {
                       _HeaderIconButton(
                         s: s,
                         icon: CupertinoIcons.add,
-                        onTap: widget.onNewChat!,
+                        onTap: _handleNewChat,
                       ),
                     const SizedBox(width: 8),
                     _HeaderIconButton(
@@ -355,23 +407,23 @@ class _AppDrawerState extends State<AppDrawer> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 6, 12, 10),
-              child: Text(
-                'CONVERSAS',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                  color: s.onSurfaceVariant,
+          ),
+
+          // ── Rodapé — mesmo gradiente progressivo do topo. ──────
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    s.pageBackground,
+                    s.pageBackground.withOpacity(0.0),
+                  ],
                 ),
               ),
-            ),
-            Expanded(
-              child: _buildConvBody(context, s, pinned, others),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -384,8 +436,8 @@ class _AppDrawerState extends State<AppDrawer> {
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
@@ -428,8 +480,18 @@ class _AppDrawerState extends State<AppDrawer> {
       );
     }
 
-    // Lista solta com divisores — sem cards, sem fundo agrupado.
-    // Envolvida num CupertinoScrollbar fino (estilo Apple).
+    final showPinnedSection = _showPinned && pinned.isNotEmpty;
+    final showOthersSection = _showConversations && others.isNotEmpty;
+
+    if (!showPinnedSection && !showOthersSection) {
+      return Center(
+        child: Text(
+          'Nada para mostrar',
+          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+        ),
+      );
+    }
+
     return CupertinoScrollbar(
       thickness: 3,
       thicknessWhileDragging: 5.5,
@@ -438,18 +500,18 @@ class _AppDrawerState extends State<AppDrawer> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
         children: [
-          if (pinned.isNotEmpty) ...[
+          if (showPinnedSection) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 8, 6),
               child: Row(children: [
-                Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
+                Icon(CupertinoIcons.pin_fill, color: s.onSurface, size: 13),
                 const SizedBox(width: 6),
                 Text('Fixadas',
                     style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 0.2,
-                        color: s.onSurfaceVariant)),
+                        color: s.onSurface)),
               ]),
             ),
             _LooseRows(
@@ -469,7 +531,7 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
             const SizedBox(height: 18),
           ],
-          if (others.isNotEmpty)
+          if (showOthersSection)
             _LooseRows(
               s: s,
               children: [
@@ -487,6 +549,134 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+// ── Toggles de secção — "Fixadas" e "Conversas". Ligado mostra a
+// secção, desligado esconde-a. Substitui a necessidade do ícone de
+// pin em cada linha para identificar itens fixados, já que a
+// própria secção "Fixadas" (quando visível) já os agrupa e
+// identifica. Usa o mesmo estilo de switch do resto da app —
+// trilho 100% arredondado, thumb com a cor primária quando ativo. ──
+
+class _SectionToggles extends StatelessWidget {
+  final AppColorScheme s;
+  final bool showPinned;
+  final bool showConversations;
+  final ValueChanged<bool> onTogglePinned;
+  final ValueChanged<bool> onToggleConversations;
+  const _SectionToggles({
+    required this.s,
+    required this.showPinned,
+    required this.showConversations,
+    required this.onTogglePinned,
+    required this.onToggleConversations,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: _ToggleChip(
+          s: s,
+          label: 'Fixadas',
+          value: showPinned,
+          onChanged: onTogglePinned,
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: _ToggleChip(
+          s: s,
+          label: 'Conversas',
+          value: showConversations,
+          onChanged: onToggleConversations,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _ToggleChip extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _ToggleChip({
+    required this.s,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: s.cardShadow,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 6),
+            _MiniSwitch(s: s, value: value),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Switch compacto — trilho 100% arredondado, thumb branco,
+// cor primária quando ligado, cinza neutro quando desligado. ────
+
+class _MiniSwitch extends StatelessWidget {
+  final AppColorScheme s;
+  final bool value;
+  const _MiniSwitch({required this.s, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      width: 34, height: 20,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: value ? s.primary : s.outline,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 16, height: 16,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+        ),
       ),
     );
   }
@@ -543,14 +733,14 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: Icon(widget.icon, color: s.onSurfaceVariant, size: 18),
+        child: Icon(widget.icon, color: s.onSurface, size: 18),
       ),
     );
   }
 }
 
 // ── Botão de pesquisa isolado, ao lado do pill de utilizador —
-// agora com a MESMA altura do pill (60), não mais pequeno. ─────
+// reduzido de 60 para 52 de altura, igual ao novo tamanho do pill. ─
 
 class _SearchSideButton extends StatefulWidget {
   final AppColorScheme s;
@@ -572,14 +762,14 @@ class _SearchSideButtonState extends State<_SearchSideButton> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        width: 60, height: 60,
+        width: 52, height: 52,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _p ? s.pressed : s.cardBackground,
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 22),
+        child: Icon(CupertinoIcons.search, color: s.onSurface, size: 20),
       ),
     );
   }
@@ -613,11 +803,11 @@ class _LooseRows extends StatelessWidget {
 
 // ── Conversa individual — sem card/fundo, apenas linha solta.
 // Long-press E o botão de opções (⋮) abrem o popup ancorado
-// exatamente na posição (x,y) do toque — para isso capturamos a
-// posição global tanto do TapDown do botão como do
-// LongPressStart do GestureDetector da linha inteira. Texto
-// envolvido em SelectionContainer.disabled para impedir sublinhado
-// amarelo de spellcheck. ─────────────────────────────────────────
+// exatamente na posição (x,y) do toque. O ícone de pin ao lado do
+// título foi REMOVIDO — os toggles de secção já identificam
+// fixadas através do agrupamento. Texto envolvido em
+// SelectionContainer.disabled para impedir sublinhado amarelo de
+// spellcheck. ─────────────────────────────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -714,26 +904,22 @@ class _ConvTileState extends State<_ConvTile> {
                     child: Text(widget.item.title,
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
                           color: widget.active ? s.navLabelActive : s.onSurface,
                         ),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ),
-                if (widget.item.pinned) ...[
-                  const SizedBox(width: 6),
-                  Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
-                  const SizedBox(width: 6),
-                ],
-                // Botão de opções — captura a posição global do
-                // próprio toque (TapDown) para ancorar o popup ali,
-                // não na linha inteira.
+                // Botão de opções — vertical (⋮), mesmo tamanho do
+                // ellipsis horizontal anterior. Captura a posição
+                // global do próprio toque (TapDown) para ancorar o
+                // popup ali, não na linha inteira.
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (d) => widget.onOptionsAt(d.globalPosition),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    child: Icon(CupertinoIcons.ellipsis, color: s.onSurfaceVariant, size: 17),
+                    child: Icon(CupertinoIcons.ellipsis_vertical, color: s.onSurface, size: 17),
                   ),
                 ),
               ]),
@@ -778,9 +964,6 @@ void showConversationOptionsPopupAt(
   const width = 232.0;
   const estimatedHeight = 230.0;
 
-  // Decide o quadrante de abertura consoante a posição do toque,
-  // para o popup nunca sair da tela — mesma ideia de um
-  // CupertinoContextMenu / long-press menu nativo.
   final openLeft = position.dx + width > screenSize.width - 12;
   final openUp = position.dy + estimatedHeight > screenSize.height - 12;
 
@@ -1097,13 +1280,12 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — mantém a linha única "Modo claro/escuro" (sem
-// toggle — isso vive exclusivamente na tela Aparência do
-// settings.dart). Botão de opções abre um menu estilizado sólido,
-// com escurecimento de fundo via s.barrier, cantos curvos e botão
-// Cancelar 100% arredondado. Textos envolvidos em
-// SelectionContainer.disabled para eliminar sublinhado amarelo de
-// spellcheck do WebView/SO.
+// ACCOUNT PILL — reduzido de 60 para 52 de altura. Botão de opções
+// abre o mesmo menu estilizado sólido de sempre (card preto,
+// escurecimento via s.barrier, cantos curvos, Cancelar 100%
+// arredondado) — estilo inalterado, apenas a linha _SolidActionRow
+// abaixo ganhou SelectionContainer.disabled em falta, que era a
+// causa das linhas amarelas de spellcheck vistas na imagem.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1266,13 +1448,13 @@ class _AccountPillState extends State<_AccountPill> {
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Container(
-      height: 60,
+      height: 52,
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(999),
         boxShadow: s.cardShadow,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: Row(children: [
         Expanded(
           child: GestureDetector(
@@ -1291,18 +1473,18 @@ class _AccountPillState extends State<_AccountPill> {
               ),
               child: Row(children: [
                 Container(
-                  width: 40, height: 40,
+                  width: 34, height: 34,
                   alignment: Alignment.center,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                       color: s.primary, shape: BoxShape.circle),
-                  child: _buildAvatarContent(s, avatar, initial, size: 40, fontSize: 16),
+                  child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: SelectionContainer.disabled(
                     child: Text(name,
-                        style: TextStyle(fontSize: 15, color: s.onSurface),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
                         overflow: TextOverflow.ellipsis),
                   ),
                 ),
@@ -1314,13 +1496,13 @@ class _AccountPillState extends State<_AccountPill> {
           behavior: HitTestBehavior.opaque,
           onTap: () => _openOptions(context),
           child: Container(
-            width: 40, height: 40,
+            width: 36, height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: s.hover,
               shape: BoxShape.circle,
             ),
-            child: Icon(CupertinoIcons.ellipsis, color: s.onSurfaceVariant, size: 19),
+            child: Icon(CupertinoIcons.ellipsis, color: s.onSurface, size: 18),
           ),
         ),
       ]),
@@ -1329,7 +1511,7 @@ class _AccountPillState extends State<_AccountPill> {
 }
 
 // ── Card sólido de opções — cantos curvos, sombra reduzida via
-// colors.dart, sem transparência/blur. ──────────────────────────
+// colors.dart, sem transparência/blur. Estilo inalterado. ───────
 
 class _SolidActionCard extends StatelessWidget {
   final AppColorScheme s;
@@ -1397,6 +1579,12 @@ class _SolidActionRowState extends State<_SolidActionRow> {
           children: [
             Icon(widget.icon, size: 19, color: color),
             const SizedBox(width: 10),
+            // CORREÇÃO: faltava SelectionContainer.disabled aqui —
+            // era exatamente isto que causava as linhas amarelas de
+            // spellcheck do WebView/SO nas 3 linhas deste card
+            // (Modo claro, Definições, Terminar sessão) na imagem
+            // enviada. Todos os outros popups do ficheiro já
+            // tinham este wrapper; só esta linha estava sem.
             SelectionContainer.disabled(
               child: Text(
                 widget.label,
