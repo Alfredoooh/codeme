@@ -6,7 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'colors.dart';
 
 // ══════════════════════════════════════════════════════════════
-// ÍCONES SVG / PNG
+// ÍCONES SVG
 // ══════════════════════════════════════════════════════════════
 
 class AppIcon extends StatelessWidget {
@@ -25,32 +25,17 @@ class AppIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lower = asset.toLowerCase();
-    final isPng = lower.endsWith('.png');
-    final isSvg = lower.endsWith('.svg') || !isPng;
-    final fileName = asset.contains('.') ? asset : (isPng ? asset : '$asset.svg');
+    // Se não tiver extensão, assume .svg
+    final fileName = asset.contains('.') ? asset : '$asset.svg';
 
-    if (isPng) {
-      return Image.asset(
-        'assets/icons/png/$fileName',
-        width: size,
-        height: size,
-        color: useColorAsset ? null : color,
-        colorBlendMode: useColorAsset ? null : BlendMode.srcIn,
-      );
-    }
-
-    if (isSvg) {
-      final normalized = fileName.replaceAll(RegExp(r'\.(png|svg)$', caseSensitive: false), '.svg');
-      return SvgPicture.asset(
-        'assets/icons/svg/$normalized',
-        width: size,
-        height: size,
-        colorFilter: useColorAsset ? null : ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-
-    return const SizedBox.shrink();
+    return SvgPicture.asset(
+      'assets/icons/outline/$fileName',
+      width: size,
+      height: size,
+      colorFilter: useColorAsset
+          ? null
+          : ColorFilter.mode(color, BlendMode.srcIn),
+    );
   }
 }
 
@@ -105,7 +90,8 @@ class _AppTapState extends State<AppTap> {
           duration: const Duration(milliseconds: 100),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 100),
-            width: widget.size, height: widget.size,
+            width: widget.size,
+            height: widget.size,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _p ? widget.s.pressed : Colors.transparent,
@@ -125,7 +111,12 @@ class AppSwitch extends StatelessWidget {
   final bool value;
   final AppColorScheme s;
   final ValueChanged<bool> onChanged;
-  const AppSwitch({super.key, required this.value, required this.s, required this.onChanged});
+  const AppSwitch({
+    super.key,
+    required this.value,
+    required this.s,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -134,7 +125,8 @@ class AppSwitch extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: kCupertinoOut,
-          width: 46, height: 26,
+          width: 46,
+          height: 26,
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             color: value ? s.primary : s.outline,
@@ -142,7 +134,8 @@ class AppSwitch extends StatelessWidget {
           ),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
-            width: 20, height: 20,
+            width: 20,
+            height: 20,
             decoration: BoxDecoration(
               color: value ? s.onPrimary : s.cardBackground,
               shape: BoxShape.circle,
@@ -227,8 +220,12 @@ class SettingsStyleCard extends StatelessWidget {
   final AppColorScheme s;
   final BorderRadius radius;
   final Widget child;
-  const SettingsStyleCard(
-      {super.key, required this.s, required this.radius, required this.child});
+  const SettingsStyleCard({
+    super.key,
+    required this.s,
+    required this.radius,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -268,12 +265,12 @@ class SheetOptionsGroup extends StatelessWidget {
   BorderRadius _radiusFor(int index, int count) {
     if (count == 1) return BorderRadius.circular(_outerRadius);
     final isFirst = index == 0;
-    final isLast  = index == count - 1;
+    final isLast = index == count - 1;
     return BorderRadius.only(
-      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
-      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      topLeft: Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight: Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft: Radius.circular(isLast ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast ? _outerRadius : _innerRadius),
     );
   }
 }
@@ -281,9 +278,11 @@ class SheetOptionsGroup extends StatelessWidget {
 class SheetGrabber extends StatelessWidget {
   final AppColorScheme s;
   const SheetGrabber({super.key, required this.s});
+
   @override
   Widget build(BuildContext context) => Container(
-        width: 36, height: 4,
+        width: 36,
+        height: 4,
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: s.outline,
