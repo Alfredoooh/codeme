@@ -26,11 +26,10 @@
 // SelectionContainer.disabled a envolver o texto — era a causa das
 // linhas amarelas de spellcheck do WebView/SO na imagem enviada;
 // adicionado, sem alterar mais nada no estilo desse card, que já
-// estava correto. CupertinoIcons requer cupertino_icons no
+// estava correto. os ícones são SVG e não requerem cupertino_icons
 // pubspec.yaml.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -388,7 +387,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     // igual aos botões do appbar do AiTab.
                     _CircleIconButton(
                       s: s,
-                      icon: CupertinoIcons.add,
+                      icon: 'add.svg',
                       onTap: _handleNewChat,
                     ),
                 ],
@@ -432,7 +431,7 @@ class _AppDrawerState extends State<AppDrawer> {
                       const SizedBox(width: 10),
                       _CircleIconButton(
                         s: s,
-                        icon: CupertinoIcons.search,
+                        icon: 'search.svg',
                         onTap: () => _openSearch(context),
                       ),
                     ],
@@ -626,7 +625,7 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String icon;
   final VoidCallback onTap;
   const _CircleIconButton({
     required this.s,
@@ -656,7 +655,7 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: Icon(widget.icon, color: s.onSurface, size: 20),
+        child: AppIcon(widget.icon, color: s.onSurface, size: 20),
       ),
     );
   }
@@ -742,7 +741,7 @@ class _ConvTileState extends State<_ConvTile> {
         : _dragDx > 0
             ? s.primary
             : Colors.transparent;
-    final icon = _dragDx < 0 ? CupertinoIcons.delete_solid : CupertinoIcons.archivebox_fill;
+    final icon = _dragDx < 0 ? 'delete_solid.svg' : 'archivebox_fill.svg';
     final iconColor = _dragDx < 0 ? s.onError : s.onPrimary;
 
     return AnimatedOpacity(
@@ -755,7 +754,7 @@ class _ConvTileState extends State<_ConvTile> {
               alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               color: swipeBg,
-              child: Icon(icon, color: iconColor, size: 18),
+              child: AppIcon(icon, color: iconColor, size: 18),
             ),
           ),
         Transform.translate(
@@ -795,7 +794,7 @@ class _ConvTileState extends State<_ConvTile> {
                   onTapDown: (d) => widget.onOptionsAt(d.globalPosition),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    child: Icon(CupertinoIcons.ellipsis_vertical, color: s.onSurface, size: 17),
+                    child: AppIcon('ellipsis_vertical.svg', color: s.onSurface, size: 17),
                   ),
                 ),
               ]),
@@ -891,25 +890,25 @@ void showConversationOptionsPopupAt(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.arrow_up_right_square, label: 'Abrir conversa',
+                    s: s, icon: 'arrow_up_right_square.svg', label: 'Abrir conversa',
                     onTap: () { close(); onOpen(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: item.pinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
+                    s: s, icon: item.pinned ? 'pin_slash.svg' : 'pin.svg',
                     label: item.pinned ? 'Desafixar' : 'Fixar',
                     onTap: () { close(); onTogglePin(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.archivebox,
+                    s: s, icon: 'archivebox.svg',
                     label: item.archived ? 'Desarquivar' : 'Arquivar',
                     onTap: () { close(); onArchive(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.pencil, label: 'Renomear',
+                    s: s, icon: 'pencil.svg', label: 'Renomear',
                     onTap: () { close(); onRename(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.delete, label: 'Eliminar',
+                    s: s, icon: 'delete.svg', label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
                   ),
@@ -928,7 +927,7 @@ void showConversationOptionsPopupAt(
 
 class _ConvPopupRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
@@ -961,7 +960,7 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, size: 18, color: color),
+          AppIcon(widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
           SelectionContainer.disabled(
             child: Text(widget.label,
@@ -1295,7 +1294,7 @@ class _AccountPillState extends State<_AccountPill> {
               color: s.hover,
               shape: BoxShape.circle,
             ),
-            child: Icon(CupertinoIcons.ellipsis, color: s.onSurface, size: 18),
+            child: AppIcon('ellipsis.svg', color: s.onSurface, size: 18),
           ),
         ),
       ]),
@@ -1384,19 +1383,19 @@ void showAccountOptionsPopupAt(
                 children: [
                   _AccountPopupRow(
                     s: s,
-                    icon: s.isDark ? CupertinoIcons.sun_max_fill : CupertinoIcons.moon_fill,
+                    icon: s.isDark ? 'sun_max_fill.svg' : 'moon_fill.svg',
                     label: s.isDark ? 'Modo claro' : 'Modo escuro',
                     onTap: () { close(); onToggleTheme(); },
                   ),
                   _AccountPopupRow(
                     s: s,
-                    icon: CupertinoIcons.settings_solid,
+                    icon: 'settings_solid.svg',
                     label: 'Definições',
                     onTap: () { close(); onOpenSettings(); },
                   ),
                   _AccountPopupRow(
                     s: s,
-                    icon: CupertinoIcons.square_arrow_right,
+                    icon: 'square_arrow_right.svg',
                     label: 'Terminar sessão',
                     destructive: true,
                     onTap: () { close(); onLogout(); },
@@ -1419,7 +1418,7 @@ void showAccountOptionsPopupAt(
 
 class _AccountPopupRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
@@ -1452,7 +1451,7 @@ class _AccountPopupRowState extends State<_AccountPopupRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, size: 18, color: color),
+          AppIcon(widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
           SelectionContainer.disabled(
             child: Text(widget.label,

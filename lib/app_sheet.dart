@@ -4,7 +4,6 @@
 // "paper sheet"). Substitui showModalBottomSheet, showCraftBottomSheet
 // e showCupertinoDialog em toda a app.
 // ══════════════════════════════════════════════════════════════
-import 'package:flutter/cupertino.dart';
 import 'colors.dart';
 
 /// Abre um modal no estilo Cupertino "paper sheet" — a tela por trás
