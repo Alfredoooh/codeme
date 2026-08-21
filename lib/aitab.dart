@@ -1,15 +1,20 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZADO: bordas sólidas mais grossas + somente HugeIcons
+// ATUALIZADO: AppBar com ícones Cupertino em botões circulares,
+// input sem bordas, sem pill de modelo, ícone de anexo sem círculo,
+// novo botão de opções com ícone de sliders que abre bottom sheet.
+// O menu de três pontos agora só contém ações da conversa (sem
+// Canvas, Pesquisa web ou Widgets). Essas opções estão no modal.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:hugeicons/hugeicons.dart'; // ✅ adicionado
+import 'package:hugeicons/hugeicons.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
@@ -611,31 +616,19 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON
+// AI CONVERSATION MENU BUTTON (simplificado)
 // ══════════════════════════════════════════════════════════════
 
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
   final bool hasMessages;
-  final int canvasCount;
-  final VoidCallback onOpenCanvas;
-  final bool webSearchEnabled;
-  final ValueChanged<bool> onToggleWebSearch;
-  final bool widgetsEnabled;
-  final ValueChanged<bool> onToggleWidgets;
 
   const AiConversationMenuButton({
     super.key,
     required this.s,
     required this.onSelect,
     required this.hasMessages,
-    required this.canvasCount,
-    required this.onOpenCanvas,
-    required this.webSearchEnabled,
-    required this.onToggleWebSearch,
-    required this.widgetsEnabled,
-    required this.onToggleWidgets,
   });
 
   @override
@@ -643,13 +636,7 @@ class AiConversationMenuButton extends StatelessWidget {
     return _HeaderMenuButton(
       s: s,
       hasMessages: hasMessages,
-      canvasCount: canvasCount,
       onSelect: onSelect,
-      onOpenCanvas: onOpenCanvas,
-      webSearchEnabled: webSearchEnabled,
-      onToggleWebSearch: onToggleWebSearch,
-      widgetsEnabled: widgetsEnabled,
-      onToggleWidgets: onToggleWidgets,
     );
   }
 }
@@ -657,24 +644,12 @@ class AiConversationMenuButton extends StatelessWidget {
 class _HeaderMenuButton extends StatefulWidget {
   final AppColorScheme s;
   final bool hasMessages;
-  final int canvasCount;
   final ValueChanged<ConversationAction> onSelect;
-  final VoidCallback onOpenCanvas;
-  final bool webSearchEnabled;
-  final ValueChanged<bool> onToggleWebSearch;
-  final bool widgetsEnabled;
-  final ValueChanged<bool> onToggleWidgets;
 
   const _HeaderMenuButton({
     required this.s,
     required this.hasMessages,
-    required this.canvasCount,
     required this.onSelect,
-    required this.onOpenCanvas,
-    required this.webSearchEnabled,
-    required this.onToggleWebSearch,
-    required this.widgetsEnabled,
-    required this.onToggleWidgets,
   });
 
   @override
@@ -686,33 +661,18 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   OverlayEntry? _ov;
   late AnimationController _ac;
   final LayerLink _anchorLink = LayerLink();
-  late ValueNotifier<bool> _webNotifier;
-  late ValueNotifier<bool> _widgetsNotifier;
 
   @override
   void initState() {
     super.initState();
     _ac = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 200));
-    _webNotifier = ValueNotifier(widget.webSearchEnabled);
-    _widgetsNotifier = ValueNotifier(widget.widgetsEnabled);
-  }
-
-  @override
-  void didUpdateWidget(covariant _HeaderMenuButton old) {
-    super.didUpdateWidget(old);
-    if (_ov == null) {
-      _webNotifier.value = widget.webSearchEnabled;
-      _widgetsNotifier.value = widget.widgetsEnabled;
-    }
   }
 
   @override
   void dispose() {
     _ac.dispose();
     _ov?.remove();
-    _webNotifier.dispose();
-    _widgetsNotifier.dispose();
     super.dispose();
   }
 
@@ -720,12 +680,9 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
 
   void _open() {
     _ac.forward(from: 0);
-    _webNotifier.value = widget.webSearchEnabled;
-    _widgetsNotifier.value = widget.widgetsEnabled;
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
-      final screenSize = MediaQuery.of(ctx).size;
       const width = 260.0;
 
       return Stack(children: [
@@ -759,98 +716,48 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
             ),
             child: Material(
               type: MaterialType.transparency,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: screenSize.height * 0.7),
-                child: SingleChildScrollView(
-                  child: Container(
-                    width: width,
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: s.floatingSurface,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: s.floatingShadow,
+              child: Container(
+                width: width,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: s.floatingShadow,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.newChat.svgAsset,
+                      label: ConversationAction.newChat.label,
+                      onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _MenuActionRow(
-                          s: s,
-                          icon: ConversationAction.newChat.svgAsset,
-                          label: ConversationAction.newChat.label,
-                          onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
-                        ),
-                        _MenuActionRow(
-                          s: s,
-                          icon: ConversationAction.incognito.svgAsset,
-                          label: ConversationAction.incognito.label,
-                          disabled: widget.hasMessages,
-                          onTap: () {
-                            if (widget.hasMessages) return;
-                            _close();
-                            widget.onSelect(ConversationAction.incognito);
-                          },
-                        ),
-                        _MenuActionRow(
-                          s: s,
-                          icon: ConversationAction.rename.svgAsset,
-                          label: ConversationAction.rename.label,
-                          onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
-                        ),
-                        _MenuActionRow(
-                          s: s,
-                          icon: ConversationAction.delete.svgAsset,
-                          label: ConversationAction.delete.label,
-                          destructive: true,
-                          onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
-                        ),
-                        _MenuActionRow(
-                          s: s,
-                          icon: 'cards.svg',
-                          label: 'Canvas',
-                          subtitle: widget.canvasCount == 0
-                              ? 'Ainda sem documentos'
-                              : '${widget.canvasCount} documento${widget.canvasCount == 1 ? '' : 's'} nesta conversa',
-                          onTap: () { _close(); widget.onOpenCanvas(); },
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12)),
-                        ),
-                        ValueListenableBuilder<bool>(
-                          valueListenable: _webNotifier,
-                          builder: (_, enabled, __) => _MenuSwitchRow(
-                            s: s,
-                            icon: 'globe.svg',
-                            label: 'Pesquisar web',
-                            subtitle: enabled ? 'Ativado' : 'Desativado',
-                            value: enabled,
-                            onChanged: (v) {
-                              _webNotifier.value = v;
-                              widget.onToggleWebSearch(v);
-                            },
-                          ),
-                        ),
-                        ValueListenableBuilder<bool>(
-                          valueListenable: _widgetsNotifier,
-                          builder: (_, enabled, __) => _MenuSwitchRow(
-                            s: s,
-                            icon: 'widgets.svg',
-                            label: 'Widgets',
-                            subtitle: enabled ? 'Gráficos, mapas e cartões' : 'Desativado',
-                            value: enabled,
-                            onChanged: (v) {
-                              _widgetsNotifier.value = v;
-                              widget.onToggleWidgets(v);
-                            },
-                          ),
-                        ),
-                      ],
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.incognito.svgAsset,
+                      label: ConversationAction.incognito.label,
+                      disabled: widget.hasMessages,
+                      onTap: () {
+                        if (widget.hasMessages) return;
+                        _close();
+                        widget.onSelect(ConversationAction.incognito);
+                      },
                     ),
-                  ),
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.rename.svgAsset,
+                      label: ConversationAction.rename.label,
+                      onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
+                    ),
+                    _MenuActionRow(
+                      s: s,
+                      icon: ConversationAction.delete.svgAsset,
+                      label: ConversationAction.delete.label,
+                      destructive: true,
+                      onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -895,7 +802,6 @@ class _MenuActionRow extends StatefulWidget {
   final AppColorScheme s;
   final String icon;
   final String label;
-  final String? subtitle;
   final bool destructive;
   final bool disabled;
   final VoidCallback onTap;
@@ -904,7 +810,6 @@ class _MenuActionRow extends StatefulWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.subtitle,
     this.destructive = false,
     this.disabled = false,
   });
@@ -943,66 +848,12 @@ class _MenuActionRowState extends State<_MenuActionRow> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.label,
-                      style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
-                  if (widget.subtitle != null) ...[
-                    const SizedBox(height: 1),
-                    Text(widget.subtitle!,
-                        style: TextStyle(fontSize: 11.5, color: widget.s.onSurfaceVariant)),
-                  ],
-                ],
-              ),
+              child: Text(widget.label,
+                  style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
             ),
           ]),
         ),
       ),
-    );
-  }
-}
-
-class _MenuSwitchRow extends StatelessWidget {
-  final AppColorScheme s;
-  final String icon;
-  final String label;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _MenuSwitchRow({
-    required this.s,
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(children: [
-        HugeIcon(
-          icon: _hugeIconFromAsset(icon),
-          size: 18,
-          color: s.onSurface,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface)),
-              Text(subtitle,
-                  style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
-            ],
-          ),
-        ),
-        AppSwitch(value: value, s: s, onChanged: onChanged),
-      ]),
     );
   }
 }
@@ -1037,7 +888,7 @@ class SimpleCanvasCard extends StatelessWidget {
           color: s.cardBackground,
           borderRadius: BorderRadius.circular(16),
           boxShadow: s.cardShadow,
-          border: Border.all(color: s.outline, width: 1.2), // ✅ borda sólida mais grossa
+          border: Border.all(color: s.outline, width: 1.2),
         ),
         child: Row(
           children: [
@@ -1288,7 +1139,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   final FocusNode _inputFocus = FocusNode();
   final LayerLink _attachLink = LayerLink();
-  final LayerLink _modelLink  = LayerLink();
 
   @override
   void initState() {
@@ -1670,22 +1520,26 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
   }
 
-  void _openModelPopup(LayerLink link) {
-    showModelSelectPopup(
-      context,
-      AppTheme.of(context),
-      link: link,
-      current: _model,
-      onSelect: _onModelSelected,
-    );
-  }
-
   void _openCanvasPopup() {
     showCanvasSheet(
       context,
       AppTheme.of(context),
       canvases: _canvases,
       onOpenCanvas: _onOpenCanvas,
+    );
+  }
+
+  void _openAiOptionsSheet() {
+    showAiOptionsSheet(
+      context,
+      AppTheme.of(context),
+      currentModel: _model,
+      webSearchEnabled: _webSearchEnabled,
+      widgetsEnabled: _widgetsEnabled,
+      onModelSelected: _onModelSelected,
+      onWebSearchChanged: setWebSearchEnabled,
+      onWidgetsChanged: setWidgetsEnabled,
+      onOpenCanvas: _openCanvasPopup,
     );
   }
 
@@ -1904,17 +1758,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             s: s,
             ctrl: _ctrl,
             focusNode: _inputFocus,
-            model: _model,
             attachedTool: _attachedTool,
             attachedFilesCount: _attachedFiles.length,
             incognito: _incognito,
             sending: _sending,
             attachLink: _attachLink,
-            modelLink: _modelLink,
             onSend: _send,
             onAttach: () => _openAttachSheet(_attachLink),
             onVoice: _openVoiceSheet,
-            onModel: () => _openModelPopup(_modelLink),
+            onOpenAiOptions: _openAiOptionsSheet,
             onClearTool: _onClearTool,
             onOpenAttachedFiles: _openAttachedFilesSheet,
           ),
@@ -2310,7 +2162,7 @@ class _StreamingBubble extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING MARKDOWN CARD (substitui _GeneratingProcessCard)
+// STREAMING MARKDOWN CARD
 // ══════════════════════════════════════════════════════════════
 
 class _StreamingMarkdownCard extends StatefulWidget {
@@ -2365,7 +2217,7 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
       decoration: BoxDecoration(
         color: s.hover.withOpacity(0.4),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: s.outline, width: 1.2), // ✅ borda sólida mais grossa
+        border: Border.all(color: s.outline, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2795,7 +2647,7 @@ class _AttachedFileRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: s.hover,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: s.outline, width: 1.0), // ✅ borda sólida
+          border: Border.all(color: s.outline, width: 1.0),
         ),
         child: Row(children: [
           if (_isImage)
@@ -2854,17 +2706,15 @@ class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
   final FocusNode focusNode;
-  final AiModel model;
   final EditorType? attachedTool;
   final int attachedFilesCount;
   final bool incognito;
   final bool sending;
   final LayerLink attachLink;
-  final LayerLink modelLink;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onVoice;
-  final VoidCallback onModel;
+  final VoidCallback onOpenAiOptions;
   final VoidCallback onClearTool;
   final VoidCallback onOpenAttachedFiles;
 
@@ -2872,17 +2722,15 @@ class _ChatInput extends StatelessWidget {
     required this.s,
     required this.ctrl,
     required this.focusNode,
-    required this.model,
     required this.attachedTool,
     required this.attachedFilesCount,
     required this.incognito,
     required this.sending,
     required this.attachLink,
-    required this.modelLink,
     required this.onSend,
     required this.onAttach,
     required this.onVoice,
-    required this.onModel,
+    required this.onOpenAiOptions,
     required this.onClearTool,
     required this.onOpenAttachedFiles,
   });
@@ -2907,9 +2755,6 @@ class _ChatInput extends StatelessWidget {
         color: s.isDark ? s.cardBackground : s.floatingSurface,
         borderRadius: BorderRadius.circular(22),
         boxShadow: floatingShadow,
-        border: incognito
-            ? null
-            : Border.all(color: s.outline, width: 1.5), // ✅ borda sólida mais grossa no modo normal
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2952,67 +2797,38 @@ class _ChatInput extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
             child: Row(
               children: [
-                CompositedTransformTarget(
-                  link: attachLink,
-                  child: GestureDetector(
-                    onTap: onAttach,
-                    child: Container(
-                      width: 36, height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: s.isDark ? s.hover : s.primary.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: HugeIcon(
-                        icon: HugeIcons.strokeRoundedAdd01,
-                        color: s.onSurface,
-                        size: 22,
-                      ),
+                // Botão de anexar (sem container circular)
+                GestureDetector(
+                  onTap: onAttach,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      CupertinoIcons.add,
+                      color: s.onSurface,
+                      size: 22,
                     ),
                   ),
                 ),
                 const SizedBox(width: 6),
-                CompositedTransformTarget(
-                  link: modelLink,
-                  child: GestureDetector(
-                    onTap: onModel,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: s.hover,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(model.label,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: s.onSurface)),
-                          const SizedBox(width: 3),
-                          Text(model.badge,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: s.onSurfaceVariant)),
-                        ],
-                      ),
+                // Novo botão de opções (ícone de sliders)
+                GestureDetector(
+                  onTap: onOpenAiOptions,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      CupertinoIcons.slider_horizontal_3,
+                      color: s.onSurface,
+                      size: 22,
                     ),
                   ),
                 ),
                 const Spacer(),
                 GestureDetector(
                   onTap: onVoice,
-                  child: Container(
-                    width: 36, height: 36,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: s.primary.withOpacity(0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: HugeIcon(
-                      icon: HugeIcons.strokeRoundedMic01,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      CupertinoIcons.mic,
                       color: s.onSurfaceVariant,
                       size: 20,
                     ),
@@ -3028,10 +2844,16 @@ class _ChatInput extends StatelessWidget {
                         color: sending ? s.primary.withOpacity(0.5) : s.primary,
                         shape: BoxShape.circle),
                     child: sending
-                        ? _SpinningIcon(asset: 'stop_button.svg', color: s.onPrimary)
-                        : HugeIcon(
-                            icon: HugeIcons.strokeRoundedSent,
-                            color: s.onPrimary,
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                        : const Icon(
+                            CupertinoIcons.arrow_up,
+                            color: Colors.white,
                             size: 20,
                           ),
                   ),
@@ -3052,35 +2874,6 @@ class _ChatInput extends StatelessWidget {
       child: bordered,
     );
   }
-}
-
-class _SpinningIcon extends StatefulWidget {
-  final String asset;
-  final Color color;
-  const _SpinningIcon({required this.asset, required this.color});
-  @override State<_SpinningIcon> createState() => _SpinningIconState();
-}
-
-class _SpinningIconState extends State<_SpinningIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat();
-  }
-  @override void dispose() { _c.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) => RotationTransition(
-        turns: _c,
-        child: HugeIcon(
-          icon: _hugeIconFromAsset(widget.asset),
-          color: widget.color,
-          size: 18,
-        ),
-      );
 }
 
 class _AttachedToolPill extends StatelessWidget {
@@ -3363,7 +3156,7 @@ class _CanvasCardState extends State<_CanvasCard> {
           color: _h ? s.hover : s.cardBackground,
           borderRadius: BorderRadius.circular(16),
           boxShadow: s.cardShadow,
-          border: Border.all(color: s.outline, width: 1.2), // ✅ borda sólida mais grossa
+          border: Border.all(color: s.outline, width: 1.2),
         ),
         child: Row(children: [
           Container(
@@ -3549,92 +3342,238 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODEL SELECT POPUP (LayerLink + CompositedTransformFollower)
+// NOVO: BOTTOM SHEET DE OPÇÕES DE IA
 // ══════════════════════════════════════════════════════════════
 
-void showModelSelectPopup(
+Future<void> showAiOptionsSheet(
   BuildContext context,
   AppColorScheme s, {
-  required LayerLink link,
-  required AiModel current,
-  required ValueChanged<AiModel> onSelect,
+  required AiModel currentModel,
+  required bool webSearchEnabled,
+  required bool widgetsEnabled,
+  required ValueChanged<AiModel> onModelSelected,
+  required ValueChanged<bool> onWebSearchChanged,
+  required ValueChanged<bool> onWidgetsChanged,
+  required VoidCallback onOpenCanvas,
 }) {
-  late OverlayEntry entry;
-  final controller = AnimationController(
-    vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 200),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setModalState) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Opções de IA',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: s.onSurface,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Seleção de modelo
+            Text(
+              'Modelo',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: s.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final model in AiModel.values) ...[
+              _ModelOptionRow(
+                s: s,
+                model: model,
+                selected: model == currentModel,
+                onTap: () {
+                  onModelSelected(model);
+                  setModalState(() {});
+                },
+              ),
+              if (model != AiModel.values.last) const SizedBox(height: 4),
+            ],
+            const SizedBox(height: 16),
+            Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.2)),
+            const SizedBox(height: 8),
+            // Canvas
+            _OptionsActionRow(
+              s: s,
+              icon: CupertinoIcons.square_on_square,
+              label: 'Canvas',
+              onTap: () {
+                Navigator.pop(ctx);
+                onOpenCanvas();
+              },
+            ),
+            const SizedBox(height: 8),
+            // Pesquisa web
+            _OptionsSwitchRow(
+              s: s,
+              icon: CupertinoIcons.globe,
+              label: 'Pesquisar web',
+              value: webSearchEnabled,
+              onChanged: (v) {
+                onWebSearchChanged(v);
+                setModalState(() {});
+              },
+            ),
+            const SizedBox(height: 8),
+            // Competências (widgets)
+            _OptionsSwitchRow(
+              s: s,
+              icon: CupertinoIcons.sparkles,
+              label: 'Competências',
+              value: widgetsEnabled,
+              onChanged: (v) {
+                onWidgetsChanged(v);
+                setModalState(() {});
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
   );
+}
 
-  void close() {
-    controller.reverse().then((_) {
-      entry.remove();
-      controller.dispose();
-    });
-  }
-
-  entry = OverlayEntry(builder: (ctx) {
-    const width = 250.0;
-
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      CompositedTransformFollower(
-        link: link,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.topLeft,
-        followerAnchor: Alignment.bottomLeft,
-        offset: const Offset(0, -6),
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: Alignment.bottomLeft,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: AiModel.values
-                    .map((m) => _PopupRow<AiModel>(
-                          s: s,
-                          entry: PopupMenuEntry(
-                            value: m,
-                            label: m.label,
-                            subtitle: m.description,
-                            selected: current == m,
-                          ),
-                          onTap: () { close(); onSelect(m); },
-                        ))
-                    .toList(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ]);
+class _ModelOptionRow extends StatelessWidget {
+  final AppColorScheme s;
+  final AiModel model;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModelOptionRow({
+    required this.s,
+    required this.model,
+    required this.selected,
+    required this.onTap,
   });
 
-  Overlay.of(context).insert(entry);
-  controller.forward();
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? s.primary.withOpacity(0.1) : s.hover,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    model.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: s.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    model.description,
+                    style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(
+                CupertinoIcons.checkmark_alt,
+                color: Color(0xFF2F7BF6),
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionsActionRow extends StatelessWidget {
+  final AppColorScheme s;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _OptionsActionRow({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: s.hover,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: s.onSurface),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(fontSize: 14, color: s.onSurface),
+            ),
+            const Spacer(),
+            Icon(CupertinoIcons.chevron_forward, size: 14, color: s.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionsSwitchRow extends StatelessWidget {
+  final AppColorScheme s;
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _OptionsSwitchRow({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: s.hover,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: s.onSurface),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(fontSize: 14, color: s.onSurface),
+          ),
+          const Spacer(),
+          CupertinoSwitch(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: s.primary,
+          ),
+        ],
+      ),
+    );
+  }
 }

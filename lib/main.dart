@@ -224,12 +224,6 @@ class _RootShellState extends State<RootShell>
                       s: s,
                       hasMessages: _hasMessages,
                       onSelect: _onConversationAction,
-                      canvasCount: st?.canvasCount ?? 0,
-                      onOpenCanvas: () => st?.openCanvasPopupExternally(),
-                      webSearchEnabled: st?.webSearchEnabled ?? false,
-                      onToggleWebSearch: (v) => st?.setWebSearchEnabled(v),
-                      widgetsEnabled: st?.widgetsEnabled ?? false,
-                      onToggleWidgets: (v) => st?.setWidgetsEnabled(v),
                     ),
                   );
                 },
@@ -469,9 +463,19 @@ class _AppHeader extends StatelessWidget {
         bottom: 10, left: 6, right: 10,
       ),
       child: Row(children: [
-        AppTap(
-          onTap: onMenu, s: s,
-          child: AppIcon('menu.svg', color: s.onSurface, size: 20),
+        // Botão de menu em container circular
+        GestureDetector(
+          onTap: onMenu,
+          child: Container(
+            width: 40, height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: s.cardBackground,
+              shape: BoxShape.circle,
+              boxShadow: s.cardShadow,
+            ),
+            child: Icon(CupertinoIcons.bars, color: s.onSurface, size: 20),
+          ),
         ),
         const SizedBox(width: 8),
         if (title.isNotEmpty)
@@ -484,7 +488,18 @@ class _AppHeader extends StatelessWidget {
             ),
           ),
         const Spacer(),
-        if (trailing != null) trailing!,
+        if (trailing != null)
+          // Envolver trailing em container circular também
+          Container(
+            width: 40, height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: s.cardBackground,
+              shape: BoxShape.circle,
+              boxShadow: s.cardShadow,
+            ),
+            child: trailing,
+          ),
       ]),
     );
 
