@@ -3,25 +3,25 @@
 // ══════════════════════════════════════════════════════════════
 // ATUALIZAÇÃO: botão de opções de cada linha passou de ellipsis
 // horizontal para ellipsis_vertical (⋮), mesmo tamanho; segmented
-// control no topo da lista — "Conversas" e "Fixadas" — controla a
+// control no rodapé — "Conversas" e "Fixadas" — controla a
 // visibilidade das respetivas secções (uma de cada vez, estilo
-// tabs). Com o segmented control, o ícone de pin ao lado do título
-// deixou de ser necessário para identificar fixadas (a própria
-// secção "Fixadas" já indica isso) e foi removido das linhas;
-// header (Menu + ícones) e rodapé (pill de conta + busca) agora
-// usam o mesmo gradiente progressivo do settings.dart (sem blur,
-// cor sólida no topo/fundo esvaindo para transparente); pill de
-// conta e botão de busca reduzidos de 60 para 52 de altura;
-// contraste geral aumentado (onSurface puro em vez de variantes
-// suaves nos títulos, ícones mais opacos); "Nova conversa" agora
-// fecha o drawer automaticamente após criar, igual ao botão fechar;
-// CORRIGIDO: _SolidActionRow (linhas do menu de conta: Modo
-// claro/escuro, Definições, Terminar sessão) não tinha
-// SelectionContainer.disabled a envolver o texto — era a causa das
-// linhas amarelas de spellcheck do WebView/SO na imagem enviada;
-// adicionado, sem alterar mais nada no estilo desse card, que já
-// estava correto. CupertinoIcons requer cupertino_icons no
-// pubspec.yaml.
+// tabs), com a mesma altura do pill de usuário (52). Com o
+// segmented control, o ícone de pin ao lado do título deixou de ser
+// necessário para identificar fixadas (a própria secção "Fixadas" já
+// indica isso) e foi removido das linhas; header (Menu + ícones) e
+// rodapé (pill de conta + busca) agora usam o mesmo gradiente
+// progressivo do settings.dart (sem blur, cor sólida no topo/fundo
+// esvaindo para transparente); pill de conta e botão de busca
+// reduzidos de 60 para 52 de altura; contraste geral aumentado
+// (onSurface puro em vez de variantes suaves nos títulos, ícones
+// mais opacos); "Nova conversa" agora fecha o drawer
+// automaticamente após criar, igual ao botão fechar; CORRIGIDO:
+// _SolidActionRow (linhas do menu de conta: Modo claro/escuro,
+// Definições, Terminar sessão) não tinha SelectionContainer.disabled
+// a envolver o texto — era a causa das linhas amarelas de spellcheck
+// do WebView/SO na imagem enviada; adicionado, sem alterar mais nada
+// no estilo desse card, que já estava correto. CupertinoIcons requer
+// cupertino_icons no pubspec.yaml.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -338,19 +338,12 @@ class _AppDrawerState extends State<AppDrawer> {
               // Espaço reservado para o header sobreposto, que fica
               // por cima com o gradiente progressivo.
               const SizedBox(height: 66),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: _DrawerSegmentedControl(
-                  s: s,
-                  selectedIndex: _selectedSection,
-                  onChanged: (i) => setState(() => _selectedSection = i),
-                ),
-              ),
+              // Não há mais segmented aqui; foi movido para o rodapé.
               Expanded(
                 child: _buildConvBody(context, s, pinned, others),
               ),
               // Espaço reservado para o rodapé sobreposto.
-              const SizedBox(height: 78),
+              const SizedBox(height: 120), // aumentado para acomodar segmented + pill
             ],
           ),
 
@@ -401,7 +394,8 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           ),
 
-          // ── Rodapé — mesmo gradiente progressivo do topo. ──────
+          // ── Rodapé — mesmo gradiente progressivo do topo,
+          // agora com segmented control acima do pill + busca. ────
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -416,14 +410,29 @@ class _AppDrawerState extends State<AppDrawer> {
                   ],
                 ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(child: _AccountPill(s: s, onOpenSettings: widget.onSettings)),
-                  const SizedBox(width: 10),
-                  _SearchSideButton(
-                    s: s,
-                    onTap: () => _openSearch(context),
+                  // Segmented control movido para cá.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: _DrawerSegmentedControl(
+                      s: s,
+                      selectedIndex: _selectedSection,
+                      onChanged: (i) => setState(() => _selectedSection = i),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(child: _AccountPill(s: s, onOpenSettings: widget.onSettings)),
+                      const SizedBox(width: 10),
+                      _SearchSideButton(
+                        s: s,
+                        onTap: () => _openSearch(context),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -514,9 +523,8 @@ class _AppDrawerState extends State<AppDrawer> {
 }
 
 // ── Segmented control para o drawer — mesmo padrão visual do
-// segmented control de Aparência (Claro/Escuro/Automático), com
-// container arredondado, thumb deslizante primário e texto com
-// SelectionContainer.disabled para evitar spellcheck. ───────────
+// segmented control de Aparência (Claro/Escuro/Automático), mas
+// agora com altura de 52 para alinhar com o pill de usuário. ─────
 
 class _DrawerSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
@@ -533,7 +541,7 @@ class _DrawerSegmentedControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 52, // mesma altura do pill
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: s.hover,
@@ -1177,12 +1185,8 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — reduzido de 60 para 52 de altura. Botão de opções
-// abre o mesmo menu estilizado sólido de sempre (card preto,
-// escurecimento via s.barrier, cantos curvos, Cancelar 100%
-// arredondado) — estilo inalterado, apenas a linha _SolidActionRow
-// abaixo ganhou SelectionContainer.disabled em falta, que era a
-// causa das linhas amarelas de spellcheck vistas na imagem.
+// ACCOUNT PILL — agora com popup ancorado nas opções (⋮), não mais
+// bottom sheet. O segmented control no rodapé usa a mesma altura.
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1242,96 +1246,17 @@ class _AccountPillState extends State<_AccountPill> {
     );
   }
 
-  void _openOptions(BuildContext context) {
-    final s = widget.s;
-    showGeneralDialog<void>(
-      context: context,
-      barrierLabel: 'account-options',
-      barrierColor: s.barrier,
-      barrierDismissible: true,
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (ctx, anim, secAnim) => const SizedBox.shrink(),
-      transitionBuilder: (ctx, anim, secAnim, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.15),
-              end: Offset.zero,
-            ).animate(curved),
-            child: FadeTransition(
-              opacity: curved,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _SolidActionCard(
-                        s: s,
-                        rows: [
-                          _SolidActionRow(
-                            s: s,
-                            icon: s.isDark ? CupertinoIcons.sun_max_fill : CupertinoIcons.moon_fill,
-                            label: s.isDark ? 'Modo claro' : 'Modo escuro',
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              appTheme.toggleDark();
-                            },
-                          ),
-                          _SolidActionRow(
-                            s: s,
-                            icon: CupertinoIcons.settings_solid,
-                            label: 'Definições',
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              widget.onOpenSettings();
-                            },
-                          ),
-                          _SolidActionRow(
-                            s: s,
-                            icon: CupertinoIcons.square_arrow_right,
-                            label: 'Terminar sessão',
-                            destructive: true,
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              authController.logout();
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(ctx),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: s.cardBackground,
-                            borderRadius: BorderRadius.circular(999),
-                            boxShadow: s.cardShadow,
-                          ),
-                          child: SelectionContainer.disabled(
-                            child: Text(
-                              'Cancelar',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: s.primary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
+  void _openOptions(BuildContext context, Offset globalPosition) {
+    showAccountOptionsPopupAt(
+      context,
+      widget.s,
+      position: globalPosition,
+      onToggleTheme: () {
+        appTheme.toggleDark();
+      },
+      onOpenSettings: widget.onOpenSettings,
+      onLogout: () {
+        authController.logout();
       },
     );
   }
@@ -1391,7 +1316,7 @@ class _AccountPillState extends State<_AccountPill> {
         ),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _openOptions(context),
+          onTapDown: (d) => _openOptions(context, d.globalPosition),
           child: Container(
             width: 36, height: 36,
             alignment: Alignment.center,
@@ -1407,89 +1332,162 @@ class _AccountPillState extends State<_AccountPill> {
   }
 }
 
-// ── Card sólido de opções — cantos curvos, sombra reduzida via
-// colors.dart, sem transparência/blur. Estilo inalterado. ───────
+// ── Popup de opções da conta — OverlayEntry manual, ancorado na
+// posição (x,y) do toque no botão ⋮ do pill. Substitui o antigo
+// bottom sheet. ─────────────────────────────────────────────────
 
-class _SolidActionCard extends StatelessWidget {
-  final AppColorScheme s;
-  final List<Widget> rows;
-  const _SolidActionCard({required this.s, required this.rows});
+void showAccountOptionsPopupAt(
+  BuildContext context,
+  AppColorScheme s, {
+  required Offset position,
+  required VoidCallback onToggleTheme,
+  required VoidCallback onOpenSettings,
+  required VoidCallback onLogout,
+}) {
+  late OverlayEntry entry;
+  final controller = AnimationController(
+    vsync: Navigator.of(context),
+    duration: const Duration(milliseconds: 190),
+  );
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: s.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (int i = 0; i < rows.length; i++) ...[
-            rows[i],
-            if (i != rows.length - 1)
-              Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.5)),
-          ],
-        ],
-      ),
-    );
+  void close() {
+    controller.reverse().then((_) {
+      entry.remove();
+      controller.dispose();
+    });
   }
+
+  final screenSize = MediaQuery.of(context).size;
+  const width = 240.0;
+  const estimatedHeight = 170.0;
+
+  final openLeft = position.dx + width > screenSize.width - 12;
+  final openUp = position.dy + estimatedHeight > screenSize.height - 12;
+
+  final left = openLeft ? (position.dx - width).clamp(8.0, screenSize.width - width - 8) : position.dx.clamp(8.0, screenSize.width - width - 8);
+  final top = openUp ? (position.dy - estimatedHeight).clamp(8.0, screenSize.height - estimatedHeight - 8) : position.dy.clamp(8.0, screenSize.height - estimatedHeight - 8);
+
+  final alignment = Alignment(
+    openLeft ? 1.0 : -1.0,
+    openUp ? 1.0 : -1.0,
+  );
+
+  entry = OverlayEntry(builder: (ctx) {
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: close,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+      Positioned(
+        left: left,
+        top: top,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (_, child) => Opacity(
+            opacity: CurvedAnimation(
+                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                .value,
+            child: Transform.scale(
+              scale: Tween(begin: 0.9, end: 1.0)
+                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
+                  .value,
+              alignment: alignment,
+              child: child,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Container(
+              width: width,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: s.floatingSurface,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: s.floatingShadow,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _AccountPopupRow(
+                    s: s,
+                    icon: s.isDark ? CupertinoIcons.sun_max_fill : CupertinoIcons.moon_fill,
+                    label: s.isDark ? 'Modo claro' : 'Modo escuro',
+                    onTap: () { close(); onToggleTheme(); },
+                  ),
+                  _AccountPopupRow(
+                    s: s,
+                    icon: CupertinoIcons.settings_solid,
+                    label: 'Definições',
+                    onTap: () { close(); onOpenSettings(); },
+                  ),
+                  _AccountPopupRow(
+                    s: s,
+                    icon: CupertinoIcons.square_arrow_right,
+                    label: 'Terminar sessão',
+                    destructive: true,
+                    onTap: () { close(); onLogout(); },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  });
+
+  Overlay.of(context).insert(entry);
+  controller.forward();
 }
 
-class _SolidActionRow extends StatefulWidget {
+// ── Linha do popup da conta — reutiliza o estilo do _ConvPopupRow,
+// mas sem código duplicado; mantém SelectionContainer.disabled. ──
+
+class _AccountPopupRow extends StatefulWidget {
   final AppColorScheme s;
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
-  const _SolidActionRow({
+  const _AccountPopupRow({
     required this.s,
     required this.icon,
     required this.label,
     required this.onTap,
     this.destructive = false,
   });
-  @override State<_SolidActionRow> createState() => _SolidActionRowState();
+  @override State<_AccountPopupRow> createState() => _AccountPopupRowState();
 }
 
-class _SolidActionRowState extends State<_SolidActionRow> {
-  bool _p = false;
-
+class _AccountPopupRowState extends State<_AccountPopupRow> {
+  bool _h = false;
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    final color = widget.destructive ? s.error : s.onSurface;
+    final color = widget.destructive ? widget.s.error : widget.s.onSurface;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        color: _p ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(widget.icon, size: 19, color: color),
-            const SizedBox(width: 10),
-            // CORREÇÃO: faltava SelectionContainer.disabled aqui —
-            // era exatamente isto que causava as linhas amarelas de
-            // spellcheck do WebView/SO nas 3 linhas deste card
-            // (Modo claro, Definições, Terminar sessão) na imagem
-            // enviada. Todos os outros popups do ficheiro já
-            // tinham este wrapper; só esta linha estava sem.
-            SelectionContainer.disabled(
-              child: Text(
-                widget.label,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: color),
-              ),
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: _h ? widget.s.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
         ),
+        child: Row(children: [
+          Icon(widget.icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          SelectionContainer.disabled(
+            child: Text(widget.label,
+                style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+          ),
+        ]),
       ),
     );
   }
