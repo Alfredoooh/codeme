@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -492,7 +493,7 @@ class _AppHeader extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: s.cardShadow,
             ),
-            child: AppIcon('bars.svg', color: s.onSurface, size: 20),
+            child: Icon(CupertinoIcons.bars, color: s.onSurface, size: 20),
           ),
         ),
         const SizedBox(width: 8),

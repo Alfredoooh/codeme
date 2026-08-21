@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/authscreens.dart
 // ══════════════════════════════════════════════════════════════
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'widgets.dart';

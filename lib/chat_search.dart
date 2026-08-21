@@ -8,10 +8,11 @@
 // MediaQuery para nunca ficarem escondidos atrás dele;
 // CupertinoScrollbar fino (estilo Apple) na lista de resultados.
 // Aberto via fade puro (PageRouteBuilder em drawermenu.dart), nunca
-// em slide. Ícones exclusivamente SVG — nenhum IconData
+// em slide. Ícones exclusivamente CupertinoIcons — nenhum Icons
 // (Material) e nenhum SVG neste ficheiro.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
@@ -164,7 +165,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                         boxShadow: s.cardShadow,
                       ),
                       child: Row(children: [
-                        AppIcon('search.svg', color: s.onSurfaceVariant, size: 20),
+                        Icon(CupertinoIcons.search, color: s.onSurfaceVariant, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: TextField(
@@ -188,7 +189,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                               _ctrl.clear();
                               _query = '';
                             }),
-                            child: AppIcon('mic.svg', color: s.onSurfaceVariant, size: 19),
+                            child: Icon(CupertinoIcons.mic, color: s.onSurfaceVariant, size: 19),
                           ),
                       ]),
                     ),
@@ -205,7 +206,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                         shape: BoxShape.circle,
                         boxShadow: s.cardShadow,
                       ),
-                      child: AppIcon('xmark.svg', color: s.onSurfaceVariant, size: 19),
+                      child: Icon(CupertinoIcons.xmark, color: s.onSurfaceVariant, size: 19),
                     ),
                   ),
                 ]),
@@ -264,7 +265,7 @@ class _SearchResultTileState extends State<_SearchResultTile> {
           ),
           if (widget.item.pinned) ...[
             const SizedBox(width: 8),
-            AppIcon('pin_fill.svg', color: s.onSurfaceVariant, size: 13),
+            Icon(CupertinoIcons.pin_fill, color: s.onSurfaceVariant, size: 13),
           ],
         ]),
       ),

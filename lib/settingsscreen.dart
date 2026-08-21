@@ -20,6 +20,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'colors.dart';
 import 'widgets.dart';
@@ -211,26 +212,26 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                           _SettingsGroup(s: s, rows: [
                             _SettingsRow(
                               s: s,
-                              icon: 'paintbrush_fill.svg',
+                              icon: CupertinoIcons.paintbrush_fill,
                               label: 'Aparência',
                               onTap: () => _openAppearance(context, s),
-                              trailing: AppIcon('chevron_forward.svg',
+                              trailing: Icon(CupertinoIcons.chevron_forward,
                                   size: 16, color: s.onSurfaceVariant),
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'rectangle_stack_fill.svg',
+                              icon: CupertinoIcons.rectangle_stack_fill,
                               label: 'Memória',
                               onTap: () => _openMemory(context, s),
-                              trailing: AppIcon('chevron_forward.svg',
+                              trailing: Icon(CupertinoIcons.chevron_forward,
                                   size: 16, color: s.onSurfaceVariant),
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'briefcase_fill.svg',
+                              icon: CupertinoIcons.briefcase_fill,
                               label: 'Área de trabalho',
                               onTap: () => _openWorkspace(context),
-                              trailing: AppIcon('chevron_forward.svg',
+                              trailing: Icon(CupertinoIcons.chevron_forward,
                                   size: 16, color: s.onSurfaceVariant),
                             ),
                           ]),
@@ -242,7 +243,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                           _SettingsGroup(s: s, rows: [
                             _SettingsRow(
                               s: s,
-                              icon: 'person_fill.svg',
+                              icon: CupertinoIcons.person_fill,
                               label: 'Nome',
                               onTap: () => _editName(context, s),
                               trailing: Text('Alterar',
@@ -253,7 +254,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'mail_solid.svg',
+                              icon: CupertinoIcons.mail_solid,
                               label: 'Email',
                               onTap: () {},
                               trailing: Text(user?.email ?? '—',
@@ -264,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'lock_fill.svg',
+                              icon: CupertinoIcons.lock_fill,
                               label: 'Palavra-passe',
                               onTap: () => _editPassword(context, s),
                               trailing: Text('Alterar',
@@ -275,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'sparkles.svg',
+                              icon: CupertinoIcons.sparkles,
                               label: 'Créditos',
                               onTap: () {},
                               trailing: Text('${user?.credits ?? 0}',
@@ -292,7 +293,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                           _SettingsGroup(s: s, rows: [
                             _SettingsRow(
                               s: s,
-                              icon: 'info_circle_fill.svg',
+                              icon: CupertinoIcons.info_circle_fill,
                               label: 'Versão',
                               onTap: () {},
                               trailing: Text('1.0.0',
@@ -302,28 +303,28 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'doc_text_fill.svg',
+                              icon: CupertinoIcons.doc_text_fill,
                               label: 'Termos de serviço',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'shield_fill.svg',
+                              icon: CupertinoIcons.shield_fill,
                               label: 'Política de privacidade',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'chat_bubble_text_fill.svg',
+                              icon: CupertinoIcons.chat_bubble_text_fill,
                               label: 'Enviar feedback',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
                             ),
                             _SettingsRow(
                               s: s,
-                              icon: 'question_circle_fill.svg',
+                              icon: CupertinoIcons.question_circle_fill,
                               label: 'Ajuda e suporte',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),
@@ -429,7 +430,7 @@ class _CircularBackButtonState extends State<_CircularBackButton> {
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: AppIcon('back.svg', color: s.onSurface, size: 18),
+        child: Icon(CupertinoIcons.back, color: s.onSurface, size: 18),
       ),
     );
   }
@@ -515,7 +516,7 @@ class _ProfileHeader extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: s.cardShadow,
                 ),
-                child: AppIcon('pencil.svg', size: 14, color: s.onSurface),
+                child: Icon(CupertinoIcons.pencil, size: 14, color: s.onSurface),
               ),
             ),
           ],
@@ -607,7 +608,7 @@ class _SettingsCard extends StatelessWidget {
 
 class _SettingsRow extends StatefulWidget {
   final AppColorScheme s;
-  final String icon;
+  final IconData icon;
   final String label;
   final Widget trailing;
   final Color? labelColor;
@@ -640,7 +641,7 @@ class _SettingsRowState extends State<_SettingsRow> {
         color: _p ? s.hover : Colors.transparent,
         child: Row(
           children: [
-            AppIcon(widget.icon, size: 19, color: widget.labelColor ?? s.onSurfaceVariant),
+            Icon(widget.icon, size: 19, color: widget.labelColor ?? s.onSurfaceVariant),
             const SizedBox(width: 12),
             Expanded(
               child: Text(widget.label,
@@ -913,10 +914,10 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                           onTap: () => setState(() => _obscureNow = !_obscureNow),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            child: AppIcon(
+                            child: Icon(
                               _obscureNow
-                                  ? 'eye_fill.svg'
-                                  : 'eye_slash_fill.svg',
+                                  ? CupertinoIcons.eye_fill
+                                  : CupertinoIcons.eye_slash_fill,
                               color: s.onSurfaceVariant,
                               size: 18,
                             ),
@@ -1334,7 +1335,7 @@ class _MemoryScreen extends StatelessWidget {
                 child: _SettingsGroup(s: s, rows: [
                   _SettingsRow(
                     s: s,
-                    icon: 'trash_fill.svg',
+                    icon: CupertinoIcons.trash_fill,
                     label: 'Eliminar todas as conversas',
                     labelColor: s.error,
                     onTap: onDeleteAllConversations,
@@ -1387,10 +1388,10 @@ class _WorkspaceScreen extends StatelessWidget {
                 child: _SettingsGroup(s: s, rows: [
                   _SettingsRow(
                     s: s,
-                    icon: 'person_fill.svg',
+                    icon: CupertinoIcons.person_fill,
                     label: 'Pessoal',
                     onTap: () {},
-                    trailing: AppIcon('checkmark_circle_fill.svg',
+                    trailing: Icon(CupertinoIcons.checkmark_circle_fill,
                         size: 18, color: s.primary),
                   ),
                 ]),
