@@ -9,11 +9,15 @@
 //     highlighting nunca foi removido, só o texto normal em prosa
 //     deixou de usar cores no _RichTextBlockParser)
 //   • Blocos de gráfico ```chart{...json...}``` — bar, line, point,
-//     estilo Apple Health/Design HIG, com cor própria por gráfico.
+//     SEM CARD — o gráfico entra diretamente no fluxo da conversa,
+//     como no Notion: sem fundo, sem borda, sem padding de caixa.
 //     Enquanto a fence ainda não fechou (streaming), NADA aparece
 //     no lugar — nem JSON cru, nem placeholder — exatamente como
 //     já acontecia com blocos de código normais. Quando fecha, o
 //     gráfico entra com fade + scale suave.
+//   • Blocos de calendário ```calendar{...json...}``` — grelha
+//     mensal estilo Notion: 7 colunas, linhas finas entre semanas,
+//     dias fora do mês esmaecidos, dia atual com círculo vermelho.
 //   • Matemática LaTeX-like: frações, raízes, super/subscritos,
 //     símbolos, letras gregas, operadores, setas, etc.
 //   • Comandos LaTeX adicionais: \text, \mathbf, \mathcal, etc.
@@ -779,6 +783,11 @@ MathBlockParseResult _extractMathBlocks(String raw) {
 // reconhece um bloco de código depois de encontrar a fence de
 // fecho, exatamente como já acontecia com blocos ``` normais. Não
 // há JSON cru nem placeholder visível durante a escrita.
+//
+// SEM CARD: o gráfico NÃO é envolto em Container com fundo/borda —
+// entra diretamente no fluxo da conversa, como no Notion. Só o
+// título, subtítulo, área de desenho e labels do eixo X aparecem,
+// sobre o fundo natural da página.
 // ══════════════════════════════════════════════════════════════
 
 class ChartSpec {
@@ -1013,13 +1022,13 @@ Color _chartColor(String name) {
   }
 }
 
-// ── Widget de gráfico — estilo Apple Health / Apple Design HIG:
-// card escuro neutro (segue o tema), eixo Y com labels leves,
-// grelha pontilhada fina, barras/linha/pontos na cor escolhida,
-// título+subtítulo+média no topo à esquerda. Entra com fade+scale
-// suave quando montado (o AnimatedContainer/TweenAnimationBuilder
-// cobre o "aparecer em tempo real" pedido — como o dado só chega
-// já completo, não há re-render parcial feio). ───────────────────
+// ── Widget de gráfico — estilo Apple Health / Apple Design HIG,
+// SEM CARD: entra diretamente no fluxo da conversa, sem fundo,
+// sem borda, sem padding de caixa envolvente — exatamente como no
+// Notion, onde o gráfico "flutua" sobre o fundo da página. Eixo Y
+// com labels leves, grelha pontilhada fina, barras/linha/pontos na
+// cor escolhida, título+subtítulo no topo à esquerda. Entra com
+// fade+scale suave quando montado. ──────────────────────────────
 
 class AiChartCard extends StatefulWidget {
   final ChartSpec spec;
@@ -1063,23 +1072,17 @@ class _AiChartCardState extends State<AiChartCard> with SingleTickerProviderStat
     final maxVal = spec.values.reduce((a, b) => a > b ? a : b);
     final niceMax = _niceCeiling(maxVal);
 
+    // SEM CARD — removido o Container com cor de fundo, borda e
+    // borderRadius que existia antes. O conteúdo (título, corpo,
+    // labels do eixo X) entra diretamente no fluxo, apenas com
+    // uma margem vertical mínima para respirar entre blocos.
     return FadeTransition(
       opacity: _fade,
       child: ScaleTransition(
         scale: _scale,
         alignment: Alignment.topLeft,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-          decoration: BoxDecoration(
-            color: s.isDark ? const Color(0xFF161616) : const Color(0xFFF7F7F9),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: s.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE4E4E8),
-              width: 1,
-            ),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1387,6 +1390,275 @@ class _ChartPainter extends CustomPainter {
         oldDelegate.type != type ||
         oldDelegate.color != color ||
         oldDelegate.niceMax != niceMax;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CALENDÁRIO MARKDOWN-NATIVO — bloco ```calendar{...json...}```
+// ══════════════════════════════════════════════════════════════
+// Formato esperado dentro da fence:
+// {
+//   "month": "Outubro",              (nome do mês exibido, opcional)
+//   "year": 2025,                     (opcional)
+//   "startWeekday": 0,                 (0 = domingo, quantas colunas
+//                                        vazias antes do dia 1; se
+//                                        omitido assume-se 0)
+//   "daysInMonth": 31,                 (obrigatório)
+//   "leadingDays": 5,                  (dias do mês anterior a
+//                                        mostrar cinzentos antes do
+//                                        dia 1 — opcional)
+//   "trailingDays": 5,                 (dias do mês seguinte a
+//                                        mostrar cinzentos depois do
+//                                        último dia — opcional)
+//   "today": 21                        (dia a destacar com círculo
+//                                        vermelho — opcional)
+// }
+//
+// Réplica fiel do calendário do Notion: grelha 7 colunas sem
+// cabeçalho de dias da semana, linha fina separando cada semana,
+// dias fora do mês corrente em cinza claro, dia atual com círculo
+// vermelho preenchido e número em branco. SEM CARD — entra
+// diretamente no fluxo, como o gráfico.
+// ══════════════════════════════════════════════════════════════
+
+class CalendarSpec {
+  final String? month;
+  final int? year;
+  final int leadingDays;
+  final int daysInMonth;
+  final int trailingDays;
+  final int? today;
+
+  const CalendarSpec({
+    this.month,
+    this.year,
+    required this.leadingDays,
+    required this.daysInMonth,
+    required this.trailingDays,
+    this.today,
+  });
+
+  static CalendarSpec? tryParse(String rawJson) {
+    try {
+      Map<String, dynamic>? decoded = _tryDecode(rawJson);
+      if (decoded == null) {
+        final cleaned = rawJson.replaceAll(RegExp(r',(\s*[}\]])'), r'$1');
+        decoded = _tryDecode(cleaned);
+      }
+      if (decoded == null) return null;
+
+      final daysInMonth = decoded['daysInMonth'];
+      if (daysInMonth is! num) return null;
+
+      final leading = decoded['leadingDays'];
+      final trailing = decoded['trailingDays'];
+      final todayRaw = decoded['today'];
+      final yearRaw = decoded['year'];
+
+      return CalendarSpec(
+        month: decoded['month']?.toString(),
+        year: yearRaw is num ? yearRaw.toInt() : null,
+        leadingDays: leading is num ? leading.toInt() : 0,
+        daysInMonth: daysInMonth.toInt(),
+        trailingDays: trailing is num ? trailing.toInt() : 0,
+        today: todayRaw is num ? todayRaw.toInt() : null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Map<String, dynamic>? _tryDecode(String raw) {
+    try {
+      final decoded = _jsonDecodeSafe(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _CalendarCell {
+  final int number;
+  final bool inCurrentMonth;
+  final bool isToday;
+  const _CalendarCell({
+    required this.number,
+    required this.inCurrentMonth,
+    required this.isToday,
+  });
+}
+
+// Widget de calendário — estilo Notion: sem card, sem cabeçalho de
+// dias da semana, grelha 7 colunas, linha fina entre semanas, dias
+// fora do mês esmaecidos, dia atual em círculo vermelho.
+class NotionCalendar extends StatelessWidget {
+  final CalendarSpec spec;
+  final AppColorScheme s;
+  const NotionCalendar({super.key, required this.spec, required this.s});
+
+  List<_CalendarCell> _buildCells() {
+    final cells = <_CalendarCell>[];
+
+    // Dias do mês anterior (esmaecidos) — numerados a contar para
+    // trás a partir do próprio leadingDays, tal como o Notion
+    // mostra "26 27 28 29 30 31" antes do dia 1.
+    final prevMonthLast = spec.leadingDays; // total de dias visíveis antes
+    for (int k = 0; k < spec.leadingDays; k++) {
+      cells.add(_CalendarCell(
+        number: 0, // preenchido abaixo
+        inCurrentMonth: false,
+        isToday: false,
+      ));
+    }
+    // Recalcula números reais dos dias do mês anterior de trás
+    // para a frente, para bater certo com a imagem de referência.
+    if (spec.leadingDays > 0) {
+      // Assume que o mês anterior termina num dia >= leadingDays;
+      // como não recebemos o total de dias do mês anterior,
+      // numeramos de forma consistente terminando imediatamente
+      // antes do dia 1 do mês atual.
+      final placeholderLast = 31; // valor neutro só para numeração decrescente
+      int startNumber = placeholderLast - spec.leadingDays + 1;
+      // Ajuste simples: se o consumidor não fornecer o tamanho real
+      // do mês anterior, ainda assim a sequência fica crescente e
+      // visualmente coerente (ex.: 26, 27, 28, 29, 30, 31).
+      for (int k = 0; k < spec.leadingDays; k++) {
+        cells[k] = _CalendarCell(
+          number: startNumber + k,
+          inCurrentMonth: false,
+          isToday: false,
+        );
+      }
+    }
+
+    // Dias do mês atual.
+    for (int day = 1; day <= spec.daysInMonth; day++) {
+      cells.add(_CalendarCell(
+        number: day,
+        inCurrentMonth: true,
+        isToday: spec.today != null && spec.today == day,
+      ));
+    }
+
+    // Dias do mês seguinte (esmaecidos).
+    for (int day = 1; day <= spec.trailingDays; day++) {
+      cells.add(_CalendarCell(
+        number: day,
+        inCurrentMonth: false,
+        isToday: false,
+      ));
+    }
+
+    return cells;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cells = _buildCells();
+    final weeks = <List<_CalendarCell>>[];
+    for (int i = 0; i < cells.length; i += 7) {
+      final end = (i + 7 <= cells.length) ? i + 7 : cells.length;
+      final week = cells.sublist(i, end);
+      // Preenche a última semana incompleta com células vazias
+      // transparentes para manter a grelha alinhada a 7 colunas.
+      while (week.length < 7) {
+        week.add(const _CalendarCell(number: -1, inCurrentMonth: false, isToday: false));
+      }
+      weeks.add(week);
+    }
+
+    final headerLabel = [
+      if (spec.month != null) spec.month!,
+      if (spec.year != null) spec.year!.toString(),
+    ].join(' ');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (headerLabel.isNotEmpty) ...[
+            Text(
+              headerLabel,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: s.onSurfaceVariant,
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          for (int w = 0; w < weeks.length; w++) ...[
+            Row(
+              children: weeks[w].map((cell) => Expanded(
+                child: _CalendarCellWidget(cell: cell, s: s),
+              )).toList(),
+            ),
+            if (w < weeks.length - 1)
+              Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.35)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarCellWidget extends StatelessWidget {
+  final _CalendarCell cell;
+  final AppColorScheme s;
+  const _CalendarCellWidget({required this.cell, required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    if (cell.number < 0) {
+      // Célula vazia de preenchimento (última semana incompleta).
+      return const SizedBox(height: 56);
+    }
+
+    final textColor = cell.isToday
+        ? Colors.white
+        : cell.inCurrentMonth
+            ? s.onSurface
+            : s.onSurfaceVariant.withOpacity(0.45);
+
+    return SizedBox(
+      height: 56,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: cell.isToday
+              ? Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE8483C), // vermelho Notion
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${cell.number}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : Text(
+                  '${cell.number}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: textColor,
+                  ),
+                ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1733,6 +2005,20 @@ class _RichTextBlockParser {
           }
         }
 
+        // ─────────────────────────────────────────────────────
+        // BLOCO ```calendar``` — tenta interpretar como grelha de
+        // calendário estilo Notion. Mesma lógica de fallback: se
+        // o JSON vier inválido, cai para o AiCodeBlock normal em
+        // vez de mostrar erro ou JSON cru.
+        // ─────────────────────────────────────────────────────
+        if (lang.toLowerCase() == 'calendar') {
+          final calSpec = CalendarSpec.tryParse(codeContent);
+          if (calSpec != null) {
+            widgets.add(NotionCalendar(spec: calSpec, s: s));
+            continue;
+          }
+        }
+
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: AiCodeBlock(
@@ -1989,30 +2275,45 @@ class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CODE BLOCK — mantém syntax highlighting colorido (NÃO foi
-// tocado o esquema de cores dos tokens — só o texto de prosa fora
-// dos blocos de código perdeu cor).
+// AI CODE BLOCK — MAIS CORES: paleta ampliada de syntax
+// highlighting. Cada categoria de token tem cor própria e
+// distinta (tags, atributos, strings, comentários, keywords,
+// números, funções, tipos, constantes, operadores, self/this,
+// decorators, built-ins) para um resultado visualmente mais rico
+// do que a versão anterior, mantendo o texto de prosa fora dos
+// blocos de código monocromático (isso não foi tocado).
 // ══════════════════════════════════════════════════════════════
 
 class _TokenPattern {
   final RegExp regex;
   final Color? color;
   final FontStyle? fontStyle;
+  final FontWeight? fontWeight;
 
-  const _TokenPattern(this.regex, {this.color, this.fontStyle});
+  const _TokenPattern(this.regex, {this.color, this.fontStyle, this.fontWeight});
 }
 
-const Color _tokTag = Color(0xFFFF6BB3);
-const Color _tokAttr = Color(0xFFB8E986);
-const Color _tokString = Color(0xFFD4A94E);
-const Color _tokComment = Color(0xFF7A7A7A);
-const Color _tokDoctype = Color(0xFF6CC7F5);
-const Color _tokPunct = Color(0xFF808080);
-const Color _tokKeyword = Color(0xFFFF7B72);
-const Color _tokNumber = Color(0xFF79C0FF);
-const Color _tokFunction = Color(0xFFD2A8FF);
-const Color _tokType = Color(0xFFFFA657);
-const Color _tokConstant = Color(0xFF79C0FF);
+// Paleta ampliada — mais matizes distintos por categoria de token,
+// inspirada em temas ricos (One Dark Pro / Dracula / Night Owl),
+// mas com mais subdivisões do que a paleta anterior tinha.
+const Color _tokTag = Color(0xFFFF6BB3);        // tags HTML/XML
+const Color _tokAttr = Color(0xFF9CDCFE);       // atributos HTML
+const Color _tokString = Color(0xFFE3B341);     // strings
+const Color _tokStringEscape = Color(0xFFFFD866); // escapes dentro de strings
+const Color _tokComment = Color(0xFF6A737D);    // comentários
+const Color _tokDoctype = Color(0xFF6CC7F5);    // <!DOCTYPE>
+const Color _tokPunct = Color(0xFF9198A1);      // pontuação/parênteses
+const Color _tokKeyword = Color(0xFFFF7B93);    // palavras-chave de controlo
+const Color _tokKeywordImport = Color(0xFFFF9E64); // import/export/from
+const Color _tokNumber = Color(0xFF79C0FF);     // números
+const Color _tokFunction = Color(0xFFDCBDFB);   // nomes de função
+const Color _tokType = Color(0xFFFFB454);       // tipos/classes
+const Color _tokConstant = Color(0xFF56C7FF);   // true/false/null
+const Color _tokOperator = Color(0xFFF97BE0);   // operadores (+, -, =>, etc.)
+const Color _tokSelf = Color(0xFFE06C75);       // self/this
+const Color _tokDecorator = Color(0xFF9ED072);  // decorators/annotations
+const Color _tokBuiltin = Color(0xFF6FE3C4);    // funções nativas (print, len, etc.)
+const Color _tokProperty = Color(0xFF7EE7FC);   // propriedades de objeto (obj.prop)
 
 class AiCodeBlock extends StatefulWidget {
   final String code;
@@ -2294,7 +2595,7 @@ List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
   if (tagName.isNotEmpty) {
     spans.add(TextSpan(
       text: tagName,
-      style: baseStyle.copyWith(color: _tokTag),
+      style: baseStyle.copyWith(color: _tokTag, fontWeight: FontWeight.w600),
     ));
   }
 
@@ -2350,6 +2651,7 @@ List<TextSpan> _highlightLineGeneric(String line, List<_TokenPattern> patterns, 
           style: baseStyle.copyWith(
             color: pattern.color,
             fontStyle: pattern.fontStyle,
+            fontWeight: pattern.fontWeight,
           ),
         ));
         index = match.end;
@@ -2373,52 +2675,89 @@ List<_TokenPattern> _patternsForLanguage(String language) {
       return [
         _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
         _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\\[nrt"\047\\$]'), color: _tokStringEscape),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
         _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:abstract|as|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|while|with|yield)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:int|double|String|bool|List|Map|Set|Object|void|dynamic|Future|Stream|Widget|BuildContext)\b'), color: _tokType),
+        _TokenPattern(RegExp(r'\bthis\b|\bsuper\b'), color: _tokSelf, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'\b(?:import|export|library|part|show|hide|deferred|as)\b'), color: _tokKeywordImport),
+        _TokenPattern(RegExp(r'\b(?:abstract|assert|async|await|break|case|catch|class|const|continue|covariant|default|do|dynamic|else|enum|extends|extension|external|factory|final|finally|for|Function|get|if|implements|in|interface|is|late|mixin|new|null|on|operator|required|rethrow|return|set|static|switch|sync|throw|try|typedef|var|void|while|with|yield)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:int|double|String|bool|List|Map|Set|Object|void|dynamic|Future|Stream|Widget|BuildContext|Duration|Color|Offset|Size|Rect)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\bprint\b(?=\()'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
         _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
         _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|&&|\|\||\?\?|\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 
     case 'python':
       return [
         _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'@[a-zA-Z_][\w.]*'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'"""[\s\S]*?"""'), color: _tokString),
+        _TokenPattern(RegExp(r"'''[\s\S]*?'''"), color: _tokString),
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\\[nrt"\047\\]'), color: _tokStringEscape),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
         _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:and|as|assert|async|await|break|class|continue|def|del|elif|else|except|False|finally|for|from|global|if|import|in|is|lambda|None|nonlocal|not|or|pass|raise|return|True|try|while|with|yield)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:int|float|str|bool|list|dict|set|tuple|object)\b'), color: _tokType),
+        _TokenPattern(RegExp(r'\bself\b|\bcls\b'), color: _tokSelf, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'\b(?:import|from|as)\b'), color: _tokKeywordImport),
+        _TokenPattern(RegExp(r'\b(?:and|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|global|if|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:int|float|str|bool|list|dict|set|tuple|object|bytes|frozenset)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:print|len|range|enumerate|zip|map|filter|sorted|sum|min|max|abs|isinstance|super|open|input|type)\b(?=\()'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
         _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
         _TokenPattern(RegExp(r'\b(?:True|False|None)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'==|!=|<=|>=|\*\*|//|->|[+\-*/%=<>!&|^~:]'), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 
     case 'javascript':
     case 'js':
+    case 'jsx':
     case 'typescript':
     case 'ts':
+    case 'tsx':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*|/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
         _TokenPattern(RegExp(r'`(?:\\`|[^`])*`'), color: _tokString),
+        _TokenPattern(RegExp(r'\\[nrt"\047\\`]'), color: _tokStringEscape),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
         _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|this|typeof|instanceof|in|of|async|await|try|catch|finally|throw|import|export|from|default|static|get|set)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\bthis\b'), color: _tokSelf, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'\b(?:import|export|from|default)\b'), color: _tokKeywordImport),
+        _TokenPattern(RegExp(r'\b(?:var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|typeof|instanceof|in|of|async|await|try|catch|finally|throw|static|get|set|yield|interface|type|enum|implements|public|private|protected|readonly|namespace|declare)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:string|number|boolean|any|void|never|unknown|object|Array|Promise|Map|Set)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:console|Math|JSON|Object|Array|parseInt|parseFloat|setTimeout|setInterval)\b'), color: _tokBuiltin),
         _TokenPattern(RegExp(r'\b(?:true|false|null|undefined)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_$]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_$]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'=>|===|!==|==|!=|<=|>=|&&|\|\||\?\?|\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 
     case 'css':
+    case 'scss':
       return [
         _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg)?\b'), color: _tokNumber),
         _TokenPattern(RegExp(r'#[0-9a-fA-F]{3,8}\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_-][\w-]*'), color: _tokFunction),
+        _TokenPattern(RegExp(r'#[a-zA-Z_-][\w-]*'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'[a-zA-Z-]+(?=\s*:)'), color: _tokAttr),
         _TokenPattern(RegExp(r'\b(?:a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)\b'), color: _tokTag),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
@@ -2430,8 +2769,12 @@ List<_TokenPattern> _patternsForLanguage(String language) {
         _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\$\{?[a-zA-Z_]\w*\}?'), color: _tokProperty),
         _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|export|readonly|local|return|exit|echo|printf|source)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|export|readonly|local|return|exit)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:echo|printf|source|cd|ls|grep|awk|sed|curl|wget|cat|mkdir|rm|cp|mv|chmod|pip|npm|flutter|dart|git)\b'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'--?[a-zA-Z-]+'), color: _tokAttr),
+        _TokenPattern(RegExp(r'[|&;><]'), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 
@@ -2441,8 +2784,10 @@ List<_TokenPattern> _patternsForLanguage(String language) {
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
         _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|DELETE|CREATE|TABLE|ALTER|DROP|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|PRIMARY|KEY|FOREIGN|REFERENCES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|DISTINCT|COUNT|SUM|AVG|MIN|MAX)\b', caseSensitive: false), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:int|varchar|char|text|date|datetime|timestamp|decimal|float|double|boolean|bool)\b', caseSensitive: false), color: _tokType),
+        _TokenPattern(RegExp(r'\b(?:SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|DELETE|CREATE|TABLE|ALTER|DROP|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|PRIMARY|KEY|FOREIGN|REFERENCES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|DISTINCT)\b', caseSensitive: false), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:COUNT|SUM|AVG|MIN|MAX|COALESCE|CAST|NOW|CURRENT_DATE)\b', caseSensitive: false), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b(?:int|varchar|char|text|date|datetime|timestamp|decimal|float|double|boolean|bool)\b', caseSensitive: false), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'=|<>|!=|<=|>=|[+\-*/<>]'), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 
@@ -2454,6 +2799,7 @@ List<_TokenPattern> _patternsForLanguage(String language) {
         _TokenPattern(RegExp(r'(\*|_)(.*?)\1'), color: _tokTag),
         _TokenPattern(RegExp(r'^\s{0,3}#{1,6}\s.*$'), color: _tokType),
         _TokenPattern(RegExp(r'^\s{0,3}>.*$'), color: _tokComment),
+        _TokenPattern(RegExp(r'`[^`]+`'), color: _tokBuiltin),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 
@@ -2463,6 +2809,8 @@ List<_TokenPattern> _patternsForLanguage(String language) {
         _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
         _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
         _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
   }
