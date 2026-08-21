@@ -2,16 +2,16 @@
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
 // ATUALIZAÇÃO: botão de opções de cada linha passou de ellipsis
-// horizontal para ellipsis_vertical (⋮), mesmo tamanho; dois
-// toggles no topo da lista — "Fixadas" e "Conversas" — controlam a
-// visibilidade das respetivas secções (ligado = secção visível,
-// desligado = oculta); com os toggles, o ícone de pin ao lado do
-// título deixou de ser necessário para identificar fixadas (a
-// própria secção "Fixadas" já indica isso) e foi removido das
-// linhas; header (Menu + ícones) e rodapé (pill de conta + busca)
-// agora usam o mesmo gradiente progressivo do settings.dart (sem
-// blur, cor sólida no topo/fundo esvaindo para transparente); pill
-// de conta e botão de busca reduzidos de 60 para 52 de altura;
+// horizontal para ellipsis_vertical (⋮), mesmo tamanho; segmented
+// control no topo da lista — "Conversas" e "Fixadas" — controla a
+// visibilidade das respetivas secções (uma de cada vez, estilo
+// tabs). Com o segmented control, o ícone de pin ao lado do título
+// deixou de ser necessário para identificar fixadas (a própria
+// secção "Fixadas" já indica isso) e foi removido das linhas;
+// header (Menu + ícones) e rodapé (pill de conta + busca) agora
+// usam o mesmo gradiente progressivo do settings.dart (sem blur,
+// cor sólida no topo/fundo esvaindo para transparente); pill de
+// conta e botão de busca reduzidos de 60 para 52 de altura;
 // contraste geral aumentado (onSurface puro em vez de variantes
 // suaves nos títulos, ícones mais opacos); "Nova conversa" agora
 // fecha o drawer automaticamente após criar, igual ao botão fechar;
@@ -227,9 +227,8 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
-  // Toggles de visibilidade das secções — ligados por omissão.
-  bool _showPinned = true;
-  bool _showConversations = true;
+  // 0 = Conversas, 1 = Fixadas
+  int _selectedSection = 0;
 
   @override
   void initState() {
@@ -265,8 +264,6 @@ class _AppDrawerState extends State<AppDrawer> {
   void _closeDrawer() => widget.onClose();
 
   void _handleNewChat() {
-    // Cria a nova conversa e fecha o drawer automaticamente, tal
-    // como acontece ao premir o botão de fechar.
     widget.onNewChat?.call();
     _closeDrawer();
   }
@@ -288,9 +285,6 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeDrawer();
   }
 
-  /// Abre o popup ancorado exatamente na posição global (x,y) onde
-  /// o dedo tocou — seja vindo do TapDown do botão de opções (⋮) ou
-  /// do LongPressStart na linha inteira.
   void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
     showConversationOptionsPopupAt(
       context,
@@ -345,13 +339,11 @@ class _AppDrawerState extends State<AppDrawer> {
               // por cima com o gradiente progressivo.
               const SizedBox(height: 66),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-                child: _SectionToggles(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: _DrawerSegmentedControl(
                   s: s,
-                  showPinned: _showPinned,
-                  showConversations: _showConversations,
-                  onTogglePinned: (v) => setState(() => _showPinned = v),
-                  onToggleConversations: (v) => setState(() => _showConversations = v),
+                  selectedIndex: _selectedSection,
+                  onChanged: (i) => setState(() => _selectedSection = i),
                 ),
               ),
               Expanded(
@@ -471,7 +463,7 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
       );
     }
-    if (pinned.isEmpty && others.isEmpty) {
+    if (conversationsController.items.isEmpty) {
       return Center(
         child: Text(
           'Sem conversas ainda',
@@ -480,13 +472,12 @@ class _AppDrawerState extends State<AppDrawer> {
       );
     }
 
-    final showPinnedSection = _showPinned && pinned.isNotEmpty;
-    final showOthersSection = _showConversations && others.isNotEmpty;
+    final activeList = _selectedSection == 0 ? others : pinned;
 
-    if (!showPinnedSection && !showOthersSection) {
+    if (activeList.isEmpty) {
       return Center(
         child: Text(
-          'Nada para mostrar',
+          _selectedSection == 0 ? 'Sem conversas' : 'Sem conversas fixadas',
           style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
         ),
       );
@@ -500,53 +491,21 @@ class _AppDrawerState extends State<AppDrawer> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
         children: [
-          if (showPinnedSection) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 8, 6),
-              child: Row(children: [
-                Icon(CupertinoIcons.pin_fill, color: s.onSurface, size: 13),
-                const SizedBox(width: 6),
-                Text('Fixadas',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        color: s.onSurface)),
-              ]),
-            ),
-            _LooseRows(
-              s: s,
-              children: [
-                for (final item in pinned)
-                  _ConvTile(
-                    s: s,
-                    item: item,
-                    active: item.id == widget.activeConversationId,
-                    onTap: () => _openConversation(item),
-                    onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
-                    onArchive: () => conversationsController.archive(item.id, true),
-                    onDelete: () => conversationsController.delete(item.id),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
-          ],
-          if (showOthersSection)
-            _LooseRows(
-              s: s,
-              children: [
-                for (final item in others)
-                  _ConvTile(
-                    s: s,
-                    item: item,
-                    active: item.id == widget.activeConversationId,
-                    onTap: () => _openConversation(item),
-                    onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
-                    onArchive: () => conversationsController.archive(item.id, true),
-                    onDelete: () => conversationsController.delete(item.id),
-                  ),
-              ],
-            ),
+          _LooseRows(
+            s: s,
+            children: [
+              for (final item in activeList)
+                _ConvTile(
+                  s: s,
+                  item: item,
+                  active: item.id == widget.activeConversationId,
+                  onTap: () => _openConversation(item),
+                  onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+                  onArchive: () => conversationsController.archive(item.id, true),
+                  onDelete: () => conversationsController.delete(item.id),
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
         ],
       ),
@@ -554,130 +513,79 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Toggles de secção — "Fixadas" e "Conversas". Ligado mostra a
-// secção, desligado esconde-a. Substitui a necessidade do ícone de
-// pin em cada linha para identificar itens fixados, já que a
-// própria secção "Fixadas" (quando visível) já os agrupa e
-// identifica. Usa o mesmo estilo de switch do resto da app —
-// trilho 100% arredondado, thumb com a cor primária quando ativo. ──
+// ── Segmented control para o drawer — mesmo padrão visual do
+// segmented control de Aparência (Claro/Escuro/Automático), com
+// container arredondado, thumb deslizante primário e texto com
+// SelectionContainer.disabled para evitar spellcheck. ───────────
 
-class _SectionToggles extends StatelessWidget {
+class _DrawerSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
-  final bool showPinned;
-  final bool showConversations;
-  final ValueChanged<bool> onTogglePinned;
-  final ValueChanged<bool> onToggleConversations;
-  const _SectionToggles({
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+  const _DrawerSegmentedControl({
     required this.s,
-    required this.showPinned,
-    required this.showConversations,
-    required this.onTogglePinned,
-    required this.onToggleConversations,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(
-        child: _ToggleChip(
-          s: s,
-          label: 'Fixadas',
-          value: showPinned,
-          onChanged: onTogglePinned,
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: _ToggleChip(
-          s: s,
-          label: 'Conversas',
-          value: showConversations,
-          onChanged: onToggleConversations,
-        ),
-      ),
-    ]);
-  }
-}
-
-class _ToggleChip extends StatelessWidget {
-  final AppColorScheme s;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _ToggleChip({
-    required this.s,
-    required this.label,
-    required this.value,
+    required this.selectedIndex,
     required this.onChanged,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: s.cardShadow,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: s.onSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 6),
-            _MiniSwitch(s: s, value: value),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Switch compacto — trilho 100% arredondado, thumb branco,
-// cor primária quando ligado, cinza neutro quando desligado. ────
-
-class _MiniSwitch extends StatelessWidget {
-  final AppColorScheme s;
-  final bool value;
-  const _MiniSwitch({required this.s, required this.value});
+  static const _options = ['Conversas', 'Fixadas'];
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      width: 34, height: 20,
-      padding: const EdgeInsets.all(2),
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: value ? s.primary : s.outline,
+        color: s.hover,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: AnimatedAlign(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
-        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          width: 16, height: 16,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
+      child: LayoutBuilder(builder: (context, constraints) {
+        final segmentWidth = constraints.maxWidth / _options.length;
+        return Stack(children: [
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            left: segmentWidth * selectedIndex.clamp(0, _options.length - 1),
+            top: 0,
+            bottom: 0,
+            width: segmentWidth,
+            child: Container(
+              decoration: BoxDecoration(
+                color: s.primary,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: s.cardShadow,
+              ),
+            ),
           ),
-        ),
-      ),
+          Row(
+            children: [
+              for (var i = 0; i < _options.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(i),
+                    child: Center(
+                      child: SelectionContainer.disabled(
+                        child: Text(
+                          _options[i],
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: selectedIndex == i
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            color: selectedIndex == i
+                                ? s.onPrimary
+                                : s.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ]);
+      }),
     );
   }
 }
@@ -775,10 +683,9 @@ class _SearchSideButtonState extends State<_SearchSideButton> {
   }
 }
 
-// ── Grupo de linhas soltas — sem card/fundo agrupado. Cada linha
-// tem um Divider fino entre si, que NÃO chega até à borda da tela
-// (padding lateral igual ao do texto da linha), estilo Grok. A
-// última linha não tem divider abaixo. ──────────────────────────
+// ── Grupo de linhas soltas — sem card/fundo agrupado. Sem
+// divisores entre linhas (removidos conforme pedido). Apenas
+// devolve as linhas uma após a outra. ──────────────────────────
 
 class _LooseRows extends StatelessWidget {
   final AppColorScheme s;
@@ -787,27 +694,17 @@ class _LooseRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i != children.length - 1) {
-        rows.add(Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Divider(height: 1, thickness: 1, color: s.outlineVariant),
-        ));
-      }
-    }
-    return Column(children: rows);
+    // Sem divisores, apenas as linhas em sequência.
+    return Column(children: children);
   }
 }
 
 // ── Conversa individual — sem card/fundo, apenas linha solta.
 // Long-press E o botão de opções (⋮) abrem o popup ancorado
 // exatamente na posição (x,y) do toque. O ícone de pin ao lado do
-// título foi REMOVIDO — os toggles de secção já identificam
-// fixadas através do agrupamento. Texto envolvido em
-// SelectionContainer.disabled para impedir sublinhado amarelo de
-// spellcheck. ─────────────────────────────────────────────────────
+// título foi REMOVIDO — o segmented control já identifica fixadas
+// através da aba. Texto envolvido em SelectionContainer.disabled
+// para impedir sublinhado amarelo de spellcheck. ───────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
