@@ -302,6 +302,25 @@ class _RootShellState extends State<RootShell>
                 child: bodyContent,
               ),
             ),
+
+            // ════════════════════════════════════════════════════
+            // EFEITO DE ESCURECIMENTO AO ABRIR O DRAWER
+            // ════════════════════════════════════════════════════
+            AnimatedBuilder(
+              animation: _drawerCtrl,
+              builder: (_, __) {
+                final t = _drawerCtrl.value;
+                return Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: t < 0.01,
+                    child: Container(
+                      color: Colors.black.withOpacity(0.3 * t),
+                    ),
+                  ),
+                );
+              },
+            ),
+
             // Drawer — entra deslizando da esquerda por cima de tudo.
             Positioned(
               top: 0, bottom: 0, left: 0,
@@ -463,7 +482,7 @@ class _AppHeader extends StatelessWidget {
         bottom: 10, left: 6, right: 10,
       ),
       child: Row(children: [
-        // Botão de menu em container circular
+        // Botão de menu em container circular (40x40)
         GestureDetector(
           onTap: onMenu,
           child: Container(
@@ -489,7 +508,7 @@ class _AppHeader extends StatelessWidget {
           ),
         const Spacer(),
         if (trailing != null)
-          // Envolver trailing em container circular também
+          // Envolver trailing em container circular também (40x40)
           Container(
             width: 40, height: 40,
             alignment: Alignment.center,

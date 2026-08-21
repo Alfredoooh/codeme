@@ -19,6 +19,8 @@
 // automaticamente após criar, igual ao botão fechar; botão de
 // fechar removido do header, mantendo apenas o botão de nova
 // conversa com container circular estilo do botão de pesquisa;
+// header reposicionado para cima (padding top 6) e botão de nova
+// conversa com tamanho 40x40, alinhado ao appbar do AiTab.
 // CORRIGIDO: _SolidActionRow (linhas do menu de conta: Modo
 // claro/escuro, Definições, Terminar sessão) não tinha
 // SelectionContainer.disabled a envolver o texto — era a causa das
@@ -341,7 +343,8 @@ class _AppDrawerState extends State<AppDrawer> {
             children: [
               // Espaço reservado para o header sobreposto, que fica
               // por cima com o gradiente progressivo.
-              const SizedBox(height: 66),
+              // Ajustado para 56 (header mais compacto).
+              const SizedBox(height: 56),
               Expanded(
                 child: _buildConvBody(context, s, pinned, others),
               ),
@@ -352,11 +355,12 @@ class _AppDrawerState extends State<AppDrawer> {
 
           // ── Header — gradiente progressivo, sem blur, mesmo
           // padrão do settings.dart. Removido o botão de fechar; só
-          // mantém o botão de nova conversa. ─────────────────────
+          // mantém o botão de nova conversa. Padding superior = 6,
+          // alinhado ao appbar do AiTab. ─────────────────────────
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 12, 10),
+              padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -380,8 +384,8 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   if (widget.onNewChat != null)
-                    // Botão de nova conversa com o estilo do botão
-                    // de pesquisa (container circular 52x52).
+                    // Botão de nova conversa agora 40x40,
+                    // igual aos botões do appbar do AiTab.
                     _CircleIconButton(
                       s: s,
                       icon: CupertinoIcons.add,
@@ -617,8 +621,8 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
-// ── Botão circular genérico — container 52x52 com cardBackground,
-// sombra e ícone central. Usado para nova conversa e pesquisa. ───
+// ── Botão circular genérico — agora 40x40, alinhado ao appbar do
+// AiTab. Usado para nova conversa e pesquisa. ───────────────────
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
@@ -645,7 +649,7 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        width: 52, height: 52,
+        width: 40, height: 40, // alterado de 52 para 40
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _p ? s.pressed : s.cardBackground,

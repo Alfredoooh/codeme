@@ -1,11 +1,10 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZADO: AppBar com ícones Cupertino em botões circulares,
-// input sem bordas, sem pill de modelo, ícone de anexo sem círculo,
-// novo botão de opções com ícone de sliders que abre bottom sheet.
-// O menu de três pontos agora só contém ações da conversa (sem
-// Canvas, Pesquisa web ou Widgets). Essas opções estão no modal.
+// ATUALIZADO: removido HugeIcons; todos os ícones usam CupertinoIcons.
+// Botão de três pontos continua a abrir popup com ações da conversa.
+// Curvas dos cards ajustadas para 20 (estilo lista das definições).
+// Switches personalizados em substituição dos CupertinoSwitch.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -14,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:hugeicons/hugeicons.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
@@ -27,48 +25,14 @@ import 'drawermenu.dart' show conversationsController, ConversationItem, showRen
 import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
-// HELPER: mapeia nomes antigos de assets para HugeIcons
+// HELPER: mapeia EditorType para CupertinoIcons
 // ══════════════════════════════════════════════════════════════
-IconData _hugeIconFromAsset(String asset) {
-  switch (asset) {
-    case 'add.svg':            return HugeIcons.strokeRoundedAdd01;
-    case 'send.svg':           return HugeIcons.strokeRoundedSent;
-    case 'record.svg':         return HugeIcons.strokeRoundedMic01;
-    case 'stop_button.svg':    return HugeIcons.strokeRoundedStop;
-    case 'thumb_up.svg':       return HugeIcons.strokeRoundedThumbsUp;
-    case 'thumb_down.svg':     return HugeIcons.strokeRoundedThumbsDown;
-    case 'copy.svg':           return HugeIcons.strokeRoundedCopy01;
-    case 'refresh.svg':        return HugeIcons.strokeRoundedRefresh;
-    case 'chevron_right.svg':  return HugeIcons.strokeRoundedArrowRight01;
-    case 'chevron_down.svg':   return HugeIcons.strokeRoundedArrowDown01;
-    case 'close.svg':          return HugeIcons.strokeRoundedCancel01;
-    case 'attached.svg':       return HugeIcons.strokeRoundedAttachment01;
-    case 'file.svg':           return HugeIcons.strokeRoundedFile01;
-    case 'image.svg':          return HugeIcons.strokeRoundedImage01;
-    case 'camera.svg':         return HugeIcons.strokeRoundedCamera01;
-    case 'globe.svg':          return HugeIcons.strokeRoundedGlobe02;
-    case 'widgets.svg':        return HugeIcons.strokeRoundedDashboardSquare01;
-    case 'cards.svg':          return HugeIcons.strokeRoundedIdentityCard;
-    case 'more_filled.svg':    return HugeIcons.strokeRoundedIdentityCard;
-    case 'check.svg':          return HugeIcons.strokeRoundedTick01;
-    case 'incognito_filled.svg': return HugeIcons.strokeRoundedIncognito;
-    case 'edit.svg':           return HugeIcons.strokeRoundedEdit02;
-    case 'trash.svg':          return HugeIcons.strokeRoundedDelete02;
-    case 'text_select.svg':    return HugeIcons.strokeRoundedTextSelection;
-    case 'mic.svg':            return HugeIcons.strokeRoundedMic01;
-    case 'mic_none.svg':       return HugeIcons.strokeRoundedMicOff01;
-    case 'newchat.svg':        return HugeIcons.strokeRoundedMessageAdd01;
-    case 'incognito.svg':      return HugeIcons.strokeRoundedIncognito;
-    default:                   return HugeIcons.strokeRoundedHelpCircle;
-  }
-}
-
-IconData _hugeIconForEditorType(EditorType type) {
+IconData _iconForEditorType(EditorType type) {
   switch (type) {
-    case EditorType.docs:       return HugeIcons.strokeRoundedFile01;
-    case EditorType.sheets:     return HugeIcons.strokeRoundedTable01;
-    case EditorType.slides:     return HugeIcons.strokeRoundedPresentation01;
-    case EditorType.whiteboard: return HugeIcons.strokeRoundedPencilEdit02;
+    case EditorType.docs:       return CupertinoIcons.doc;
+    case EditorType.sheets:     return CupertinoIcons.table;
+    case EditorType.slides:     return CupertinoIcons.square_on_square;
+    case EditorType.whiteboard: return CupertinoIcons.pencil;
   }
 }
 
@@ -366,12 +330,12 @@ class AttachedFile {
 enum ConversationAction { newChat, incognito, rename, delete }
 
 extension ConversationActionX on ConversationAction {
-  String get svgAsset => const {
-        ConversationAction.newChat:   'newchat.svg',
-        ConversationAction.incognito: 'incognito.svg',
-        ConversationAction.rename:    'edit.svg',
-        ConversationAction.delete:    'trash.svg',
-      }[this]!;
+  IconData get icon => switch (this) {
+        ConversationAction.newChat   => CupertinoIcons.plus_bubble,
+        ConversationAction.incognito => CupertinoIcons.eye_slash,
+        ConversationAction.rename    => CupertinoIcons.pencil,
+        ConversationAction.delete    => CupertinoIcons.trash,
+      };
 
   String get label => const {
         ConversationAction.newChat:   'Iniciar nova conversa',
@@ -407,7 +371,7 @@ class PopupMenuEntry<T> {
   final T value;
   final String label;
   final String? subtitle;
-  final String? svgIcon;
+  final IconData icon;
   final bool selected;
   final bool disabled;
   final bool destructive;
@@ -415,7 +379,7 @@ class PopupMenuEntry<T> {
     required this.value,
     required this.label,
     this.subtitle,
-    this.svgIcon,
+    required this.icon,
     this.selected = false,
     this.disabled = false,
     this.destructive = false,
@@ -490,7 +454,7 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: s.floatingShadow,
                 ),
                 child: Column(
@@ -576,14 +540,8 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            if (e.svgIcon != null) ...[
-              HugeIcon(
-                icon: _hugeIconFromAsset(e.svgIcon!),
-                color: color,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
-            ],
+            Icon(e.icon, size: 18, color: color),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,11 +561,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
               ),
             ),
             if (e.selected)
-              HugeIcon(
-                icon: HugeIcons.strokeRoundedTick01,
-                color: s.primary,
-                size: 16,
-              ),
+              Icon(CupertinoIcons.checkmark_alt, size: 16, color: s.primary),
           ]),
         ),
       ),
@@ -616,7 +570,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON (simplificado)
+// AI CONVERSATION MENU BUTTON (popup de três pontos)
 // ══════════════════════════════════════════════════════════════
 
 class AiConversationMenuButton extends StatelessWidget {
@@ -721,7 +675,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: s.floatingShadow,
                 ),
                 child: Column(
@@ -729,13 +683,13 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                   children: [
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.newChat.svgAsset,
+                      icon: ConversationAction.newChat.icon,
                       label: ConversationAction.newChat.label,
                       onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
                     ),
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.incognito.svgAsset,
+                      icon: ConversationAction.incognito.icon,
                       label: ConversationAction.incognito.label,
                       disabled: widget.hasMessages,
                       onTap: () {
@@ -746,13 +700,13 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                     ),
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.rename.svgAsset,
+                      icon: ConversationAction.rename.icon,
                       label: ConversationAction.rename.label,
                       onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
                     ),
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.delete.svgAsset,
+                      icon: ConversationAction.delete.icon,
                       label: ConversationAction.delete.label,
                       destructive: true,
                       onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
@@ -784,11 +738,12 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
           behavior: HitTestBehavior.opaque,
           onTap: _toggle,
           child: IgnorePointer(
-            child: AppTap(
-              onTap: () {},
-              s: widget.s,
-              child: HugeIcon(
-                icon: _hugeIconFromAsset('more_filled.svg'),
+            child: Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              child: Icon(
+                CupertinoIcons.ellipsis_vertical,
                 color: widget.s.onSurface,
                 size: 20,
               ),
@@ -800,7 +755,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
 
 class _MenuActionRow extends StatefulWidget {
   final AppColorScheme s;
-  final String icon;
+  final IconData icon;
   final String label;
   final bool destructive;
   final bool disabled;
@@ -841,11 +796,7 @@ class _MenuActionRowState extends State<_MenuActionRow> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            HugeIcon(
-              icon: _hugeIconFromAsset(widget.icon),
-              size: 18,
-              color: color,
-            ),
+            Icon(widget.icon, size: 18, color: color),
             const SizedBox(width: 10),
             Expanded(
               child: Text(widget.label,
@@ -859,7 +810,7 @@ class _MenuActionRowState extends State<_MenuActionRow> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SIMPLE CANVAS CARD (substitui o DocumentWidgetCard)
+// SIMPLE CANVAS CARD
 // ══════════════════════════════════════════════════════════════
 
 class SimpleCanvasCard extends StatelessWidget {
@@ -886,9 +837,8 @@ class SimpleCanvasCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: s.cardBackground,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20), // curva ajustada
           boxShadow: s.cardShadow,
-          border: Border.all(color: s.outline, width: 1.2),
         ),
         child: Row(
           children: [
@@ -900,8 +850,8 @@ class SimpleCanvasCard extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: HugeIcon(
-                icon: _hugeIconForEditorType(item.kind.editorType),
+              child: Icon(
+                _iconForEditorType(item.kind.editorType),
                 size: 20,
                 color: s.onSurface,
               ),
@@ -932,11 +882,7 @@ class SimpleCanvasCard extends StatelessWidget {
                 ],
               ),
             ),
-            HugeIcon(
-              icon: HugeIcons.strokeRoundedArrowRight01,
-              color: s.onSurfaceVariant,
-              size: 16,
-            ),
+            Icon(CupertinoIcons.chevron_forward, color: s.onSurfaceVariant, size: 16),
           ],
         ),
       ),
@@ -1699,7 +1645,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       behavior: HitTestBehavior.opaque,
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
-        color: _incognito ? s.pageBackground : s.pageBackground,
+        color: s.pageBackground,
         child: Column(children: [
           Expanded(
             child: _incognito
@@ -1803,8 +1749,8 @@ class _IncognitoState extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     return Center(
-      child: HugeIcon(
-        icon: HugeIcons.strokeRoundedIncognito,
+      child: Icon(
+        CupertinoIcons.eye_slash,
         color: s.onSurface,
         size: 72,
       ),
@@ -1923,7 +1869,7 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
                 maxWidth: MediaQuery.of(context).size.width * 0.75),
             decoration: BoxDecoration(
               color: bubbleColor,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: widget.s.cardShadow,
             ),
             child: Text(widget.text,
@@ -2014,24 +1960,24 @@ class _AssistantActionBar extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _AssistantActionIcon(s: s, asset: 'thumb_up.svg', onTap: onThumbUp),
+          _AssistantActionIcon(s: s, icon: CupertinoIcons.hand_thumbsup, onTap: onThumbUp),
           const SizedBox(width: 4),
-          _AssistantActionIcon(s: s, asset: 'thumb_down.svg', onTap: onThumbDown),
+          _AssistantActionIcon(s: s, icon: CupertinoIcons.hand_thumbsdown, onTap: onThumbDown),
           const SizedBox(width: 4),
-          _AssistantActionIcon(s: s, asset: 'copy.svg', onTap: onCopy),
+          _AssistantActionIcon(s: s, icon: CupertinoIcons.doc_on_doc, onTap: onCopy),
           const SizedBox(width: 4),
-          _AssistantActionIcon(s: s, asset: 'refresh.svg', onTap: onRefresh),
+          _AssistantActionIcon(s: s, icon: CupertinoIcons.arrow_clockwise, onTap: onRefresh),
         ],
       );
 }
 
 class _AssistantActionIcon extends StatefulWidget {
   final AppColorScheme s;
-  final String asset;
+  final IconData icon;
   final VoidCallback onTap;
   const _AssistantActionIcon({
     required this.s,
-    required this.asset,
+    required this.icon,
     required this.onTap,
   });
   @override State<_AssistantActionIcon> createState() => _AssistantActionIconState();
@@ -2056,8 +2002,8 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
           color: _h ? s.hover : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        child: HugeIcon(
-          icon: _hugeIconFromAsset(widget.asset),
+        child: Icon(
+          widget.icon,
           color: s.onSurfaceVariant,
           size: 16,
         ),
@@ -2216,8 +2162,7 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: s.hover.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: s.outline, width: 1.2),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2241,8 +2186,8 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: HugeIcon(
-                    icon: HugeIcons.strokeRoundedArrowDown01,
+                  child: Icon(
+                    CupertinoIcons.chevron_down,
                     size: 14,
                     color: s.onSurfaceVariant,
                   ),
@@ -2434,25 +2379,25 @@ void showMessageActionsPopup(
                 children: [
                   _MessageActionRow(
                     s: s,
-                    icon: 'edit.svg',
+                    icon: CupertinoIcons.pencil,
                     label: 'Editar',
                     onTap: () { close(); onEdit(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: 'copy.svg',
+                    icon: CupertinoIcons.doc_on_doc,
                     label: 'Copiar',
                     onTap: () { close(); onCopy(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: 'text_select.svg',
+                    icon: CupertinoIcons.selection_pin_in_out,
                     label: 'Selecionar texto',
                     onTap: () { close(); onSelectText(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: 'trash.svg',
+                    icon: CupertinoIcons.trash,
                     label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
@@ -2472,7 +2417,7 @@ void showMessageActionsPopup(
 
 class _MessageActionRow extends StatefulWidget {
   final AppColorScheme s;
-  final String icon;
+  final IconData icon;
   final String label;
   final bool destructive;
   final VoidCallback onTap;
@@ -2505,11 +2450,7 @@ class _MessageActionRowState extends State<_MessageActionRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          HugeIcon(
-            icon: _hugeIconFromAsset(widget.icon),
-            size: 18,
-            color: color,
-          ),
+          Icon(widget.icon, size: 18, color: color),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
@@ -2577,11 +2518,7 @@ Future<void> showAttachedFilesSheet(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              HugeIcon(
-                icon: HugeIcons.strokeRoundedAttachment01,
-                color: s.onSurface,
-                size: 18,
-              ),
+              Icon(CupertinoIcons.paperclip, color: s.onSurface, size: 18),
               const SizedBox(width: 8),
               Text(
                 'Anexos desta mensagem',
@@ -2646,8 +2583,7 @@ class _AttachedFileRow extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: s.hover,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: s.outline, width: 1.0),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Row(children: [
           if (_isImage)
@@ -2663,11 +2599,8 @@ class _AttachedFileRow extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: HugeIcon(
-                icon: HugeIcons.strokeRoundedAttachment01,
-                color: s.onPrimaryContainer,
-                size: 18,
-              ),
+              child: Icon(CupertinoIcons.paperclip,
+                  color: s.onPrimaryContainer, size: 18),
             ),
           const SizedBox(width: 10),
           Expanded(
@@ -2687,11 +2620,7 @@ class _AttachedFileRow extends StatelessWidget {
               width: 28, height: 28,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: s.error.withOpacity(0.12), shape: BoxShape.circle),
-              child: HugeIcon(
-                icon: HugeIcons.strokeRoundedCancel01,
-                color: s.error,
-                size: 14,
-              ),
+              child: Icon(CupertinoIcons.xmark, color: s.error, size: 14),
             ),
           ),
         ]),
@@ -2753,7 +2682,7 @@ class _ChatInput extends StatelessWidget {
     final inner = Container(
       decoration: BoxDecoration(
         color: s.isDark ? s.cardBackground : s.floatingSurface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: floatingShadow,
       ),
       child: Column(
@@ -2810,7 +2739,7 @@ class _ChatInput extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Novo botão de opções (ícone de sliders)
+                // Botão de opções (ícone de sliders)
                 GestureDetector(
                   onTap: onOpenAiOptions,
                   child: Padding(
@@ -2866,7 +2795,7 @@ class _ChatInput extends StatelessWidget {
     );
 
     final bordered = incognito
-        ? DashedRRectBorder(color: s.outline, radius: 22, child: inner)
+        ? DashedRRectBorder(color: s.outline, radius: 20, child: inner)
         : inner;
 
     return Padding(
@@ -2895,11 +2824,8 @@ class _AttachedToolPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              HugeIcon(
-                icon: _hugeIconForEditorType(type),
-                size: 13,
-                color: s.onPrimaryContainer,
-              ),
+              Icon(_iconForEditorType(type),
+                  size: 13, color: s.onPrimaryContainer),
               const SizedBox(width: 4),
               Text(type.label,
                   style: TextStyle(
@@ -2909,11 +2835,8 @@ class _AttachedToolPill extends StatelessWidget {
               const SizedBox(width: 4),
               GestureDetector(
                 onTap: onClear,
-                child: HugeIcon(
-                  icon: HugeIcons.strokeRoundedCancel01,
-                  color: s.onPrimaryContainer,
-                  size: 9,
-                ),
+                child: Icon(CupertinoIcons.xmark,
+                    color: s.onPrimaryContainer, size: 9),
               ),
             ],
           ),
@@ -2942,11 +2865,7 @@ class _AttachedFilesPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            HugeIcon(
-              icon: HugeIcons.strokeRoundedAttachment01,
-              color: fg,
-              size: 13,
-            ),
+            Icon(CupertinoIcons.paperclip, color: fg, size: 13),
             const SizedBox(width: 4),
             Text('$count anexo${count == 1 ? '' : 's'}',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
@@ -2958,7 +2877,7 @@ class _AttachedFilesPill extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP (LayerLink + CompositedTransformFollower)
+// ATTACH POPUP
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachAction { files, photos, camera }
@@ -2989,9 +2908,21 @@ void showAttachPopup(
     const width = 240.0;
 
     final entries = <PopupMenuEntry<_AttachAction>>[
-      const PopupMenuEntry(value: _AttachAction.files, label: 'Arquivos', subtitle: 'Enviar qualquer tipo de arquivo', svgIcon: 'file.svg'),
-      const PopupMenuEntry(value: _AttachAction.photos, label: 'Fotos', subtitle: 'Enviar fotos da galeria', svgIcon: 'image.svg'),
-      const PopupMenuEntry(value: _AttachAction.camera, label: 'Câmera', subtitle: 'Tirar uma foto agora', svgIcon: 'camera.svg'),
+      const PopupMenuEntry(
+          value: _AttachAction.files,
+          label: 'Arquivos',
+          subtitle: 'Enviar qualquer tipo de arquivo',
+          icon: CupertinoIcons.folder),
+      const PopupMenuEntry(
+          value: _AttachAction.photos,
+          label: 'Fotos',
+          subtitle: 'Enviar fotos da galeria',
+          icon: CupertinoIcons.photo),
+      const PopupMenuEntry(
+          value: _AttachAction.camera,
+          label: 'Câmera',
+          subtitle: 'Tirar uma foto agora',
+          icon: CupertinoIcons.camera),
     ];
 
     return Stack(children: [
@@ -3029,7 +2960,7 @@ void showAttachPopup(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: s.floatingShadow,
               ),
               child: Column(
@@ -3080,11 +3011,7 @@ Future<void> showCanvasSheet(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            HugeIcon(
-              icon: HugeIcons.strokeRoundedIdentityCard,
-              color: s.onSurface,
-              size: 18,
-            ),
+            Icon(CupertinoIcons.square_on_square, color: s.onSurface, size: 18),
             const SizedBox(width: 8),
             Text('Canvas desta conversa',
                 style: TextStyle(
@@ -3154,9 +3081,8 @@ class _CanvasCardState extends State<_CanvasCard> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: _h ? s.hover : s.cardBackground,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: s.cardShadow,
-          border: Border.all(color: s.outline, width: 1.2),
         ),
         child: Row(children: [
           Container(
@@ -3166,11 +3092,8 @@ class _CanvasCardState extends State<_CanvasCard> {
               color: s.primaryContainer.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: HugeIcon(
-              icon: _hugeIconForEditorType(_editorType),
-              size: 20,
-              color: s.onSurface,
-            ),
+            child: Icon(_iconForEditorType(_editorType),
+                size: 20, color: s.onSurface),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -3187,11 +3110,8 @@ class _CanvasCardState extends State<_CanvasCard> {
               ],
             ),
           ),
-          HugeIcon(
-            icon: HugeIcons.strokeRoundedArrowRight01,
-            color: s.onSurfaceVariant,
-            size: 14,
-          ),
+          Icon(CupertinoIcons.chevron_forward,
+              color: s.onSurfaceVariant, size: 14),
         ]),
       ),
     );
@@ -3302,17 +3222,11 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                 shape: BoxShape.circle,
                 border: Border.all(color: s.error, width: 1.5),
               ),
-              child: _recording
-                  ? HugeIcon(
-                      icon: HugeIcons.strokeRoundedMic01,
-                      size: 30,
-                      color: s.error,
-                    )
-                  : HugeIcon(
-                      icon: HugeIcons.strokeRoundedMicOff01,
-                      size: 30,
-                      color: s.error,
-                    ),
+              child: Icon(
+                _recording ? CupertinoIcons.mic : CupertinoIcons.mic_off,
+                size: 30,
+                color: s.error,
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -3342,7 +3256,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// NOVO: BOTTOM SHEET DE OPÇÕES DE IA
+// BOTTOM SHEET DE OPÇÕES DE IA
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAiOptionsSheet(
@@ -3374,7 +3288,6 @@ Future<void> showAiOptionsSheet(
               ),
             ),
             const SizedBox(height: 16),
-            // Seleção de modelo
             Text(
               'Modelo',
               style: TextStyle(
@@ -3399,7 +3312,6 @@ Future<void> showAiOptionsSheet(
             const SizedBox(height: 16),
             Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.2)),
             const SizedBox(height: 8),
-            // Canvas
             _OptionsActionRow(
               s: s,
               icon: CupertinoIcons.square_on_square,
@@ -3410,7 +3322,6 @@ Future<void> showAiOptionsSheet(
               },
             ),
             const SizedBox(height: 8),
-            // Pesquisa web
             _OptionsSwitchRow(
               s: s,
               icon: CupertinoIcons.globe,
@@ -3422,7 +3333,6 @@ Future<void> showAiOptionsSheet(
               },
             ),
             const SizedBox(height: 8),
-            // Competências (widgets)
             _OptionsSwitchRow(
               s: s,
               icon: CupertinoIcons.sparkles,
@@ -3460,7 +3370,7 @@ class _ModelOptionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? s.primary.withOpacity(0.1) : s.hover,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           children: [
@@ -3517,7 +3427,7 @@ class _OptionsActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: s.hover,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           children: [
@@ -3556,7 +3466,7 @@ class _OptionsSwitchRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: s.hover,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
@@ -3567,12 +3477,46 @@ class _OptionsSwitchRow extends StatelessWidget {
             style: TextStyle(fontSize: 14, color: s.onSurface),
           ),
           const Spacer(),
-          CupertinoSwitch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: s.primary,
-          ),
+          _CustomSwitch(value: value, onChanged: onChanged, s: s),
         ],
+      ),
+    );
+  }
+}
+
+// ── Switch personalizado (substitui CupertinoSwitch) ──────────
+
+class _CustomSwitch extends StatelessWidget {
+  final AppColorScheme s;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _CustomSwitch({required this.s, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        width: 44, height: 26,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: value ? s.primary : s.outline,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 20, height: 20,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
       ),
     );
   }
