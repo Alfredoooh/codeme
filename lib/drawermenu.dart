@@ -5,7 +5,8 @@
 // horizontal para ellipsis_vertical (⋮), mesmo tamanho; segmented
 // control no rodapé — "Conversas" e "Fixadas" — controla a
 // visibilidade das respetivas secções (uma de cada vez, estilo
-// tabs), com a mesma altura do pill de usuário (52). Com o
+// tabs), com a mesma altura do pill de usuário (52) e container
+// com a cor da superfície do pill (s.cardBackground). Com o
 // segmented control, o ícone de pin ao lado do título deixou de ser
 // necessário para identificar fixadas (a própria secção "Fixadas" já
 // indica isso) e foi removido das linhas; header (Menu + ícones) e
@@ -15,13 +16,16 @@
 // reduzidos de 60 para 52 de altura; contraste geral aumentado
 // (onSurface puro em vez de variantes suaves nos títulos, ícones
 // mais opacos); "Nova conversa" agora fecha o drawer
-// automaticamente após criar, igual ao botão fechar; CORRIGIDO:
-// _SolidActionRow (linhas do menu de conta: Modo claro/escuro,
-// Definições, Terminar sessão) não tinha SelectionContainer.disabled
-// a envolver o texto — era a causa das linhas amarelas de spellcheck
-// do WebView/SO na imagem enviada; adicionado, sem alterar mais nada
-// no estilo desse card, que já estava correto. CupertinoIcons requer
-// cupertino_icons no pubspec.yaml.
+// automaticamente após criar, igual ao botão fechar; botão de
+// fechar removido do header, mantendo apenas o botão de nova
+// conversa com container circular estilo do botão de pesquisa;
+// CORRIGIDO: _SolidActionRow (linhas do menu de conta: Modo
+// claro/escuro, Definições, Terminar sessão) não tinha
+// SelectionContainer.disabled a envolver o texto — era a causa das
+// linhas amarelas de spellcheck do WebView/SO na imagem enviada;
+// adicionado, sem alterar mais nada no estilo desse card, que já
+// estava correto. CupertinoIcons requer cupertino_icons no
+// pubspec.yaml.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -338,7 +342,6 @@ class _AppDrawerState extends State<AppDrawer> {
               // Espaço reservado para o header sobreposto, que fica
               // por cima com o gradiente progressivo.
               const SizedBox(height: 66),
-              // Não há mais segmented aqui; foi movido para o rodapé.
               Expanded(
                 child: _buildConvBody(context, s, pinned, others),
               ),
@@ -348,7 +351,8 @@ class _AppDrawerState extends State<AppDrawer> {
           ),
 
           // ── Header — gradiente progressivo, sem blur, mesmo
-          // padrão do settings.dart. ─────────────────────────────
+          // padrão do settings.dart. Removido o botão de fechar; só
+          // mantém o botão de nova conversa. ─────────────────────
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
@@ -375,20 +379,14 @@ class _AppDrawerState extends State<AppDrawer> {
                       color: s.onSurface,
                     ),
                   ),
-                  Row(children: [
-                    if (widget.onNewChat != null)
-                      _HeaderIconButton(
-                        s: s,
-                        icon: CupertinoIcons.add,
-                        onTap: _handleNewChat,
-                      ),
-                    const SizedBox(width: 8),
-                    _HeaderIconButton(
+                  if (widget.onNewChat != null)
+                    // Botão de nova conversa com o estilo do botão
+                    // de pesquisa (container circular 52x52).
+                    _CircleIconButton(
                       s: s,
-                      icon: CupertinoIcons.xmark,
-                      onTap: _closeDrawer,
+                      icon: CupertinoIcons.add,
+                      onTap: _handleNewChat,
                     ),
-                  ]),
                 ],
               ),
             ),
@@ -428,8 +426,9 @@ class _AppDrawerState extends State<AppDrawer> {
                     children: [
                       Expanded(child: _AccountPill(s: s, onOpenSettings: widget.onSettings)),
                       const SizedBox(width: 10),
-                      _SearchSideButton(
+                      _CircleIconButton(
                         s: s,
+                        icon: CupertinoIcons.search,
                         onTap: () => _openSearch(context),
                       ),
                     ],
@@ -522,9 +521,9 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Segmented control para o drawer — mesmo padrão visual do
-// segmented control de Aparência (Claro/Escuro/Automático), mas
-// agora com altura de 52 para alinhar com o pill de usuário. ─────
+// ── Segmented control para o drawer — agora com container externo
+// usando s.cardBackground (mesma cor da superfície do pill de
+// usuário) e thumb deslizante mantendo s.primary. ─────────────────
 
 class _DrawerSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
@@ -544,8 +543,9 @@ class _DrawerSegmentedControl extends StatelessWidget {
       height: 52, // mesma altura do pill
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: s.hover,
+        color: s.cardBackground, // superfície do pill
         borderRadius: BorderRadius.circular(999),
+        boxShadow: s.cardShadow, // sombra igual ao pill
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         final segmentWidth = constraints.maxWidth / _options.length;
@@ -559,9 +559,8 @@ class _DrawerSegmentedControl extends StatelessWidget {
             width: segmentWidth,
             child: Container(
               decoration: BoxDecoration(
-                color: s.primary,
+                color: s.primary, // thumb azul mantido
                 borderRadius: BorderRadius.circular(999),
-                boxShadow: s.cardShadow,
               ),
             ),
           ),
@@ -618,54 +617,22 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
-// ── Ícone do header (nova conversa / fechar) — sempre dentro de
-// um container circular visível, não só ao pressionar. ─────────
+// ── Botão circular genérico — container 52x52 com cardBackground,
+// sombra e ícone central. Usado para nova conversa e pesquisa. ───
 
-class _HeaderIconButton extends StatefulWidget {
+class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
   final IconData icon;
   final VoidCallback onTap;
-  const _HeaderIconButton({required this.s, required this.icon, required this.onTap});
-  @override State<_HeaderIconButton> createState() => _HeaderIconButtonState();
+  const _CircleIconButton({
+    required this.s,
+    required this.icon,
+    required this.onTap,
+  });
+  @override State<_CircleIconButton> createState() => _CircleIconButtonState();
 }
 
-class _HeaderIconButtonState extends State<_HeaderIconButton> {
-  bool _p = false;
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 110),
-        width: 36, height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _p ? s.pressed : s.cardBackground,
-          shape: BoxShape.circle,
-          boxShadow: s.cardShadow,
-        ),
-        child: Icon(widget.icon, color: s.onSurface, size: 18),
-      ),
-    );
-  }
-}
-
-// ── Botão de pesquisa isolado, ao lado do pill de utilizador —
-// reduzido de 60 para 52 de altura, igual ao novo tamanho do pill. ─
-
-class _SearchSideButton extends StatefulWidget {
-  final AppColorScheme s;
-  final VoidCallback onTap;
-  const _SearchSideButton({required this.s, required this.onTap});
-  @override State<_SearchSideButton> createState() => _SearchSideButtonState();
-}
-
-class _SearchSideButtonState extends State<_SearchSideButton> {
+class _CircleIconButtonState extends State<_CircleIconButton> {
   bool _p = false;
   @override
   Widget build(BuildContext context) {
@@ -685,7 +652,7 @@ class _SearchSideButtonState extends State<_SearchSideButton> {
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: Icon(CupertinoIcons.search, color: s.onSurface, size: 20),
+        child: Icon(widget.icon, color: s.onSurface, size: 20),
       ),
     );
   }
