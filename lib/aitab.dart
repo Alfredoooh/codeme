@@ -743,7 +743,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
               height: 40,
               alignment: Alignment.center,
               child: AppIcon(
-                'more_ver',
+                'more_vert',
                 color: widget.s.onSurface,
                 size: 20,
               ),
