@@ -16,6 +16,15 @@
 // encosta no thumb passou a ser quase reta (radius pequeno) em vez
 // de總 arredondada — só o lado esquerdo (início do trilho) mantém
 // o arredondamento cheio.
+//
+// NOVO: no tema CLARO, a cor de fundo da página (pageBackground) e
+// a cor de fundo dos cards (cardBackground) são trocadas entre si
+// — os cards passam a usar a cor que antes era do fundo da página,
+// e o fundo da página passa a usar a cor que antes era dos cards.
+// No tema ESCURO nada muda, mantém-se exatamente como estava.
+// Isto é feito através de um AppColorScheme derivado (_settingsScheme)
+// que só troca os dois valores quando !s.isDark; todo o resto do
+// scheme (primary, onSurface, error, etc.) permanece intocado.
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
@@ -27,6 +36,20 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import 'app_sheet.dart';
+
+// ── Helper: devolve um AppColorScheme com pageBackground e
+// cardBackground trocados entre si, mas SÓ quando o tema é claro.
+// No tema escuro devolve o scheme original sem qualquer alteração.
+// Usado em toda a árvore da SettingsScreen para que o efeito se
+// propague a todos os ecrãs internos (Aparência, Memória, Área de
+// trabalho) sem duplicar lógica em cada um deles. ─────────────────
+AppColorScheme _invertedForLightTheme(AppColorScheme s) {
+  if (s.isDark) return s;
+  return s.copyWith(
+    pageBackground: s.cardBackground,
+    cardBackground: s.pageBackground,
+  );
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -173,7 +196,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final rawS = AppTheme.of(context);
+    final s = _invertedForLightTheme(rawS);
     final user = authController.user;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -990,7 +1014,7 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final s = _invertedForLightTheme(AppTheme.of(context));
 
     return Material(
       type: MaterialType.transparency,
@@ -1298,7 +1322,7 @@ class _MemoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final s = _invertedForLightTheme(AppTheme.of(context));
 
     return Material(
       type: MaterialType.transparency,
@@ -1359,7 +1383,7 @@ class _WorkspaceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+    final s = _invertedForLightTheme(AppTheme.of(context));
 
     return Material(
       type: MaterialType.transparency,
