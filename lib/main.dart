@@ -493,7 +493,7 @@ class _AppHeader extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: s.cardShadow,
             ),
-            child: Icon(CupertinoIcons.bars, color: s.onSurface, size: 20),
+            child: AppIcon('menu', color: s.onSurface, size: 20),
           ),
         ),
         const SizedBox(width: 8),
