@@ -16,23 +16,7 @@
 // encosta no thumb passou a ser quase reta (radius pequeno) em vez
 // de總 arredondada — só o lado esquerdo (início do trilho) mantém
 // o arredondamento cheio.
-//
-// NOVO: no tema CLARO, a cor de fundo da página (pageBackground) e
-// a cor de fundo dos cards (cardBackground) são trocadas entre si
-// — os cards passam a usar a cor que antes era do fundo da página,
-// e o fundo da página passa a usar a cor que antes era dos cards.
-// No tema ESCURO nada muda, mantém-se exatamente como estava.
-//
-// IMPLEMENTAÇÃO: AppColorScheme (em colors.dart) expõe as cores
-// como GETTERS calculados a partir de isDark — não são campos
-// simples guardados em memória — por isso não existe (nem faz
-// sentido existir) um copyWith() nessa classe. A troca é feita
-// através de uma subclasse local, _InvertedColorScheme, que estende
-// AppColorScheme e faz override APENAS de pageBackground e
-// cardBackground; todos os outros getters (primary, error,
-// cardShadow, onSurface, etc.) são herdados sem alteração
-// nenhuma do pai. Isto é resolvido em tempo de compilação, sem
-// depender de nenhum método que a classe base não tenha. ─────────
+// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -43,33 +27,6 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import 'app_sheet.dart';
-
-// ── Subclasse local que troca pageBackground <-> cardBackground.
-// Usada apenas dentro deste ficheiro (settings e as suas subtelas).
-// Herda de AppColorScheme, então qualquer método/getter novo que
-// venha a ser adicionado à classe base continua a funcionar aqui
-// sem precisar de manutenção. ─────────────────────────────────────
-class _InvertedColorScheme extends AppColorScheme {
-  final AppColorScheme _base;
-  _InvertedColorScheme(this._base) : super(_base.isDark);
-
-  @override
-  Color get pageBackground => _base.cardBackground;
-
-  @override
-  Color get cardBackground => _base.pageBackground;
-}
-
-// ── Helper: devolve um AppColorScheme com pageBackground e
-// cardBackground trocados entre si, mas SÓ quando o tema é claro.
-// No tema escuro devolve o scheme original sem qualquer alteração.
-// Usado em toda a árvore da SettingsScreen para que o efeito se
-// propague a todos os ecrãs internos (Aparência, Memória, Área de
-// trabalho) sem duplicar lógica em cada um deles. ─────────────────
-AppColorScheme _invertedForLightTheme(AppColorScheme s) {
-  if (s.isDark) return s;
-  return _InvertedColorScheme(s);
-}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -216,8 +173,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
   @override
   Widget build(BuildContext context) {
-    final rawS = AppTheme.of(context);
-    final s = _invertedForLightTheme(rawS);
+    final s = AppTheme.of(context);
     final user = authController.user;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -1034,7 +990,7 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
 
   @override
   Widget build(BuildContext context) {
-    final s = _invertedForLightTheme(AppTheme.of(context));
+    final s = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
@@ -1342,7 +1298,7 @@ class _MemoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = _invertedForLightTheme(AppTheme.of(context));
+    final s = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
@@ -1403,7 +1359,7 @@ class _WorkspaceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = _invertedForLightTheme(AppTheme.of(context));
+    final s = AppTheme.of(context);
 
     return Material(
       type: MaterialType.transparency,
