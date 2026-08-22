@@ -332,7 +332,7 @@ enum ConversationAction { newChat, incognito, rename, delete }
 extension ConversationActionX on ConversationAction {
   String get assetName => switch (this) {
         ConversationAction.newChat   => 'add',
-        ConversationAction.incognito => 'eye_slash',
+        ConversationAction.incognito => 'incognito',
         ConversationAction.rename    => 'pencil',
         ConversationAction.delete    => 'trash',
       };
@@ -743,7 +743,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
               height: 40,
               alignment: Alignment.center,
               child: AppIcon(
-                'more_vert',
+                'more_ver',
                 color: widget.s.onSurface,
                 size: 20,
               ),
@@ -1750,7 +1750,7 @@ class _IncognitoState extends StatelessWidget {
     final s = AppTheme.of(context);
     return Center(
       child: AppIcon(
-        'eye_slash',
+        'incognito',
         color: s.onSurface,
         size: 72,
       ),
