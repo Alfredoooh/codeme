@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZADO: removido HugeIcons; todos os ícones usam CupertinoIcons.
+// ATUALIZADO: removido HugeIcons; todos os ícones usam AppIcon (SVG).
 // Botão de três pontos continua a abrir popup com ações da conversa.
 // Curvas dos cards ajustadas para 20 (estilo lista das definições).
 // Switches personalizados em substituição dos CupertinoSwitch.
@@ -25,14 +25,14 @@ import 'drawermenu.dart' show conversationsController, ConversationItem, showRen
 import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
-// HELPER: mapeia EditorType para CupertinoIcons
+// HELPER: mapeia EditorType para nome de asset SVG
 // ══════════════════════════════════════════════════════════════
-IconData _iconForEditorType(EditorType type) {
+String _iconForEditorType(EditorType type) {
   switch (type) {
-    case EditorType.docs:       return CupertinoIcons.doc;
-    case EditorType.sheets:     return CupertinoIcons.table;
-    case EditorType.slides:     return CupertinoIcons.square_on_square;
-    case EditorType.whiteboard: return CupertinoIcons.pencil;
+    case EditorType.docs:       return 'doc';
+    case EditorType.sheets:     return 'table';
+    case EditorType.slides:     return 'grid';
+    case EditorType.whiteboard: return 'pencil';
   }
 }
 
@@ -330,11 +330,11 @@ class AttachedFile {
 enum ConversationAction { newChat, incognito, rename, delete }
 
 extension ConversationActionX on ConversationAction {
-  IconData get icon => switch (this) {
-        ConversationAction.newChat   => CupertinoIcons.plus_bubble,
-        ConversationAction.incognito => CupertinoIcons.eye_slash,
-        ConversationAction.rename    => CupertinoIcons.pencil,
-        ConversationAction.delete    => CupertinoIcons.trash,
+  String get assetName => switch (this) {
+        ConversationAction.newChat   => 'add',
+        ConversationAction.incognito => 'eye_slash',
+        ConversationAction.rename    => 'pencil',
+        ConversationAction.delete    => 'trash',
       };
 
   String get label => const {
@@ -371,7 +371,7 @@ class PopupMenuEntry<T> {
   final T value;
   final String label;
   final String? subtitle;
-  final IconData icon;
+  final String assetName;
   final bool selected;
   final bool disabled;
   final bool destructive;
@@ -379,7 +379,7 @@ class PopupMenuEntry<T> {
     required this.value,
     required this.label,
     this.subtitle,
-    required this.icon,
+    required this.assetName,
     this.selected = false,
     this.disabled = false,
     this.destructive = false,
@@ -540,7 +540,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            Icon(e.icon, size: 18, color: color),
+            AppIcon(e.assetName, size: 18, color: color),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -561,7 +561,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
               ),
             ),
             if (e.selected)
-              Icon(CupertinoIcons.checkmark_alt, size: 16, color: s.primary),
+              AppIcon('check', size: 16, color: s.primary),
           ]),
         ),
       ),
@@ -683,13 +683,13 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                   children: [
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.newChat.icon,
+                      assetName: ConversationAction.newChat.assetName,
                       label: ConversationAction.newChat.label,
                       onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
                     ),
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.incognito.icon,
+                      assetName: ConversationAction.incognito.assetName,
                       label: ConversationAction.incognito.label,
                       disabled: widget.hasMessages,
                       onTap: () {
@@ -700,13 +700,13 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                     ),
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.rename.icon,
+                      assetName: ConversationAction.rename.assetName,
                       label: ConversationAction.rename.label,
                       onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
                     ),
                     _MenuActionRow(
                       s: s,
-                      icon: ConversationAction.delete.icon,
+                      assetName: ConversationAction.delete.assetName,
                       label: ConversationAction.delete.label,
                       destructive: true,
                       onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
@@ -742,8 +742,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
               width: 40,
               height: 40,
               alignment: Alignment.center,
-              child: Icon(
-                CupertinoIcons.ellipsis_vertical,
+              child: AppIcon(
+                'more_vert',
                 color: widget.s.onSurface,
                 size: 20,
               ),
@@ -755,14 +755,14 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
 
 class _MenuActionRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final String label;
   final bool destructive;
   final bool disabled;
   final VoidCallback onTap;
   const _MenuActionRow({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.label,
     required this.onTap,
     this.destructive = false,
@@ -796,7 +796,7 @@ class _MenuActionRowState extends State<_MenuActionRow> {
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(children: [
-            Icon(widget.icon, size: 18, color: color),
+            AppIcon(widget.assetName, size: 18, color: color),
             const SizedBox(width: 10),
             Expanded(
               child: Text(widget.label,
@@ -837,7 +837,7 @@ class SimpleCanvasCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: s.cardBackground,
-          borderRadius: BorderRadius.circular(20), // curva ajustada
+          borderRadius: BorderRadius.circular(20),
           boxShadow: s.cardShadow,
         ),
         child: Row(
@@ -850,7 +850,7 @@ class SimpleCanvasCard extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
+              child: AppIcon(
                 _iconForEditorType(item.kind.editorType),
                 size: 20,
                 color: s.onSurface,
@@ -882,7 +882,7 @@ class SimpleCanvasCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(CupertinoIcons.chevron_forward, color: s.onSurfaceVariant, size: 16),
+            AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 16),
           ],
         ),
       ),
@@ -1749,8 +1749,8 @@ class _IncognitoState extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     return Center(
-      child: Icon(
-        CupertinoIcons.eye_slash,
+      child: AppIcon(
+        'eye_slash',
         color: s.onSurface,
         size: 72,
       ),
@@ -1960,24 +1960,24 @@ class _AssistantActionBar extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _AssistantActionIcon(s: s, icon: CupertinoIcons.hand_thumbsup, onTap: onThumbUp),
+          _AssistantActionIcon(s: s, assetName: 'thumbs_up', onTap: onThumbUp),
           const SizedBox(width: 4),
-          _AssistantActionIcon(s: s, icon: CupertinoIcons.hand_thumbsdown, onTap: onThumbDown),
+          _AssistantActionIcon(s: s, assetName: 'thumbs_down', onTap: onThumbDown),
           const SizedBox(width: 4),
-          _AssistantActionIcon(s: s, icon: CupertinoIcons.doc_on_doc, onTap: onCopy),
+          _AssistantActionIcon(s: s, assetName: 'copy', onTap: onCopy),
           const SizedBox(width: 4),
-          _AssistantActionIcon(s: s, icon: CupertinoIcons.arrow_clockwise, onTap: onRefresh),
+          _AssistantActionIcon(s: s, assetName: 'refresh', onTap: onRefresh),
         ],
       );
 }
 
 class _AssistantActionIcon extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final VoidCallback onTap;
   const _AssistantActionIcon({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.onTap,
   });
   @override State<_AssistantActionIcon> createState() => _AssistantActionIconState();
@@ -2002,8 +2002,8 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
           color: _h ? s.hover : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          widget.icon,
+        child: AppIcon(
+          widget.assetName,
           color: s.onSurfaceVariant,
           size: 16,
         ),
@@ -2186,8 +2186,8 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    CupertinoIcons.chevron_down,
+                  child: AppIcon(
+                    'chevron_down',
                     size: 14,
                     color: s.onSurfaceVariant,
                   ),
@@ -2379,25 +2379,25 @@ void showMessageActionsPopup(
                 children: [
                   _MessageActionRow(
                     s: s,
-                    icon: CupertinoIcons.pencil,
+                    assetName: 'pencil',
                     label: 'Editar',
                     onTap: () { close(); onEdit(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: CupertinoIcons.doc_on_doc,
+                    assetName: 'copy',
                     label: 'Copiar',
                     onTap: () { close(); onCopy(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: CupertinoIcons.selection_pin_in_out,
+                    assetName: 'select_text',
                     label: 'Selecionar texto',
                     onTap: () { close(); onSelectText(); },
                   ),
                   _MessageActionRow(
                     s: s,
-                    icon: CupertinoIcons.trash,
+                    assetName: 'trash',
                     label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
@@ -2417,13 +2417,13 @@ void showMessageActionsPopup(
 
 class _MessageActionRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final String label;
   final bool destructive;
   final VoidCallback onTap;
   const _MessageActionRow({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.label,
     required this.onTap,
     this.destructive = false,
@@ -2450,7 +2450,7 @@ class _MessageActionRowState extends State<_MessageActionRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, size: 18, color: color),
+          AppIcon(widget.assetName, size: 18, color: color),
           const SizedBox(width: 10),
           Text(widget.label,
               style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
@@ -2518,7 +2518,7 @@ Future<void> showAttachedFilesSheet(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(CupertinoIcons.paperclip, color: s.onSurface, size: 18),
+              AppIcon('attach', color: s.onSurface, size: 18),
               const SizedBox(width: 8),
               Text(
                 'Anexos desta mensagem',
@@ -2599,7 +2599,7 @@ class _AttachedFileRow extends StatelessWidget {
                 color: s.primaryContainer.withOpacity(0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(CupertinoIcons.paperclip,
+              child: AppIcon('paperclip',
                   color: s.onPrimaryContainer, size: 18),
             ),
           const SizedBox(width: 10),
@@ -2620,7 +2620,7 @@ class _AttachedFileRow extends StatelessWidget {
               width: 28, height: 28,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: s.error.withOpacity(0.12), shape: BoxShape.circle),
-              child: Icon(CupertinoIcons.xmark, color: s.error, size: 14),
+              child: AppIcon('close', color: s.error, size: 14),
             ),
           ),
         ]),
@@ -2731,8 +2731,8 @@ class _ChatInput extends StatelessWidget {
                   onTap: onAttach,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      CupertinoIcons.add,
+                    child: AppIcon(
+                      'add',
                       color: s.onSurface,
                       size: 22,
                     ),
@@ -2744,8 +2744,8 @@ class _ChatInput extends StatelessWidget {
                   onTap: onOpenAiOptions,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      CupertinoIcons.slider_horizontal_3,
+                    child: AppIcon(
+                      'sliders',
                       color: s.onSurface,
                       size: 22,
                     ),
@@ -2756,8 +2756,8 @@ class _ChatInput extends StatelessWidget {
                   onTap: onVoice,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      CupertinoIcons.mic,
+                    child: AppIcon(
+                      'mic',
                       color: s.onSurfaceVariant,
                       size: 20,
                     ),
@@ -2780,8 +2780,8 @@ class _ChatInput extends StatelessWidget {
                               valueColor: AlwaysStoppedAnimation(Colors.white),
                             ),
                           )
-                        : const Icon(
-                            CupertinoIcons.arrow_up,
+                        : AppIcon(
+                            'arrow_up',
                             color: Colors.white,
                             size: 20,
                           ),
@@ -2824,7 +2824,7 @@ class _AttachedToolPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_iconForEditorType(type),
+              AppIcon(_iconForEditorType(type),
                   size: 13, color: s.onPrimaryContainer),
               const SizedBox(width: 4),
               Text(type.label,
@@ -2835,7 +2835,7 @@ class _AttachedToolPill extends StatelessWidget {
               const SizedBox(width: 4),
               GestureDetector(
                 onTap: onClear,
-                child: Icon(CupertinoIcons.xmark,
+                child: AppIcon('close',
                     color: s.onPrimaryContainer, size: 9),
               ),
             ],
@@ -2865,7 +2865,7 @@ class _AttachedFilesPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(CupertinoIcons.paperclip, color: fg, size: 13),
+            AppIcon('paperclip', color: fg, size: 13),
             const SizedBox(width: 4),
             Text('$count anexo${count == 1 ? '' : 's'}',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
@@ -2912,17 +2912,17 @@ void showAttachPopup(
           value: _AttachAction.files,
           label: 'Arquivos',
           subtitle: 'Enviar qualquer tipo de arquivo',
-          icon: CupertinoIcons.folder),
+          assetName: 'folder'),
       const PopupMenuEntry(
           value: _AttachAction.photos,
           label: 'Fotos',
           subtitle: 'Enviar fotos da galeria',
-          icon: CupertinoIcons.photo),
+          assetName: 'image'),
       const PopupMenuEntry(
           value: _AttachAction.camera,
           label: 'Câmera',
           subtitle: 'Tirar uma foto agora',
-          icon: CupertinoIcons.camera),
+          assetName: 'camera'),
     ];
 
     return Stack(children: [
@@ -3011,7 +3011,7 @@ Future<void> showCanvasSheet(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(CupertinoIcons.square_on_square, color: s.onSurface, size: 18),
+            AppIcon('grid', color: s.onSurface, size: 18),
             const SizedBox(width: 8),
             Text('Canvas desta conversa',
                 style: TextStyle(
@@ -3092,7 +3092,7 @@ class _CanvasCardState extends State<_CanvasCard> {
               color: s.primaryContainer.withOpacity(0.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(_iconForEditorType(_editorType),
+            child: AppIcon(_iconForEditorType(_editorType),
                 size: 20, color: s.onSurface),
           ),
           const SizedBox(width: 12),
@@ -3110,7 +3110,7 @@ class _CanvasCardState extends State<_CanvasCard> {
               ],
             ),
           ),
-          Icon(CupertinoIcons.chevron_forward,
+          AppIcon('chevron_forward',
               color: s.onSurfaceVariant, size: 14),
         ]),
       ),
@@ -3222,8 +3222,8 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
                 shape: BoxShape.circle,
                 border: Border.all(color: s.error, width: 1.5),
               ),
-              child: Icon(
-                _recording ? CupertinoIcons.mic : CupertinoIcons.mic_off,
+              child: AppIcon(
+                _recording ? 'mic' : 'mic_off',
                 size: 30,
                 color: s.error,
               ),
@@ -3314,7 +3314,7 @@ Future<void> showAiOptionsSheet(
             const SizedBox(height: 8),
             _OptionsActionRow(
               s: s,
-              icon: CupertinoIcons.square_on_square,
+              assetName: 'grid',
               label: 'Canvas',
               onTap: () {
                 Navigator.pop(ctx);
@@ -3324,7 +3324,7 @@ Future<void> showAiOptionsSheet(
             const SizedBox(height: 8),
             _OptionsSwitchRow(
               s: s,
-              icon: CupertinoIcons.globe,
+              assetName: 'globe',
               label: 'Pesquisar web',
               value: webSearchEnabled,
               onChanged: (v) {
@@ -3335,7 +3335,7 @@ Future<void> showAiOptionsSheet(
             const SizedBox(height: 8),
             _OptionsSwitchRow(
               s: s,
-              icon: CupertinoIcons.sparkles,
+              assetName: 'sparkles',
               label: 'Competências',
               value: widgetsEnabled,
               onChanged: (v) {
@@ -3395,8 +3395,8 @@ class _ModelOptionRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(
-                CupertinoIcons.checkmark_alt,
+              const AppIcon(
+                'check',
                 color: Color(0xFF2F7BF6),
                 size: 20,
               ),
@@ -3409,12 +3409,12 @@ class _ModelOptionRow extends StatelessWidget {
 
 class _OptionsActionRow extends StatelessWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final String label;
   final VoidCallback onTap;
   const _OptionsActionRow({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.label,
     required this.onTap,
   });
@@ -3431,14 +3431,14 @@ class _OptionsActionRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: s.onSurface),
+            AppIcon(assetName, size: 18, color: s.onSurface),
             const SizedBox(width: 10),
             Text(
               label,
               style: TextStyle(fontSize: 14, color: s.onSurface),
             ),
             const Spacer(),
-            Icon(CupertinoIcons.chevron_forward, size: 14, color: s.onSurfaceVariant),
+            AppIcon('chevron_forward', size: 14, color: s.onSurfaceVariant),
           ],
         ),
       ),
@@ -3448,13 +3448,13 @@ class _OptionsActionRow extends StatelessWidget {
 
 class _OptionsSwitchRow extends StatelessWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
   const _OptionsSwitchRow({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.label,
     required this.value,
     required this.onChanged,
@@ -3470,7 +3470,7 @@ class _OptionsSwitchRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: s.onSurface),
+          AppIcon(assetName, size: 18, color: s.onSurface),
           const SizedBox(width: 10),
           Text(
             label,
