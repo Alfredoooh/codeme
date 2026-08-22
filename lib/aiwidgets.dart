@@ -487,7 +487,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          AppIcon('sliders.svg', size: 14, color: widget.s.onPrimary),
+                          AppIcon('sliders', size: 14, color: widget.s.onPrimary),
                           const SizedBox(width: 7),
                           Text(
                             'Opções',
@@ -505,7 +505,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
                 ),
                 const SizedBox(width: 6),
                 _CircularActionButton(
-                  icon: 'copy.svg',
+                  icon: 'copy',
                   tooltip: 'Copiar',
                   onTap: _copyData,
                   primary: _primary(),
@@ -513,7 +513,7 @@ class _AiChartWidgetState extends State<AiChartWidget>
                 ),
                 const SizedBox(width: 6),
                 _CircularActionButton(
-                  icon: 'download.svg',
+                  icon: 'download',
                   tooltip: 'Download',
                   onTap: _downloadChart,
                   primary: _primary(),
@@ -592,10 +592,10 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
   late List<TextEditingController> _valueControllers;
 
   final List<({String key, String icon})> _chartTypes = [
-    (key: 'bar', icon: 'chart_bar.svg'),
-    (key: 'line', icon: 'chart_line.svg'),
-    (key: 'area', icon: 'chart_area.svg'),
-    (key: 'pie', icon: 'chart_pie.svg'),
+    (key: 'bar', icon: 'chart_bar'),
+    (key: 'line', icon: 'chart_line'),
+    (key: 'area', icon: 'chart_area'),
+    (key: 'pie', icon: 'chart_pie'),
   ];
 
   static const _colorPalette = [
@@ -837,7 +837,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                                 shape: BoxShape.circle,
                                 color: _chipInactiveBg(),
                               ),
-                              child: AppIcon('close.svg', size: 12, color: _chipInactiveText()),
+                              child: AppIcon('close', size: 12, color: _chipInactiveText()),
                             ),
                           ),
                         ],
@@ -860,7 +860,7 @@ class _ChartOptionsSheetState extends State<_ChartOptionsSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppIcon('add.svg', size: 12, color: _label()),
+                    AppIcon('add', size: 12, color: _label()),
                     const SizedBox(width: 6),
                     Text('Adicionar valor',
                         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _label())),
@@ -1369,7 +1369,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                             AnimatedRotation(
                               turns: isUp ? 0.0 : 0.5,
                               duration: const Duration(milliseconds: 150),
-                              child: AppIcon('chevron_up.svg', color: color, size: 14),
+                              child: AppIcon('chevron_up', color: color, size: 14),
                             ),
                             const SizedBox(width: 2),
                             Text(
@@ -1450,7 +1450,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppIcon('repaste.svg', color: widget.s.onPrimary, size: 16),
+                    AppIcon('repaste', color: widget.s.onPrimary, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       'Alterar moeda',
@@ -1758,12 +1758,12 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                         Row(
                           children: [
                             _buildNavButton(
-                              icon: 'chevron_left.svg',
+                              icon: 'chevron_left',
                               onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1)),
                             ),
                             const SizedBox(width: 8),
                             _buildNavButton(
-                              icon: 'chevron_right.svg',
+                              icon: 'chevron_right',
                               onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1)),
                             ),
                           ],
@@ -1824,7 +1824,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppIcon('add.svg', size: 14, color: widget.s.onPrimary),
+                    AppIcon('add', size: 14, color: widget.s.onPrimary),
                     const SizedBox(width: 7),
                     Text(
                       'Novo evento',
@@ -2014,12 +2014,12 @@ class _AiTimerWidgetState extends State<AiTimerWidget> {
         ),
         _WidgetActionBar(s: s, actions: [
           _WidgetAction(
-            icon: _running ? 'pause.svg' : 'play.svg',
+            icon: _running ? 'pause' : 'play',
             label: _running ? 'Pausar' : 'Iniciar',
             primary: true,
             onTap: _toggle,
           ),
-          _WidgetAction(icon: 'refresh.svg', label: 'Reiniciar', onTap: _reset),
+          _WidgetAction(icon: 'refresh', label: 'Reiniciar', onTap: _reset),
         ]),
       ]),
     );
@@ -2257,7 +2257,7 @@ class _AiMindMapWidgetState extends State<AiMindMapWidget> {
                         shape: BoxShape.circle,
                         border: Border.all(color: s.outline),
                       ),
-                      child: AppIcon('sliders.svg', size: 14, color: s.onSurface),
+                      child: AppIcon('sliders', size: 14, color: s.onSurface),
                     ),
                   ),
                 ),
@@ -2827,7 +2827,7 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AppIcon('edit.svg', size: 15, color: widget.s.onPrimary),
+                    AppIcon('edit', size: 15, color: widget.s.onPrimary),
                     const SizedBox(width: 7),
                     Text(
                       'Editar',
@@ -2845,14 +2845,14 @@ class _AiMathGraphWidgetState extends State<AiMathGraphWidget> {
           ),
           const SizedBox(width: 6),
           _CircleActionButton(
-            svgAsset: _animating ? 'pause.svg' : 'play.svg',
+            svgAsset: _animating ? 'pause' : 'play',
             onTap: _toggleAnimation,
             active: _animating,
             s: widget.s,
           ),
           const SizedBox(width: 6),
           _CircleActionButton(
-            svgAsset: 'refresh.svg',
+            svgAsset: 'refresh',
             onTap: _reset,
             s: widget.s,
           ),
@@ -3623,7 +3623,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AppIcon(
-                            'location.svg',
+                            'location',
                             color: s.primary,
                             size: 13,
                           ),
@@ -3670,7 +3670,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                                   ),
                                 )
                               : AppIcon(
-                                  'locate.svg',
+                                  'locate',
                                   color: _recenterIcon,
                                   size: 15,
                                 ),
@@ -3727,7 +3727,7 @@ class _AiMapWidgetState extends State<AiMapWidget>
                               ),
                             )
                           : AppIcon(
-                              'search.svg',
+                              'search',
                               color: s.onPrimary,
                               size: 15,
                             ),
