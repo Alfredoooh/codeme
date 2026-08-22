@@ -1,36 +1,6 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/drawermenu.dart
-// ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: botão de opções de cada linha passou de more
-// horizontal para more_vert (⋮), mesmo tamanho; segmented
-// control no rodapé — "Conversas" e "Fixadas" — controla a
-// visibilidade das respetivas secções (uma de cada vez, estilo
-// tabs), com a mesma altura do pill de usuário (52) e container
-// com a cor da superfície do pill (s.cardBackground). Com o
-// segmented control, o ícone de pin ao lado do título deixou de ser
-// necessário para identificar fixadas (a própria secção "Fixadas" já
-// indica isso) e foi removido das linhas; header (Menu + ícones) e
-// rodapé (pill de conta + busca) agora usam o mesmo gradiente
-// progressivo do settings.dart (sem blur, cor sólida no topo/fundo
-// esvaindo para transparente); pill de conta e botão de busca
-// reduzidos de 60 para 52 de altura; contraste geral aumentado
-// (onSurface puro em vez de variantes suaves nos títulos, ícones
-// mais opacos); "Nova conversa" agora fecha o drawer
-// automaticamente após criar, igual ao botão fechar; botão de
-// fechar removido do header, mantendo apenas o botão de nova
-// conversa com container circular estilo do botão de pesquisa;
-// header reposicionado para cima (padding top 6) e botão de nova
-// conversa com tamanho 40x40, alinhado ao appbar do AiTab.
-// CORRIGIDO: _SolidActionRow (linhas do menu de conta: Modo
-// claro/escuro, Definições, Terminar sessão) não tinha
-// SelectionContainer.disabled a envolver o texto — era a causa das
-// linhas amarelas de spellcheck do WebView/SO na imagem enviada;
-// adicionado, sem alterar mais nada no estilo desse card, que já
-// estava correto. CupertinoIcons requer cupertino_icons no
-// pubspec.yaml.
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
@@ -268,11 +238,29 @@ class _AppDrawerState extends State<AppDrawer> {
   void _closeDrawer() => widget.onClose();
 
   void _handleNewChat() {
+    HapticFeedback.lightImpact();
     widget.onNewChat?.call();
     _closeDrawer();
   }
 
+  void _openAccountOptions(BuildContext context, Offset globalPosition) {
+    HapticFeedback.lightImpact();
+    showAccountOptionsPopupAt(
+      context,
+      widget.s,
+      position: globalPosition,
+      onToggleTheme: () {
+        appTheme.toggleDark();
+      },
+      onOpenSettings: widget.onSettings,
+      onLogout: () {
+        authController.logout();
+      },
+    );
+  }
+
   void _openSearch(BuildContext context) {
+    HapticFeedback.lightImpact();
     _closeDrawer();
     Navigator.of(context).push(_FadePageRoute(
       builder: (_) => ChatSearchScreen(
@@ -290,6 +278,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
+    HapticFeedback.lightImpact();
     showConversationOptionsPopupAt(
       context,
       widget.s,
@@ -374,11 +363,15 @@ class _AppDrawerState extends State<AppDrawer> {
                       color: s.onSurface,
                     ),
                   ),
+                  // ── Container único do header — 40x40 de altura,
+                  // SEM aumentar — agora com dois ícones lado a
+                  // lado (nova conversa + opções da conta), sem
+                  // divisor entre eles, apenas espaçamento. ────────
                   if (widget.onNewChat != null)
-                    _CircleIconButton(
+                    _HeaderDualIconPill(
                       s: s,
-                      assetName: 'add',
-                      onTap: _handleNewChat,
+                      onNewChat: _handleNewChat,
+                      onAccountOptionsAt: (pos) => _openAccountOptions(context, pos),
                     ),
                 ],
               ),
@@ -408,7 +401,11 @@ class _AppDrawerState extends State<AppDrawer> {
                     child: _DrawerSegmentedControl(
                       s: s,
                       selectedIndex: _selectedSection,
-                      onChanged: (i) => setState(() => _selectedSection = i),
+                      onChanged: (i) {
+                        if (i == _selectedSection) return;
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedSection = i);
+                      },
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -417,9 +414,13 @@ class _AppDrawerState extends State<AppDrawer> {
                     children: [
                       Expanded(child: _AccountPill(s: s, onOpenSettings: widget.onSettings)),
                       const SizedBox(width: 10),
+                      // ── Único botão que aumentou: busca, de 40
+                      // para 52 de altura/largura. ────────────────
                       _CircleIconButton(
                         s: s,
                         assetName: 'search',
+                        size: 52,
+                        iconSize: 22,
                         onTap: () => _openSearch(context),
                       ),
                     ],
@@ -512,9 +513,105 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Segmented control do drawer ────────────────────────────────
+// ── Container único do header — 40x40 fixo, dois ícones lado a
+// lado (add + more_hor), sem divisor. Cada metade tem a sua própria
+// GestureDetector para que o toque em cada ícone dispare a sua
+// própria ação, com feedback de pressão independente (highlight só
+// na metade tocada) e haptic ao tocar nas opções da conta. ────────
 
-class _DrawerSegmentedControl extends StatelessWidget {
+class _HeaderDualIconPill extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onNewChat;
+  final ValueChanged<Offset> onAccountOptionsAt;
+  const _HeaderDualIconPill({
+    required this.s,
+    required this.onNewChat,
+    required this.onAccountOptionsAt,
+  });
+
+  @override
+  State<_HeaderDualIconPill> createState() => _HeaderDualIconPillState();
+}
+
+class _HeaderDualIconPillState extends State<_HeaderDualIconPill> {
+  bool _pLeft = false;
+  bool _pRight = false;
+
+  static const double _height = 40;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Container(
+      height: _height,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: s.cardShadow,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown:   (_) => setState(() => _pLeft = true),
+            onTapCancel: ()  => setState(() => _pLeft = false),
+            onTapUp:     (_) => setState(() => _pLeft = false),
+            onTap:       widget.onNewChat,
+            child: AnimatedScale(
+              scale: _pLeft ? 0.88 : 1.0,
+              duration: const Duration(milliseconds: 110),
+              curve: kCupertinoOut,
+              child: Container(
+                width: _height - 4, height: _height - 4,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _pLeft ? s.pressed : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: AppIcon('add', color: s.onSurface, size: 20),
+              ),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown:   (d) {
+              setState(() => _pRight = true);
+              widget.onAccountOptionsAt(d.globalPosition);
+            },
+            onTapCancel: () => setState(() => _pRight = false),
+            onTapUp:     (_) => setState(() => _pRight = false),
+            child: AnimatedScale(
+              scale: _pRight ? 0.88 : 1.0,
+              duration: const Duration(milliseconds: 110),
+              curve: kCupertinoOut,
+              child: Container(
+                width: _height - 4, height: _height - 4,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _pRight ? s.pressed : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: AppIcon('more_hor', color: s.onSurface, size: 20),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Segmented control do drawer ────────────────────────────────
+// Animação do thumb mais suave: curva expressiva
+// (Curves.easeOutCubic combinada com um leve overshoot via
+// AnimatedScale por segmento), duração ligeiramente maior que
+// antes (200ms -> 260ms) para dar mais "corpo" ao movimento sem
+// ficar lento. Cada segmento agora responde ao toque com uma leve
+// contração (feedback tipo iOS) antes do thumb assentar por baixo.
+
+class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
   final int selectedIndex;
   final ValueChanged<int> onChanged;
@@ -524,10 +621,18 @@ class _DrawerSegmentedControl extends StatelessWidget {
     required this.onChanged,
   });
 
+  @override
+  State<_DrawerSegmentedControl> createState() => _DrawerSegmentedControlState();
+}
+
+class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   static const _options = ['Conversas', 'Fixadas'];
+
+  int? _pressedIndex;
 
   @override
   Widget build(BuildContext context) {
+    final s = widget.s;
     return Container(
       height: 52,
       padding: const EdgeInsets.all(3),
@@ -540,13 +645,15 @@ class _DrawerSegmentedControl extends StatelessWidget {
         final segmentWidth = constraints.maxWidth / _options.length;
         return Stack(children: [
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            left: segmentWidth * selectedIndex.clamp(0, _options.length - 1),
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            left: segmentWidth * widget.selectedIndex.clamp(0, _options.length - 1),
             top: 0,
             bottom: 0,
             width: segmentWidth,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
                 color: s.primary,
                 borderRadius: BorderRadius.circular(999),
@@ -559,19 +666,29 @@ class _DrawerSegmentedControl extends StatelessWidget {
                 Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () => onChanged(i),
-                    child: Center(
-                      child: SelectionContainer.disabled(
-                        child: Text(
-                          _options[i],
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: selectedIndex == i
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                            color: selectedIndex == i
-                                ? s.onPrimary
-                                : s.onSurfaceVariant,
+                    onTapDown:   (_) => setState(() => _pressedIndex = i),
+                    onTapCancel: ()  => setState(() => _pressedIndex = null),
+                    onTapUp:     (_) => setState(() => _pressedIndex = null),
+                    onTap: () => widget.onChanged(i),
+                    child: AnimatedScale(
+                      scale: _pressedIndex == i ? 0.94 : 1.0,
+                      duration: const Duration(milliseconds: 120),
+                      curve: kCupertinoOut,
+                      child: Center(
+                        child: SelectionContainer.disabled(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: widget.selectedIndex == i
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: widget.selectedIndex == i
+                                  ? s.onPrimary
+                                  : s.onSurfaceVariant,
+                            ),
+                            child: Text(_options[i]),
                           ),
                         ),
                       ),
@@ -606,15 +723,22 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
 }
 
 // ── Botão circular genérico agora com AppIcon ─────────────────
+// size/iconSize agora são parametrizáveis (default 40/20, como
+// sempre foi) para permitir o botão de busca crescer para 52 sem
+// duplicar a classe inteira. Feedback tátil leve incluído no tap.
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
+  final double size;
+  final double iconSize;
   const _CircleIconButton({
     required this.s,
     required this.assetName,
     required this.onTap,
+    this.size = 40,
+    this.iconSize = 20,
   });
   @override State<_CircleIconButton> createState() => _CircleIconButtonState();
 }
@@ -630,16 +754,21 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
       onTapCancel: ()  => setState(() => _p = false),
       onTapUp:     (_) => setState(() => _p = false),
       onTap:       widget.onTap,
-      child: AnimatedContainer(
+      child: AnimatedScale(
+        scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
-        width: 40, height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _p ? s.pressed : s.cardBackground,
-          shape: BoxShape.circle,
-          boxShadow: s.cardShadow,
+        curve: kCupertinoOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 110),
+          width: widget.size, height: widget.size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _p ? s.pressed : s.cardBackground,
+            shape: BoxShape.circle,
+            boxShadow: s.cardShadow,
+          ),
+          child: AppIcon(widget.assetName, color: s.onSurface, size: widget.iconSize),
         ),
-        child: AppIcon(widget.assetName, color: s.onSurface, size: 20),
       ),
     );
   }
@@ -699,14 +828,26 @@ class _ConvTileState extends State<_ConvTile> {
       return;
     }
     if (_dragDx <= -_threshold) {
+      HapticFeedback.lightImpact();
       setState(() => _resolved = true);
       widget.onDelete();
     } else if (_dragDx >= _threshold) {
+      HapticFeedback.lightImpact();
       setState(() => _resolved = true);
       widget.onArchive();
     } else {
       setState(() => _dragDx = 0);
     }
+  }
+
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    widget.onTap();
+  }
+
+  void _handleLongPressStart(LongPressStartDetails d) {
+    HapticFeedback.lightImpact();
+    widget.onOptionsAt(d.globalPosition);
   }
 
   @override
@@ -740,8 +881,8 @@ class _ConvTileState extends State<_ConvTile> {
             onTapDown:   (_) => setState(() => _h = true),
             onTapCancel: ()  => setState(() => _h = false),
             onTapUp:     (_) => setState(() => _h = false),
-            onTap: widget.onTap,
-            onLongPressStart: (d) => widget.onOptionsAt(d.globalPosition),
+            onTap: _handleTap,
+            onLongPressStart: _handleLongPressStart,
             onHorizontalDragUpdate: _onDragUpdate,
             onHorizontalDragEnd: _onDragEnd,
             child: Container(
@@ -763,7 +904,10 @@ class _ConvTileState extends State<_ConvTile> {
                 ),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTapDown: (d) => widget.onOptionsAt(d.globalPosition),
+                  onTapDown: (d) {
+                    HapticFeedback.lightImpact();
+                    widget.onOptionsAt(d.globalPosition);
+                  },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                     child: AppIcon('more_vert', color: s.onSurface, size: 17),
@@ -920,7 +1064,10 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
       onTapDown:   (_) => setState(() => _h = true),
       onTapCancel: ()  => setState(() => _h = false),
       onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTap:       () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1020,7 +1167,10 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
       onTapDown:   (_) => setState(() => _p = true),
       onTapCancel: ()  => setState(() => _p = false),
       onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
+      onTap:       () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
       child: AnimatedScale(
         scale: _p ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 110),
@@ -1098,6 +1248,7 @@ Future<void> showRenameSheet(
             const SizedBox(height: 16),
             GestureDetector(
               onTap: () {
+                HapticFeedback.lightImpact();
                 Navigator.pop(ctx);
                 onConfirm(ctrl.text.trim());
               },
@@ -1126,6 +1277,10 @@ Future<void> showRenameSheet(
 // ══════════════════════════════════════════════════════════════
 // ACCOUNT PILL
 // ══════════════════════════════════════════════════════════════
+// Perdeu o botão "⋯" que existia ao lado do avatar+nome — essa
+// ação foi deslocada para o container do header, junto com o botão
+// de nova conversa. O pill agora é inteiramente clicável e abre as
+// definições (comportamento que já era o do avatar+nome antes).
 
 class _AccountPill extends StatefulWidget {
   final AppColorScheme s;
@@ -1184,19 +1339,9 @@ class _AccountPillState extends State<_AccountPill> {
     );
   }
 
-  void _openOptions(BuildContext context, Offset globalPosition) {
-    showAccountOptionsPopupAt(
-      context,
-      widget.s,
-      position: globalPosition,
-      onToggleTheme: () {
-        appTheme.toggleDark();
-      },
-      onOpenSettings: widget.onOpenSettings,
-      onLogout: () {
-        authController.logout();
-      },
-    );
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    widget.onOpenSettings();
   }
 
   @override
@@ -1207,65 +1352,45 @@ class _AccountPillState extends State<_AccountPill> {
     final avatar = user?.avatar;
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadow,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      child: Row(children: [
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown:   (_) => setState(() => _p = true),
-            onTapCancel: ()  => setState(() => _p = false),
-            onTapUp:     (_) => setState(() => _p = false),
-            onTap: widget.onOpenSettings,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 6, vertical: 6),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap: _handleTap,
+      child: AnimatedScale(
+        scale: _p ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 52,
+          decoration: BoxDecoration(
+            color: _p ? s.hover : s.cardBackground,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: s.cardShadow,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(children: [
+            Container(
+              width: 34, height: 34,
+              alignment: Alignment.center,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: _p ? s.hover : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+                  color: s.primary, shape: BoxShape.circle),
+              child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: SelectionContainer.disabled(
+                child: Text(name,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                    overflow: TextOverflow.ellipsis),
               ),
-              child: Row(children: [
-                Container(
-                  width: 34, height: 34,
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                      color: s.primary, shape: BoxShape.circle),
-                  child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SelectionContainer.disabled(
-                    child: Text(name,
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-              ]),
             ),
-          ),
+          ]),
         ),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (d) => _openOptions(context, d.globalPosition),
-          child: Container(
-            width: 36, height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: s.hover,
-              shape: BoxShape.circle,
-            ),
-            child: AppIcon('more_hor', color: s.onSurface, size: 18),
-          ),
-        ),
-      ]),
+      ),
     );
   }
 }
@@ -1407,7 +1532,10 @@ class _AccountPopupRowState extends State<_AccountPopupRow> {
       onTapDown:   (_) => setState(() => _h = true),
       onTapCancel: ()  => setState(() => _h = false),
       onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
+      onTap:       () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
