@@ -303,7 +303,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                             ),
                             _SettingsRow(
                               s: s,
-                              iconAsset: 'doc_text',
+                              iconAsset: 'license',
                               label: 'Termos de serviço',
                               onTap: () {},
                               trailing: const SizedBox.shrink(),

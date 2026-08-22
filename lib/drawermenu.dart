@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZAÇÃO: botão de opções de cada linha passou de ellipsis
-// horizontal para ellipsis_vertical (⋮), mesmo tamanho; segmented
+// ATUALIZAÇÃO: botão de opções de cada linha passou de more
+// horizontal para more_vert (⋮), mesmo tamanho; segmented
 // control no rodapé — "Conversas" e "Fixadas" — controla a
 // visibilidade das respetivas secções (uma de cada vez, estilo
 // tabs), com a mesma altura do pill de usuário (52) e container
@@ -49,15 +49,13 @@ import 'app_sheet.dart';
 enum AppTab { ai, edit }
 
 extension AppTabX on AppTab {
-  String get svg       => const {
+  String get svg => const {
         AppTab.ai:   'ai_tab.svg',
         AppTab.edit: 'edit_tab.svg',
       }[this]!;
 
-  String get svgFilled => const {
-        AppTab.ai:   'ai_tab_filled.svg',
-        AppTab.edit: 'edit_tab_filled.svg',
-      }[this]!;
+  // Agora aponta para o mesmo asset sem sufixo filled
+  String get svgFilled => svg;
 
   String get label => const {
         AppTab.ai:   'IA',
@@ -341,22 +339,15 @@ class _AppDrawerState extends State<AppDrawer> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Espaço reservado para o header sobreposto, que fica
-              // por cima com o gradiente progressivo.
-              // Ajustado para 56 (header mais compacto).
               const SizedBox(height: 56),
               Expanded(
                 child: _buildConvBody(context, s, pinned, others),
               ),
-              // Espaço reservado para o rodapé sobreposto.
-              const SizedBox(height: 120), // aumentado para acomodar segmented + pill
+              const SizedBox(height: 120),
             ],
           ),
 
-          // ── Header — gradiente progressivo, sem blur, mesmo
-          // padrão do settings.dart. Removido o botão de fechar; só
-          // mantém o botão de nova conversa. Padding superior = 6,
-          // alinhado ao appbar do AiTab. ─────────────────────────
+          // Header
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
@@ -384,11 +375,9 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   if (widget.onNewChat != null)
-                    // Botão de nova conversa agora 40x40,
-                    // igual aos botões do appbar do AiTab.
                     _CircleIconButton(
                       s: s,
-                      icon: CupertinoIcons.add,
+                      assetName: 'add',
                       onTap: _handleNewChat,
                     ),
                 ],
@@ -396,8 +385,7 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           ),
 
-          // ── Rodapé — mesmo gradiente progressivo do topo,
-          // agora com segmented control acima do pill + busca. ────
+          // Rodapé
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -415,7 +403,6 @@ class _AppDrawerState extends State<AppDrawer> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Segmented control movido para cá.
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: _DrawerSegmentedControl(
@@ -432,7 +419,7 @@ class _AppDrawerState extends State<AppDrawer> {
                       const SizedBox(width: 10),
                       _CircleIconButton(
                         s: s,
-                        icon: CupertinoIcons.search,
+                        assetName: 'search',
                         onTap: () => _openSearch(context),
                       ),
                     ],
@@ -525,9 +512,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Segmented control para o drawer — agora com container externo
-// usando s.cardBackground (mesma cor da superfície do pill de
-// usuário) e thumb deslizante mantendo s.primary. ─────────────────
+// ── Segmented control do drawer ────────────────────────────────
 
 class _DrawerSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
@@ -544,12 +529,12 @@ class _DrawerSegmentedControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 52, // mesma altura do pill
+      height: 52,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: s.cardBackground, // superfície do pill
+        color: s.cardBackground,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadow, // sombra igual ao pill
+        boxShadow: s.cardShadow,
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         final segmentWidth = constraints.maxWidth / _options.length;
@@ -563,7 +548,7 @@ class _DrawerSegmentedControl extends StatelessWidget {
             width: segmentWidth,
             child: Container(
               decoration: BoxDecoration(
-                color: s.primary, // thumb azul mantido
+                color: s.primary,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -601,8 +586,7 @@ class _DrawerSegmentedControl extends StatelessWidget {
   }
 }
 
-// ── Rota de transição por fade puro, sem slide, usada para abrir
-// a tela de pesquisa a partir do drawer. ────────────────────────
+// ── Rota de transição por fade ────────────────────────────────
 
 class _FadePageRoute<T> extends PageRouteBuilder<T> {
   final WidgetBuilder builder;
@@ -621,16 +605,15 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
-// ── Botão circular genérico — agora 40x40, alinhado ao appbar do
-// AiTab. Usado para nova conversa e pesquisa. ───────────────────
+// ── Botão circular genérico agora com AppIcon ─────────────────
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final VoidCallback onTap;
   const _CircleIconButton({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.onTap,
   });
   @override State<_CircleIconButton> createState() => _CircleIconButtonState();
@@ -649,22 +632,20 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        width: 40, height: 40, // alterado de 52 para 40
+        width: 40, height: 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _p ? s.pressed : s.cardBackground,
           shape: BoxShape.circle,
           boxShadow: s.cardShadow,
         ),
-        child: Icon(widget.icon, color: s.onSurface, size: 20),
+        child: AppIcon(widget.assetName, color: s.onSurface, size: 20),
       ),
     );
   }
 }
 
-// ── Grupo de linhas soltas — sem card/fundo agrupado. Sem
-// divisores entre linhas (removidos conforme pedido). Apenas
-// devolve as linhas uma após a outra. ──────────────────────────
+// ── Grupo de linhas soltas ────────────────────────────────────
 
 class _LooseRows extends StatelessWidget {
   final AppColorScheme s;
@@ -673,17 +654,11 @@ class _LooseRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sem divisores, apenas as linhas em sequência.
     return Column(children: children);
   }
 }
 
-// ── Conversa individual — sem card/fundo, apenas linha solta.
-// Long-press E o botão de opções (⋮) abrem o popup ancorado
-// exatamente na posição (x,y) do toque. O ícone de pin ao lado do
-// título foi REMOVIDO — o segmented control já identifica fixadas
-// através da aba. Texto envolvido em SelectionContainer.disabled
-// para impedir sublinhado amarelo de spellcheck. ───────────────
+// ── Conversa individual ───────────────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -742,7 +717,7 @@ class _ConvTileState extends State<_ConvTile> {
         : _dragDx > 0
             ? s.primary
             : Colors.transparent;
-    final icon = _dragDx < 0 ? CupertinoIcons.delete_solid : CupertinoIcons.archivebox_fill;
+    final iconAsset = _dragDx < 0 ? 'trash' : 'archive_solid';
     final iconColor = _dragDx < 0 ? s.onError : s.onPrimary;
 
     return AnimatedOpacity(
@@ -755,7 +730,7 @@ class _ConvTileState extends State<_ConvTile> {
               alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               color: swipeBg,
-              child: Icon(icon, color: iconColor, size: 18),
+              child: AppIcon(iconAsset, color: iconColor, size: 18),
             ),
           ),
         Transform.translate(
@@ -786,16 +761,12 @@ class _ConvTileState extends State<_ConvTile> {
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ),
-                // Botão de opções — vertical (⋮), mesmo tamanho do
-                // ellipsis horizontal anterior. Captura a posição
-                // global do próprio toque (TapDown) para ancorar o
-                // popup ali, não na linha inteira.
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (d) => widget.onOptionsAt(d.globalPosition),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    child: Icon(CupertinoIcons.ellipsis_vertical, color: s.onSurface, size: 17),
+                    child: AppIcon('more_vert', color: s.onSurface, size: 17),
                   ),
                 ),
               ]),
@@ -807,10 +778,7 @@ class _ConvTileState extends State<_ConvTile> {
   }
 }
 
-// ── Popup de opções da conversa — OverlayEntry manual, ancorado
-// exatamente na posição (x,y) global do toque que o disparou. O
-// popup ajusta-se automaticamente para não sair da tela (flip para
-// a esquerda/cima quando necessário). ───────────────────────────
+// ── Popup de opções da conversa ───────────────────────────────
 
 void showConversationOptionsPopupAt(
   BuildContext context,
@@ -891,25 +859,25 @@ void showConversationOptionsPopupAt(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.arrow_up_right_square, label: 'Abrir conversa',
+                    s: s, assetName: 'open', label: 'Abrir conversa',
                     onTap: () { close(); onOpen(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: item.pinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
+                    s: s, assetName: item.pinned ? 'pin_slash' : 'pin',
                     label: item.pinned ? 'Desafixar' : 'Fixar',
                     onTap: () { close(); onTogglePin(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.archivebox,
+                    s: s, assetName: 'archive',
                     label: item.archived ? 'Desarquivar' : 'Arquivar',
                     onTap: () { close(); onArchive(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.pencil, label: 'Renomear',
+                    s: s, assetName: 'pencil', label: 'Renomear',
                     onTap: () { close(); onRename(); },
                   ),
                   _ConvPopupRow(
-                    s: s, icon: CupertinoIcons.delete, label: 'Eliminar',
+                    s: s, assetName: 'trash', label: 'Eliminar',
                     destructive: true,
                     onTap: () { close(); onDelete(); },
                   ),
@@ -928,13 +896,13 @@ void showConversationOptionsPopupAt(
 
 class _ConvPopupRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
   const _ConvPopupRow({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.label,
     required this.onTap,
     this.destructive = false,
@@ -961,7 +929,7 @@ class _ConvPopupRowState extends State<_ConvPopupRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, size: 18, color: color),
+          AppIcon(widget.assetName, size: 18, color: color),
           const SizedBox(width: 10),
           SelectionContainer.disabled(
             child: Text(widget.label,
@@ -1156,8 +1124,7 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL — agora com popup ancorado nas opções (⋮), não mais
-// bottom sheet. O segmented control no rodapé usa a mesma altura.
+// ACCOUNT PILL
 // ══════════════════════════════════════════════════════════════
 
 class _AccountPill extends StatefulWidget {
@@ -1295,7 +1262,7 @@ class _AccountPillState extends State<_AccountPill> {
               color: s.hover,
               shape: BoxShape.circle,
             ),
-            child: Icon(CupertinoIcons.ellipsis, color: s.onSurface, size: 18),
+            child: AppIcon('more_hor', color: s.onSurface, size: 18),
           ),
         ),
       ]),
@@ -1303,9 +1270,7 @@ class _AccountPillState extends State<_AccountPill> {
   }
 }
 
-// ── Popup de opções da conta — OverlayEntry manual, ancorado na
-// posição (x,y) do toque no botão ⋮ do pill. Substitui o antigo
-// bottom sheet. ─────────────────────────────────────────────────
+// ── Popup de opções da conta ──────────────────────────────────
 
 void showAccountOptionsPopupAt(
   BuildContext context,
@@ -1384,19 +1349,19 @@ void showAccountOptionsPopupAt(
                 children: [
                   _AccountPopupRow(
                     s: s,
-                    icon: s.isDark ? CupertinoIcons.sun_max_fill : CupertinoIcons.moon_fill,
+                    assetName: s.isDark ? 'sun' : 'moon',
                     label: s.isDark ? 'Modo claro' : 'Modo escuro',
                     onTap: () { close(); onToggleTheme(); },
                   ),
                   _AccountPopupRow(
                     s: s,
-                    icon: CupertinoIcons.settings_solid,
+                    assetName: 'settings',
                     label: 'Definições',
                     onTap: () { close(); onOpenSettings(); },
                   ),
                   _AccountPopupRow(
                     s: s,
-                    icon: CupertinoIcons.square_arrow_right,
+                    assetName: 'logout',
                     label: 'Terminar sessão',
                     destructive: true,
                     onTap: () { close(); onLogout(); },
@@ -1414,18 +1379,17 @@ void showAccountOptionsPopupAt(
   controller.forward();
 }
 
-// ── Linha do popup da conta — reutiliza o estilo do _ConvPopupRow,
-// mas sem código duplicado; mantém SelectionContainer.disabled. ──
+// ── Linha do popup da conta ──────────────────────────────────
 
 class _AccountPopupRow extends StatefulWidget {
   final AppColorScheme s;
-  final IconData icon;
+  final String assetName;
   final String label;
   final VoidCallback onTap;
   final bool destructive;
   const _AccountPopupRow({
     required this.s,
-    required this.icon,
+    required this.assetName,
     required this.label,
     required this.onTap,
     this.destructive = false,
@@ -1452,7 +1416,7 @@ class _AccountPopupRowState extends State<_AccountPopupRow> {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(children: [
-          Icon(widget.icon, size: 18, color: color),
+          AppIcon(widget.assetName, size: 18, color: color),
           const SizedBox(width: 10),
           SelectionContainer.disabled(
             child: Text(widget.label,
