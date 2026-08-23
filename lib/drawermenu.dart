@@ -367,12 +367,11 @@ class _AppDrawerState extends State<AppDrawer> {
                   // SEM aumentar — agora com dois ícones lado a
                   // lado (nova conversa + opções da conta), sem
                   // divisor entre eles, apenas espaçamento. ────────
-                  if (widget.onNewChat != null)
-                    _HeaderDualIconPill(
-                      s: s,
-                      onNewChat: _handleNewChat,
-                      onAccountOptionsAt: (pos) => _openAccountOptions(context, pos),
-                    ),
+                  _HeaderDualIconPill(
+                    s: s,
+                    onNewChat: widget.onNewChat != null ? _handleNewChat : null,
+                    onAccountOptionsAt: (pos) => _openAccountOptions(context, pos),
+                  ),
                 ],
               ),
             ),
@@ -521,11 +520,11 @@ class _AppDrawerState extends State<AppDrawer> {
 
 class _HeaderDualIconPill extends StatefulWidget {
   final AppColorScheme s;
-  final VoidCallback onNewChat;
+  final VoidCallback? onNewChat;
   final ValueChanged<Offset> onAccountOptionsAt;
   const _HeaderDualIconPill({
     required this.s,
-    required this.onNewChat,
+    this.onNewChat,
     required this.onAccountOptionsAt,
   });
 
@@ -553,27 +552,28 @@ class _HeaderDualIconPillState extends State<_HeaderDualIconPill> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown:   (_) => setState(() => _pLeft = true),
-            onTapCancel: ()  => setState(() => _pLeft = false),
-            onTapUp:     (_) => setState(() => _pLeft = false),
-            onTap:       widget.onNewChat,
-            child: AnimatedScale(
-              scale: _pLeft ? 0.88 : 1.0,
-              duration: const Duration(milliseconds: 110),
-              curve: kCupertinoOut,
-              child: Container(
-                width: _height - 4, height: _height - 4,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _pLeft ? s.pressed : Colors.transparent,
-                  shape: BoxShape.circle,
+          if (widget.onNewChat != null)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown:   (_) => setState(() => _pLeft = true),
+              onTapCancel: ()  => setState(() => _pLeft = false),
+              onTapUp:     (_) => setState(() => _pLeft = false),
+              onTap:       widget.onNewChat,
+              child: AnimatedScale(
+                scale: _pLeft ? 0.88 : 1.0,
+                duration: const Duration(milliseconds: 110),
+                curve: kCupertinoOut,
+                child: Container(
+                  width: _height - 4, height: _height - 4,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _pLeft ? s.pressed : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: AppIcon('add', color: s.onSurface, size: 20),
                 ),
-                child: AppIcon('add', color: s.onSurface, size: 20),
               ),
             ),
-          ),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTapDown:   (d) {
