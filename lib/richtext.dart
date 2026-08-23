@@ -16,6 +16,12 @@
 //     para não quebrar quem ainda chama _substituteEmojis noutro
 //     ponto do código.
 //   • Widgets inline (quando ativados)
+//
+// ATUALIZAÇÃO: removida a sugestão de “mostrar widget” quando os
+// widgets estão desativados. Agora o texto é exibido diretamente,
+// sem qualquer pill de sugestão. Os parâmetros onEnableWidgets e
+// onSuggestionTap continuam presentes por compatibilidade, mas são
+// ignorados.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -776,39 +782,10 @@ class RichAiText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!widgetsEnabled) {
-      final widgetParse = parseAiWidgetBlocks(text);
-      final strippedText = widgetParse.blocks.isEmpty
-          ? text
-          : widgetParse.textWithMarkers.replaceAll(
-              RegExp(r'\u0000WB(\d+)\u0000'), '');
-
-      final suggestionMessage = widgetParse.blocks.length == 1
-          ? 'Mostra o widget desta resposta'
-          : 'Mostra os ${widgetParse.blocks.length} widgets desta resposta';
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ..._RichTextBlockParser.parse(strippedText, s),
-          if (widgetParse.blocks.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _WidgetSuggestionPill(
-              s: s,
-              count: widgetParse.blocks.length,
-              onTap: () {
-                onEnableWidgets?.call();
-                onSuggestionTap?.call(suggestionMessage);
-              },
-            ),
-          ],
-        ],
-      );
-    }
-
     final widgetParse = parseAiWidgetBlocks(text);
+
     if (widgetParse.blocks.isEmpty) {
+      // Sem widgets: apenas texto markdown normal
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -816,6 +793,7 @@ class RichAiText extends StatelessWidget {
       );
     }
 
+    // Com widgets (ativos ou não, não mostramos mais a sugestão)
     final markerRe = RegExp(r'\u0000WB(\d+)\u0000');
     final children = <Widget>[];
     int last = 0;
@@ -982,7 +960,7 @@ class _RichTextBlockParser {
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
                     color: s.outline,
-                    borderRadius: BorderRadius.circular(2), // pontas curvas
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 Expanded(
@@ -1106,14 +1084,9 @@ class _RichTextBlockParser {
   }
 
   static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 15.5}) {
-    // Cor de link neutra (não usa mais azul vivo/roxo — texto em
-    // prosa fica monocromático por pedido explícito do
-    // utilizador, com sublinhado a marcar o link em vez da cor).
     final linkColor = s.onSurface;
 
     var processed = raw;
-    // kEmojiShortcodes está vazio (ver acima) — este loop não faz
-    // nada agora, mas mantém-se para não quebrar contrato.
     kEmojiShortcodes.forEach((code, emoji) {
       if (processed.contains(code)) {
         processed = processed.replaceAll(code, emoji);
@@ -1162,9 +1135,6 @@ class _RichTextBlockParser {
           style: const TextStyle(fontWeight: FontWeight.w700),
         ));
       } else if (token.startsWith('`')) {
-        // Código inline MANTÉM a cor de fundo — só o texto de
-        // prosa perdeu cor, não os elementos que já eram
-        // visualmente diferenciados por natureza (código).
         spans.add(TextSpan(
           text: token.substring(1, token.length - 1),
           style: TextStyle(
@@ -1274,68 +1244,6 @@ Widget buildAiTableFromWidgetJson(Map<String, dynamic> json, AppColorScheme s) {
     margin: const EdgeInsets.symmetric(vertical: 6),
     child: _AiTable(rows: allRows, s: s),
   );
-}
-
-// ══════════════════════════════════════════════════════════════
-// WIDGET SUGGESTION PILL
-// ══════════════════════════════════════════════════════════════
-
-class _WidgetSuggestionPill extends StatefulWidget {
-  final AppColorScheme s;
-  final int count;
-  final VoidCallback? onTap;
-  const _WidgetSuggestionPill({required this.s, required this.count, this.onTap});
-  @override State<_WidgetSuggestionPill> createState() => _WidgetSuggestionPillState();
-}
-
-class _WidgetSuggestionPillState extends State<_WidgetSuggestionPill> {
-  bool _h = false;
-
-  String get _label => widget.count == 1
-      ? 'mostrar também o widget desta resposta'
-      : 'mostrar também os ${widget.count} widgets desta resposta';
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: Opacity(
-        opacity: _h ? 0.65 : 1.0,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppIcon('repaste.svg', color: s.onSurfaceVariant, size: 14),
-              const SizedBox(width: 6),
-              Text('↳', style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  _label,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: s.onSurfaceVariant,
-                    decoration: TextDecoration.underline,
-                    decorationStyle: TextDecorationStyle.dotted,
-                    decorationColor: s.onSurfaceVariant,
-                    decorationThickness: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ══════════════════════════════════════════════════════════════

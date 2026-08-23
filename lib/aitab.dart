@@ -1,6 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab.dart
-// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -187,14 +184,8 @@ dentro da conversa (nunca em canvas). Quando fizer sentido para a resposta,
 gera um bloco de código com uma das seguintes linguagens especiais, contendo
 APENAS um objeto JSON válido no corpo do bloco:
 
-- ```widget_table``` — { "headers": ["Col1","Col2"], "rows": [["a","b"]] }
-- ```widget_bar``` — { "data": [{"label":"Jan","value":10,"unit":"","color":"#6F5AF6"}] }
-- ```widget_pie``` — { "data": [{"label":"A","value":30,"color":"#2F80ED"}] }
 - ```widget_market``` — { "type": "crypto", "symbol": "BTC", "name": "Bitcoin" } ou { "type": "forex", "symbol": "USDEUR" }
 - ```widget_calendar``` — { "events": [{"date":"2026-08-10","name":"Reunião","time":"14:00","color":"#6F5AF6"}] }
-- ```widget_timer``` — { "seconds": 300, "label": "Foco" }
-- ```widget_mindmap``` — { "tree": {"id":"root","label":"Tema","color":"#6F5AF6","children":[]} }
-- ```widget_graph``` — { "expression": "sin(x)", "xMin": -10, "xMax": 10 }
 - ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
 
 Não uses widget_code — blocos de código normais já aparecem automaticamente
@@ -985,15 +976,8 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
 
 const List<String> _kPartialMarkerPrefixes = [
   '[[canvas:',
-  '```widget_table',
-  '```widget_code',
-  '```widget_bar',
-  '```widget_pie',
   '```widget_market',
   '```widget_calendar',
-  '```widget_timer',
-  '```widget_mindmap',
-  '```widget_graph',
   '```widget_map',
   '> [!NOTE]',
   '> [!TIP]',
@@ -1862,27 +1846,50 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                 ),
             ]),
           ),
-          _ChatInput(
-            s: s,
-            ctrl: _ctrl,
-            focusNode: _inputFocus,
-            attachedTool: _attachedTool,
-            attachedFilesCount: _attachedFiles.length,
-            incognito: _incognito,
-            sending: _sending,
-            attachButtonKey: _attachButtonKey,
-            onSend: _send,
-            onPause: _pauseGeneration,
-            onAttach: _openAttachSheet,
-            onVoice: _openVoiceSheet,
-            onOpenAiOptions: _openAiOptionsSheet,
-            onClearTool: _onClearTool,
-            onOpenAttachedFiles: _openAttachedFilesSheet,
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: kCupertinoOut,
-            height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
+          // ── Wrapper do bottombar com gradiente vertical ─────
+          // O gradiente cobre desde o topo do input até o fundo,
+          // incluindo a área de padding do teclado.
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  s.pageBackground.withOpacity(0.0),
+                  s.pageBackground,
+                ],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ChatInput(
+                    s: s,
+                    ctrl: _ctrl,
+                    focusNode: _inputFocus,
+                    attachedTool: _attachedTool,
+                    attachedFilesCount: _attachedFiles.length,
+                    incognito: _incognito,
+                    sending: _sending,
+                    attachButtonKey: _attachButtonKey,
+                    onSend: _send,
+                    onPause: _pauseGeneration,
+                    onAttach: _openAttachSheet,
+                    onVoice: _openVoiceSheet,
+                    onOpenAiOptions: _openAiOptionsSheet,
+                    onClearTool: _onClearTool,
+                    onOpenAttachedFiles: _openAttachedFilesSheet,
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: kCupertinoOut,
+                    height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
+                  ),
+                ],
+              ),
+            ),
           ),
         ]),
       ),
@@ -1921,7 +1928,7 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Rodapé fixo de aviso — último item absoluto da lista, agora à direita ──
+// ── Rodapé fixo de aviso — último item absoluto da lista, alinhado à direita ──
 
 class _DisclaimerFooter extends StatelessWidget {
   const _DisclaimerFooter();
@@ -2855,6 +2862,8 @@ class _AttachedFileRow extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // CHAT INPUT
 // ══════════════════════════════════════════════════════════════
+// Sem gradiente próprio. O gradiente é agora aplicado pelo wrapper
+// no AiTabState, que cobre também a área inferior.
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
@@ -3015,20 +3024,7 @@ class _ChatInput extends StatelessWidget {
         ? DashedRRectBorder(color: s.outline, radius: 20, child: inner)
         : inner;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            s.pageBackground.withOpacity(0.0),
-            s.pageBackground,
-          ],
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: bordered,
-    );
+    return bordered;
   }
 }
 
