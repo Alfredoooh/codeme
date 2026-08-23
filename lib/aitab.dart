@@ -1,6 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab.dart
-// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -553,8 +550,8 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON (popup de três pontos) — AGORA
-// ancorado manualmente via RenderBox, sem LayerLink.
+// AI CONVERSATION MENU BUTTON (popup de três pontos) — ancorado
+// manualmente via RenderBox, sem LayerLink.
 // ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
@@ -952,10 +949,10 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
     if (!closesAfter) {
       final kindStr = last.group(1)!;
       final label = switch (kindStr) {
-        'sheet' => 'A criar folha de cálculo...',
-        'slide' => 'A criar apresentação...',
-        'whiteboard' => 'A criar quadro branco...',
-        _ => 'A criar documento...',
+        'sheet' => 'Criando folha de cálculo...',
+        'slide' => 'Criando apresentação...',
+        'whiteboard' => 'Criando quadro branco...',
+        _ => 'Criando documento...',
       };
       final markerEnd = text.indexOf('||', last.start);
       final partial = markerEnd >= 0 ? text.substring(markerEnd + 2) : '';
@@ -971,12 +968,12 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
     if (!closesAfter) {
       final newlineIdx = text.indexOf('\n', last.start);
       final partial = newlineIdx >= 0 ? text.substring(newlineIdx + 1) : '';
-      return _OpenBlockInfo('A criar widget...', partial);
+      return _OpenBlockInfo('Criando widget...', partial);
     }
   }
 
   if (_endsWithPartialMarker(text)) {
-    return const _OpenBlockInfo('A criar...', '');
+    return const _OpenBlockInfo('Criando...', '');
   }
 
   return null;
@@ -1375,9 +1372,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           case ChatDoneEvent(fullText: final fullText):
             final finalText = fullText.isNotEmpty ? fullText : _streamingText;
             final scan = _scanForCanvasItems(finalText, _nextCanvasId);
+            final thinkingText = _streamingThink != null ? cleanAiText(_streamingThink!) : '';
+            final combined = thinkingText.isNotEmpty
+                ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n${scan.cleanText}'
+                : scan.cleanText;
+
             setState(() {
-              if (scan.cleanText.trim().isNotEmpty || scan.items.isNotEmpty) {
-                _msgs.add(ChatMessage(role: 'assistant', content: finalText));
+              if (combined.trim().isNotEmpty || scan.items.isNotEmpty) {
+                _msgs.add(ChatMessage(role: 'assistant', content: combined));
               }
               _canvases.addAll(scan.items);
               _sending = false;
@@ -1436,9 +1438,13 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _streamSub?.cancel();
     _streamSub = null;
     final partial = _streamingText;
+    final thinkingText = _streamingThink != null ? cleanAiText(_streamingThink!) : '';
     setState(() {
-      if (partial.trim().isNotEmpty) {
-        _msgs.add(ChatMessage(role: 'assistant', content: partial));
+      final combined = thinkingText.isNotEmpty
+          ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$partial'
+          : partial;
+      if (combined.trim().isNotEmpty) {
+        _msgs.add(ChatMessage(role: 'assistant', content: combined));
       }
       _sending = false;
       _streamingText = '';
@@ -1878,7 +1884,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                 ),
             ]),
           ),
-          // ── Wrapper do bottombar com gradiente progressivo ──
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -2277,7 +2282,7 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING BUBBLE — AGORA COM PENSAMENTO COLAPSÁVEL
+// STREAMING BUBBLE — com pensamento colapsável
 // ══════════════════════════════════════════════════════════════
 class _StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
@@ -2380,7 +2385,7 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
   }
 }
 
-// ── Componente de pensamento colapsável ────────────────────────
+// ── Componente de pensamento colapsável durante streaming ─────
 
 class _ThinkingCollapsible extends StatelessWidget {
   final AppColorScheme s;
