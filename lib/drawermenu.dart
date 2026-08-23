@@ -336,7 +336,8 @@ class _AppDrawerState extends State<AppDrawer> {
             ],
           ),
 
-          // Header
+          // Header — agora com avatar à esquerda, segmented central e
+          // botão de opções à direita.
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
@@ -352,32 +353,51 @@ class _AppDrawerState extends State<AppDrawer> {
                 ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Menu',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.4,
-                      color: s.onSurface,
+                  // Avatar circular — substitui o texto "Menu"
+                  _AvatarCircleButton(
+                    s: s,
+                    onTap: widget.onSettings,
+                  ),
+                  const SizedBox(width: 12),
+                  // Segmented control subiu para o meio do header
+                  Expanded(
+                    child: Center(
+                      child: _DrawerSegmentedControl(
+                        s: s,
+                        selectedIndex: _selectedSection,
+                        onChanged: (i) {
+                          if (i == _selectedSection) return;
+                          HapticFeedback.selectionClick();
+                          setState(() => _selectedSection = i);
+                        },
+                      ),
                     ),
                   ),
-                  // ── Container único do header — 40x40 de altura,
-                  // SEM aumentar — agora com dois ícones lado a
-                  // lado (nova conversa + opções da conta), sem
-                  // divisor entre eles, apenas espaçamento. ────────
-                  _HeaderDualIconPill(
+                  const SizedBox(width: 12),
+                  // Botão de opções da conta (more_vert)
+                  _CircleIconButton(
                     s: s,
-                    onNewChat: widget.onNewChat != null ? _handleNewChat : null,
-                    onAccountOptionsAt: (pos) => _openAccountOptions(context, pos),
+                    assetName: 'more_vert',
+                    size: 40,
+                    iconSize: 20,
+                    onTap: () {
+                      final box = context.findRenderObject() as RenderBox?;
+                      if (box != null) {
+                        final pos = box.localToGlobal(Offset(
+                          box.size.width / 2,
+                          box.size.height / 2,
+                        ));
+                        _openAccountOptions(context, pos);
+                      }
+                    },
                   ),
                 ],
               ),
             ),
           ),
 
-          // Rodapé
+          // Rodapé — sem segmented; apenas search pill + botão de nova conversa
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -392,37 +412,17 @@ class _AppDrawerState extends State<AppDrawer> {
                   ],
                 ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: _DrawerSegmentedControl(
-                      s: s,
-                      selectedIndex: _selectedSection,
-                      onChanged: (i) {
-                        if (i == _selectedSection) return;
-                        HapticFeedback.selectionClick();
-                        setState(() => _selectedSection = i);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(child: _AccountPill(s: s, onOpenSettings: widget.onSettings)),
-                      const SizedBox(width: 10),
-                      // ── Único botão que aumentou: busca, de 40
-                      // para 52 de altura/largura. ────────────────
-                      _CircleIconButton(
-                        s: s,
-                        assetName: 'search',
-                        size: 52,
-                        iconSize: 22,
-                        onTap: () => _openSearch(context),
-                      ),
-                    ],
+                  Expanded(child: _SearchPill(s: s, onTap: () => _openSearch(context))),
+                  const SizedBox(width: 10),
+                  _CircleIconButton(
+                    s: s,
+                    assetName: 'new_chat',
+                    size: 52,
+                    iconSize: 22,
+                    onTap: widget.onNewChat != null ? _handleNewChat : () {},
                   ),
                 ],
               ),
@@ -512,104 +512,104 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Container único do header — 40x40 fixo, dois ícones lado a
-// lado (add + more_vert), sem divisor. Cada metade tem a sua própria
-// GestureDetector para que o toque em cada ícone dispare a sua
-// própria ação, com feedback de pressão independente (highlight só
-// na metade tocada) e haptic ao tocar nas opções da conta. ────────
+// ── Avatar circular para o header ─────────────────────────────
 
-class _HeaderDualIconPill extends StatefulWidget {
+class _AvatarCircleButton extends StatefulWidget {
   final AppColorScheme s;
-  final VoidCallback? onNewChat;
-  final ValueChanged<Offset> onAccountOptionsAt;
-  const _HeaderDualIconPill({
-    required this.s,
-    this.onNewChat,
-    required this.onAccountOptionsAt,
-  });
-
-  @override
-  State<_HeaderDualIconPill> createState() => _HeaderDualIconPillState();
+  final VoidCallback onTap;
+  const _AvatarCircleButton({required this.s, required this.onTap});
+  @override State<_AvatarCircleButton> createState() => _AvatarCircleButtonState();
 }
 
-class _HeaderDualIconPillState extends State<_HeaderDualIconPill> {
-  bool _pLeft = false;
-  bool _pRight = false;
+class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
+  bool _p = false;
 
-  static const double _height = 40;
+  Uint8List? _decodeAvatar(String raw) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return null;
+    }
+    try {
+      final commaIdx = raw.indexOf(',');
+      final b64 = raw.startsWith('data:') && commaIdx != -1
+          ? raw.substring(commaIdx + 1)
+          : raw;
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildAvatarContent(
+    AppColorScheme s,
+    String? avatar,
+    String initial, {
+    required double size,
+    required double fontSize,
+  }) {
+    final fallback = Text(initial,
+        style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: fontSize));
+
+    if (avatar == null || avatar.isEmpty) return fallback;
+
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return Image.network(
+        avatar,
+        width: size, height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
+      );
+    }
+
+    final bytes = _decodeAvatar(avatar);
+    if (bytes == null) return fallback;
+    return Image.memory(
+      bytes,
+      width: size, height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Container(
-      height: _height,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadow,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.onNewChat != null)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown:   (_) => setState(() => _pLeft = true),
-              onTapCancel: ()  => setState(() => _pLeft = false),
-              onTapUp:     (_) => setState(() => _pLeft = false),
-              onTap:       widget.onNewChat,
-              child: AnimatedScale(
-                scale: _pLeft ? 0.88 : 1.0,
-                duration: const Duration(milliseconds: 110),
-                curve: kCupertinoOut,
-                child: Container(
-                  width: _height - 4, height: _height - 4,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _pLeft ? s.pressed : Colors.transparent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: AppIcon('add', color: s.onSurface, size: 20),
-                ),
-              ),
-            ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown:   (d) {
-              setState(() => _pRight = true);
-              widget.onAccountOptionsAt(d.globalPosition);
-            },
-            onTapCancel: () => setState(() => _pRight = false),
-            onTapUp:     (_) => setState(() => _pRight = false),
-            child: AnimatedScale(
-              scale: _pRight ? 0.88 : 1.0,
-              duration: const Duration(milliseconds: 110),
-              curve: kCupertinoOut,
-              child: Container(
-                width: _height - 4, height: _height - 4,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _pRight ? s.pressed : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
-                child: AppIcon('more_vert', color: s.onSurface, size: 20),
-              ),
-            ),
+    final user = authController.user;
+    final name = user?.name ?? 'Utilizador';
+    final avatar = user?.avatar;
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: _p ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: Container(
+          width: 40, height: 40,
+          alignment: Alignment.center,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: _p ? s.hover : s.cardBackground,
+            shape: BoxShape.circle,
+            boxShadow: s.cardShadow,
           ),
-        ],
+          child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
+        ),
       ),
     );
   }
 }
 
-// ── Segmented control do drawer ────────────────────────────────
-// Animação do thumb mais suave: curva expressiva
-// (Curves.easeOutCubic combinada com um leve overshoot via
-// AnimatedScale por segmento), duração ligeiramente maior que
-// antes (200ms -> 260ms) para dar mais "corpo" ao movimento sem
-// ficar lento. Cada segmento agora responde ao toque com uma leve
-// contração (feedback tipo iOS) antes do thumb assentar por baixo.
+// ── Segmented control do drawer — agora com altura 36 e estilo
+// semelhante ao segmented de aparência das definições. ───────────
 
 class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
@@ -634,29 +634,27 @@ class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   Widget build(BuildContext context) {
     final s = widget.s;
     return Container(
-      height: 52,
+      height: 36,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: s.cardBackground,
+        color: s.hover,
         borderRadius: BorderRadius.circular(999),
-        boxShadow: s.cardShadow,
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         final segmentWidth = constraints.maxWidth / _options.length;
         return Stack(children: [
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 260),
+            duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             left: segmentWidth * widget.selectedIndex.clamp(0, _options.length - 1),
             top: 0,
             bottom: 0,
             width: segmentWidth,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
+            child: Container(
               decoration: BoxDecoration(
                 color: s.primary,
                 borderRadius: BorderRadius.circular(999),
+                boxShadow: s.cardShadow,
               ),
             ),
           ),
@@ -723,9 +721,6 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
 }
 
 // ── Botão circular genérico agora com AppIcon ─────────────────
-// size/iconSize agora são parametrizáveis (default 40/20, como
-// sempre foi) para permitir o botão de busca crescer para 52 sem
-// duplicar a classe inteira. Feedback tátil leve incluído no tap.
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
@@ -787,7 +782,7 @@ class _LooseRows extends StatelessWidget {
   }
 }
 
-// ── Conversa individual ───────────────────────────────────────
+// ── Conversa individual — sem ícone more_vert, apenas long press ──
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -900,17 +895,6 @@ class _ConvTileState extends State<_ConvTile> {
                           color: widget.active ? s.navLabelActive : s.onSurface,
                         ),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (d) {
-                    HapticFeedback.lightImpact();
-                    widget.onOptionsAt(d.globalPosition);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                    child: AppIcon('more_vert', color: s.onSurface, size: 17),
                   ),
                 ),
               ]),
@@ -1275,89 +1259,31 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ACCOUNT PILL
+// SEARCH PILL — substitui o AccountPill
 // ══════════════════════════════════════════════════════════════
-// Perdeu o botão "⋯" que existia ao lado do avatar+nome — essa
-// ação foi deslocada para o container do header, junto com o botão
-// de nova conversa. O pill agora é inteiramente clicável e abre as
-// definições (comportamento que já era o do avatar+nome antes).
 
-class _AccountPill extends StatefulWidget {
+class _SearchPill extends StatefulWidget {
   final AppColorScheme s;
-  final VoidCallback onOpenSettings;
-  const _AccountPill({required this.s, required this.onOpenSettings});
-  @override State<_AccountPill> createState() => _AccountPillState();
+  final VoidCallback onTap;
+  const _SearchPill({required this.s, required this.onTap});
+  @override State<_SearchPill> createState() => _SearchPillState();
 }
 
-class _AccountPillState extends State<_AccountPill> {
+class _SearchPillState extends State<_SearchPill> {
   bool _p = false;
-
-  Uint8List? _decodeAvatar(String raw) {
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      return null;
-    }
-    try {
-      final commaIdx = raw.indexOf(',');
-      final b64 = raw.startsWith('data:') && commaIdx != -1
-          ? raw.substring(commaIdx + 1)
-          : raw;
-      return base64Decode(b64);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Widget _buildAvatarContent(
-    AppColorScheme s,
-    String? avatar,
-    String initial, {
-    required double size,
-    required double fontSize,
-  }) {
-    final fallback = Text(initial,
-        style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: fontSize));
-
-    if (avatar == null || avatar.isEmpty) return fallback;
-
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-      return Image.network(
-        avatar,
-        width: size, height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
-        loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
-      );
-    }
-
-    final bytes = _decodeAvatar(avatar);
-    if (bytes == null) return fallback;
-    return Image.memory(
-      bytes,
-      width: size, height: size,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => fallback,
-    );
-  }
-
-  void _handleTap() {
-    HapticFeedback.lightImpact();
-    widget.onOpenSettings();
-  }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final user = authController.user;
-    final name = user?.name ?? 'Utilizador';
-    final avatar = user?.avatar;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
-
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _p = true),
       onTapCancel: ()  => setState(() => _p = false),
       onTapUp:     (_) => setState(() => _p = false),
-      onTap: _handleTap,
+      onTap:       () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
       child: AnimatedScale(
         scale: _p ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 110),
@@ -1370,22 +1296,17 @@ class _AccountPillState extends State<_AccountPill> {
             borderRadius: BorderRadius.circular(999),
             boxShadow: s.cardShadow,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
-            Container(
-              width: 34, height: 34,
-              alignment: Alignment.center,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                  color: s.primary, shape: BoxShape.circle),
-              child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
-            ),
+            AppIcon('search', color: s.onSurfaceVariant, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: SelectionContainer.disabled(
-                child: Text(name,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                    overflow: TextOverflow.ellipsis),
+                child: Text(
+                  'Escreve aqui para pesquisar...',
+                  style: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ]),
