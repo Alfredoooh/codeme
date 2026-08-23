@@ -1,15 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
-// NOVO: botões do appbar (_AppHeader) deixaram de ficar colados às
-// bordas físicas da tela — o padding horizontal do header passou a
-// ser 16 (igual ao padding lateral do input bar em aitab.dart:
-// EdgeInsets.symmetric(horizontal: 16)), garantindo que o botão de
-// menu à esquerda e o botão trailing à direita fiquem exatamente
-// alinhados, na mesma margem, com o container do input bar
-// embaixo. Antes o padding era left:6/right:10, que colava os
-// botões perto demais da borda física do ecrã.
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -84,12 +75,6 @@ class CraftLabApp extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// ROOT SHELL — drawer tradicional (overlay push, tela cheia)
-// O drawer entra deslizando da esquerda por cima do conteúdo.
-// O conteúdo principal apenas sofre um leve deslocamento horizontal.
-// ══════════════════════════════════════════════════════════════
-
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
   @override State<RootShell> createState() => _RootShellState();
@@ -162,9 +147,6 @@ class _RootShellState extends State<RootShell>
     setState(() => _pendingConversationLoad = null);
   }
 
-  /// Quando a IA cria um canvas, apenas carregamos o item no
-  /// controller. A navegação para o editor NÃO é automática — o
-  /// utilizador toca no card do documento para abrir.
   void _onCanvasCreated(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
   }
@@ -274,8 +256,6 @@ class _RootShellState extends State<RootShell>
         backgroundColor: s.surface,
         body: Stack(
           children: [
-            // Conteúdo principal — sofre leve deslocamento horizontal
-            // quando o drawer abre (efeito push subtil).
             GestureDetector(
               behavior: HitTestBehavior.deferToChild,
               onHorizontalDragStart: (_) {
@@ -312,9 +292,6 @@ class _RootShellState extends State<RootShell>
               ),
             ),
 
-            // ════════════════════════════════════════════════════
-            // EFEITO DE ESCURECIMENTO AO ABRIR O DRAWER
-            // ════════════════════════════════════════════════════
             AnimatedBuilder(
               animation: _drawerCtrl,
               builder: (_, __) {
@@ -330,7 +307,6 @@ class _RootShellState extends State<RootShell>
               },
             ),
 
-            // Drawer — entra deslizando da esquerda por cima de tudo.
             Positioned(
               top: 0, bottom: 0, left: 0,
               width: _drawerWidth,
@@ -485,19 +461,12 @@ class _AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Padding horizontal unificado em 16 — o mesmo valor usado pelo
-    // container externo do input bar (EdgeInsets.symmetric(horizontal: 16)
-    // em _ChatInput, aitab.dart), garantindo que os botões do
-    // header fiquem na MESMA margem lateral que o input bar embaixo,
-    // em vez de coladas às bordas físicas da tela como antes
-    // (left: 6, right: 10).
     final content = Padding(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 6,
         bottom: 10, left: 16, right: 16,
       ),
       child: Row(children: [
-        // Botão de menu em container circular (40x40)
         GestureDetector(
           onTap: onMenu,
           child: Container(
@@ -523,7 +492,6 @@ class _AppHeader extends StatelessWidget {
           ),
         const Spacer(),
         if (trailing != null)
-          // Envolver trailing em container circular também (40x40)
           Container(
             width: 40, height: 40,
             alignment: Alignment.center,

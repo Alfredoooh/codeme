@@ -1,63 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
-// ATUALIZADO: removido HugeIcons; todos os ícones usam AppIcon (SVG).
-// Botão de três pontos continua a abrir popup com ações da conversa.
-// Curvas dos cards ajustadas para 20 (estilo lista das definições).
-// Switches personalizados em substituição dos CupertinoSwitch.
-//
-// NOVO:
-// 1) Cards do chat (SimpleCanvasCard, _StreamingMarkdownCard,
-//    _CanvasCard do sheet de canvas) — curva unificada em 20
-//    (padrão settings) e ALTURA/PADDING padronizados entre si para
-//    que todos fiquem visualmente do mesmo tamanho (ícone 40x40,
-//    padding 14 horizontal / 12 vertical, mesma tipografia). Cores
-//    não foram tocadas — apenas geometria.
-// 2) showAttachPopup (popup do botão "+" da barra de input, com
-//    Arquivos/Fotos/Câmera) deixou de usar CompositedTransformFollower
-//    (causava o bug de "abre uma vez, nunca mais reabre" após o
-//    LayerLink perder sincronismo) e passou a calcular a posição
-//    manualmente via RenderBox, exatamente como
-//    showConversationOptionsPopupAt no drawer. O parâmetro
-//    'link: LayerLink' de _openAttachSheet deu lugar a um GlobalKey
-//    fixado no botão "+", usado para localizar seu RenderBox no
-//    momento do toque.
-// 3) Botão de enviar: enquanto 'sending' mostra AppIcon('pause', ...)
-//    ESTÁTICO — nenhuma rotação, nenhum CircularProgressIndicator —
-//    e o toque nesse estado cancela o stream em curso (a resposta
-//    parcial já recebida permanece na tela como mensagem do
-//    assistente, exatamente como uma resposta completa).
-// 4) Novo widget _NexaLoaderLogo: recriação em Flutter puro do
-//    loader de 24 pontos do HTML fornecido pelo utilizador (mesmas
-//    posições, cores exatas em rgb() e delays de animação, convertidos
-//    de px para proporção de um quadrado 128x128). É usado em dois
-//    lugares: (a) na _EmptyState, no lugar do antigo
-//    Image.asset('assets/logo.png'); (b) como indicador de
-//    "a pensar" antes do primeiro token chegar — no lugar de
-//    AiSmallDotsLoader nesse caso específico. As cores são fixas
-//    (não seguem s.primary nem o tema), exatamente como no HTML
-//    original — por isso aparecem "azuis" tanto no claro como no
-//    escuro.
-// 5) Placeholder do campo de texto: "Conversar com Claude..." →
-//    "Conversar com DeepSeek...".
-// 6) Botão circular flutuante de "ir para o fim" (double_arrow_down),
-//    sobreposto ACIMA do container do input bar (não dentro dele).
-//    Só aparece quando o utilizador rolou para cima e a lista não
-//    está mais no fim (scroll listener com threshold), com fade
-//    suave ao aparecer/desaparecer. Ao tocar, rola instantaneamente
-//    até ao fim.
-// 7) Aviso "O DeepSeek é uma IA e pode cometer erros." inserido como
-//    ÚLTIMO item do ListView (depois da mensagem mais recente,
-//    incluindo durante o streaming) — não se repete atrás de cada
-//    bolha, só no final absoluto da lista.
-// 8) Container do input bar (_ChatInput) ganhou um wrapper com
-//    gradiente vertical — transparente em cima, esvaindo para a cor
-//    de fundo da página embaixo — no mesmo padrão do settings/drawer.
-//    Os botões e o campo de texto internos (o "bottom bar" em si)
-//    permanecem exatamente como estavam, incluindo suas cores e
-//    sombra própria; só o container externo que os envolve ganhou
-//    esse gradiente por trás.
-// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -92,7 +35,6 @@ String _iconForEditorType(EditorType type) {
 // ══════════════════════════════════════════════════════════════
 // AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning)
 // ══════════════════════════════════════════════════════════════
-
 enum AiModel { deepseekFlash, deepseekPro, deepseekReasoning }
 
 extension AiModelX on AiModel {
@@ -124,7 +66,6 @@ extension AiModelX on AiModel {
 // ══════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
 // ══════════════════════════════════════════════════════════════
-
 const String kAiSystemPrompt = '''
 Respondes sempre em português europeu, de forma clara e bem estruturada.
 Usa formatação markdown completa sempre que ajudar a organizar a informação:
@@ -150,8 +91,7 @@ o bloco neste formato exato.
 
 Para expressões matemáticas, usa \$expressão\$ para matemática dentro do
 texto corrido e \$\$expressão\$\$ numa linha própria para fórmulas em destaque.
-Podes usar notação LaTeX-like: frações com \\frac{a}{b}, raízes com
-\\sqrt{x} ou \\sqrt[n]{x}, potências com x^2 ou x^{10}, índices com x_1 ou
+Podes usar notação LaTeX-like: frações com \\frac{a}{b}, raízes com \\sqrt{x} ou \\sqrt[n]{x}, potências com x^2 ou x^{10}, índices com x_1 ou
 x_{ij}, letras gregas com \\alpha, \\beta, \\pi, \\Delta, etc., e operadores
 como \\leq, \\geq, \\neq, \\times, \\cdot, \\sum, \\int, \\infty, \\rightarrow.
 A aplicação converte tudo automaticamente para uma apresentação visual
@@ -280,7 +220,6 @@ sobre a fonte de forma natural no texto.
 // ══════════════════════════════════════════════════════════════
 // TEXT CLEANUP
 // ══════════════════════════════════════════════════════════════
-
 String cleanAiText(String raw) {
   var t = raw;
   t = t.replaceAll(RegExp(r'\[\[canvas:[\s\S]*?\]\]'), '');
@@ -290,7 +229,6 @@ String cleanAiText(String raw) {
 // ══════════════════════════════════════════════════════════════
 // LOCAL CANVAS
 // ══════════════════════════════════════════════════════════════
-
 enum LocalCanvasKind { doc, sheet, slide, whiteboard }
 
 extension LocalCanvasKindX on LocalCanvasKind {
@@ -360,7 +298,6 @@ _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
 // ══════════════════════════════════════════════════════════════
 // ATTACHED FILES
 // ══════════════════════════════════════════════════════════════
-
 class AttachedFile {
   final String id;
   final String name;
@@ -379,7 +316,6 @@ class AttachedFile {
 // ══════════════════════════════════════════════════════════════
 // CONVERSATION MENU
 // ══════════════════════════════════════════════════════════════
-
 enum ConversationAction { newChat, incognito, rename, delete }
 
 extension ConversationActionX on ConversationAction {
@@ -625,7 +561,6 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 // ══════════════════════════════════════════════════════════════
 // AI CONVERSATION MENU BUTTON (popup de três pontos)
 // ══════════════════════════════════════════════════════════════
-
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
@@ -865,10 +800,6 @@ class _MenuActionRowState extends State<_MenuActionRow> {
 // ══════════════════════════════════════════════════════════════
 // SIMPLE CANVAS CARD
 // ══════════════════════════════════════════════════════════════
-// Geometria padronizada: ícone 40x40 em container radius 12,
-// padding 14/12, curva externa 20 (igual settings). Cores
-// inalteradas.
-
 class SimpleCanvasCard extends StatelessWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
@@ -949,7 +880,6 @@ class SimpleCanvasCard extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // STREAM ELEMENTS
 // ══════════════════════════════════════════════════════════════
-
 sealed class _StreamElement {}
 
 class _StreamText extends _StreamElement {
@@ -1086,16 +1016,9 @@ bool _endsWithPartialMarker(String text) {
 // ══════════════════════════════════════════════════════════════
 // NEXA LOADER LOGO — recriação Flutter do loader HTML de 24 pontos
 // ══════════════════════════════════════════════════════════════
-// Coordenadas e cores copiadas 1:1 do HTML fornecido (quadrado de
-// referência 128x128px, convertidas para frações 0..1 para poderem
-// ser dimensionadas livremente). Cada ponto pisca em loop com o
-// mesmo atraso relativo do CSS original (0.00s a 1.53s, ciclo de
-// 1.6s). As cores são fixas — não seguem s.primary nem o tema —
-// exatamente como pedido ("azul mesmo no claro").
-
 class _NexaDotSpec {
-  final double left;  // fração 0..1 do lado do quadrado
-  final double top;   // fração 0..1 do lado do quadrado
+  final double left;
+  final double top;
   final Color color;
   final double delaySeconds;
   const _NexaDotSpec({
@@ -1106,7 +1029,6 @@ class _NexaDotSpec {
   });
 }
 
-// 128px de referência no HTML original; dividimos por 128 para obter frações.
 final List<_NexaDotSpec> _kNexaDots = [
   _NexaDotSpec(left: 28.21 / 128, top: 55.26 / 128, color: const Color.fromRGBO(88, 148, 247, 1),  delaySeconds: 0.00),
   _NexaDotSpec(left: 42.30 / 128, top: 49.85 / 128, color: const Color.fromRGBO(91, 150, 247, 1),  delaySeconds: 0.07),
@@ -1147,7 +1069,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
   late final AnimationController _c;
 
   static const double _cycleSeconds = 1.6;
-  static const double _dotFraction = 5.64 / 128; // tamanho do ponto relativo ao quadrado
+  static const double _dotFraction = 5.64 / 128;
 
   @override
   void initState() {
@@ -1165,8 +1087,6 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
   }
 
   double _opacityFor(double delaySeconds, double t) {
-    // Replica o keyframe CSS 0%→25% / 50%→100% / 100%→25% em opacidade,
-    // usando uma onda triangular suave com pico em t=0.5 do ciclo local.
     final delayFrac = delaySeconds / _cycleSeconds;
     var local = (t - delayFrac) % 1.0;
     if (local < 0) local += 1.0;
@@ -1211,7 +1131,6 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
 // ══════════════════════════════════════════════════════════════
 // AI TAB
 // ══════════════════════════════════════════════════════════════
-
 class AiTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
   final String? initialConversationId;
@@ -1266,8 +1185,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   StreamSubscription<ChatStreamEvent>? _streamSub;
 
   final FocusNode _inputFocus = FocusNode();
-  // GlobalKey do botão "+" — usado para calcular a posição do
-  // popup de anexos manualmente (substitui o antigo LayerLink).
   final GlobalKey _attachButtonKey = GlobalKey();
 
   @override
@@ -1498,10 +1415,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
   }
 
-  /// Cancela a geração em curso (botão de pausa). O texto já
-  /// recebido até este momento é preservado como mensagem final do
-  /// assistente, exatamente como se a resposta tivesse terminado
-  /// normalmente — apenas mais curta.
   void _pauseGeneration() {
     if (!_sending) return;
     _streamSub?.cancel();
@@ -1861,9 +1774,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final headerHeight = topInset + 6 + 40 + 12;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // Total de itens da lista: mensagens + (bolha de streaming, se
-    // enviando) + 1 item final fixo de aviso, que só aparece quando
-    // já existe pelo menos uma mensagem na conversa.
     final baseCount = _msgs.length + (_sending ? 1 : 0);
     final showDisclaimer = _msgs.isNotEmpty || _sending;
     final totalCount = baseCount + (showDisclaimer ? 1 : 0);
@@ -1885,8 +1795,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                           padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
                           itemCount: totalCount,
                           itemBuilder: (_, i) {
-                            // Último item: aviso fixo, só depois da
-                            // mensagem/streaming mais recente.
                             if (showDisclaimer && i == totalCount - 1) {
                               return const _DisclaimerFooter();
                             }
@@ -1934,9 +1842,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                             );
                           },
                         ),
-              // ── Botão flutuante de "ir para o fim" — sobreposto
-              // ACIMA do input bar (não faz parte dele), só visível
-              // quando o utilizador não está mais no fim da lista.
               if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
                 Positioned(
                   left: 0, right: 0,
@@ -2016,7 +1921,7 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Rodapé fixo de aviso — último item absoluto da lista ────────
+// ── Rodapé fixo de aviso — último item absoluto da lista, agora à direita ──
 
 class _DisclaimerFooter extends StatelessWidget {
   const _DisclaimerFooter();
@@ -2026,12 +1931,13 @@ class _DisclaimerFooter extends StatelessWidget {
     final s = AppTheme.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 16),
-      child: Center(
+      child: Align(
+        alignment: Alignment.centerRight,
         child: Text(
           'O DeepSeek é uma IA e pode cometer erros.',
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.right,
           style: TextStyle(
-            fontSize: 11.5,
+            fontSize: 10.5,
             color: s.onSurfaceVariant,
           ),
         ),
@@ -2093,7 +1999,7 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const NexaLoaderLogo(size: 40),
+                const NexaLoaderLogo(size: 48),
                 const SizedBox(height: 14),
                 Text(
                   'Olá, o que vamos criar hoje?',
@@ -2336,7 +2242,6 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 // ══════════════════════════════════════════════════════════════
 // STREAMING BUBBLE
 // ══════════════════════════════════════════════════════════════
-
 class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
   final List<_StreamElement> elements;
@@ -2435,9 +2340,6 @@ class _StreamingBubble extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // STREAMING MARKDOWN CARD
 // ══════════════════════════════════════════════════════════════
-// Geometria alinhada com SimpleCanvasCard/_CanvasCard: curva
-// externa 20 (já era), sem alteração de cor.
-
 class _StreamingMarkdownCard extends StatefulWidget {
   final AppColorScheme s;
   final String label;
@@ -2546,7 +2448,6 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
 // ══════════════════════════════════════════════════════════════
 // BLINKING GRID LOADER
 // ══════════════════════════════════════════════════════════════
-
 class BlinkingGridLoader extends StatefulWidget {
   final Color color;
   final double dotSize;
@@ -2634,7 +2535,6 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
 // ══════════════════════════════════════════════════════════════
 // MESSAGE ACTIONS POPUP
 // ══════════════════════════════════════════════════════════════
-
 void showMessageActionsPopup(
   BuildContext context,
   AppColorScheme s, {
@@ -2790,7 +2690,6 @@ class _MessageActionRowState extends State<_MessageActionRow> {
 // ══════════════════════════════════════════════════════════════
 // SELECT TEXT SHEET
 // ══════════════════════════════════════════════════════════════
-
 Future<void> showSelectTextSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -2828,7 +2727,6 @@ Future<void> showSelectTextSheet(
 // ══════════════════════════════════════════════════════════════
 // ATTACHED FILES SHEET
 // ══════════════════════════════════════════════════════════════
-
 Future<void> showAttachedFilesSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -2957,12 +2855,6 @@ class _AttachedFileRow extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // CHAT INPUT
 // ══════════════════════════════════════════════════════════════
-// Container externo ganhou um gradiente vertical por trás (mesmo
-// padrão de settings/drawer: transparente em cima, esvaindo para
-// s.pageBackground embaixo). O card do input em si (inner) manteve
-// exatamente a sua própria cor/sombra, como antes — só o wrapper
-// que o envolve é que agora tem esse gradiente atrás dele.
-
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
@@ -3060,9 +2952,6 @@ class _ChatInput extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
             child: Row(
               children: [
-                // Botão de anexar (sem container circular) — ancorado
-                // via GlobalKey para o cálculo manual de posição do
-                // popup de anexos.
                 GestureDetector(
                   key: attachButtonKey,
                   onTap: onAttach,
@@ -3076,7 +2965,6 @@ class _ChatInput extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Botão de opções (ícone de sliders)
                 GestureDetector(
                   onTap: onOpenAiOptions,
                   child: Padding(
@@ -3101,10 +2989,6 @@ class _ChatInput extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Botão de enviar/pausar — enquanto 'sending' mostra
-                // AppIcon('pause', ...) ESTÁTICO (sem rotação nenhuma,
-                // sem CircularProgressIndicator) e, ao ser tocado
-                // nesse estado, chama onPause (cancela o stream).
                 GestureDetector(
                   onTap: sending ? onPause : onSend,
                   child: Container(
@@ -3142,7 +3026,7 @@ class _ChatInput extends StatelessWidget {
           ],
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: bordered,
     );
   }
@@ -3222,15 +3106,6 @@ class _AttachedFilesPill extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // ATTACH POPUP
 // ══════════════════════════════════════════════════════════════
-// Antes usava CompositedTransformFollower(link: LayerLink) — o que
-// se mostrou frágil dentro do Stack do header/input, causando o bug
-// de "abre uma vez e nunca mais reabre" reportado pelo utilizador.
-// Agora calcula a posição manualmente a partir do RenderBox do botão
-// "+" (via GlobalKey), no mesmo padrão que já era usado no drawer
-// (showConversationOptionsPopupAt) e no menu de três pontos do
-// canvas card. Isso elimina a dependência de sincronismo entre
-// camadas do Overlay que o LayerLink exigia.
-
 enum _AttachAction { files, photos, camera }
 
 void showAttachPopup(
@@ -3356,7 +3231,6 @@ void showAttachPopup(
 // ══════════════════════════════════════════════════════════════
 // CANVAS SHEET
 // ══════════════════════════════════════════════════════════════
-
 Future<void> showCanvasSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -3482,7 +3356,6 @@ class _CanvasCardState extends State<_CanvasCard> {
 // ══════════════════════════════════════════════════════════════
 // VOICE RECORD SHEET
 // ══════════════════════════════════════════════════════════════
-
 Future<void> showVoiceRecordSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -3619,8 +3492,6 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 // ══════════════════════════════════════════════════════════════
 // BOTTOM SHEET DE OPÇÕES DE IA
 // ══════════════════════════════════════════════════════════════
-// Intocado a pedido explícito do utilizador.
-
 Future<void> showAiOptionsSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -3845,8 +3716,6 @@ class _OptionsSwitchRow extends StatelessWidget {
     );
   }
 }
-
-// ── Switch personalizado (substitui CupertinoSwitch) ──────────
 
 class _CustomSwitch extends StatelessWidget {
   final AppColorScheme s;
