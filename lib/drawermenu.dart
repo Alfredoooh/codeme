@@ -513,7 +513,7 @@ class _AppDrawerState extends State<AppDrawer> {
 }
 
 // ── Container único do header — 40x40 fixo, dois ícones lado a
-// lado (add + more_hor), sem divisor. Cada metade tem a sua própria
+// lado (add + more_vert), sem divisor. Cada metade tem a sua própria
 // GestureDetector para que o toque em cada ícone dispare a sua
 // própria ação, com feedback de pressão independente (highlight só
 // na metade tocada) e haptic ao tocar nas opções da conta. ────────
@@ -593,7 +593,7 @@ class _HeaderDualIconPillState extends State<_HeaderDualIconPill> {
                   color: _pRight ? s.pressed : Colors.transparent,
                   shape: BoxShape.circle,
                 ),
-                child: AppIcon('more_hor', color: s.onSurface, size: 20),
+                child: AppIcon('more_vert', color: s.onSurface, size: 20),
               ),
             ),
           ),
