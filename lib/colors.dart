@@ -47,7 +47,7 @@ class AppColorScheme {
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF121212) : const Color(0xFFF7F7F9);
+  Color get pageBackground     => isDark ? const Color(0xFF121212) : const Color(0xFFF9F7F4);
 
   /// Fundo dos cards no tema claro é agora branco puro absoluto —
   /// pedido explícito do utilizador para diferenciar claramente do

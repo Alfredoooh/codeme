@@ -336,8 +336,8 @@ class _AppDrawerState extends State<AppDrawer> {
             ],
           ),
 
-          // Header — agora com avatar à esquerda, segmented central e
-          // botão de opções à direita.
+          // Header — avatar à esquerda, segmented central e botão de
+          // opções da conta à direita (ancorado corretamente).
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
@@ -360,7 +360,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     onTap: widget.onSettings,
                   ),
                   const SizedBox(width: 12),
-                  // Segmented control subiu para o meio do header
+                  // Segmented control no meio do header
                   Expanded(
                     child: Center(
                       child: _DrawerSegmentedControl(
@@ -375,29 +375,21 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Botão de opções da conta (more_vert)
+                  // Botão de opções da conta — com onTapDown para
+                  // obter a posição exata e abrir o popup ancorado.
                   _CircleIconButton(
                     s: s,
                     assetName: 'more_vert',
                     size: 40,
                     iconSize: 20,
-                    onTap: () {
-                      final box = context.findRenderObject() as RenderBox?;
-                      if (box != null) {
-                        final pos = box.localToGlobal(Offset(
-                          box.size.width / 2,
-                          box.size.height / 2,
-                        ));
-                        _openAccountOptions(context, pos);
-                      }
-                    },
+                    onTapDown: (pos) => _openAccountOptions(context, pos),
                   ),
                 ],
               ),
             ),
           ),
 
-          // Rodapé — sem segmented; apenas search pill + botão de nova conversa
+          // Rodapé — apenas search pill e botão de nova conversa
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -422,7 +414,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     assetName: 'new_chat',
                     size: 52,
                     iconSize: 22,
-                    onTap: widget.onNewChat != null ? _handleNewChat : () {},
+                    onTap: widget.onNewChat != null ? _handleNewChat : null,
                   ),
                 ],
               ),
@@ -601,15 +593,14 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
             shape: BoxShape.circle,
             boxShadow: s.cardShadow,
           ),
-          child: _buildAvatarContent(s, avatar, initial, size: 34, fontSize: 14),
+          child: _buildAvatarContent(s, avatar, initial, size: 38, fontSize: 16),
         ),
       ),
     );
   }
 }
 
-// ── Segmented control do drawer — agora com altura 36 e estilo
-// semelhante ao segmented de aparência das definições. ───────────
+// ── Segmented control do drawer — 36 de altura, estilo settings ─
 
 class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
@@ -720,18 +711,21 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
-// ── Botão circular genérico agora com AppIcon ─────────────────
+// ── Botão circular genérico — agora com suporte a onTapDown para
+// ancoragem de popups. ─────────────────────────────────────────
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
   final String assetName;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final ValueChanged<Offset>? onTapDown;
   final double size;
   final double iconSize;
   const _CircleIconButton({
     required this.s,
     required this.assetName,
-    required this.onTap,
+    this.onTap,
+    this.onTapDown,
     this.size = 40,
     this.iconSize = 20,
   });
@@ -745,10 +739,15 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
+      onTapDown: (d) {
+        setState(() => _p = true);
+        widget.onTapDown?.call(d.globalPosition);
+      },
       onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
+      onTapUp:     (_) {
+        setState(() => _p = false);
+        widget.onTap?.call();
+      },
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
