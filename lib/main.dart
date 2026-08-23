@@ -1,6 +1,11 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
+// NOVO: CraftLabApp agora é um StatefulWidget que escuta appTheme
+// e atualiza o SystemUiOverlayStyle imediatamente quando o tema
+// muda, sem atrasos. O MaterialApp continua a reconstruir com o
+// ThemeMode reativo.
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -33,23 +38,52 @@ void main() async {
   runApp(const CraftLabApp());
 }
 
-class CraftLabApp extends StatelessWidget {
+class CraftLabApp extends StatefulWidget {
   const CraftLabApp({super.key});
+
+  @override
+  State<CraftLabApp> createState() => _CraftLabAppState();
+}
+
+class _CraftLabAppState extends State<CraftLabApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Reage imediatamente a mudanças de tema para atualizar o
+    // status bar / navigation bar sem atraso.
+    appTheme.addListener(_syncSystemUi);
+    // Sincroniza logo no arranque.
+    _syncSystemUi();
+  }
+
+  @override
+  void dispose() {
+    appTheme.removeListener(_syncSystemUi);
+    super.dispose();
+  }
+
+  void _syncSystemUi() {
+    final isDark = appTheme.isDark;
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness:
+          isDark ? Brightness.light : Brightness.dark,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
-        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
-          statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
-          systemNavigationBarColor: Colors.transparent,
-          systemNavigationBarIconBrightness:
-              s.isDark ? Brightness.light : Brightness.dark,
-          systemNavigationBarDividerColor: Colors.transparent,
-        ));
+        // Garante que, mesmo que o listener não seja chamado por
+        // qualquer motivo, o estilo seja coerente no rebuild.
+        _syncSystemUi();
+
         return MaterialApp(
           title: 'CraftLab',
           debugShowCheckedModeBanner: false,
