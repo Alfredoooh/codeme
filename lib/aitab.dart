@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/aitab.dart
+// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -550,7 +553,8 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON (popup de três pontos)
+// AI CONVERSATION MENU BUTTON (popup de três pontos) — AGORA
+// ancorado manualmente via RenderBox, sem LayerLink.
 // ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
@@ -593,7 +597,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
     with SingleTickerProviderStateMixin {
   OverlayEntry? _ov;
   late AnimationController _ac;
-  final LayerLink _anchorLink = LayerLink();
+  final GlobalKey _anchorKey = GlobalKey();
 
   @override
   void initState() {
@@ -612,11 +616,21 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
+    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
+    final off = box.localToGlobal(Offset.zero);
+    final sz = box.size;
     _ac.forward(from: 0);
 
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
       const width = 260.0;
+      const estimatedHeight = 230.0;
+      final screenSize = MediaQuery.of(ctx).size;
+      final desiredTop = off.dy + sz.height + 6;
+      final opensUp = desiredTop + estimatedHeight > screenSize.height - 24;
+      final top = opensUp ? null : desiredTop;
+      final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
+      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - width - 12);
 
       return Stack(children: [
         Positioned.fill(
@@ -626,12 +640,10 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
             child: Container(color: Colors.transparent),
           ),
         ),
-        CompositedTransformFollower(
-          link: _anchorLink,
-          showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.topRight,
-          offset: const Offset(0, 6),
+        Positioned(
+          top: top,
+          bottom: bottom,
+          right: right,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -643,7 +655,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
                 scale: Tween(begin: 0.92, end: 1.0)
                     .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
                     .value,
-                alignment: Alignment.topRight,
+                alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
                 child: child,
               ),
             ),
@@ -711,22 +723,18 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   }
 
   @override
-  Widget build(BuildContext context) => CompositedTransformTarget(
-        link: _anchorLink,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _toggle,
-          child: IgnorePointer(
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              child: AppIcon(
-                'more_vert',
-                color: widget.s.onSurface,
-                size: 20,
-              ),
-            ),
+  Widget build(BuildContext context) => GestureDetector(
+        key: _anchorKey,
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggle,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          child: AppIcon(
+            'more_vert',
+            color: widget.s.onSurface,
+            size: 20,
           ),
         ),
       );
@@ -998,7 +1006,7 @@ bool _endsWithPartialMarker(String text) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOADER LOGO — recriação Flutter do loader HTML de 24 pontos
+// NEXA LOADER LOGO COM SHIMMER
 // ══════════════════════════════════════════════════════════════
 class _NexaDotSpec {
   final double left;
@@ -1051,6 +1059,7 @@ class NexaLoaderLogo extends StatefulWidget {
 class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
+  late final AnimationController _shimmer;
 
   static const double _cycleSeconds = 1.6;
   static const double _dotFraction = 5.64 / 128;
@@ -1062,11 +1071,16 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
       vsync: this,
       duration: Duration(milliseconds: (_cycleSeconds * 1000).round()),
     )..repeat();
+    _shimmer = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _c.dispose();
+    _shimmer.dispose();
     super.dispose();
   }
 
@@ -1086,27 +1100,45 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
       width: widget.size,
       height: widget.size,
       child: AnimatedBuilder(
-        animation: _c,
-        builder: (_, __) => Stack(
-          children: [
-            for (final dot in _kNexaDots)
-              Positioned(
-                left: dot.left * widget.size,
-                top: dot.top * widget.size,
-                child: Opacity(
-                  opacity: _opacityFor(dot.delaySeconds, _c.value),
-                  child: Container(
-                    width: dotSize,
-                    height: dotSize,
-                    decoration: BoxDecoration(
-                      color: dot.color,
-                      shape: BoxShape.circle,
+        animation: Listenable.merge([_c, _shimmer]),
+        builder: (_, __) {
+          final shimmerX = (_shimmer.value * 2 - 1) * widget.size * 0.4;
+          return ShaderMask(
+            shaderCallback: (bounds) {
+              return LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.transparent,
+                  Colors.white.withOpacity(0.45),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ).createShader(bounds.shift(Offset(shimmerX, 0)));
+            },
+            blendMode: BlendMode.srcIn,
+            child: Stack(
+              children: [
+                for (final dot in _kNexaDots)
+                  Positioned(
+                    left: dot.left * widget.size,
+                    top: dot.top * widget.size,
+                    child: Opacity(
+                      opacity: _opacityFor(dot.delaySeconds, _c.value),
+                      child: Container(
+                        width: dotSize,
+                        height: dotSize,
+                        decoration: BoxDecoration(
+                          color: dot.color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -1846,9 +1878,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                 ),
             ]),
           ),
-          // ── Wrapper do bottombar com gradiente vertical ─────
-          // O gradiente cobre desde o topo do input até o fundo,
-          // incluindo a área de padding do teclado.
+          // ── Wrapper do bottombar com gradiente progressivo ──
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -1861,7 +1891,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1928,7 +1958,7 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Rodapé fixo de aviso — último item absoluto da lista, alinhado à direita ──
+// ── Rodapé fixo de aviso — alinhado à direita ──────────────────
 
 class _DisclaimerFooter extends StatelessWidget {
   const _DisclaimerFooter();
@@ -2006,7 +2036,7 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const NexaLoaderLogo(size: 48),
+                const NexaLoaderLogo(size: 56),
                 const SizedBox(height: 14),
                 Text(
                   'Olá, o que vamos criar hoje?',
@@ -2247,9 +2277,9 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING BUBBLE
+// STREAMING BUBBLE — AGORA COM PENSAMENTO COLAPSÁVEL
 // ══════════════════════════════════════════════════════════════
-class _StreamingBubble extends StatelessWidget {
+class _StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
   final List<_StreamElement> elements;
   final String? thinking;
@@ -2270,23 +2300,29 @@ class _StreamingBubble extends StatelessWidget {
   });
 
   @override
+  State<_StreamingBubble> createState() => _StreamingBubbleState();
+}
+
+class _StreamingBubbleState extends State<_StreamingBubble> {
+  bool _thinkingExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final s = widget.s;
+    final thinking = widget.thinking;
     final children = <Widget>[];
 
-    if (thinking != null && thinking!.isNotEmpty) {
-      children.add(Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(thinking!,
-            style: TextStyle(
-                color: s.onSurfaceVariant,
-                fontSize: 12.5,
-                fontStyle: FontStyle.italic,
-                height: 1.4)),
+    if (thinking != null && thinking.isNotEmpty) {
+      children.add(_ThinkingCollapsible(
+        s: s,
+        thinking: thinking,
+        expanded: _thinkingExpanded,
+        onToggle: () => setState(() => _thinkingExpanded = !_thinkingExpanded),
       ));
     }
 
     bool anyContent = false;
-    for (final el in elements) {
+    for (final el in widget.elements) {
       switch (el) {
         case _StreamText(:final text):
           final cleaned = cleanAiText(text);
@@ -2295,9 +2331,9 @@ class _StreamingBubble extends StatelessWidget {
           children.add(RichAiText(
             text: cleaned,
             s: s,
-            widgetsEnabled: widgetsEnabled,
-            onEnableWidgets: onEnableWidgets,
-            onSuggestionTap: onSuggestionTap,
+            widgetsEnabled: widget.widgetsEnabled,
+            onEnableWidgets: widget.onEnableWidgets,
+            onSuggestionTap: widget.onSuggestionTap,
           ));
         case _StreamOpenBlock(:final label, :final partialContent):
           anyContent = true;
@@ -2305,15 +2341,15 @@ class _StreamingBubble extends StatelessWidget {
             s: s,
             label: label,
             partialContent: partialContent,
-            widgetsEnabled: widgetsEnabled,
-            onEnableWidgets: onEnableWidgets,
-            onSuggestionTap: onSuggestionTap,
+            widgetsEnabled: widget.widgetsEnabled,
+            onEnableWidgets: widget.onEnableWidgets,
+            onSuggestionTap: widget.onSuggestionTap,
           ));
         case _StreamClosedCanvas(:final item):
           anyContent = true;
           children.add(Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
+            child: SimpleCanvasCard(s: s, item: item, onTap: () => widget.onOpenCanvas(item)),
           ));
         case _StreamClosedWidget(:final block):
           anyContent = true;
@@ -2324,8 +2360,8 @@ class _StreamingBubble extends StatelessWidget {
       }
     }
 
-    if (!anyContent) {
-      children.add(showLogoLoader
+    if (!anyContent && thinking == null) {
+      children.add(widget.showLogoLoader
           ? const NexaLoaderLogo(size: 28)
           : AiSmallDotsLoader(color: s.onSurfaceVariant));
     }
@@ -2339,6 +2375,77 @@ class _StreamingBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: children,
         ),
+      ),
+    );
+  }
+}
+
+// ── Componente de pensamento colapsável ────────────────────────
+
+class _ThinkingCollapsible extends StatelessWidget {
+  final AppColorScheme s;
+  final String thinking;
+  final bool expanded;
+  final VoidCallback onToggle;
+  const _ThinkingCollapsible({
+    required this.s,
+    required this.thinking,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: s.hover.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: onToggle,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  const NexaLoaderLogo(size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pensando...',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: RichAiText(
+                text: thinking,
+                s: s,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2860,10 +2967,8 @@ class _AttachedFileRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT
+// CHAT INPUT — botão de enviar branco durante resposta
 // ══════════════════════════════════════════════════════════════
-// Sem gradiente próprio. O gradiente é agora aplicado pelo wrapper
-// no AiTabState, que cobre também a área inferior.
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
@@ -3004,11 +3109,13 @@ class _ChatInput extends StatelessWidget {
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: s.primary,
-                        shape: BoxShape.circle),
+                      color: sending ? Colors.white : s.primary,
+                      shape: BoxShape.circle,
+                      border: sending ? Border.all(color: s.primary) : null,
+                    ),
                     child: AppIcon(
                       sending ? 'pause' : 'arrow_up',
-                      color: Colors.white,
+                      color: sending ? s.primary : Colors.white,
                       size: sending ? 16 : 20,
                     ),
                   ),

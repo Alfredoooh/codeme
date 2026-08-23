@@ -363,14 +363,17 @@ class _AppDrawerState extends State<AppDrawer> {
                   // Segmented control no meio do header
                   Expanded(
                     child: Center(
-                      child: _DrawerSegmentedControl(
-                        s: s,
-                        selectedIndex: _selectedSection,
-                        onChanged: (i) {
-                          if (i == _selectedSection) return;
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedSection = i);
-                        },
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 220),
+                        child: _DrawerSegmentedControl(
+                          s: s,
+                          selectedIndex: _selectedSection,
+                          onChanged: (i) {
+                            if (i == _selectedSection) return;
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedSection = i);
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -548,6 +551,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
         avatar,
         width: size, height: size,
         fit: BoxFit.cover,
+        gaplessPlayback: true,
         errorBuilder: (_, __, ___) => fallback,
         loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
       );
@@ -559,6 +563,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
       bytes,
       width: size, height: size,
       fit: BoxFit.cover,
+      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => fallback,
     );
   }
