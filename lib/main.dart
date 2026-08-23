@@ -1,6 +1,15 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
+// NOVO: botões do appbar (_AppHeader) deixaram de ficar colados às
+// bordas físicas da tela — o padding horizontal do header passou a
+// ser 16 (igual ao padding lateral do input bar em aitab.dart:
+// EdgeInsets.symmetric(horizontal: 16)), garantindo que o botão de
+// menu à esquerda e o botão trailing à direita fiquem exatamente
+// alinhados, na mesma margem, com o container do input bar
+// embaixo. Antes o padding era left:6/right:10, que colava os
+// botões perto demais da borda física do ecrã.
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -476,10 +485,16 @@ class _AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Padding horizontal unificado em 16 — o mesmo valor usado pelo
+    // container externo do input bar (EdgeInsets.symmetric(horizontal: 16)
+    // em _ChatInput, aitab.dart), garantindo que os botões do
+    // header fiquem na MESMA margem lateral que o input bar embaixo,
+    // em vez de coladas às bordas físicas da tela como antes
+    // (left: 6, right: 10).
     final content = Padding(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 6,
-        bottom: 10, left: 6, right: 10,
+        bottom: 10, left: 16, right: 16,
       ),
       child: Row(children: [
         // Botão de menu em container circular (40x40)

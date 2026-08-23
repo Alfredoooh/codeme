@@ -5,9 +5,62 @@
 // Botão de três pontos continua a abrir popup com ações da conversa.
 // Curvas dos cards ajustadas para 20 (estilo lista das definições).
 // Switches personalizados em substituição dos CupertinoSwitch.
+//
+// NOVO:
+// 1) Cards do chat (SimpleCanvasCard, _StreamingMarkdownCard,
+//    _CanvasCard do sheet de canvas) — curva unificada em 20
+//    (padrão settings) e ALTURA/PADDING padronizados entre si para
+//    que todos fiquem visualmente do mesmo tamanho (ícone 40x40,
+//    padding 14 horizontal / 12 vertical, mesma tipografia). Cores
+//    não foram tocadas — apenas geometria.
+// 2) showAttachPopup (popup do botão "+" da barra de input, com
+//    Arquivos/Fotos/Câmera) deixou de usar CompositedTransformFollower
+//    (causava o bug de "abre uma vez, nunca mais reabre" após o
+//    LayerLink perder sincronismo) e passou a calcular a posição
+//    manualmente via RenderBox, exatamente como
+//    showConversationOptionsPopupAt no drawer. O parâmetro
+//    'link: LayerLink' de _openAttachSheet deu lugar a um GlobalKey
+//    fixado no botão "+", usado para localizar seu RenderBox no
+//    momento do toque.
+// 3) Botão de enviar: enquanto 'sending' mostra AppIcon('pause', ...)
+//    ESTÁTICO — nenhuma rotação, nenhum CircularProgressIndicator —
+//    e o toque nesse estado cancela o stream em curso (a resposta
+//    parcial já recebida permanece na tela como mensagem do
+//    assistente, exatamente como uma resposta completa).
+// 4) Novo widget _NexaLoaderLogo: recriação em Flutter puro do
+//    loader de 24 pontos do HTML fornecido pelo utilizador (mesmas
+//    posições, cores exatas em rgb() e delays de animação, convertidos
+//    de px para proporção de um quadrado 128x128). É usado em dois
+//    lugares: (a) na _EmptyState, no lugar do antigo
+//    Image.asset('assets/logo.png'); (b) como indicador de
+//    "a pensar" antes do primeiro token chegar — no lugar de
+//    AiSmallDotsLoader nesse caso específico. As cores são fixas
+//    (não seguem s.primary nem o tema), exatamente como no HTML
+//    original — por isso aparecem "azuis" tanto no claro como no
+//    escuro.
+// 5) Placeholder do campo de texto: "Conversar com Claude..." →
+//    "Conversar com DeepSeek...".
+// 6) Botão circular flutuante de "ir para o fim" (double_arrow_down),
+//    sobreposto ACIMA do container do input bar (não dentro dele).
+//    Só aparece quando o utilizador rolou para cima e a lista não
+//    está mais no fim (scroll listener com threshold), com fade
+//    suave ao aparecer/desaparecer. Ao tocar, rola instantaneamente
+//    até ao fim.
+// 7) Aviso "O DeepSeek é uma IA e pode cometer erros." inserido como
+//    ÚLTIMO item do ListView (depois da mensagem mais recente,
+//    incluindo durante o streaming) — não se repete atrás de cada
+//    bolha, só no final absoluto da lista.
+// 8) Container do input bar (_ChatInput) ganhou um wrapper com
+//    gradiente vertical — transparente em cima, esvaindo para a cor
+//    de fundo da página embaixo — no mesmo padrão do settings/drawer.
+//    Os botões e o campo de texto internos (o "bottom bar" em si)
+//    permanecem exatamente como estavam, incluindo suas cores e
+//    sombra própria; só o container externo que os envolve ganhou
+//    esse gradiente por trás.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -812,6 +865,9 @@ class _MenuActionRowState extends State<_MenuActionRow> {
 // ══════════════════════════════════════════════════════════════
 // SIMPLE CANVAS CARD
 // ══════════════════════════════════════════════════════════════
+// Geometria padronizada: ícone 40x40 em container radius 12,
+// padding 14/12, curva externa 20 (igual settings). Cores
+// inalteradas.
 
 class SimpleCanvasCard extends StatelessWidget {
   final AppColorScheme s;
@@ -1028,6 +1084,131 @@ bool _endsWithPartialMarker(String text) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// NEXA LOADER LOGO — recriação Flutter do loader HTML de 24 pontos
+// ══════════════════════════════════════════════════════════════
+// Coordenadas e cores copiadas 1:1 do HTML fornecido (quadrado de
+// referência 128x128px, convertidas para frações 0..1 para poderem
+// ser dimensionadas livremente). Cada ponto pisca em loop com o
+// mesmo atraso relativo do CSS original (0.00s a 1.53s, ciclo de
+// 1.6s). As cores são fixas — não seguem s.primary nem o tema —
+// exatamente como pedido ("azul mesmo no claro").
+
+class _NexaDotSpec {
+  final double left;  // fração 0..1 do lado do quadrado
+  final double top;   // fração 0..1 do lado do quadrado
+  final Color color;
+  final double delaySeconds;
+  const _NexaDotSpec({
+    required this.left,
+    required this.top,
+    required this.color,
+    required this.delaySeconds,
+  });
+}
+
+// 128px de referência no HTML original; dividimos por 128 para obter frações.
+final List<_NexaDotSpec> _kNexaDots = [
+  _NexaDotSpec(left: 28.21 / 128, top: 55.26 / 128, color: const Color.fromRGBO(88, 148, 247, 1),  delaySeconds: 0.00),
+  _NexaDotSpec(left: 42.30 / 128, top: 49.85 / 128, color: const Color.fromRGBO(91, 150, 247, 1),  delaySeconds: 0.07),
+  _NexaDotSpec(left: 35.05 / 128, top: 42.55 / 128, color: const Color.fromRGBO(99, 155, 247, 1),  delaySeconds: 0.13),
+  _NexaDotSpec(left: 42.45 / 128, top: 35.10 / 128, color: const Color.fromRGBO(112, 164, 248, 1), delaySeconds: 0.20),
+  _NexaDotSpec(left: 49.44 / 128, top: 42.51 / 128, color: const Color.fromRGBO(130, 175, 249, 1), delaySeconds: 0.27),
+  _NexaDotSpec(left: 55.21 / 128, top: 29.38 / 128, color: const Color.fromRGBO(150, 188, 250, 1), delaySeconds: 0.33),
+  _NexaDotSpec(left: 67.36 / 128, top: 29.33 / 128, color: const Color.fromRGBO(171, 201, 251, 1), delaySeconds: 0.40),
+  _NexaDotSpec(left: 72.92 / 128, top: 42.55 / 128, color: const Color.fromRGBO(193, 215, 252, 1), delaySeconds: 0.47),
+  _NexaDotSpec(left: 79.96 / 128, top: 35.10 / 128, color: const Color.fromRGBO(213, 228, 253, 1), delaySeconds: 0.53),
+  _NexaDotSpec(left: 87.37 / 128, top: 42.55 / 128, color: const Color.fromRGBO(230, 239, 253, 1), delaySeconds: 0.60),
+  _NexaDotSpec(left: 79.96 / 128, top: 49.85 / 128, color: const Color.fromRGBO(243, 247, 254, 1), delaySeconds: 0.67),
+  _NexaDotSpec(left: 94.05 / 128, top: 55.26 / 128, color: const Color.fromRGBO(252, 253, 254, 1), delaySeconds: 0.73),
+  _NexaDotSpec(left: 94.05 / 128, top: 67.82 / 128, color: const Color.fromRGBO(255, 255, 255, 1), delaySeconds: 0.80),
+  _NexaDotSpec(left: 79.96 / 128, top: 73.53 / 128, color: const Color.fromRGBO(252, 253, 254, 1), delaySeconds: 0.87),
+  _NexaDotSpec(left: 87.31 / 128, top: 80.78 / 128, color: const Color.fromRGBO(243, 247, 254, 1), delaySeconds: 0.93),
+  _NexaDotSpec(left: 79.96 / 128, top: 88.13 / 128, color: const Color.fromRGBO(230, 239, 253, 1), delaySeconds: 1.00),
+  _NexaDotSpec(left: 72.82 / 128, top: 80.78 / 128, color: const Color.fromRGBO(213, 228, 253, 1), delaySeconds: 1.07),
+  _NexaDotSpec(left: 67.30 / 128, top: 93.94 / 128, color: const Color.fromRGBO(193, 215, 252, 1), delaySeconds: 1.13),
+  _NexaDotSpec(left: 54.95 / 128, top: 93.94 / 128, color: const Color.fromRGBO(171, 201, 251, 1), delaySeconds: 1.20),
+  _NexaDotSpec(left: 49.44 / 128, top: 80.78 / 128, color: const Color.fromRGBO(150, 188, 250, 1), delaySeconds: 1.27),
+  _NexaDotSpec(left: 42.30 / 128, top: 88.13 / 128, color: const Color.fromRGBO(130, 175, 249, 1), delaySeconds: 1.33),
+  _NexaDotSpec(left: 34.95 / 128, top: 80.78 / 128, color: const Color.fromRGBO(112, 164, 248, 1), delaySeconds: 1.40),
+  _NexaDotSpec(left: 42.30 / 128, top: 73.53 / 128, color: const Color.fromRGBO(99, 155, 247, 1),  delaySeconds: 1.47),
+  _NexaDotSpec(left: 28.21 / 128, top: 67.81 / 128, color: const Color.fromRGBO(91, 150, 247, 1),  delaySeconds: 1.53),
+];
+
+class NexaLoaderLogo extends StatefulWidget {
+  final double size;
+  const NexaLoaderLogo({super.key, this.size = 40});
+
+  @override
+  State<NexaLoaderLogo> createState() => _NexaLoaderLogoState();
+}
+
+class _NexaLoaderLogoState extends State<NexaLoaderLogo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  static const double _cycleSeconds = 1.6;
+  static const double _dotFraction = 5.64 / 128; // tamanho do ponto relativo ao quadrado
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: (_cycleSeconds * 1000).round()),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  double _opacityFor(double delaySeconds, double t) {
+    // Replica o keyframe CSS 0%→25% / 50%→100% / 100%→25% em opacidade,
+    // usando uma onda triangular suave com pico em t=0.5 do ciclo local.
+    final delayFrac = delaySeconds / _cycleSeconds;
+    var local = (t - delayFrac) % 1.0;
+    if (local < 0) local += 1.0;
+    final phase = (local * 2).clamp(0.0, 2.0);
+    final eased = phase <= 1.0 ? phase : (2.0 - phase);
+    return 0.25 + (0.75 * eased);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dotSize = widget.size * _dotFraction;
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => Stack(
+          children: [
+            for (final dot in _kNexaDots)
+              Positioned(
+                left: dot.left * widget.size,
+                top: dot.top * widget.size,
+                child: Opacity(
+                  opacity: _opacityFor(dot.delaySeconds, _c.value),
+                  child: Container(
+                    width: dotSize,
+                    height: dotSize,
+                    decoration: BoxDecoration(
+                      color: dot.color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // AI TAB
 // ══════════════════════════════════════════════════════════════
 
@@ -1062,6 +1243,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _sending      = false;
   bool     _widgetsEnabled = true;
   bool     _webSearchEnabled = false;
+  bool     _showScrollToBottom = false;
   String   _streamingText = '';
   String?  _streamingThink;
   String?  _conversationId;
@@ -1084,11 +1266,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   StreamSubscription<ChatStreamEvent>? _streamSub;
 
   final FocusNode _inputFocus = FocusNode();
-  final LayerLink _attachLink = LayerLink();
+  // GlobalKey do botão "+" — usado para calcular a posição do
+  // popup de anexos manualmente (substitui o antigo LayerLink).
+  final GlobalKey _attachButtonKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     if (widget.initialConversationId != null) {
       _loadConversation(widget.initialConversationId!);
     }
@@ -1105,6 +1290,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         widget.initialConversationId != oldWidget.initialConversationId &&
         widget.initialConversationId != _conversationId) {
       _loadConversation(widget.initialConversationId!);
+    }
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final distanceFromBottom = _scroll.position.maxScrollExtent - _scroll.position.pixels;
+    final shouldShow = distanceFromBottom > 240;
+    if (shouldShow != _showScrollToBottom) {
+      setState(() => _showScrollToBottom = shouldShow);
     }
   }
 
@@ -1304,6 +1498,27 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
   }
 
+  /// Cancela a geração em curso (botão de pausa). O texto já
+  /// recebido até este momento é preservado como mensagem final do
+  /// assistente, exatamente como se a resposta tivesse terminado
+  /// normalmente — apenas mais curta.
+  void _pauseGeneration() {
+    if (!_sending) return;
+    _streamSub?.cancel();
+    _streamSub = null;
+    final partial = _streamingText;
+    setState(() {
+      if (partial.trim().isNotEmpty) {
+        _msgs.add(ChatMessage(role: 'assistant', content: partial));
+      }
+      _sending = false;
+      _streamingText = '';
+      _streamingThink = null;
+    });
+    _notifyHeader();
+    _persistConversation();
+  }
+
   Future<void> _createConversationWithGeneratedTitle(String firstMessage) async {
     final token = authController.token;
     if (token == null) return;
@@ -1354,11 +1569,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
-  void _scrollToEnd() {
+  void _scrollToEnd({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300), curve: kCupertinoOut);
+        if (animated) {
+          _scroll.animateTo(_scroll.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300), curve: kCupertinoOut);
+        } else {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
       }
     });
   }
@@ -1441,11 +1660,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
-  void _openAttachSheet(LayerLink link) {
+  void _openAttachSheet() {
     showAttachPopup(
       context,
       AppTheme.of(context),
-      link: link,
+      anchorKey: _attachButtonKey,
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
@@ -1613,6 +1832,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
     _ctrl.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
@@ -1641,6 +1861,13 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final headerHeight = topInset + 6 + 40 + 12;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
+    // Total de itens da lista: mensagens + (bolha de streaming, se
+    // enviando) + 1 item final fixo de aviso, que só aparece quando
+    // já existe pelo menos uma mensagem na conversa.
+    final baseCount = _msgs.length + (_sending ? 1 : 0);
+    final showDisclaimer = _msgs.isNotEmpty || _sending;
+    final totalCount = baseCount + (showDisclaimer ? 1 : 0);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => FocusScope.of(context).unfocus(),
@@ -1648,57 +1875,87 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         color: s.pageBackground,
         child: Column(children: [
           Expanded(
-            child: _incognito
-                ? const _IncognitoState()
-                : (_msgs.isEmpty && _streamingText.isEmpty)
-                    ? _EmptyState(s: s, topPadding: headerHeight)
-                    : ListView.builder(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
-                        itemCount: _msgs.length + (_sending ? 1 : 0),
-                        itemBuilder: (_, i) {
-                          if (i >= _msgs.length) {
-                            final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
-                            return _StreamingBubble(
+            child: Stack(children: [
+              _incognito
+                  ? const _IncognitoState()
+                  : (_msgs.isEmpty && _streamingText.isEmpty)
+                      ? _EmptyState(s: s, topPadding: headerHeight)
+                      : ListView.builder(
+                          controller: _scroll,
+                          padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
+                          itemCount: totalCount,
+                          itemBuilder: (_, i) {
+                            // Último item: aviso fixo, só depois da
+                            // mensagem/streaming mais recente.
+                            if (showDisclaimer && i == totalCount - 1) {
+                              return const _DisclaimerFooter();
+                            }
+                            if (i >= _msgs.length) {
+                              final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
+                              final isThinkingOnly = _streamingText.isEmpty && (_streamingThink == null || _streamingThink!.isEmpty);
+                              return _StreamingBubble(
+                                s: s,
+                                elements: elements,
+                                thinking: _streamingThink != null
+                                    ? cleanAiText(_streamingThink!)
+                                    : null,
+                                showLogoLoader: isThinkingOnly,
+                                widgetsEnabled: _widgetsEnabled,
+                                onEnableWidgets: () => setWidgetsEnabled(true),
+                                onSuggestionTap: sendSuggestedMessage,
+                                onOpenCanvas: _onOpenCanvas,
+                              );
+                            }
+                            final msg = _msgs[i];
+                            if (msg.role == 'user') {
+                              return _Bubble(
+                                s: s,
+                                text: msg.content,
+                                onEdit: () => _onBubbleEdit(i),
+                                onCopy: () => _onBubbleCopy(i),
+                                onDelete: () => _onBubbleDelete(i),
+                                onSelectText: () => _onBubbleSelectText(i),
+                              );
+                            }
+                            final scan = _scanForCanvasItems(msg.content, () => '');
+                            final msgCanvases = _canvasesForMessage(msg.content);
+                            return _AssistantBubble(
                               s: s,
-                              elements: elements,
-                              thinking: _streamingThink != null
-                                  ? cleanAiText(_streamingThink!)
-                                  : null,
+                              text: cleanAiText(scan.cleanText),
+                              canvases: msgCanvases,
+                              onOpenCanvas: _onOpenCanvas,
+                              onThumbUp: () => _onAssistantThumbUp(i),
+                              onThumbDown: () => _onAssistantThumbDown(i),
+                              onCopy: () => _onAssistantCopy(i),
+                              onRefresh: () => _onAssistantRefresh(i),
                               widgetsEnabled: _widgetsEnabled,
                               onEnableWidgets: () => setWidgetsEnabled(true),
                               onSuggestionTap: sendSuggestedMessage,
-                              onOpenCanvas: _onOpenCanvas,
                             );
-                          }
-                          final msg = _msgs[i];
-                          if (msg.role == 'user') {
-                            return _Bubble(
-                              s: s,
-                              text: msg.content,
-                              onEdit: () => _onBubbleEdit(i),
-                              onCopy: () => _onBubbleCopy(i),
-                              onDelete: () => _onBubbleDelete(i),
-                              onSelectText: () => _onBubbleSelectText(i),
-                            );
-                          }
-                          final scan = _scanForCanvasItems(msg.content, () => '');
-                          final msgCanvases = _canvasesForMessage(msg.content);
-                          return _AssistantBubble(
-                            s: s,
-                            text: cleanAiText(scan.cleanText),
-                            canvases: msgCanvases,
-                            onOpenCanvas: _onOpenCanvas,
-                            onThumbUp: () => _onAssistantThumbUp(i),
-                            onThumbDown: () => _onAssistantThumbDown(i),
-                            onCopy: () => _onAssistantCopy(i),
-                            onRefresh: () => _onAssistantRefresh(i),
-                            widgetsEnabled: _widgetsEnabled,
-                            onEnableWidgets: () => setWidgetsEnabled(true),
-                            onSuggestionTap: sendSuggestedMessage,
-                          );
-                        },
+                          },
+                        ),
+              // ── Botão flutuante de "ir para o fim" — sobreposto
+              // ACIMA do input bar (não faz parte dele), só visível
+              // quando o utilizador não está mais no fim da lista.
+              if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
+                Positioned(
+                  left: 0, right: 0,
+                  bottom: 8,
+                  child: Center(
+                    child: AnimatedOpacity(
+                      opacity: _showScrollToBottom ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 180),
+                      child: IgnorePointer(
+                        ignoring: !_showScrollToBottom,
+                        child: _ScrollToBottomButton(
+                          s: s,
+                          onTap: () => _scrollToEnd(),
+                        ),
                       ),
+                    ),
+                  ),
+                ),
+            ]),
           ),
           _ChatInput(
             s: s,
@@ -1708,9 +1965,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             attachedFilesCount: _attachedFiles.length,
             incognito: _incognito,
             sending: _sending,
-            attachLink: _attachLink,
+            attachButtonKey: _attachButtonKey,
             onSend: _send,
-            onAttach: () => _openAttachSheet(_attachLink),
+            onPause: _pauseGeneration,
+            onAttach: _openAttachSheet,
             onVoice: _openVoiceSheet,
             onOpenAiOptions: _openAiOptionsSheet,
             onClearTool: _onClearTool,
@@ -1758,6 +2016,69 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
+// ── Rodapé fixo de aviso — último item absoluto da lista ────────
+
+class _DisclaimerFooter extends StatelessWidget {
+  const _DisclaimerFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 16),
+      child: Center(
+        child: Text(
+          'O DeepSeek é uma IA e pode cometer erros.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11.5,
+            color: s.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Botão circular flutuante de "ir para o fim" ─────────────────
+
+class _ScrollToBottomButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _ScrollToBottomButton({required this.s, required this.onTap});
+  @override State<_ScrollToBottomButton> createState() => _ScrollToBottomButtonState();
+}
+
+class _ScrollToBottomButtonState extends State<_ScrollToBottomButton> {
+  bool _p = false;
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap:       widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
+        child: Container(
+          width: 38, height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            shape: BoxShape.circle,
+            boxShadow: s.floatingShadow,
+          ),
+          child: AppIcon('double_arrow_down', color: s.onSurface, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
   final AppColorScheme s;
   final double topPadding;
@@ -1772,7 +2093,7 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset('assets/logo.png', width: 40, height: 40),
+                const NexaLoaderLogo(size: 40),
                 const SizedBox(height: 14),
                 Text(
                   'Olá, o que vamos criar hoje?',
@@ -2020,6 +2341,7 @@ class _StreamingBubble extends StatelessWidget {
   final AppColorScheme s;
   final List<_StreamElement> elements;
   final String? thinking;
+  final bool showLogoLoader;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
@@ -2028,6 +2350,7 @@ class _StreamingBubble extends StatelessWidget {
     required this.s,
     required this.elements,
     this.thinking,
+    this.showLogoLoader = false,
     required this.widgetsEnabled,
     required this.onEnableWidgets,
     required this.onSuggestionTap,
@@ -2090,7 +2413,9 @@ class _StreamingBubble extends StatelessWidget {
     }
 
     if (!anyContent) {
-      children.add(AiSmallDotsLoader(color: s.onSurfaceVariant));
+      children.add(showLogoLoader
+          ? const NexaLoaderLogo(size: 28)
+          : AiSmallDotsLoader(color: s.onSurfaceVariant));
     }
 
     return Align(
@@ -2110,6 +2435,8 @@ class _StreamingBubble extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // STREAMING MARKDOWN CARD
 // ══════════════════════════════════════════════════════════════
+// Geometria alinhada com SimpleCanvasCard/_CanvasCard: curva
+// externa 20 (já era), sem alteração de cor.
 
 class _StreamingMarkdownCard extends StatefulWidget {
   final AppColorScheme s;
@@ -2159,7 +2486,7 @@ class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: s.hover.withOpacity(0.4),
         borderRadius: BorderRadius.circular(20),
@@ -2630,6 +2957,11 @@ class _AttachedFileRow extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // CHAT INPUT
 // ══════════════════════════════════════════════════════════════
+// Container externo ganhou um gradiente vertical por trás (mesmo
+// padrão de settings/drawer: transparente em cima, esvaindo para
+// s.pageBackground embaixo). O card do input em si (inner) manteve
+// exatamente a sua própria cor/sombra, como antes — só o wrapper
+// que o envolve é que agora tem esse gradiente atrás dele.
 
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
@@ -2639,8 +2971,9 @@ class _ChatInput extends StatelessWidget {
   final int attachedFilesCount;
   final bool incognito;
   final bool sending;
-  final LayerLink attachLink;
+  final GlobalKey attachButtonKey;
   final VoidCallback onSend;
+  final VoidCallback onPause;
   final VoidCallback onAttach;
   final VoidCallback onVoice;
   final VoidCallback onOpenAiOptions;
@@ -2655,8 +2988,9 @@ class _ChatInput extends StatelessWidget {
     required this.attachedFilesCount,
     required this.incognito,
     required this.sending,
-    required this.attachLink,
+    required this.attachButtonKey,
     required this.onSend,
+    required this.onPause,
     required this.onAttach,
     required this.onVoice,
     required this.onOpenAiOptions,
@@ -2715,7 +3049,7 @@ class _ChatInput extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
-                hintText: incognito ? 'Mensagem incógnita...' : 'Conversar com Claude...',
+                hintText: incognito ? 'Mensagem incógnita...' : 'Conversar com DeepSeek...',
                 hintStyle: TextStyle(fontSize: 16.5, letterSpacing: 0.15, color: s.onSurfaceVariant),
                 contentPadding: EdgeInsets.zero,
               ),
@@ -2726,8 +3060,11 @@ class _ChatInput extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
             child: Row(
               children: [
-                // Botão de anexar (sem container circular)
+                // Botão de anexar (sem container circular) — ancorado
+                // via GlobalKey para o cálculo manual de posição do
+                // popup de anexos.
                 GestureDetector(
+                  key: attachButtonKey,
                   onTap: onAttach,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
@@ -2764,27 +3101,23 @@ class _ChatInput extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Botão de enviar/pausar — enquanto 'sending' mostra
+                // AppIcon('pause', ...) ESTÁTICO (sem rotação nenhuma,
+                // sem CircularProgressIndicator) e, ao ser tocado
+                // nesse estado, chama onPause (cancela o stream).
                 GestureDetector(
-                  onTap: sending ? null : onSend,
+                  onTap: sending ? onPause : onSend,
                   child: Container(
                     width: 36, height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: sending ? s.primary.withOpacity(0.5) : s.primary,
+                        color: s.primary,
                         shape: BoxShape.circle),
-                    child: sending
-                        ? const SizedBox(
-                            width: 18, height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          )
-                        : AppIcon(
-                            'arrow_up',
-                            color: Colors.white,
-                            size: 20,
-                          ),
+                    child: AppIcon(
+                      sending ? 'pause' : 'arrow_up',
+                      color: Colors.white,
+                      size: sending ? 16 : 20,
+                    ),
                   ),
                 ),
               ],
@@ -2798,7 +3131,17 @@ class _ChatInput extends StatelessWidget {
         ? DashedRRectBorder(color: s.outline, radius: 20, child: inner)
         : inner;
 
-    return Padding(
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            s.pageBackground.withOpacity(0.0),
+            s.pageBackground,
+          ],
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: bordered,
     );
@@ -2879,18 +3222,32 @@ class _AttachedFilesPill extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // ATTACH POPUP
 // ══════════════════════════════════════════════════════════════
+// Antes usava CompositedTransformFollower(link: LayerLink) — o que
+// se mostrou frágil dentro do Stack do header/input, causando o bug
+// de "abre uma vez e nunca mais reabre" reportado pelo utilizador.
+// Agora calcula a posição manualmente a partir do RenderBox do botão
+// "+" (via GlobalKey), no mesmo padrão que já era usado no drawer
+// (showConversationOptionsPopupAt) e no menu de três pontos do
+// canvas card. Isso elimina a dependência de sincronismo entre
+// camadas do Overlay que o LayerLink exigia.
 
 enum _AttachAction { files, photos, camera }
 
 void showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
-  required LayerLink link,
+  required GlobalKey anchorKey,
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
   required ValueChanged<EditorType> onSelectTool,
 }) {
+  final anchorContext = anchorKey.currentContext;
+  if (anchorContext == null) return;
+  final box = anchorContext.findRenderObject() as RenderBox;
+  final anchorOffset = box.localToGlobal(Offset.zero);
+  final anchorSize = box.size;
+
   late OverlayEntry entry;
   final controller = AnimationController(
     vsync: Navigator.of(context),
@@ -2906,6 +3263,13 @@ void showAttachPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const width = 240.0;
+    const estimatedHeight = 200.0;
+    final screenSize = MediaQuery.of(ctx).size;
+
+    final desiredTop = anchorOffset.dy - 6 - estimatedHeight;
+    final opensUp = desiredTop >= 40;
+    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
+    final left = anchorOffset.dx.clamp(8.0, screenSize.width - width - 8);
 
     final entries = <PopupMenuEntry<_AttachAction>>[
       const PopupMenuEntry(
@@ -2933,12 +3297,9 @@ void showAttachPopup(
           child: Container(color: Colors.transparent),
         ),
       ),
-      CompositedTransformFollower(
-        link: link,
-        showWhenUnlinked: false,
-        targetAnchor: Alignment.topLeft,
-        followerAnchor: Alignment.bottomLeft,
-        offset: const Offset(0, -6),
+      Positioned(
+        left: left,
+        top: top,
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -2949,7 +3310,7 @@ void showAttachPopup(
               scale: Tween(begin: 0.92, end: 1.0)
                   .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
                   .value,
-              alignment: Alignment.bottomLeft,
+              alignment: opensUp ? Alignment.bottomLeft : Alignment.topLeft,
               child: child,
             ),
           ),
@@ -3078,7 +3439,7 @@ class _CanvasCardState extends State<_CanvasCard> {
       onTap:       widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: _h ? s.hover : s.cardBackground,
           borderRadius: BorderRadius.circular(20),
@@ -3258,6 +3619,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 // ══════════════════════════════════════════════════════════════
 // BOTTOM SHEET DE OPÇÕES DE IA
 // ══════════════════════════════════════════════════════════════
+// Intocado a pedido explícito do utilizador.
 
 Future<void> showAiOptionsSheet(
   BuildContext context,
