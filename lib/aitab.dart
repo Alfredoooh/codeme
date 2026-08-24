@@ -2349,7 +2349,7 @@ class _ThinkingHistoryCollapsibleState extends State<_ThinkingHistoryCollapsible
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: s.hover.withOpacity(0.5),
+        color: s.cardBackground,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -2600,7 +2600,7 @@ class _ThinkingCollapsible extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: s.hover.withOpacity(0.5),
+        color: s.cardBackground,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
