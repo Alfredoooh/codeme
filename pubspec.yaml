@@ -41,6 +41,5 @@ flutter:
     - assets/editor/docs.html
     - assets/editor/sheets.html
     - assets/editor/slides.html
-    - assets/editor/whiteboard.html
     - assets/logo.png
     - assets/images/background1.jpg

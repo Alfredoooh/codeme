@@ -92,7 +92,7 @@ class EditTabController extends ChangeNotifier {
 final EditTabController editTabController = EditTabController();
 
 // ══════════════════════════════════════════════════════════════
-// EDITOR SCREEN — dispose explícito dos WebViews adicionado.
+// EDITOR SCREEN — sem FAB de IA, com WebView otimizado.
 // ══════════════════════════════════════════════════════════════
 
 class EditorScreen extends StatefulWidget {
@@ -245,202 +245,67 @@ class _EditorScreenState extends State<EditorScreen> with ThemeReactive<EditorSc
     final s   = AppTheme.of(context);
     final idx = EditorType.values.indexOf(widget.editorType);
 
-    return Stack(children: [
-      IndexedStack(
-        index: idx,
-        children: EditorType.values.map((t) {
-          if (kIsWeb) return const SizedBox.shrink();
-          return InAppWebView(
-            initialFile: t.htmlAsset,
-            initialSettings: InAppWebViewSettings(
-              transparentBackground: true,
-              javaScriptEnabled: true,
-              allowFileAccessFromFileURLs: true,
-              allowUniversalAccessFromFileURLs: true,
-              useHybridComposition: true,
-            ),
-            onWebViewCreated: (c) {
-              _controllers[t] = c;
-              c.addJavaScriptHandler(
-                handlerName: 'openColorPicker',
-                callback: (args) {
-                  final cb =
-                      args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
-                  _openColorPicker(context, s, cb);
-                },
-              );
-              c.addJavaScriptHandler(
-                handlerName: 'openImagePicker',
-                callback: (_) {
-                  showImagePickerSheet(context, s);
-                },
-              );
-              c.addJavaScriptHandler(
-                handlerName: 'openLinkSheet',
-                callback: (_) {
-                  showLinkSheet(context, s, (url, text) {
-                    _runJs("editorApi.insertLink('$url','$text')");
-                  });
-                },
-              );
-              c.addJavaScriptHandler(
-                handlerName: 'openAiEditForSelection',
-                callback: (args) {
-                  final selected = args.isNotEmpty ? args[0]?.toString() : null;
-                  if (t == widget.editorType) {
-                    _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
-                  }
-                },
-              );
-            },
-            onLoadStop: (c, _) => _onPendingLoad(),
-          );
-        }).toList(),
-      ),
-      Positioned(
-        right: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 84,
-        child: _AiEditFab(
-          s: s,
-          busy: _aiEditing,
-          onTap: () => _openAiEditModal(),
-        ),
-      ),
-    ]);
-  }
-}
-
-// ── FAB circular de sparkles ─────────────────────────────────────
-
-class _AiEditFab extends StatefulWidget {
-  final AppColorScheme s;
-  final bool busy;
-  final VoidCallback onTap;
-  const _AiEditFab({required this.s, required this.busy, required this.onTap});
-  @override State<_AiEditFab> createState() => _AiEditFabState();
-}
-
-class _AiEditFabState extends State<_AiEditFab> {
-  bool _p = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   widget.busy ? null : (_) => setState(() => _p = true),
-      onTapCancel: widget.busy ? null : ()  => setState(() => _p = false),
-      onTapUp:     widget.busy ? null : (_) => setState(() => _p = false),
-      onTap:       widget.busy ? null : widget.onTap,
-      child: AnimatedScale(
-        scale: _p ? 0.90 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          width: 52, height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: s.primary,
-            shape: BoxShape.circle,
-            boxShadow: s.floatingShadow,
+    return IndexedStack(
+      index: idx,
+      children: EditorType.values.map((t) {
+        if (kIsWeb) return const SizedBox.shrink();
+        return InAppWebView(
+          initialFile: t.htmlAsset,
+          initialSettings: InAppWebViewSettings(
+            transparentBackground: false,
+            backgroundColor: s.pageBackground,
+            javaScriptEnabled: true,
+            allowFileAccessFromFileURLs: true,
+            allowUniversalAccessFromFileURLs: true,
+            useHybridComposition: true,
+            verticalScrollBarEnabled: false,
+            horizontalScrollBarEnabled: false,
+            supportZoom: false,
           ),
-          child: widget.busy
-              ? SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    valueColor: AlwaysStoppedAnimation(s.onPrimary),
-                  ),
-                )
-              : AppIcon('sparkles.svg', color: s.onPrimary, size: 22),
-        ),
-      ),
+          onWebViewCreated: (c) {
+            _controllers[t] = c;
+            c.addJavaScriptHandler(
+              handlerName: 'openColorPicker',
+              callback: (args) {
+                final cb =
+                    args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
+                _openColorPicker(context, s, cb);
+              },
+            );
+            c.addJavaScriptHandler(
+              handlerName: 'openImagePicker',
+              callback: (_) {
+                showImagePickerSheet(context, s);
+              },
+            );
+            c.addJavaScriptHandler(
+              handlerName: 'openLinkSheet',
+              callback: (_) {
+                showLinkSheet(context, s, (url, text) {
+                  _runJs("editorApi.insertLink('$url','$text')");
+                });
+              },
+            );
+            c.addJavaScriptHandler(
+              handlerName: 'openAiEditForSelection',
+              callback: (args) {
+                final selected = args.isNotEmpty ? args[0]?.toString() : null;
+                if (t == widget.editorType) {
+                  _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
+                }
+              },
+            );
+          },
+          onLoadStop: (c, _) => _onPendingLoad(),
+        );
+      }).toList(),
     );
   }
 }
 
-// ── Modal de input do FAB de sparkles ─────────────────────────────
-// Agora utiliza showAppSheet (CupertinoSheetRoute), sem Material/Container externo.
-
-Future<String?> showAiEditModal(
-  BuildContext context,
-  AppColorScheme s, {
-  bool hasSelection = false,
-}) {
-  final ctrl = TextEditingController();
-  return showAppSheet<String>(
-    context,
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              AppIcon('sparkles.svg', color: s.primary, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                hasSelection ? 'Editar seleção com IA' : 'Editar documento com IA',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-              ),
-            ]),
-            const SizedBox(height: 4),
-            Text(
-              hasSelection
-                  ? 'Diz o que queres mudar no trecho selecionado.'
-                  : 'Diz o que queres alterar — a IA aplica direto no documento.',
-              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              minLines: 1, maxLines: 4,
-              style: TextStyle(fontSize: 15, color: s.onSurface),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Ex: torna este parágrafo mais formal',
-                hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-                filled: true,
-                fillColor: s.hover,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              onSubmitted: (v) => Navigator.pop(ctx, v),
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () => Navigator.pop(ctx, ctrl.text),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: s.primary,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppIcon('sparkles.svg', color: s.onPrimary, size: 16),
-                    const SizedBox(width: 8),
-                    Text('Aplicar',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
+// ══════════════════════════════════════════════════════════════
+// EDIT TYPE BUTTON (agora com rótulo centralizado e more_vert)
+// ══════════════════════════════════════════════════════════════
 
 class EditTypeButton extends StatefulWidget {
   final AppColorScheme s;
@@ -461,7 +326,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
   void initState() {
     super.initState();
     _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+        vsync: this, duration: const Duration(milliseconds: 240));
   }
 
   @override
@@ -494,11 +359,11 @@ class _EditTypeButtonState extends State<EditTypeButton>
             builder: (_, child) => Opacity(
               opacity: CurvedAnimation(
                       parent: _ac,
-                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
+                      curve: const Interval(0, 0.5, curve: Curves.easeOutCubic))
                   .value,
               child: Transform.scale(
                 scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
+                    .animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic))
                     .value,
                 alignment: Alignment.topRight,
                 child: child,
@@ -507,7 +372,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
             child: Material(
               type: MaterialType.transparency,
               child: Container(
-                width: 220,
+                width: 230,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: s.floatingSurface,
@@ -517,6 +382,7 @@ class _EditTypeButtonState extends State<EditTypeButton>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: EditorType.values
+                      .where((t) => t != EditorType.whiteboard) // remove quadro branco
                       .map((t) => _TypeOption(
                             s: s,
                             type: t,
@@ -549,12 +415,27 @@ class _EditTypeButtonState extends State<EditTypeButton>
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _toggle,
-          child: IgnorePointer(
-            child: AppTap(
-              onTap: () {},
-              s: widget.s,
-              size: 36,
-              child: AppIcon('more_filled.svg', color: widget.s.onSurface, size: 20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.current.label,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: widget.s.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                AppIcon(
+                  'more_vert',
+                  color: widget.s.onSurface,
+                  size: 20,
+                ),
+              ],
             ),
           ),
         ),
@@ -581,7 +462,8 @@ class _TypeOptionState extends State<_TypeOption> {
         onTapUp:     (_) => setState(() => _h = false),
         onTap:       widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: _h

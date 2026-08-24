@@ -2,24 +2,18 @@
 // FILE: lib/aitab.dart
 // ══════════════════════════════════════════════════════════════
 // ATUALIZADO:
-// 1) Popups ancorados manualmente via RenderBox (menu de três
-//    pontos, popup de anexos).
-// 2) Botão de enviar: branco durante resposta, ícone pause.svg,
-//    sem rotação, sem loader circular.
-// 3) Loader Nexa com shimmer, usado no empty state e no streaming
-//    quando a IA ainda não produziu conteúdo.
-// 4) Pensamento colapsável durante streaming e persistente no
-//    histórico (card "Pensamento").
-// 5) Criação de documentos/canvas/widgets durante streaming com
-//    label "Criando..." ou "A carregar...", sem expor JSON parcial.
-// 6) Ordem real de texto, widgets e canvas preservada via
-//    marcadores posicionais.
+// 1) Popups ancorados manualmente via RenderBox.
+// 2) Botão de enviar: branco durante resposta, ícone pause.svg.
+// 3) Loader Nexa com shimmer.
+// 4) Pensamento colapsável no streaming e no histórico.
+// 5) Criação de documentos/canvas/widgets durante streaming sem expor JSON.
+// 6) Ordem real de texto, widgets e canvas preservada.
 // 7) Placeholder: "Conversar com DeepSeek...".
 // 8) Aviso final alinhado à direita, fonte 10.5.
 // 9) Container do input bar com gradiente progressivo.
-// 10) Cards de "Criando..." permanecem com a mesma casca visual
-//     e transitam suavemente para o resultado final, sem expor
-//     conteúdo cru.
+// 10) Cards de progresso para canvas/widgets com transição suave e sem conteúdo cru.
+// 11) Opções de IA com estado local (switches atualizam imediatamente).
+// 12) Cards de sheet com tom de fundo do sheet (sem sombras).
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -296,7 +290,6 @@ LocalCanvasKind _canvasKindFromString(String kindStr) {
   };
 }
 
-// Usada no histórico: remove os canvas, sem marcador posicional.
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
   final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
@@ -312,7 +305,6 @@ _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   return _CanvasScanResult(cleanText: text.trim(), items: items);
 }
 
-// Usada no streaming: marca a posição com \u0000CVn\u0000.
 class _CanvasMarkResult {
   final String textWithMarkers;
   final List<LocalCanvasItem> items;
@@ -339,7 +331,6 @@ String _canvasBlockToRaw(LocalCanvasItem item) {
   return '[[canvas:${item.kind.name}:${item.title}||${item.content}]]';
 }
 
-// Reconstrói os blocos [[canvas:...]] originais a partir dos marcadores.
 String _resolveCanvasMarkersToBlocks(
   String textWithMarkers,
   List<LocalCanvasItem> items,
@@ -646,8 +637,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON (popup de três pontos) — ancorado
-// manualmente via RenderBox, sem LayerLink.
+// AI CONVERSATION MENU BUTTON
 // ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
@@ -982,13 +972,13 @@ class _StreamText extends _StreamElement {
 
 class _StreamCanvasBlock extends _StreamElement {
   final String label;
-  final LocalCanvasItem? item; // null enquanto ainda está a escrever
+  final LocalCanvasItem? item;
   _StreamCanvasBlock({required this.label, this.item});
 }
 
 class _StreamWidgetBlock extends _StreamElement {
   final String label;
-  final AiWidgetBlock? block; // null enquanto ainda está a escrever
+  final AiWidgetBlock? block;
   _StreamWidgetBlock({required this.label, this.block});
 }
 
@@ -3156,7 +3146,7 @@ class _AttachedFileRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: s.hover,
+          color: s.surface,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(children: [
@@ -3650,12 +3640,12 @@ class _CanvasCardState extends State<_CanvasCard> {
       onTapUp:     (_) => setState(() => _h = false),
       onTap:       widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: _h ? s.hover : s.cardBackground,
+          color: _h ? s.hover : s.surface,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: s.cardShadow,
         ),
         child: Row(children: [
           Container(
@@ -3843,81 +3833,87 @@ Future<void> showAiOptionsSheet(
 }) {
   return showAppSheet<void>(
     context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setModalState) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Opções de IA',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: s.onSurface,
+    builder: (ctx) {
+      var selectedModel = currentModel;
+      var localWeb = webSearchEnabled;
+      var localWidgets = widgetsEnabled;
+
+      return StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Opções de IA',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Modelo',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: s.onSurfaceVariant,
+              const SizedBox(height: 16),
+              Text(
+                'Modelo',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurfaceVariant,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            for (final model in AiModel.values) ...[
-              _ModelOptionRow(
+              const SizedBox(height: 8),
+              for (final model in AiModel.values) ...[
+                _ModelOptionRow(
+                  s: s,
+                  model: model,
+                  selected: model == selectedModel,
+                  onTap: () {
+                    setModalState(() => selectedModel = model);
+                    onModelSelected(model);
+                  },
+                ),
+                if (model != AiModel.values.last) const SizedBox(height: 4),
+              ],
+              const SizedBox(height: 16),
+              Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.2)),
+              const SizedBox(height: 8),
+              _OptionsActionRow(
                 s: s,
-                model: model,
-                selected: model == currentModel,
+                assetName: 'grid',
+                label: 'Canvas',
                 onTap: () {
-                  onModelSelected(model);
-                  setModalState(() {});
+                  Navigator.pop(ctx);
+                  onOpenCanvas();
                 },
               ),
-              if (model != AiModel.values.last) const SizedBox(height: 4),
+              const SizedBox(height: 8),
+              _OptionsSwitchRow(
+                s: s,
+                assetName: 'globe',
+                label: 'Pesquisar web',
+                value: localWeb,
+                onChanged: (v) {
+                  setModalState(() => localWeb = v);
+                  onWebSearchChanged(v);
+                },
+              ),
+              const SizedBox(height: 8),
+              _OptionsSwitchRow(
+                s: s,
+                assetName: 'sparkles',
+                label: 'Competências',
+                value: localWidgets,
+                onChanged: (v) {
+                  setModalState(() => localWidgets = v);
+                  onWidgetsChanged(v);
+                },
+              ),
             ],
-            const SizedBox(height: 16),
-            Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.2)),
-            const SizedBox(height: 8),
-            _OptionsActionRow(
-              s: s,
-              assetName: 'grid',
-              label: 'Canvas',
-              onTap: () {
-                Navigator.pop(ctx);
-                onOpenCanvas();
-              },
-            ),
-            const SizedBox(height: 8),
-            _OptionsSwitchRow(
-              s: s,
-              assetName: 'globe',
-              label: 'Pesquisar web',
-              value: webSearchEnabled,
-              onChanged: (v) {
-                onWebSearchChanged(v);
-                setModalState(() {});
-              },
-            ),
-            const SizedBox(height: 8),
-            _OptionsSwitchRow(
-              s: s,
-              assetName: 'sparkles',
-              label: 'Competências',
-              value: widgetsEnabled,
-              onChanged: (v) {
-                onWidgetsChanged(v);
-                setModalState(() {});
-              },
-            ),
-          ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -3940,7 +3936,7 @@ class _ModelOptionRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? s.primary.withOpacity(0.1) : s.hover,
+          color: selected ? s.primary.withOpacity(0.1) : s.surface,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -3966,9 +3962,9 @@ class _ModelOptionRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              const AppIcon(
+              AppIcon(
                 'check',
-                color: Color(0xFF2F7BF6),
+                color: s.primary,
                 size: 20,
               ),
           ],
@@ -3997,7 +3993,7 @@ class _OptionsActionRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: s.hover,
+          color: s.surface,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -4036,7 +4032,7 @@ class _OptionsSwitchRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: s.hover,
+        color: s.surface,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -4067,7 +4063,7 @@ class _CustomSwitch extends StatelessWidget {
       onTap: () => onChanged(!value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
+        curve: Curves.easeOutCubic,
         width: 44, height: 26,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
@@ -4076,7 +4072,7 @@ class _CustomSwitch extends StatelessWidget {
         ),
         child: AnimatedAlign(
           duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
+          curve: Curves.easeOutCubic,
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
             width: 20, height: 20,
