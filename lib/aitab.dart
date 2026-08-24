@@ -1,3 +1,23 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/aitab.dart
+// ══════════════════════════════════════════════════════════════
+// ATUALIZADO:
+// 1) Popups ancorados manualmente via RenderBox (menu de três
+//    pontos, popup de anexos).
+// 2) Botão de enviar: branco durante resposta, ícone pause.svg,
+//    sem rotação, sem loader circular.
+// 3) Loader Nexa com shimmer, usado no empty state e no streaming
+//    quando a IA ainda não produziu conteúdo.
+// 4) Pensamento colapsável durante streaming e persistente no
+//    histórico (card "Pensamento").
+// 5) Criação de documentos/canvas/widgets durante streaming com
+//    label "Criando..." ou "A carregar...", sem expor JSON parcial.
+// 6) Ordem real de texto, widgets e canvas preservada via
+//    marcadores posicionais.
+// 7) Placeholder: "Conversar com DeepSeek...".
+// 8) Aviso final alinhado à direita, fonte 10.5.
+// 9) Container do input bar com gradiente progressivo.
+// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -212,9 +232,10 @@ sobre a fonte de forma natural no texto.
 // TEXT CLEANUP
 // ══════════════════════════════════════════════════════════════
 String cleanAiText(String raw) {
-  var t = raw;
-  t = t.replaceAll(RegExp(r'\[\[canvas:[\s\S]*?\]\]'), '');
-  return t.trim();
+  return raw
+      .replaceAll(_kExplicitCanvasRe, '')
+      .replaceAll(_kThinkingRe, '')
+      .trim();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -263,27 +284,94 @@ final RegExp _kExplicitCanvasRe = RegExp(
   r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
 );
 
+LocalCanvasKind _canvasKindFromString(String kindStr) {
+  return switch (kindStr) {
+    'sheet' => LocalCanvasKind.sheet,
+    'slide' => LocalCanvasKind.slide,
+    'whiteboard' => LocalCanvasKind.whiteboard,
+    _ => LocalCanvasKind.doc,
+  };
+}
+
+// Usada no histórico: remove os canvas, sem marcador posicional.
 _CanvasScanResult _scanForCanvasItems(String raw, String Function() idGen) {
   final items = <LocalCanvasItem>[];
   final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
-    final kindStr = m.group(1)!;
     final title = m.group(2)!.trim();
-    final content = m.group(3)!;
-    final kind = switch (kindStr) {
-      'sheet' => LocalCanvasKind.sheet,
-      'slide' => LocalCanvasKind.slide,
-      'whiteboard' => LocalCanvasKind.whiteboard,
-      _ => LocalCanvasKind.doc,
-    };
     items.add(LocalCanvasItem(
       id: idGen(),
-      kind: kind,
+      kind: _canvasKindFromString(m.group(1)!),
       title: title.isEmpty ? 'Documento' : title,
-      content: content,
+      content: m.group(3)!,
     ));
     return '';
   });
   return _CanvasScanResult(cleanText: text.trim(), items: items);
+}
+
+// Usada no streaming: marca a posição com \u0000CVn\u0000.
+class _CanvasMarkResult {
+  final String textWithMarkers;
+  final List<LocalCanvasItem> items;
+  const _CanvasMarkResult({required this.textWithMarkers, required this.items});
+}
+
+_CanvasMarkResult _markCanvasItems(String raw, String Function() idGen) {
+  final items = <LocalCanvasItem>[];
+  final text = raw.replaceAllMapped(_kExplicitCanvasRe, (m) {
+    final title = m.group(2)!.trim();
+    final idx = items.length;
+    items.add(LocalCanvasItem(
+      id: idGen(),
+      kind: _canvasKindFromString(m.group(1)!),
+      title: title.isEmpty ? 'Documento' : title,
+      content: m.group(3)!,
+    ));
+    return '\u0000CV$idx\u0000';
+  });
+  return _CanvasMarkResult(textWithMarkers: text.trim(), items: items);
+}
+
+String _canvasBlockToRaw(LocalCanvasItem item) {
+  return '[[canvas:${item.kind.name}:${item.title}||${item.content}]]';
+}
+
+// Reconstrói os blocos [[canvas:...]] originais a partir dos marcadores.
+String _resolveCanvasMarkersToBlocks(
+  String textWithMarkers,
+  List<LocalCanvasItem> items,
+) {
+  var result = textWithMarkers;
+  for (int i = 0; i < items.length; i++) {
+    result = result.replaceFirst('\u0000CV$i\u0000', _canvasBlockToRaw(items[i]));
+  }
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════
+// THINKING EXTRACTION
+// ══════════════════════════════════════════════════════════════
+final RegExp _kThinkingRe = RegExp(
+  r'\[\[THINKING\]\]([\s\S]*?)\[\[/THINKING\]\]',
+);
+
+class _ThinkingScanResult {
+  final String? thinking;
+  final String cleanText;
+  const _ThinkingScanResult({required this.thinking, required this.cleanText});
+}
+
+_ThinkingScanResult _extractThinking(String raw) {
+  final match = _kThinkingRe.firstMatch(raw);
+  if (match == null) {
+    return _ThinkingScanResult(thinking: null, cleanText: raw);
+  }
+  final thinking = match.group(1)!.trim();
+  final cleanText = raw.replaceFirst(_kThinkingRe, '').trim();
+  return _ThinkingScanResult(
+    thinking: thinking.isEmpty ? null : thinking,
+    cleanText: cleanText,
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -380,7 +468,11 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
   }
 
   @override
-  void dispose() { _ac.dispose(); _ov?.remove(); super.dispose(); }
+  void dispose() {
+    _ac.dispose();
+    _ov?.remove();
+    super.dispose();
+  }
 
   void toggle() => _ov == null ? open() : close();
 
@@ -483,7 +575,8 @@ class _PopupRow<T> extends StatefulWidget {
   final PopupMenuEntry<T> entry;
   final VoidCallback onTap;
   const _PopupRow({required this.s, required this.entry, required this.onTap});
-  @override State<_PopupRow<T>> createState() => _PopupRowState<T>();
+  @override
+  State<_PopupRow<T>> createState() => _PopupRowState<T>();
 }
 
 class _PopupRowState<T> extends State<_PopupRow<T>> {
@@ -752,7 +845,8 @@ class _MenuActionRow extends StatefulWidget {
     this.destructive = false,
     this.disabled = false,
   });
-  @override State<_MenuActionRow> createState() => _MenuActionRowState();
+  @override
+  State<_MenuActionRow> createState() => _MenuActionRowState();
 }
 
 class _MenuActionRowState extends State<_MenuActionRow> {
@@ -906,30 +1000,28 @@ class _OpenBlockInfo {
 }
 
 List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
+  final canvasScan = _markCanvasItems(raw, idGen);
+  final widgetParse = parseAiWidgetBlocks(canvasScan.textWithMarkers);
+  final remaining = widgetParse.textWithMarkers;
+
+  final combinedMarkerRe = RegExp(r'\u0000(CV|WB)(\d+)\u0000');
+  final parts = remaining.split(combinedMarkerRe);
+  final markerMatches = combinedMarkerRe.allMatches(remaining).toList();
+
   final elements = <_StreamElement>[];
-  final canvasScan = _scanForCanvasItems(raw, idGen);
-
-  var remaining = canvasScan.cleanText;
-  final widgetParse = parseAiWidgetBlocks(remaining);
-  remaining = widgetParse.textWithMarkers;
-
-  final parts = remaining.split(RegExp(r'\u0000WB(\d+)\u0000'));
-  final markerMatches = RegExp(r'\u0000WB(\d+)\u0000').allMatches(remaining).toList();
-
   for (int i = 0; i < parts.length; i++) {
     if (parts[i].isNotEmpty) {
       elements.add(_StreamText(parts[i]));
     }
     if (i < markerMatches.length) {
-      final idx = int.parse(markerMatches[i].group(1)!);
-      if (idx < widgetParse.blocks.length) {
+      final type = markerMatches[i].group(1)!;
+      final idx = int.parse(markerMatches[i].group(2)!);
+      if (type == 'CV' && idx < canvasScan.items.length) {
+        elements.add(_StreamClosedCanvas(canvasScan.items[idx]));
+      } else if (type == 'WB' && idx < widgetParse.blocks.length) {
         elements.add(_StreamClosedWidget(widgetParse.blocks[idx]));
       }
     }
-  }
-
-  for (final item in canvasScan.items) {
-    elements.add(_StreamClosedCanvas(item));
   }
 
   final openInfo = _detectOpenBlockInfo(raw);
@@ -960,15 +1052,21 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
     }
   }
 
-  final widgetOpen = RegExp(r'```widget_').allMatches(text).toList();
-  if (widgetOpen.isNotEmpty) {
-    final last = widgetOpen.last;
+  final widgetOpenMatch = RegExp(r'```(widget_[a-z]+)').allMatches(text).toList();
+  if (widgetOpenMatch.isNotEmpty) {
+    final last = widgetOpenMatch.last;
     final afterLast = text.substring(last.start);
-    final closesAfter = afterLast.contains('```');
+    final closesAfter = afterLast.contains('```', 3);
     if (!closesAfter) {
-      final newlineIdx = text.indexOf('\n', last.start);
-      final partial = newlineIdx >= 0 ? text.substring(newlineIdx + 1) : '';
-      return _OpenBlockInfo('Criando widget...', partial);
+      final widgetId = last.group(1)!;
+      final label = switch (widgetId) {
+        'widget_market' => 'A carregar cotação...',
+        'widget_calendar' => 'A criar calendário...',
+        'widget_map' => 'A carregar mapa...',
+        _ => 'Criando widget...',
+      };
+      // Nunca expõe o JSON parcial.
+      return _OpenBlockInfo(label, '');
     }
   }
 
@@ -1371,11 +1469,12 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             break;
           case ChatDoneEvent(fullText: final fullText):
             final finalText = fullText.isNotEmpty ? fullText : _streamingText;
-            final scan = _scanForCanvasItems(finalText, _nextCanvasId);
+            final scan = _markCanvasItems(finalText, _nextCanvasId);
             final thinkingText = _streamingThink != null ? cleanAiText(_streamingThink!) : '';
+            final bodyWithCanvasBlocks = _resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
             final combined = thinkingText.isNotEmpty
-                ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n${scan.cleanText}'
-                : scan.cleanText;
+                ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$bodyWithCanvasBlocks'
+                : bodyWithCanvasBlocks;
 
             setState(() {
               if (combined.trim().isNotEmpty || scan.items.isNotEmpty) {
@@ -1439,13 +1538,16 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _streamSub = null;
     final partial = _streamingText;
     final thinkingText = _streamingThink != null ? cleanAiText(_streamingThink!) : '';
+    final scan = _markCanvasItems(partial, _nextCanvasId);
+    final bodyWithCanvasBlocks = _resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
     setState(() {
       final combined = thinkingText.isNotEmpty
-          ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$partial'
-          : partial;
+          ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$bodyWithCanvasBlocks'
+          : bodyWithCanvasBlocks;
       if (combined.trim().isNotEmpty) {
         _msgs.add(ChatMessage(role: 'assistant', content: combined));
       }
+      _canvases.addAll(scan.items);
       _sending = false;
       _streamingText = '';
       _streamingThink = null;
@@ -1848,10 +1950,12 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                               );
                             }
                             final scan = _scanForCanvasItems(msg.content, () => '');
+                            final thinkScan = _extractThinking(scan.cleanText);
                             final msgCanvases = _canvasesForMessage(msg.content);
                             return _AssistantBubble(
                               s: s,
-                              text: cleanAiText(scan.cleanText),
+                              text: cleanAiText(thinkScan.cleanText),
+                              thinking: thinkScan.thinking,
                               canvases: msgCanvases,
                               onOpenCanvas: _onOpenCanvas,
                               onThumbUp: () => _onAssistantThumbUp(i),
@@ -1994,7 +2098,8 @@ class _ScrollToBottomButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
   const _ScrollToBottomButton({required this.s, required this.onTap});
-  @override State<_ScrollToBottomButton> createState() => _ScrollToBottomButtonState();
+  @override
+  State<_ScrollToBottomButton> createState() => _ScrollToBottomButtonState();
 }
 
 class _ScrollToBottomButtonState extends State<_ScrollToBottomButton> {
@@ -2074,7 +2179,8 @@ class _Bubble extends StatefulWidget {
     required this.onDelete,
     required this.onSelectText,
   });
-  @override State<_Bubble> createState() => _BubbleState();
+  @override
+  State<_Bubble> createState() => _BubbleState();
 }
 
 class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
@@ -2153,6 +2259,7 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 class _AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
+  final String? thinking;
   final List<LocalCanvasItem> canvases;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
   final VoidCallback onThumbUp;
@@ -2165,6 +2272,7 @@ class _AssistantBubble extends StatelessWidget {
   const _AssistantBubble({
     required this.s,
     required this.text,
+    this.thinking,
     required this.canvases,
     required this.onOpenCanvas,
     required this.onThumbUp,
@@ -2185,6 +2293,12 @@ class _AssistantBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (thinking != null && thinking!.isNotEmpty)
+                _ThinkingHistoryCollapsible(
+                  s: s,
+                  thinking: thinking!,
+                  widgetsEnabled: widgetsEnabled,
+                ),
               if (text.isNotEmpty)
                 RichAiText(
                   text: text,
@@ -2209,6 +2323,83 @@ class _AssistantBubble extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _ThinkingHistoryCollapsible extends StatefulWidget {
+  final AppColorScheme s;
+  final String thinking;
+  final bool widgetsEnabled;
+
+  const _ThinkingHistoryCollapsible({
+    required this.s,
+    required this.thinking,
+    required this.widgetsEnabled,
+  });
+
+  @override
+  State<_ThinkingHistoryCollapsible> createState() => _ThinkingHistoryCollapsibleState();
+}
+
+class _ThinkingHistoryCollapsibleState extends State<_ThinkingHistoryCollapsible> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: s.hover.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  AppIcon('sparkles', size: 15, color: s.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pensamento',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: RichAiText(
+                text: widget.thinking,
+                s: s,
+                widgetsEnabled: widget.widgetsEnabled,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AssistantActionBar extends StatelessWidget {
@@ -2249,7 +2440,8 @@ class _AssistantActionIcon extends StatefulWidget {
     required this.assetName,
     required this.onTap,
   });
-  @override State<_AssistantActionIcon> createState() => _AssistantActionIconState();
+  @override
+  State<_AssistantActionIcon> createState() => _AssistantActionIconState();
 }
 
 class _AssistantActionIconState extends State<_AssistantActionIcon> {
@@ -2323,6 +2515,7 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
         thinking: thinking,
         expanded: _thinkingExpanded,
         onToggle: () => setState(() => _thinkingExpanded = !_thinkingExpanded),
+        widgetsEnabled: widget.widgetsEnabled,
       ));
     }
 
@@ -2392,11 +2585,14 @@ class _ThinkingCollapsible extends StatelessWidget {
   final String thinking;
   final bool expanded;
   final VoidCallback onToggle;
+  final bool widgetsEnabled;
+
   const _ThinkingCollapsible({
     required this.s,
     required this.thinking,
     required this.expanded,
     required this.onToggle,
+    required this.widgetsEnabled,
   });
 
   @override
@@ -2447,6 +2643,7 @@ class _ThinkingCollapsible extends StatelessWidget {
               child: RichAiText(
                 text: thinking,
                 s: s,
+                widgetsEnabled: widgetsEnabled,
               ),
             ),
           ),
@@ -2774,7 +2971,8 @@ class _MessageActionRow extends StatefulWidget {
     required this.onTap,
     this.destructive = false,
   });
-  @override State<_MessageActionRow> createState() => _MessageActionRowState();
+  @override
+  State<_MessageActionRow> createState() => _MessageActionRowState();
 }
 
 class _MessageActionRowState extends State<_MessageActionRow> {
