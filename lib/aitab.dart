@@ -17,6 +17,9 @@
 // 7) Placeholder: "Conversar com DeepSeek...".
 // 8) Aviso final alinhado à direita, fonte 10.5.
 // 9) Container do input bar com gradiente progressivo.
+// 10) Cards de "Criando..." permanecem com a mesma casca visual
+//     e transitam suavemente para o resultado final, sem expor
+//     conteúdo cru.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -977,26 +980,26 @@ class _StreamText extends _StreamElement {
   _StreamText(this.text);
 }
 
-class _StreamOpenBlock extends _StreamElement {
+class _StreamCanvasBlock extends _StreamElement {
   final String label;
-  final String partialContent;
-  _StreamOpenBlock(this.label, this.partialContent);
+  final LocalCanvasItem? item; // null enquanto ainda está a escrever
+  _StreamCanvasBlock({required this.label, this.item});
 }
 
-class _StreamClosedCanvas extends _StreamElement {
-  final LocalCanvasItem item;
-  _StreamClosedCanvas(this.item);
+class _StreamWidgetBlock extends _StreamElement {
+  final String label;
+  final AiWidgetBlock? block; // null enquanto ainda está a escrever
+  _StreamWidgetBlock({required this.label, this.block});
 }
 
-class _StreamClosedWidget extends _StreamElement {
-  final AiWidgetBlock block;
-  _StreamClosedWidget(this.block);
+class _StreamGenericOpenBlock extends _StreamElement {
+  final String label;
+  _StreamGenericOpenBlock(this.label);
 }
 
 class _OpenBlockInfo {
   final String label;
-  final String partialContent;
-  const _OpenBlockInfo(this.label, this.partialContent);
+  const _OpenBlockInfo(this.label);
 }
 
 List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
@@ -1017,19 +1020,55 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
       final type = markerMatches[i].group(1)!;
       final idx = int.parse(markerMatches[i].group(2)!);
       if (type == 'CV' && idx < canvasScan.items.length) {
-        elements.add(_StreamClosedCanvas(canvasScan.items[idx]));
+        final item = canvasScan.items[idx];
+        elements.add(_StreamCanvasBlock(
+          label: _labelForCanvasKind(item.kind),
+          item: item,
+        ));
       } else if (type == 'WB' && idx < widgetParse.blocks.length) {
-        elements.add(_StreamClosedWidget(widgetParse.blocks[idx]));
+        final block = widgetParse.blocks[idx];
+        elements.add(_StreamWidgetBlock(
+          label: _labelForWidgetId(block.id),
+          block: block,
+        ));
       }
     }
   }
 
   final openInfo = _detectOpenBlockInfo(raw);
   if (openInfo != null) {
-    elements.add(_StreamOpenBlock(openInfo.label, openInfo.partialContent));
+    elements.add(_openBlockToElement(raw, openInfo));
   }
 
   return elements;
+}
+
+String _labelForCanvasKind(LocalCanvasKind kind) => switch (kind) {
+      LocalCanvasKind.sheet => 'Criando folha de cálculo...',
+      LocalCanvasKind.slide => 'Criando apresentação...',
+      LocalCanvasKind.whiteboard => 'Criando quadro branco...',
+      LocalCanvasKind.doc => 'Criando documento...',
+    };
+
+String _labelForWidgetId(String widgetId) => switch (widgetId) {
+      'widget_market' => 'A carregar cotação...',
+      'widget_calendar' => 'A criar calendário...',
+      'widget_map' => 'A carregar mapa...',
+      _ => 'Criando widget...',
+    };
+
+_StreamElement _openBlockToElement(String raw, _OpenBlockInfo info) {
+  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(raw).toList();
+  final widgetOpenMatch = RegExp(r'```(widget_[a-z]+)').allMatches(raw).toList();
+
+  if (canvasOpenMatch.isNotEmpty &&
+      (widgetOpenMatch.isEmpty || canvasOpenMatch.last.start > widgetOpenMatch.last.start)) {
+    return _StreamCanvasBlock(label: info.label, item: null);
+  }
+  if (widgetOpenMatch.isNotEmpty) {
+    return _StreamWidgetBlock(label: info.label, block: null);
+  }
+  return _StreamGenericOpenBlock(info.label);
 }
 
 _OpenBlockInfo? _detectOpenBlockInfo(String text) {
@@ -1046,9 +1085,7 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
         'whiteboard' => 'Criando quadro branco...',
         _ => 'Criando documento...',
       };
-      final markerEnd = text.indexOf('||', last.start);
-      final partial = markerEnd >= 0 ? text.substring(markerEnd + 2) : '';
-      return _OpenBlockInfo(label, partial);
+      return _OpenBlockInfo(label);
     }
   }
 
@@ -1065,13 +1102,12 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
         'widget_map' => 'A carregar mapa...',
         _ => 'Criando widget...',
       };
-      // Nunca expõe o JSON parcial.
-      return _OpenBlockInfo(label, '');
+      return _OpenBlockInfo(label);
     }
   }
 
   if (_endsWithPartialMarker(text)) {
-    return const _OpenBlockInfo('Criando...', '');
+    return const _OpenBlockInfo('Criando...');
   }
 
   return null;
@@ -1235,6 +1271,109 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
           );
         },
       ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STREAMING CARDS DE PROGRESSO
+// ══════════════════════════════════════════════════════════════
+class _StreamingMarkdownCard extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+
+  const _StreamingMarkdownCard({
+    super.key,
+    required this.s,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            AiSmallDotsLoader(color: s.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CanvasProgressCard extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final LocalCanvasItem? item;
+  final ValueChanged<LocalCanvasItem> onOpenCanvas;
+
+  const _CanvasProgressCard({
+    required this.s,
+    required this.label,
+    required this.item,
+    required this.onOpenCanvas,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: item == null
+          ? _StreamingMarkdownCard(key: const ValueKey('progress'), s: s, label: label)
+          : SimpleCanvasCard(
+              key: const ValueKey('done'),
+              s: s,
+              item: item!,
+              onTap: () => onOpenCanvas(item!),
+            ),
+    );
+  }
+}
+
+class _WidgetProgressCard extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final AiWidgetBlock? block;
+
+  const _WidgetProgressCard({
+    required this.s,
+    required this.label,
+    required this.block,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: block == null
+          ? _StreamingMarkdownCard(key: const ValueKey('progress'), s: s, label: label)
+          : Padding(
+              key: const ValueKey('done'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: buildAiWidget(block!, s),
+            ),
     );
   }
 }
@@ -2474,7 +2613,7 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING BUBBLE — com pensamento colapsável
+// STREAMING BUBBLE — com pensamento colapsável e cards de progresso
 // ══════════════════════════════════════════════════════════════
 class _StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
@@ -2533,27 +2672,28 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
             onEnableWidgets: widget.onEnableWidgets,
             onSuggestionTap: widget.onSuggestionTap,
           ));
-        case _StreamOpenBlock(:final label, :final partialContent):
-          anyContent = true;
-          children.add(_StreamingMarkdownCard(
-            s: s,
-            label: label,
-            partialContent: partialContent,
-            widgetsEnabled: widget.widgetsEnabled,
-            onEnableWidgets: widget.onEnableWidgets,
-            onSuggestionTap: widget.onSuggestionTap,
-          ));
-        case _StreamClosedCanvas(:final item):
+        case _StreamCanvasBlock(:final label, :final item):
           anyContent = true;
           children.add(Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: SimpleCanvasCard(s: s, item: item, onTap: () => widget.onOpenCanvas(item)),
+            child: _CanvasProgressCard(
+              s: s,
+              label: label,
+              item: item,
+              onOpenCanvas: widget.onOpenCanvas,
+            ),
           ));
-        case _StreamClosedWidget(:final block):
+        case _StreamWidgetBlock(:final label, :final block):
           anyContent = true;
           children.add(Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: buildAiWidget(block, s),
+            child: _WidgetProgressCard(s: s, label: label, block: block),
+          ));
+        case _StreamGenericOpenBlock(:final label):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: _StreamingMarkdownCard(s: s, label: label),
           ));
       }
     }
@@ -2644,114 +2784,6 @@ class _ThinkingCollapsible extends StatelessWidget {
                 text: thinking,
                 s: s,
                 widgetsEnabled: widgetsEnabled,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// STREAMING MARKDOWN CARD
-// ══════════════════════════════════════════════════════════════
-class _StreamingMarkdownCard extends StatefulWidget {
-  final AppColorScheme s;
-  final String label;
-  final String partialContent;
-  final bool widgetsEnabled;
-  final VoidCallback onEnableWidgets;
-  final ValueChanged<String> onSuggestionTap;
-
-  const _StreamingMarkdownCard({
-    super.key,
-    required this.s,
-    required this.label,
-    required this.partialContent,
-    required this.widgetsEnabled,
-    required this.onEnableWidgets,
-    required this.onSuggestionTap,
-  });
-
-  @override
-  State<_StreamingMarkdownCard> createState() => _StreamingMarkdownCardState();
-}
-
-class _StreamingMarkdownCardState extends State<_StreamingMarkdownCard> {
-  bool _expanded = true;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final content = widget.partialContent.trim();
-
-    if (content.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            AiSmallDotsLoader(color: s.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Text(
-              widget.label,
-              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: s.hover.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Row(
-              children: [
-                AiSmallDotsLoader(color: s.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                AnimatedRotation(
-                  turns: _expanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: AppIcon(
-                    'chevron_down',
-                    size: 14,
-                    color: s.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: RichAiText(
-                text: content,
-                s: s,
-                widgetsEnabled: widget.widgetsEnabled,
-                onEnableWidgets: widget.onEnableWidgets,
-                onSuggestionTap: widget.onSuggestionTap,
               ),
             ),
           ),
