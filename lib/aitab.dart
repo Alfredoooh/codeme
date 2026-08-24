@@ -400,7 +400,7 @@ enum ConversationAction { newChat, incognito, rename, delete }
 
 extension ConversationActionX on ConversationAction {
   String get assetName => switch (this) {
-        ConversationAction.newChat   => 'add',
+        ConversationAction.newChat   => 'new_chat',
         ConversationAction.incognito => 'incognito',
         ConversationAction.rename    => 'pencil',
         ConversationAction.delete    => 'trash',
