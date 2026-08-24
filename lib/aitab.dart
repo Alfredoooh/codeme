@@ -14,6 +14,13 @@
 // 10) Cards de progresso para canvas/widgets com transição suave e sem conteúdo cru.
 // 11) Opções de IA com estado local (switches atualizam imediatamente).
 // 12) Cards de sheet com tom de fundo do sheet (sem sombras).
+// 13) CORREÇÕES APLICADAS:
+//     - NexaLoaderLogo agora suporta `tintColor` e `animated`.
+//     - Empty state: logo maior (112) com cor primária no tema claro.
+//     - Histórico de pensamento usa NexaLoaderLogo parado em vez de sparkles.
+//     - Bolha do utilizador usa cores dinâmicas (primaryContainer/onPrimaryContainer).
+//     - Input com capitalização automática de frases.
+//     - Preferências de prompt e frequência de emojis integradas no system prompt.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -1127,7 +1134,7 @@ bool _endsWithPartialMarker(String text) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOADER LOGO COM SHIMMER
+// NEXA LOADER LOGO COM SHIMMER (atualizado com tintColor/animated)
 // ══════════════════════════════════════════════════════════════
 class _NexaDotSpec {
   final double left;
@@ -1171,7 +1178,14 @@ final List<_NexaDotSpec> _kNexaDots = [
 
 class NexaLoaderLogo extends StatefulWidget {
   final double size;
-  const NexaLoaderLogo({super.key, this.size = 40});
+  final Color? tintColor;
+  final bool animated;
+  const NexaLoaderLogo({
+    super.key,
+    this.size = 40,
+    this.tintColor,
+    this.animated = true,
+  });
 
   @override
   State<NexaLoaderLogo> createState() => _NexaLoaderLogoState();
@@ -1191,11 +1205,33 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     _c = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: (_cycleSeconds * 1000).round()),
-    )..repeat();
+    );
     _shimmer = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
-    )..repeat();
+    );
+    if (widget.animated) {
+      _c.repeat();
+      _shimmer.repeat();
+    } else {
+      // Congela num frame com todos os pontos visíveis
+      _c.value = 0.5;
+      _shimmer.value = 0.5;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant NexaLoaderLogo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.animated != oldWidget.animated) {
+      if (widget.animated) {
+        _c.repeat();
+        _shimmer.repeat();
+      } else {
+        _c.stop();
+        _shimmer.stop();
+      }
+    }
   }
 
   @override
@@ -1224,6 +1260,32 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
         animation: Listenable.merge([_c, _shimmer]),
         builder: (_, __) {
           final shimmerX = (_shimmer.value * 2 - 1) * widget.size * 0.4;
+          final content = Stack(
+            children: [
+              for (final dot in _kNexaDots)
+                Positioned(
+                  left: dot.left * widget.size,
+                  top: dot.top * widget.size,
+                  child: Opacity(
+                    opacity: _opacityFor(dot.delaySeconds, _c.value),
+                    child: Container(
+                      width: dotSize,
+                      height: dotSize,
+                      decoration: BoxDecoration(
+                        color: widget.tintColor ?? dot.color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+
+          if (widget.tintColor != null) {
+            // Sem shimmer quando tintColor definido
+            return content;
+          }
+
           return ShaderMask(
             shaderCallback: (bounds) {
               return LinearGradient(
@@ -1238,26 +1300,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
               ).createShader(bounds.shift(Offset(shimmerX, 0)));
             },
             blendMode: BlendMode.srcIn,
-            child: Stack(
-              children: [
-                for (final dot in _kNexaDots)
-                  Positioned(
-                    left: dot.left * widget.size,
-                    top: dot.top * widget.size,
-                    child: Opacity(
-                      opacity: _opacityFor(dot.delaySeconds, _c.value),
-                      child: Container(
-                        width: dotSize,
-                        height: dotSize,
-                        decoration: BoxDecoration(
-                          color: dot.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            child: content,
           );
         },
       ),
@@ -1507,8 +1550,25 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   String _nextCanvasId() => 'cv_${DateTime.now().millisecondsSinceEpoch}_${_canvasIdSeq++}';
   String _nextAttachedFileId() => 'af_${DateTime.now().millisecondsSinceEpoch}_${_attachedFileIdSeq++}';
 
+  String get _emojiInstruction {
+    switch (appPreferences.emojiFrequency) {
+      case EmojiFrequency.never:
+        return 'Nunca uses emojis nas tuas respostas.';
+      case EmojiFrequency.rare:
+        return 'Usa emojis apenas quando forem realmente necessários para clarificar o tom, no máximo um por resposta.';
+      case EmojiFrequency.medium:
+        return 'Podes usar emojis com moderação para dar vida à resposta.';
+      case EmojiFrequency.often:
+        return 'Usa emojis livremente para enriquecer a comunicação.';
+    }
+  }
+
   String get _effectiveSystemPrompt {
     var prompt = kAiSystemPrompt;
+    prompt += '\n\n' + _emojiInstruction;
+    if (appPreferences.prompt.isNotEmpty) {
+      prompt += '\n\nPreferências adicionais do utilizador (segue sempre):\n${appPreferences.prompt}';
+    }
     if (_widgetsEnabled) prompt += kAiWidgetsInstructions;
     if (_webSearchEnabled) prompt += kAiWebSearchInstructions;
     return prompt;
@@ -2275,7 +2335,10 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const NexaLoaderLogo(size: 56),
+                NexaLoaderLogo(
+                  size: 112,
+                  tintColor: s.isDark ? null : s.primary,
+                ),
                 const SizedBox(height: 14),
                 Text(
                   'Olá, o que vamos criar hoje?',
@@ -2348,12 +2411,9 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = widget.s.isDark
-        ? widget.s.primaryContainer
-        : const Color(0xFFD7E7FE);
-    final textColor = widget.s.isDark
-        ? widget.s.onPrimaryContainer
-        : const Color(0xFF0A3B72);
+    // CORREÇÃO: usar cores dinâmicas do tema
+    final bubbleColor = widget.s.primaryContainer;
+    final textColor = widget.s.onPrimaryContainer;
 
     return AnimatedBuilder(
       animation: _c,
@@ -2491,7 +2551,8 @@ class _ThinkingHistoryCollapsibleState extends State<_ThinkingHistoryCollapsible
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
-                  AppIcon('sparkles', size: 15, color: s.onSurfaceVariant),
+                  // CORREÇÃO: NexaLoaderLogo parado em vez de sparkles
+                  const NexaLoaderLogo(size: 15, animated: false),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -3275,6 +3336,7 @@ class _ChatInput extends StatelessWidget {
               controller: ctrl,
               focusNode: focusNode,
               minLines: 1, maxLines: 6,
+              textCapitalization: TextCapitalization.sentences, // CORREÇÃO
               style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15).copyWith(color: s.onSurface),
               cursorColor: s.primary,
               decoration: InputDecoration(

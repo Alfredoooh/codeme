@@ -1,22 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
 // ══════════════════════════════════════════════════════════════
-// CORREÇÃO: appbar VOLTOU ao gradiente progressivo puro — o blur
-// (BackdropFilter) da versão anterior foi removido, nunca devia ter
-// sido adicionado; agora usa exatamente o mesmo padrão que o
-// bottombar do botão "Terminar sessão" já usava e que ficou
-// intocado (LinearGradient de s.pageBackground opaco até
-// transparente, sem qualquer filtro). Segmented control
-// Claro/Escuro/Automático: bordas 100% arredondadas
-// (BorderRadius.circular(999) tanto no container quanto no thumb
-// deslizante) e o thumb selecionado agora usa s.primary (cor de
-// marca) com texto em s.onPrimary, em vez do cinza/branco neutro
-// anterior. Slider de tamanho de fonte: grossura geral reduzida
-// (trilho e thumb mais finos), e a ponta do trilho preenchido que
-// encosta no thumb passou a ser quase reta (radius pequeno) em vez
-// de總 arredondada — só o lado esquerdo (início do trilho) mantém
-// o arredondamento cheio.
-// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -171,6 +155,12 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     ));
   }
 
+  void _openPersonalization(BuildContext context) {
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => const _PersonalizationScreen(),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -215,6 +205,14 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               iconAsset: 'paintbrush',
                               label: 'Aparência',
                               onTap: () => _openAppearance(context, s),
+                              trailing: AppIcon('chevron_forward',
+                                  size: 16, color: s.onSurfaceVariant),
+                            ),
+                            _SettingsRow(
+                              s: s,
+                              iconAsset: 'sliders',
+                              label: 'Personalização',
+                              onTap: () => _openPersonalization(context),
                               trailing: AppIcon('chevron_forward',
                                   size: 16, color: s.onSurfaceVariant),
                             ),
@@ -339,9 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                 ],
               ),
 
-              // ── Appbar — gradiente progressivo PURO, sem blur.
-              // Exatamente o mesmo padrão que o bottombar abaixo, que
-              // nunca foi mexido. ─────────────────────────────────
+              // Appbar
               Positioned(
                 top: 0, left: 0, right: 0,
                 child: Container(
@@ -372,8 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                 ),
               ),
 
-              // ── Bottombar — inalterado, gradiente progressivo
-              // puro, tal como sempre esteve. ─────────────────────
+              // Bottombar
               Positioned(
                 left: 0, right: 0, bottom: 0,
                 child: Container(
@@ -400,8 +395,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 }
 
-// ── Botão de voltar em container circular — idêntico ao
-// _HeaderIconButton do drawer. ───────────────────────────────────
+// ── Botão de voltar (inalterado) ───────────────────────────────
 
 class _CircularBackButton extends StatefulWidget {
   final AppColorScheme s;
@@ -436,7 +430,7 @@ class _CircularBackButtonState extends State<_CircularBackButton> {
   }
 }
 
-// ── Cabeçalho — avatar centrado, sem card, estilo ChatGPT. ──────
+// ── Cabeçalho (inalterado) ─────────────────────────────────────
 
 class _ProfileHeader extends StatelessWidget {
   final AppColorScheme s;
@@ -534,7 +528,7 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-// ── Componentes internos ──────────────────────────────────────
+// ── Componentes internos (inalterados) ────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final AppColorScheme s;
@@ -656,8 +650,6 @@ class _SettingsRowState extends State<_SettingsRow> {
   }
 }
 
-// ── Botão terminar sessão ───────────────────────────────────
-
 class _LogoutButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
@@ -699,8 +691,6 @@ class _LogoutButtonState extends State<_LogoutButton> {
     );
   }
 }
-
-// ── Sheet de confirmação genérico (Sim / Não) ─────────────────
 
 class _ConfirmActionSheet extends StatelessWidget {
   final AppColorScheme s;
@@ -806,8 +796,6 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
     );
   }
 }
-
-// ── Sheet de edição de campo simples (nome / palavra-passe) ────
 
 class _EditFieldSheet extends StatefulWidget {
   final AppColorScheme s;
@@ -977,7 +965,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APARÊNCIA
+// APARÊNCIA (inalterada, exceto uso de cores dinâmicas)
 // ══════════════════════════════════════════════════════════════
 
 class _AppearanceScreen extends StatefulWidget {
@@ -1041,11 +1029,6 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
     );
   }
 }
-
-// ── Segmented control — 100% arredondado (container E thumb usam
-// BorderRadius.circular(999), não mais um raio pequeno de 7-9px),
-// thumb selecionado usa a cor PRIMÁRIA da app (s.primary) com texto
-// em s.onPrimary, em vez do cinza/branco neutro anterior. ────────
 
 class _ThemeSegmentedControl extends StatelessWidget {
   final AppColorScheme s;
@@ -1113,8 +1096,6 @@ class _ThemeSegmentedControl extends StatelessWidget {
   }
 }
 
-// ── Card de tamanho de fonte ──────────────────────────────────
-
 class _FontSizeCard extends StatelessWidget {
   final AppColorScheme s;
   final double value;
@@ -1170,13 +1151,6 @@ class _FontSizeCard extends StatelessWidget {
   }
 }
 
-// ── Slider de tamanho de fonte — grossura geral reduzida (trilho
-// e thumb mais finos que antes). A ponta do trilho preenchido que
-// fica do lado ESQUERDO (início) mantém-se 100% arredondada; a
-// ponta do lado DIREITO — a que encosta directamente no thumb —
-// passa a ser quase reta (raio pequeno, 3px), só uma leve
-// suavização, não um círculo completo. ───────────────────────────
-
 class _ExpressiveSlider extends StatefulWidget {
   final AppColorScheme s;
   final double value;
@@ -1186,8 +1160,6 @@ class _ExpressiveSlider extends StatefulWidget {
 }
 
 class _ExpressiveSliderState extends State<_ExpressiveSlider> {
-  // Grossura geral reduzida — trilho e thumb mais finos que a
-  // versão anterior (que tinha 44/60).
   static const double _trackHeight = 26;
   static const double _thumbWidth = 4;
   static const double _thumbHeight = 38;
@@ -1234,8 +1206,6 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
             alignment: Alignment.centerLeft,
             clipBehavior: Clip.none,
             children: [
-              // Trilho vazio (fundo completo) — mantém-se 100%
-              // arredondado nas duas pontas, é o container inteiro.
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
                 left: 0, right: 0,
@@ -1247,9 +1217,6 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
                   ),
                 ),
               ),
-              // Trilho preenchido — ponta ESQUERDA (início) 100%
-              // arredondada; ponta DIREITA (encostada no thumb)
-              // quase reta, só _filledEndRadius de suavização.
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
                 left: 0,
@@ -1267,7 +1234,6 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
                   ),
                 ),
               ),
-              // Thumb — barra vertical fina, sem círculo
               Positioned(
                 left: thumbX,
                 top: 0,
@@ -1289,7 +1255,363 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MEMÓRIA
+// PERSONALIZAÇÃO (nova secção)
+// ══════════════════════════════════════════════════════════════
+
+class _PersonalizationScreen extends StatelessWidget {
+  const _PersonalizationScreen();
+
+  void _openPromptEditor(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (ctx) => _PromptEditorSheet(s: s),
+    );
+  }
+
+  void _openEmojiFrequency(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (ctx) => _EmojiFrequencySheet(s: s),
+    );
+  }
+
+  void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (ctx) => _PrimaryColorSheet(s: s),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Row(children: [
+                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  const SizedBox(width: 12),
+                  Text('Personalização',
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: s.onSurface)),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _SettingsGroup(s: s, rows: [
+                  _SettingsRow(
+                    s: s,
+                    iconAsset: 'text',
+                    label: 'Preferências de prompt',
+                    onTap: () => _openPromptEditor(context, s),
+                    trailing: Text(
+                      appPreferences.prompt.isEmpty ? 'Nenhuma' : 'Editado',
+                      style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                    ),
+                  ),
+                  _SettingsRow(
+                    s: s,
+                    iconAsset: 'emoji',
+                    label: 'Frequência de emojis',
+                    onTap: () => _openEmojiFrequency(context, s),
+                    trailing: Text(
+                      appPreferences.emojiFrequency.displayName,
+                      style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                    ),
+                  ),
+                  _SettingsRow(
+                    s: s,
+                    iconAsset: 'palette',
+                    label: 'Cor primária',
+                    onTap: () => _openPrimaryColorPicker(context, s),
+                    trailing: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: appTheme.primaryColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: s.outline),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sheet editor de prompt ────────────────────────────────────
+
+class _PromptEditorSheet extends StatefulWidget {
+  final AppColorScheme s;
+  const _PromptEditorSheet({required this.s});
+  @override State<_PromptEditorSheet> createState() => _PromptEditorSheetState();
+}
+
+class _PromptEditorSheetState extends State<_PromptEditorSheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: appPreferences.prompt);
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    appPreferences.setPrompt(_ctrl.text.trim());
+    // Pequeno delay para feedback visual
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Preferências de prompt',
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface)),
+            const SizedBox(height: 8),
+            Text(
+              'Instruções que a IA deve seguir em todas as conversas. Ex.: "Responde sempre em português europeu".',
+              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: s.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: s.outline.withOpacity(0.5)),
+              ),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 6,
+                textCapitalization: TextCapitalization.sentences,
+                style: TextStyle(fontSize: 15, color: s.onSurface),
+                cursorColor: s.primary,
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(16),
+                  hintText: 'Escreve aqui as tuas preferências...',
+                  hintStyle: TextStyle(
+                      fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: _SheetActionButton(
+                  s: s,
+                  label: 'Cancelar',
+                  filled: false,
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _saving ? null : _save,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.primary.withOpacity(_saving ? 0.6 : 1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: _saving
+                        ? SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              valueColor: AlwaysStoppedAnimation(s.onPrimary),
+                            ),
+                          )
+                        : Text('Guardar',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: s.onPrimary)),
+                  ),
+                ),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sheet frequência de emojis ────────────────────────────────
+
+class _EmojiFrequencySheet extends StatelessWidget {
+  final AppColorScheme s;
+  const _EmojiFrequencySheet({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Frequência de emojis',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 16),
+          for (final freq in EmojiFrequency.values)
+            _FrequencyOption(
+              s: s,
+              freq: freq,
+              selected: appPreferences.emojiFrequency == freq,
+              onTap: () {
+                appPreferences.setEmojiFrequency(freq);
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FrequencyOption extends StatelessWidget {
+  final AppColorScheme s;
+  final EmojiFrequency freq;
+  final bool selected;
+  final VoidCallback onTap;
+  const _FrequencyOption({
+    required this.s,
+    required this.freq,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: selected ? s.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                freq.displayName,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? s.onPrimaryContainer : s.onSurface,
+                ),
+              ),
+            ),
+            if (selected)
+              AppIcon('checkmark_circle', size: 20, color: s.onPrimaryContainer)
+            else
+              const SizedBox(width: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sheet seletor de cor primária ─────────────────────────────
+
+class _PrimaryColorSheet extends StatelessWidget {
+  final AppColorScheme s;
+  const _PrimaryColorSheet({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Cor primária',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: kPrimaryColorOptions.map((color) {
+              final selected = appTheme.primaryColor.value == color.value;
+              return GestureDetector(
+                onTap: () {
+                  appTheme.setPrimaryColor(color);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: selected
+                        ? Border.all(color: s.onSurface, width: 3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: selected
+                      ? const AppIcon('check', color: Colors.white, size: 20)
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MEMÓRIA (inalterada)
 // ══════════════════════════════════════════════════════════════
 
 class _MemoryScreen extends StatelessWidget {
@@ -1351,7 +1673,7 @@ class _MemoryScreen extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ÁREA DE TRABALHO
+// ÁREA DE TRABALHO (inalterada)
 // ══════════════════════════════════════════════════════════════
 
 class _WorkspaceScreen extends StatelessWidget {
