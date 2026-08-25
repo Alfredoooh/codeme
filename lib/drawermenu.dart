@@ -201,7 +201,7 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
-  // 0 = Conversas, 1 = Fixadas
+  // 0 = Conversas, 1 = Fixadas, 2 = Apps
   int _selectedSection = 0;
 
   @override
@@ -243,20 +243,9 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeDrawer();
   }
 
-  void _openAccountOptions(BuildContext context, Offset globalPosition) {
+  void _handleCloseButton() {
     HapticFeedback.lightImpact();
-    showAccountOptionsPopupAt(
-      context,
-      widget.s,
-      position: globalPosition,
-      onToggleTheme: () {
-        appTheme.toggleDark();
-      },
-      onOpenSettings: widget.onSettings,
-      onLogout: () {
-        authController.logout();
-      },
-    );
+    _closeDrawer();
   }
 
   void _openSearch(BuildContext context) {
@@ -337,7 +326,7 @@ class _AppDrawerState extends State<AppDrawer> {
           ),
 
           // Header — avatar à esquerda, segmented central e botão de
-          // opções da conta à direita (ancorado corretamente).
+          // fechar o drawer à direita.
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
@@ -364,7 +353,7 @@ class _AppDrawerState extends State<AppDrawer> {
                   Expanded(
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 220),
+                        constraints: const BoxConstraints(maxWidth: 260),
                         child: _DrawerSegmentedControl(
                           s: s,
                           selectedIndex: _selectedSection,
@@ -378,14 +367,13 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Botão de opções da conta — com onTapDown para
-                  // obter a posição exata e abrir o popup ancorado.
+                  // Botão de fechar o drawer
                   _CircleIconButton(
                     s: s,
-                    assetName: 'more_vert',
+                    assetName: 'double_arrow_right',
                     size: 40,
                     iconSize: 20,
-                    onTapDown: (pos) => _openAccountOptions(context, pos),
+                    onTap: _handleCloseButton,
                   ),
                 ],
               ),
@@ -434,6 +422,15 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> pinned,
     List<ConversationItem> others,
   ) {
+    if (_selectedSection == 2) {
+      return Center(
+        child: Text(
+          'Sem apps ainda',
+          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+        ),
+      );
+    }
+
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
         child: SizedBox(
@@ -495,8 +492,6 @@ class _AppDrawerState extends State<AppDrawer> {
                   active: item.id == widget.activeConversationId,
                   onTap: () => _openConversation(item),
                   onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
-                  onArchive: () => conversationsController.archive(item.id, true),
-                  onDelete: () => conversationsController.delete(item.id),
                 ),
             ],
           ),
@@ -590,7 +585,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
         child: Container(
-          width: 40, height: 40,
+          width: 44, height: 44,
           alignment: Alignment.center,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
@@ -598,14 +593,14 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
             shape: BoxShape.circle,
             boxShadow: s.cardShadow,
           ),
-          child: _buildAvatarContent(s, avatar, initial, size: 38, fontSize: 16),
+          child: _buildAvatarContent(s, avatar, initial, size: 42, fontSize: 17),
         ),
       ),
     );
   }
 }
 
-// ── Segmented control do drawer — 36 de altura, estilo settings ─
+// ── Segmented control do drawer — altura maior, pill mantém tamanho ─
 
 class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
@@ -622,7 +617,11 @@ class _DrawerSegmentedControl extends StatefulWidget {
 }
 
 class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
-  static const _options = ['Conversas', 'Fixadas'];
+  static const _options = ['Conversas', 'Fixadas', 'Apps'];
+
+  static const double _containerHeight = 46;
+  static const double _pillHeight = 36;
+  static const double _outerPadding = 3;
 
   int? _pressedIndex;
 
@@ -630,22 +629,23 @@ class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   Widget build(BuildContext context) {
     final s = widget.s;
     return Container(
-      height: 36,
-      padding: const EdgeInsets.all(3),
+      height: _containerHeight,
+      padding: const EdgeInsets.all(_outerPadding),
       decoration: BoxDecoration(
         color: s.hover,
         borderRadius: BorderRadius.circular(999),
       ),
       child: LayoutBuilder(builder: (context, constraints) {
         final segmentWidth = constraints.maxWidth / _options.length;
+        final pillTop = (constraints.maxHeight - _pillHeight) / 2;
         return Stack(children: [
           AnimatedPositioned(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             left: segmentWidth * widget.selectedIndex.clamp(0, _options.length - 1),
-            top: 0,
-            bottom: 0,
+            top: pillTop,
             width: segmentWidth,
+            height: _pillHeight,
             child: Container(
               decoration: BoxDecoration(
                 color: s.primary,
@@ -716,7 +716,7 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
-// ── Botão circular genérico — agora com suporte a onTapDown para
+// ── Botão circular genérico — com suporte a onTapDown para
 // ancoragem de popups. ─────────────────────────────────────────
 
 class _CircleIconButton extends StatefulWidget {
@@ -786,7 +786,7 @@ class _LooseRows extends StatelessWidget {
   }
 }
 
-// ── Conversa individual — sem ícone more_vert, apenas long press ──
+// ── Conversa individual — sem swipe, apenas tap e long press ──
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -794,50 +794,18 @@ class _ConvTile extends StatefulWidget {
   final bool active;
   final VoidCallback onTap;
   final ValueChanged<Offset> onOptionsAt;
-  final VoidCallback onArchive;
-  final VoidCallback onDelete;
   const _ConvTile({
     required this.s,
     required this.item,
     required this.active,
     required this.onTap,
     required this.onOptionsAt,
-    required this.onArchive,
-    required this.onDelete,
   });
   @override State<_ConvTile> createState() => _ConvTileState();
 }
 
 class _ConvTileState extends State<_ConvTile> {
   bool _h = false;
-
-  double _dragDx = 0;
-  bool _resolved = false;
-
-  static const double _threshold = 96;
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_resolved) return;
-    setState(() => _dragDx += d.delta.dx);
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    if (_resolved) {
-      setState(() => _dragDx = 0);
-      return;
-    }
-    if (_dragDx <= -_threshold) {
-      HapticFeedback.lightImpact();
-      setState(() => _resolved = true);
-      widget.onDelete();
-    } else if (_dragDx >= _threshold) {
-      HapticFeedback.lightImpact();
-      setState(() => _resolved = true);
-      widget.onArchive();
-    } else {
-      setState(() => _dragDx = 0);
-    }
-  }
 
   void _handleTap() {
     HapticFeedback.lightImpact();
@@ -852,60 +820,33 @@ class _ConvTileState extends State<_ConvTile> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final swipeBg = _dragDx < 0
-        ? s.error
-        : _dragDx > 0
-            ? s.primary
-            : Colors.transparent;
-    final iconAsset = _dragDx < 0 ? 'trash' : 'archive_solid';
-    final iconColor = _dragDx < 0 ? s.onError : s.onPrimary;
 
-    return AnimatedOpacity(
-      opacity: _resolved ? 0.0 : 1.0,
-      duration: const Duration(milliseconds: 180),
-      child: Stack(children: [
-        if (_dragDx != 0)
-          Positioned.fill(
-            child: Container(
-              alignment: _dragDx < 0 ? Alignment.centerRight : Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              color: swipeBg,
-              child: AppIcon(iconAsset, color: iconColor, size: 18),
-            ),
-          ),
-        Transform.translate(
-          offset: Offset(_dragDx, 0),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown:   (_) => setState(() => _h = true),
-            onTapCancel: ()  => setState(() => _h = false),
-            onTapUp:     (_) => setState(() => _h = false),
-            onTap: _handleTap,
-            onLongPressStart: _handleLongPressStart,
-            onHorizontalDragUpdate: _onDragUpdate,
-            onHorizontalDragEnd: _onDragEnd,
-            child: Container(
-              color: widget.active
-                  ? s.navIndicatorBg
-                  : (_h ? s.hover : Colors.transparent),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(children: [
-                Expanded(
-                  child: SelectionContainer.disabled(
-                    child: Text(widget.item.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
-                          color: widget.active ? s.navLabelActive : s.onSurface,
-                        ),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap: _handleTap,
+      onLongPressStart: _handleLongPressStart,
+      child: Container(
+        color: widget.active
+            ? s.navIndicatorBg
+            : (_h ? s.hover : Colors.transparent),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Expanded(
+            child: SelectionContainer.disabled(
+              child: Text(widget.item.title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
+                    color: widget.active ? s.navLabelActive : s.onSurface,
                   ),
-                ),
-              ]),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 }

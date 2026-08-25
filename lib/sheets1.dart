@@ -7,9 +7,8 @@ import 'app_sheet.dart';
 // ══════════════════════════════════════════════════════════════
 // BASE BOTTOM SHEET
 // ══════════════════════════════════════════════════════════════
-// Sheet normal (sem efeito de push/scale do CupertinoSheetRoute),
-// bordas totalmente curvas como os popups, handle bar mantido,
-// e animação super suave.
+// Agora usa showAppSheet (CupertinoSheetRoute). O grabber manual foi
+// removido — o CupertinoSheetRoute já desenha o dele.
 
 Future<T?> showCraftBottomSheet<T>({
   required BuildContext context,
@@ -17,102 +16,34 @@ Future<T?> showCraftBottomSheet<T>({
   required Widget child,
   String? title,
 }) {
-  return showModalBottomSheet<T>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withOpacity(0.4),
-    elevation: 0,
-    transitionAnimationController: null,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-    builder: (ctx) => _SmoothSheetTransition(
-      child: _SheetShell(
-        s: s,
-        title: title,
-        child: child,
+  return showAppSheet<T>(
+    context,
+    builder: (_) => ColoredBox(
+      color: s.cardBackground,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Text(title,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface)),
+              ),
+              const SizedBox(height: 4),
+            ],
+            child,
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     ),
   );
-}
-
-class _SmoothSheetTransition extends StatelessWidget {
-  final Widget child;
-  const _SmoothSheetTransition({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 340),
-      curve: Curves.easeOutCubic,
-      builder: (context, v, _) {
-        return Opacity(
-          opacity: v,
-          child: Transform.translate(
-            offset: Offset(0, (1 - v) * 24),
-            child: child,
-          ),
-        );
-      },
-      child: child,
-    );
-  }
-}
-
-class _SheetShell extends StatelessWidget {
-  final AppColorScheme s;
-  final String? title;
-  final Widget child;
-  const _SheetShell({required this.s, required this.title, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: s.floatingShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 10),
-              Center(
-                child: Container(
-                  width: 36, height: 4.5,
-                  decoration: BoxDecoration(
-                    color: s.outline.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              if (title != null) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                  child: Text(title!,
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurface)),
-                ),
-                const SizedBox(height: 4),
-              ],
-              child,
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -179,16 +110,15 @@ Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// URL DIALOG
+// URL DIALOG — convertido para showAppSheet
 // ══════════════════════════════════════════════════════════════
 
 Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
   final ctrl = TextEditingController();
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +135,7 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
             autofocus: true,
             style: TextStyle(fontSize: 15, color: s.onSurface),
             decoration: BoxDecoration(
-              color: s.pageBackground,
+              color: s.cardBackground,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: s.outline.withOpacity(0.5)),
             ),
@@ -215,7 +145,7 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
           Row(children: [
             Expanded(
               child: GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.pop(ctx),
                 child: Container(
                   height: 44,
                   alignment: Alignment.center,
@@ -230,7 +160,7 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
             const SizedBox(width: 10),
             Expanded(
               child: GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.pop(ctx),
                 child: Container(
                   height: 44,
                   alignment: Alignment.center,
