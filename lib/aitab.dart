@@ -10,7 +10,9 @@
 // 6) Ordem real de texto, widgets e canvas preservada.
 // 7) Placeholder: "Conversar com DeepSeek...".
 // 8) Aviso final alinhado à direita, fonte 10.5.
-// 9) Container do input bar com gradiente progressivo.
+// 9) Container do input bar com efeito de transparência (gradiente
+//    progressivo no topo, sólido embaixo) — mesmo princípio do
+//    container mãe do botão de sair em settingsscreen.dart.
 // 10) Cards de progresso para canvas/widgets com transição suave e sem conteúdo cru.
 // 11) Opções de IA com estado local (switches atualizam imediatamente).
 // 12) Cards de sheet com tom de fundo do sheet (sem sombras).
@@ -21,6 +23,8 @@
 //     - Bolha do utilizador usa cores dinâmicas (primaryContainer/onPrimaryContainer).
 //     - Input com capitalização automática de frases.
 //     - Preferências de prompt e frequência de emojis integradas no system prompt.
+//     - Sheets migrados para showCraftBottomSheet (sheets.dart).
+//     - Popups de mensagem e de menu de conversa ancorados via RenderBox.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -645,7 +649,8 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON
+// AI CONVERSATION MENU BUTTON — ancorado corretamente via
+// GlobalKey + RenderBox, mesmo princípio do drawermenu.
 // ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
@@ -707,7 +712,9 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
   void _toggle() => _ov == null ? _open() : _close();
 
   void _open() {
-    final box = _anchorKey.currentContext!.findRenderObject() as RenderBox;
+    final anchorContext = _anchorKey.currentContext;
+    if (anchorContext == null) return;
+    final box = anchorContext.findRenderObject() as RenderBox;
     final off = box.localToGlobal(Offset.zero);
     final sz = box.size;
     _ac.forward(from: 0);
@@ -2097,91 +2104,110 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
         color: s.pageBackground,
-        child: Column(children: [
-          Expanded(
-            child: Stack(children: [
-              _incognito
-                  ? const _IncognitoState()
-                  : (_msgs.isEmpty && _streamingText.isEmpty)
-                      ? _EmptyState(s: s, topPadding: headerHeight)
-                      : ListView.builder(
-                          controller: _scroll,
-                          padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
-                          itemCount: totalCount,
-                          itemBuilder: (_, i) {
-                            if (showDisclaimer && i == totalCount - 1) {
-                              return const _DisclaimerFooter();
-                            }
-                            if (i >= _msgs.length) {
-                              final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
-                              final isThinkingOnly = _streamingText.isEmpty && (_streamingThink == null || _streamingThink!.isEmpty);
-                              return _StreamingBubble(
+        child: Stack(children: [
+          Column(children: [
+            Expanded(
+              child: Stack(children: [
+                _incognito
+                    ? const _IncognitoState()
+                    : (_msgs.isEmpty && _streamingText.isEmpty)
+                        ? _EmptyState(s: s, topPadding: headerHeight)
+                        : ListView.builder(
+                            controller: _scroll,
+                            padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
+                            itemCount: totalCount,
+                            itemBuilder: (_, i) {
+                              if (showDisclaimer && i == totalCount - 1) {
+                                return const _DisclaimerFooter();
+                              }
+                              if (i >= _msgs.length) {
+                                final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
+                                final isThinkingOnly = _streamingText.isEmpty && (_streamingThink == null || _streamingThink!.isEmpty);
+                                return _StreamingBubble(
+                                  s: s,
+                                  elements: elements,
+                                  thinking: _streamingThink != null
+                                      ? cleanAiText(_streamingThink!)
+                                      : null,
+                                  showLogoLoader: isThinkingOnly,
+                                  widgetsEnabled: _widgetsEnabled,
+                                  onEnableWidgets: () => setWidgetsEnabled(true),
+                                  onSuggestionTap: sendSuggestedMessage,
+                                  onOpenCanvas: _onOpenCanvas,
+                                );
+                              }
+                              final msg = _msgs[i];
+                              if (msg.role == 'user') {
+                                return _Bubble(
+                                  s: s,
+                                  text: msg.content,
+                                  onEdit: () => _onBubbleEdit(i),
+                                  onCopy: () => _onBubbleCopy(i),
+                                  onDelete: () => _onBubbleDelete(i),
+                                  onSelectText: () => _onBubbleSelectText(i),
+                                );
+                              }
+                              final scan = _scanForCanvasItems(msg.content, () => '');
+                              final thinkScan = _extractThinking(scan.cleanText);
+                              final msgCanvases = _canvasesForMessage(msg.content);
+                              return _AssistantBubble(
                                 s: s,
-                                elements: elements,
-                                thinking: _streamingThink != null
-                                    ? cleanAiText(_streamingThink!)
-                                    : null,
-                                showLogoLoader: isThinkingOnly,
+                                text: cleanAiText(thinkScan.cleanText),
+                                thinking: thinkScan.thinking,
+                                canvases: msgCanvases,
+                                onOpenCanvas: _onOpenCanvas,
+                                onThumbUp: () => _onAssistantThumbUp(i),
+                                onThumbDown: () => _onAssistantThumbDown(i),
+                                onCopy: () => _onAssistantCopy(i),
+                                onRefresh: () => _onAssistantRefresh(i),
                                 widgetsEnabled: _widgetsEnabled,
                                 onEnableWidgets: () => setWidgetsEnabled(true),
                                 onSuggestionTap: sendSuggestedMessage,
-                                onOpenCanvas: _onOpenCanvas,
                               );
-                            }
-                            final msg = _msgs[i];
-                            if (msg.role == 'user') {
-                              return _Bubble(
-                                s: s,
-                                text: msg.content,
-                                onEdit: () => _onBubbleEdit(i),
-                                onCopy: () => _onBubbleCopy(i),
-                                onDelete: () => _onBubbleDelete(i),
-                                onSelectText: () => _onBubbleSelectText(i),
-                              );
-                            }
-                            final scan = _scanForCanvasItems(msg.content, () => '');
-                            final thinkScan = _extractThinking(scan.cleanText);
-                            final msgCanvases = _canvasesForMessage(msg.content);
-                            return _AssistantBubble(
-                              s: s,
-                              text: cleanAiText(thinkScan.cleanText),
-                              thinking: thinkScan.thinking,
-                              canvases: msgCanvases,
-                              onOpenCanvas: _onOpenCanvas,
-                              onThumbUp: () => _onAssistantThumbUp(i),
-                              onThumbDown: () => _onAssistantThumbDown(i),
-                              onCopy: () => _onAssistantCopy(i),
-                              onRefresh: () => _onAssistantRefresh(i),
-                              widgetsEnabled: _widgetsEnabled,
-                              onEnableWidgets: () => setWidgetsEnabled(true),
-                              onSuggestionTap: sendSuggestedMessage,
-                            );
-                          },
-                        ),
-              if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
-                Positioned(
-                  left: 0, right: 0,
-                  bottom: 8,
-                  child: Center(
-                    child: AnimatedOpacity(
-                      opacity: _showScrollToBottom ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 180),
-                      child: IgnorePointer(
-                        ignoring: !_showScrollToBottom,
-                        child: _ScrollToBottomButton(
-                          s: s,
-                          onTap: () => _scrollToEnd(),
+                            },
+                          ),
+                if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
+                  Positioned(
+                    left: 0, right: 0,
+                    bottom: 8,
+                    child: Center(
+                      child: AnimatedOpacity(
+                        opacity: _showScrollToBottom ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 180),
+                        child: IgnorePointer(
+                          ignoring: !_showScrollToBottom,
+                          child: _ScrollToBottomButton(
+                            s: s,
+                            onTap: () => _scrollToEnd(),
+                          ),
                         ),
                       ),
                     ),
                   ),
+              ]),
+            ),
+          ]),
+
+          // Container mãe do bottom bar — transparente/gradiente em
+          // cima, sólido embaixo, exatamente o mesmo princípio do
+          // container que envolve o botão "Terminar sessão" em
+          // settingsscreen.dart. O input flutuante (_ChatInput) faz
+          // o papel do "botão" dentro deste container mãe.
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    s.pageBackground.withOpacity(0.0),
+                    s.pageBackground,
+                  ],
+                  stops: const [0.0, 0.45],
                 ),
-            ]),
-          ),
-          Container(
-            color: Colors.transparent, // ← removido gradiente
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2205,8 +2231,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     curve: kCupertinoOut,
-                    height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
-                    color: s.pageBackground, // ← sólido embaixo
+                    height: keyboardInset > 0
+                        ? keyboardInset + 16
+                        : MediaQuery.of(context).padding.bottom + 16,
                   ),
                 ],
               ),
