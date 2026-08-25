@@ -517,9 +517,9 @@ class _AvatarCircleButton extends StatefulWidget {
 class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
 
-  static const double _buttonSize = 40;
-  static const double _imageSize = 38;
-  static const double _fontSize = 16;
+  static const double _buttonSize = 44;
+  static const double _imageSize = 40;
+  static const double _fontSize = 17;
 
   Uint8List? _decodeAvatar(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -627,9 +627,9 @@ class _DrawerSegmentedControl extends StatefulWidget {
 class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   static const _options = ['Conversas', 'Fixadas', 'Apps'];
 
-  static const double _containerHeight = 52;
-  static const double _pillHeight = 36;
-  static const double _outerPadding = 3;
+  static const double _containerHeight = 50;
+  static const double _pillHeight = 46;
+  static const double _outerPadding = 2;
 
   int? _pressedIndex;
 
@@ -682,7 +682,7 @@ class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOut,
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: widget.selectedIndex == i
                                   ? FontWeight.w600
                                   : FontWeight.w500,
