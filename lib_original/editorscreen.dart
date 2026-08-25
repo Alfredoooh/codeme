@@ -311,78 +311,75 @@ Future<String?> showAiEditModal(
   bool hasSelection = false,
 }) {
   final ctrl = TextEditingController();
-  return showCraftBottomSheet<String>(
-    context: context,
-    s: s,
-    child: Builder(
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                AppIcon('sparkles', color: s.primary, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  hasSelection ? 'Editar seleção com IA' : 'Editar documento com IA',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                ),
-              ]),
-              const SizedBox(height: 4),
+  return showAppSheet<String>(
+    context,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              AppIcon('sparkles', color: s.primary, size: 18),
+              const SizedBox(width: 8),
               Text(
-                hasSelection
-                    ? 'Diz o que queres mudar no trecho selecionado.'
-                    : 'Diz o que queres alterar — a IA aplica direto no documento.',
-                style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                hasSelection ? 'Editar seleção com IA' : 'Editar documento com IA',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                minLines: 1, maxLines: 4,
-                style: TextStyle(fontSize: 15, color: s.onSurface),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: 'Ex: torna este parágrafo mais formal',
-                  hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-                  filled: true,
-                  fillColor: s.hover,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(999),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+              hasSelection
+                  ? 'Diz o que queres mudar no trecho selecionado.'
+                  : 'Diz o que queres alterar — a IA aplica direto no documento.',
+              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              minLines: 1, maxLines: 4,
+              style: TextStyle(fontSize: 15, color: s.onSurface),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Ex: torna este parágrafo mais formal',
+                hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                filled: true,
+                fillColor: s.hover,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: BorderSide.none,
                 ),
-                onSubmitted: (v) => Navigator.pop(sheetContext, v),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () => Navigator.pop(sheetContext, ctrl.text),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.primary,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AppIcon('sparkles', color: s.onPrimary, size: 16),
-                      const SizedBox(width: 8),
-                      Text('Aplicar',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
-                    ],
-                  ),
+              onSubmitted: (v) => Navigator.pop(ctx, v),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx, ctrl.text),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: s.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppIcon('sparkles', color: s.onPrimary, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Aplicar',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600, color: s.onPrimary)),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     ),

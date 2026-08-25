@@ -40,7 +40,6 @@ import 'aiwidgets.dart';
 import 'exportservice.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
 
 // ══════════════════════════════════════════════════════════════
 // HELPER: mapeia EditorType para nome de asset SVG
@@ -2179,7 +2178,16 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ]),
           ),
           Container(
-            color: Colors.transparent, // ← removido gradiente
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  s.pageBackground.withOpacity(0.0),
+                  s.pageBackground,
+                ],
+              ),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Column(
@@ -2206,7 +2214,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     duration: const Duration(milliseconds: 180),
                     curve: kCupertinoOut,
                     height: keyboardInset > 0 ? keyboardInset + 8 : MediaQuery.of(context).padding.bottom + 8,
-                    color: s.pageBackground, // ← sólido embaixo
                   ),
                 ],
               ),
@@ -3088,10 +3095,9 @@ Future<void> showSelectTextSheet(
   AppColorScheme s, {
   required String text,
 }) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: Builder(builder: (ctx) => Padding(
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3114,7 +3120,7 @@ Future<void> showSelectTextSheet(
           ),
         ],
       ),
-    )),
+    ),
   );
 }
 
@@ -3127,10 +3133,9 @@ Future<void> showAttachedFilesSheet(
   required List<AttachedFile> files,
   required ValueChanged<String> onRemove,
 }) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: StatefulBuilder(
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => StatefulBuilder(
       builder: (ctx, setModalState) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
@@ -3622,10 +3627,9 @@ Future<void> showCanvasSheet(
   required List<LocalCanvasItem> canvases,
   required ValueChanged<LocalCanvasItem> onOpenCanvas,
 }) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: Builder(builder: (ctx) => Padding(
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3671,7 +3675,7 @@ Future<void> showCanvasSheet(
             ),
         ],
       ),
-    )),
+    ),
   );
 }
 
@@ -3747,10 +3751,9 @@ Future<void> showVoiceRecordSheet(
   AppColorScheme s, {
   required ValueChanged<String> onTranscribed,
 }) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: _VoiceRecordSheetContent(
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => _VoiceRecordSheetContent(
       s: s,
       onTranscribed: onTranscribed,
     ),
@@ -3890,10 +3893,9 @@ Future<void> showAiOptionsSheet(
   required ValueChanged<bool> onWidgetsChanged,
   required VoidCallback onOpenCanvas,
 }) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: Builder(builder: (ctx) {
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) {
       var selectedModel = currentModel;
       var localWeb = webSearchEnabled;
       var localWidgets = widgetsEnabled;
@@ -3973,7 +3975,7 @@ Future<void> showAiOptionsSheet(
           ),
         ),
       );
-    }),
+    },
   );
 }
 

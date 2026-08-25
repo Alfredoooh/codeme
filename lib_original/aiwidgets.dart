@@ -15,7 +15,6 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
 
 // ══════════════════════════════════════════════════════════════
 // FUNÇÃO AUXILIAR _parseColor
@@ -260,10 +259,9 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   }
 
   Future<void> _openPairSelector() async {
-    final selected = await showCraftBottomSheet<String>(
-      context: context,
-      s: widget.s,
-      child: Builder(builder: (ctx) => Padding(
+    final selected = await showAppSheet<String>(
+      context,
+      builder: (ctx) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -304,7 +302,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
             ),
           ],
         ),
-      )),
+      ),
     );
     if (selected != null && selected != _currentPairKey) {
       _changePair(selected);
@@ -630,10 +628,9 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final s = widget.s;
     final nameCtrl = TextEditingController();
     final timeCtrl = TextEditingController();
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: Builder(builder: (ctx) => Padding(
+    showAppSheet(
+      context,
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -689,7 +686,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
             ],
           ),
         ),
-      )),
+      ),
     );
   }
 

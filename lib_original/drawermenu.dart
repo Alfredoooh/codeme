@@ -11,7 +11,6 @@ import 'auth_service.dart';
 import 'api_service.dart';
 import 'chat_search.dart';
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
 
 // ══════════════════════════════════════════════════════════════
 // TABS
@@ -292,17 +291,16 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
-    showCraftBottomSheet(
-      context: context,
-      s: widget.s,
-      child: Builder(builder: (sheetContext) => _DeleteConversationSheet(
+    showAppSheet(
+      context,
+      builder: (ctx) => _DeleteConversationSheet(
         s: widget.s,
         title: item.title,
         onConfirm: () {
-          Navigator.pop(sheetContext);
+          Navigator.pop(ctx);
           conversationsController.delete(item.id);
         },
-      )),
+      ),
     );
   }
 
@@ -504,8 +502,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Avatar circular para o header — mantém o botão em 40, só a
-// imagem interna cresce um pouco. ──────────────────────────────
+// ── Avatar circular para o header ─────────────────────────────
 
 class _AvatarCircleButton extends StatefulWidget {
   final AppColorScheme s;
@@ -516,10 +513,6 @@ class _AvatarCircleButton extends StatefulWidget {
 
 class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
-
-  static const double _buttonSize = 40;
-  static const double _imageSize = 38;
-  static const double _fontSize = 16;
 
   Uint8List? _decodeAvatar(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -592,7 +585,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
         child: Container(
-          width: _buttonSize, height: _buttonSize,
+          width: 44, height: 44,
           alignment: Alignment.center,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
@@ -600,15 +593,14 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
             shape: BoxShape.circle,
             boxShadow: s.cardShadow,
           ),
-          child: _buildAvatarContent(s, avatar, initial, size: _imageSize, fontSize: _fontSize),
+          child: _buildAvatarContent(s, avatar, initial, size: 42, fontSize: 17),
         ),
       ),
     );
   }
 }
 
-// ── Segmented control do drawer — container mais alto, pill mantém
-// o mesmo tamanho mas agora com mais respiro acima/abaixo. ──────
+// ── Segmented control do drawer — altura maior, pill mantém tamanho ─
 
 class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
@@ -627,7 +619,7 @@ class _DrawerSegmentedControl extends StatefulWidget {
 class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   static const _options = ['Conversas', 'Fixadas', 'Apps'];
 
-  static const double _containerHeight = 52;
+  static const double _containerHeight = 46;
   static const double _pillHeight = 36;
   static const double _outerPadding = 3;
 
@@ -1146,10 +1138,9 @@ Future<void> showRenameSheet(
   String hint = 'Título da conversa',
 }) {
   final ctrl = TextEditingController(text: currentTitle);
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: Builder(builder: (ctx) => Padding(
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -1208,7 +1199,7 @@ Future<void> showRenameSheet(
           ],
         ),
       ),
-    )),
+    ),
   );
 }
 

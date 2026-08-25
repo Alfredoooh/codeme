@@ -11,7 +11,6 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -52,19 +51,16 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _confirmLogout(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: Builder(
-        builder: (sheetContext) => _ConfirmActionSheet(
-          s: s,
-          message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
-          confirmLabel: 'Terminar sessão',
-          onConfirm: () {
-            Navigator.pop(sheetContext);
-            _logoutNow(context);
-          },
-        ),
+    showAppSheet(
+      context,
+      builder: (ctx) => _ConfirmActionSheet(
+        s: s,
+        message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
+        confirmLabel: 'Terminar sessão',
+        onConfirm: () {
+          Navigator.pop(ctx);
+          _logoutNow(context);
+        },
       ),
     );
   }
@@ -77,10 +73,9 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _editName(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _EditFieldSheet(
+    showAppSheet(
+      context,
+      builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar nome',
         label: 'Nome',
@@ -103,10 +98,9 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _editPassword(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _EditFieldSheet(
+    showAppSheet(
+      context,
+      builder: (ctx) => _EditFieldSheet(
         s: s,
         title: 'Alterar palavra-passe',
         label: 'Nova palavra-passe',
@@ -124,22 +118,19 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: Builder(
-        builder: (sheetContext) => _ConfirmActionSheet(
-          s: s,
-          message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
-          confirmLabel: 'Eliminar tudo',
-          destructive: true,
-          onConfirm: () async {
-            Navigator.pop(sheetContext);
-            final token = authController.token;
-            if (token == null) return;
-            await ConversationsApiService.deleteAll(token);
-          },
-        ),
+    showAppSheet(
+      context,
+      builder: (ctx) => _ConfirmActionSheet(
+        s: s,
+        message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
+        confirmLabel: 'Eliminar tudo',
+        destructive: true,
+        onConfirm: () async {
+          Navigator.pop(ctx);
+          final token = authController.token;
+          if (token == null) return;
+          await ConversationsApiService.deleteAll(token);
+        },
       ),
     );
   }
@@ -1271,26 +1262,23 @@ class _PersonalizationScreen extends StatelessWidget {
   const _PersonalizationScreen();
 
   void _openPromptEditor(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _PromptEditorSheet(s: s),
+    showAppSheet(
+      context,
+      builder: (ctx) => _PromptEditorSheet(s: s),
     );
   }
 
   void _openEmojiFrequency(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _EmojiFrequencySheet(s: s),
+    showAppSheet(
+      context,
+      builder: (ctx) => _EmojiFrequencySheet(s: s),
     );
   }
 
   void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _PrimaryColorSheet(s: s),
+    showAppSheet(
+      context,
+      builder: (ctx) => _PrimaryColorSheet(s: s),
     );
   }
 
