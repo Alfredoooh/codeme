@@ -2,9 +2,9 @@
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
 // NOVO: CraftLabApp agora é um StatefulWidget que escuta appTheme
-// e atualiza o SystemUiOverlayStyle imediatamente quando o tema
-// muda, sem atrasos. O MaterialApp continua a reconstruir com o
-// ThemeMode reativo.
+// e appPreferences e atualiza o SystemUiOverlayStyle imediatamente
+// quando o tema ou a escala de texto muda, sem atrasos.
+// O MaterialApp continua a reconstruir com o ThemeMode reativo.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -38,6 +38,7 @@ void main() async {
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await appTheme.load();
+  await appPreferences.load(); // ← garante persistência do fontScale
   runApp(const CraftLabApp());
 }
 
@@ -53,13 +54,19 @@ class _CraftLabAppState extends State<CraftLabApp> {
   void initState() {
     super.initState();
     appTheme.addListener(_syncSystemUi);
+    appPreferences.addListener(_onPrefsChanged);
     _syncSystemUi();
   }
 
   @override
   void dispose() {
     appTheme.removeListener(_syncSystemUi);
+    appPreferences.removeListener(_onPrefsChanged);
     super.dispose();
+  }
+
+  void _onPrefsChanged() {
+    if (mounted) setState(() {});
   }
 
   void _syncSystemUi() {
@@ -99,7 +106,12 @@ class _CraftLabAppState extends State<CraftLabApp> {
             ),
           ),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
-          builder: (_, child) => ColoredBox(color: s.sheetBackdrop, child: child!),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(appPreferences.textScaleFactor),
+            ),
+            child: ColoredBox(color: s.sheetBackdrop, child: child!),
+          ),
           home: const AuthGate(),
         );
       }),

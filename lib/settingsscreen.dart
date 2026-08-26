@@ -11,7 +11,7 @@ import 'widgets.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
+import 'sheets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -974,7 +974,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APARÊNCIA (inalterada, exceto uso de cores dinâmicas)
+// APARÊNCIA (com fonte global ligada ao slider)
 // ══════════════════════════════════════════════════════════════
 
 class _AppearanceScreen extends StatefulWidget {
@@ -983,8 +983,6 @@ class _AppearanceScreen extends StatefulWidget {
 }
 
 class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive<_AppearanceScreen> {
-  double _fontScale = 0.35;
-
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -1027,8 +1025,8 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _FontSizeCard(
                   s: s,
-                  value: _fontScale,
-                  onChanged: (v) => setState(() => _fontScale = v),
+                  value: appPreferences.fontScale,
+                  onChanged: appPreferences.setFontScale,
                 ),
               ),
             ],
@@ -1264,7 +1262,7 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PERSONALIZAÇÃO (nova secção)
+// PERSONALIZAÇÃO (inalterada)
 // ══════════════════════════════════════════════════════════════
 
 class _PersonalizationScreen extends StatelessWidget {
@@ -1388,7 +1386,6 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
   Future<void> _save() async {
     setState(() => _saving = true);
     appPreferences.setPrompt(_ctrl.text.trim());
-    // Pequeno delay para feedback visual
     await Future.delayed(const Duration(milliseconds: 200));
     if (mounted) Navigator.pop(context);
   }

@@ -82,6 +82,15 @@ extension AppKindX on AppKind {
         AppKind.sound:  'Sound',
       }[this]!;
 
+  /// Pequena descrição mostrada por baixo do nome no drawer,
+  /// no mesmo estilo da referência (ex.: "Read and manage Slack").
+  String get description => const {
+        AppKind.docs:   'Criar e editar documentos de texto',
+        AppKind.sheets: 'Criar e editar folhas de cálculo',
+        AppKind.slides: 'Criar e editar apresentações',
+        AppKind.sound:  'Pesquisar e reproduzir música',
+      }[this]!;
+
   String get iconAsset => const {
         AppKind.docs:   'assets/icons/apps/docs.png',
         AppKind.sheets: 'assets/icons/apps/sheets.png',

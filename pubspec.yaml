@@ -37,10 +37,11 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/outline/
+    - assets/fonts/
     - assets/icons/png/
     - assets/icons/apps/
     - assets/editor/docs.html
     - assets/editor/sheets.html
     - assets/editor/slides.html
-    - assets/logo.png
+    #- assets/logo.png
     - assets/images/background1.jpg

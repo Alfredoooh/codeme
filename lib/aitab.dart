@@ -230,9 +230,6 @@ String cleanAiText(String raw) {
 // ══════════════════════════════════════════════════════════════
 // LOCAL CANVAS
 // ══════════════════════════════════════════════════════════════
-// Removido enum LocalCanvasKind daqui — agora está em app_types.dart
-// (a definição local foi eliminada)
-
 class _CanvasScanResult {
   final String cleanText;
   final List<LocalCanvasItem> items;
@@ -1100,7 +1097,7 @@ bool _endsWithPartialMarker(String text) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOADER LOGO COM SHIMMER (atualizado com tintColor/animated)
+// NEXA LOADER LOGO COM SHIMMER (quadrados + brilho contínuo)
 // ══════════════════════════════════════════════════════════════
 class _NexaDotSpec {
   final double left;
@@ -1174,11 +1171,11 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     );
     _shimmer = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1400),
     );
     if (widget.animated) {
       _c.repeat();
-      _shimmer.repeat();
+      _shimmer.repeat(reverse: true);
     } else {
       _c.value = 0.5;
       _shimmer.value = 0.5;
@@ -1191,7 +1188,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     if (widget.animated != oldWidget.animated) {
       if (widget.animated) {
         _c.repeat();
-        _shimmer.repeat();
+        _shimmer.repeat(reverse: true);
       } else {
         _c.stop();
         _shimmer.stop();
@@ -1212,7 +1209,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     if (local < 0) local += 1.0;
     final phase = (local * 2).clamp(0.0, 2.0);
     final eased = phase <= 1.0 ? phase : (2.0 - phase);
-    return 0.25 + (0.75 * eased);
+    return 0.15 + (0.85 * eased);
   }
 
   @override
@@ -1238,7 +1235,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
                       height: dotSize,
                       decoration: BoxDecoration(
                         color: widget.tintColor ?? dot.color,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(dotSize * 0.22),
                       ),
                     ),
                   ),
@@ -1257,7 +1254,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
                 end: Alignment.bottomRight,
                 colors: [
                   Colors.transparent,
-                  Colors.white.withOpacity(0.45),
+                  Colors.white.withOpacity(0.75),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.5, 1.0],
@@ -1318,31 +1315,77 @@ class _StreamingMarkdownCard extends StatelessWidget {
 
 class _CanvasProgressCard extends StatelessWidget {
   final AppColorScheme s;
-  final String label;
+  final String title;
   final LocalCanvasItem? item;
+  final ValueNotifier<String> contentNotifier;
+  final ValueNotifier<bool> doneNotifier;
+  final LocalCanvasItem? Function() finalItem;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
 
   const _CanvasProgressCard({
     required this.s,
-    required this.label,
+    required this.title,
     required this.item,
+    required this.contentNotifier,
+    required this.doneNotifier,
+    required this.finalItem,
     required this.onOpenCanvas,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      child: item == null
-          ? _StreamingMarkdownCard(key: const ValueKey('progress'), s: s, label: label)
-          : SimpleCanvasCard(
-              key: const ValueKey('done'),
-              s: s,
-              item: item!,
-              onTap: () => onOpenCanvas(item!),
+    if (item != null) {
+      return SimpleCanvasCard(s: s, item: item!, onTap: () => onOpenCanvas(item!));
+    }
+    return GestureDetector(
+      onTap: () => showCanvasStreamingModal(
+        context, s,
+        title: title,
+        contentNotifier: contentNotifier,
+        doneNotifier: doneNotifier,
+        finalItem: finalItem,
+        onOpenCanvas: onOpenCanvas,
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: s.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const NexaLoaderLogo(size: 20),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('A gerar...', style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 16),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1351,28 +1394,242 @@ class _WidgetProgressCard extends StatelessWidget {
   final AppColorScheme s;
   final String label;
   final AiWidgetBlock? block;
+  final ValueNotifier<String> contentNotifier;
+  final ValueNotifier<bool> doneNotifier;
 
   const _WidgetProgressCard({
     required this.s,
     required this.label,
     required this.block,
+    required this.contentNotifier,
+    required this.doneNotifier,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeIn,
-      child: block == null
-          ? _StreamingMarkdownCard(key: const ValueKey('progress'), s: s, label: label)
-          : Padding(
-              key: const ValueKey('done'),
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: buildAiWidget(block!, s),
+    if (block != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: buildAiWidget(block!, s),
+      );
+    }
+    return GestureDetector(
+      onTap: () => showWidgetStreamingModal(
+        context, s,
+        title: label,
+        contentNotifier: contentNotifier,
+        doneNotifier: doneNotifier,
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: s.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const NexaLoaderLogo(size: 20),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE STREAMING — canvas em criação
+// ══════════════════════════════════════════════════════════════
+Future<void> showCanvasStreamingModal(
+  BuildContext context,
+  AppColorScheme s, {
+  required String title,
+  required ValueNotifier<String> contentNotifier,
+  required ValueNotifier<bool> doneNotifier,
+  required LocalCanvasItem? Function() finalItem,
+  required ValueChanged<LocalCanvasItem> onOpenCanvas,
+}) {
+  return showCraftBottomSheet<void>(
+    context: context,
+    s: s,
+    child: _CanvasStreamingModalContent(
+      s: s,
+      title: title,
+      contentNotifier: contentNotifier,
+      doneNotifier: doneNotifier,
+      finalItem: finalItem,
+      onOpenCanvas: onOpenCanvas,
+    ),
+  );
+}
+
+class _CanvasStreamingModalContent extends StatelessWidget {
+  final AppColorScheme s;
+  final String title;
+  final ValueNotifier<String> contentNotifier;
+  final ValueNotifier<bool> doneNotifier;
+  final LocalCanvasItem? Function() finalItem;
+  final ValueChanged<LocalCanvasItem> onOpenCanvas;
+
+  const _CanvasStreamingModalContent({
+    required this.s,
+    required this.title,
+    required this.contentNotifier,
+    required this.doneNotifier,
+    required this.finalItem,
+    required this.onOpenCanvas,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: doneNotifier,
+            builder: (_, done, __) => Row(
+              children: [
+                if (!done)
+                  const NexaLoaderLogo(size: 22)
+                else
+                  AppIcon('doc', size: 22, color: s.onSurface),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: s.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: SingleChildScrollView(
+              child: ValueListenableBuilder<String>(
+                valueListenable: contentNotifier,
+                builder: (_, content, __) => Text(
+                  content,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12.5,
+                    color: s.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ValueListenableBuilder<bool>(
+            valueListenable: doneNotifier,
+            builder: (_, done, __) => GestureDetector(
+              onTap: done
+                  ? () {
+                      final item = finalItem();
+                      if (item != null) {
+                        Navigator.pop(context);
+                        onOpenCanvas(item);
+                      }
+                    }
+                  : null,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: done ? s.primary : s.outline.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  done ? 'Abrir' : 'A gerar...',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: done ? s.onPrimary : s.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE STREAMING — widget (só leitura)
+// ══════════════════════════════════════════════════════════════
+Future<void> showWidgetStreamingModal(
+  BuildContext context,
+  AppColorScheme s, {
+  required String title,
+  required ValueNotifier<String> contentNotifier,
+  required ValueNotifier<bool> doneNotifier,
+}) {
+  return showCraftBottomSheet<void>(
+    context: context,
+    s: s,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const NexaLoaderLogo(size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: s.surface, borderRadius: BorderRadius.circular(16)),
+            child: SingleChildScrollView(
+              child: ValueListenableBuilder<String>(
+                valueListenable: contentNotifier,
+                builder: (_, content, __) => Text(
+                  content,
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, color: s.onSurfaceVariant, height: 1.5),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1423,6 +1680,13 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   final List<AttachedFile> _attachedFiles = [];
   int _attachedFileIdSeq = 0;
+
+  final ValueNotifier<String> _openCanvasContentNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _openCanvasDoneNotifier = ValueNotifier<bool>(false);
+  LocalCanvasItem? _openCanvasFinalItem;
+
+  final ValueNotifier<String> _openWidgetContentNotifier = ValueNotifier<String>('');
+  final ValueNotifier<bool> _openWidgetDoneNotifier = ValueNotifier<bool>(false);
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
@@ -1521,6 +1785,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _streamingThink = null;
       _attachedFiles.clear();
     });
+    _openCanvasContentNotifier.value = '';
+    _openCanvasDoneNotifier.value = false;
+    _openCanvasFinalItem = null;
+    _openWidgetContentNotifier.value = '';
+    _openWidgetDoneNotifier.value = false;
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
     _notifyHeader();
@@ -1564,6 +1833,32 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _send();
   }
 
+  void _updateOpenCanvasNotifier() {
+    final openMatch = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(_streamingText).toList();
+    if (openMatch.isEmpty) return;
+    final last = openMatch.last;
+    final afterLast = _streamingText.substring(last.start);
+    if (afterLast.contains(']]')) return;
+    final markerEnd = _streamingText.indexOf('||', last.start);
+    final partial = markerEnd >= 0 ? _streamingText.substring(markerEnd + 2) : '';
+    _openCanvasContentNotifier.value = partial;
+  }
+
+  void _updateOpenWidgetNotifier() {
+    final openMatch = RegExp(r'```(widget_[a-z]+)').allMatches(_streamingText).toList();
+    if (openMatch.isEmpty) return;
+    final last = openMatch.last;
+    final afterLast = _streamingText.substring(last.start);
+    final closesAfter = afterLast.contains('```', 3);
+    if (closesAfter) return;
+    final markerEnd = _streamingText.indexOf('\n', last.start);
+    if (markerEnd == -1) {
+      _openWidgetContentNotifier.value = '';
+    } else {
+      _openWidgetContentNotifier.value = _streamingText.substring(markerEnd + 1);
+    }
+  }
+
   Future<void> _send() async {
     final t = _ctrl.text.trim();
     if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
@@ -1604,6 +1899,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _streamingText = '';
       _streamingThink = null;
     });
+    _openCanvasContentNotifier.value = '';
+    _openCanvasDoneNotifier.value = false;
+    _openCanvasFinalItem = null;
+    _openWidgetContentNotifier.value = '';
+    _openWidgetDoneNotifier.value = false;
     if (isFirst) {
       widget.onFirstMessage();
       widget.onHasMessagesChanged?.call(true);
@@ -1635,6 +1935,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             setState(() {
               _streamingText += text;
             });
+            _updateOpenCanvasNotifier();
+            _updateOpenWidgetNotifier();
             _scrollToEnd();
             break;
           case ChatThinkEvent(text: final text):
@@ -1658,6 +1960,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               _streamingText = '';
               _streamingThink = null;
             });
+            if (scan.items.isNotEmpty) {
+              _openCanvasDoneNotifier.value = true;
+              _openCanvasFinalItem = scan.items.last;
+            }
+            final widgetParse = parseAiWidgetBlocks(finalText);
+            if (widgetParse.blocks.isNotEmpty) {
+              _openWidgetDoneNotifier.value = true;
+            }
             _notifyHeader();
             _scrollToEnd();
             _checkSoundSearch(combined);
@@ -1968,6 +2278,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _conversationId = null;
           _attachedFiles.clear();
         });
+        _openCanvasContentNotifier.value = '';
+        _openCanvasDoneNotifier.value = false;
+        _openCanvasFinalItem = null;
+        _openWidgetContentNotifier.value = '';
+        _openWidgetDoneNotifier.value = false;
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -1984,6 +2299,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _conversationId = null;
           _attachedFiles.clear();
         });
+        _openCanvasContentNotifier.value = '';
+        _openCanvasDoneNotifier.value = false;
+        _openCanvasFinalItem = null;
+        _openWidgetContentNotifier.value = '';
+        _openWidgetDoneNotifier.value = false;
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -2018,6 +2338,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _conversationId = null;
           _attachedFiles.clear();
         });
+        _openCanvasContentNotifier.value = '';
+        _openCanvasDoneNotifier.value = false;
+        _openCanvasFinalItem = null;
+        _openWidgetContentNotifier.value = '';
+        _openWidgetDoneNotifier.value = false;
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -2078,6 +2403,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _scroll.dispose();
     _inputFocus.dispose();
     _streamSub?.cancel();
+    _openCanvasContentNotifier.dispose();
+    _openCanvasDoneNotifier.dispose();
+    _openWidgetContentNotifier.dispose();
+    _openWidgetDoneNotifier.dispose();
     super.dispose();
   }
 
@@ -2154,6 +2483,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                   onEnableWidgets: () => setWidgetsEnabled(true),
                                   onSuggestionTap: sendSuggestedMessage,
                                   onOpenCanvas: _onOpenCanvas,
+                                  openCanvasContentNotifier: _openCanvasContentNotifier,
+                                  openCanvasDoneNotifier: _openCanvasDoneNotifier,
+                                  openCanvasFinalItem: () => _openCanvasFinalItem,
+                                  openWidgetContentNotifier: _openWidgetContentNotifier,
+                                  openWidgetDoneNotifier: _openWidgetDoneNotifier,
                                 );
                               }
                               final msg = _msgs[i];
@@ -2419,12 +2753,12 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 280));
-    _scale = Tween(begin: 0.92, end: 1.0)
-        .animate(CurvedAnimation(parent: _c, curve: kCupertinoOut));
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+    _scale = Tween(begin: 0.85, end: 1.0)
+        .animate(CurvedAnimation(parent: _c, curve: Curves.easeOutBack));
     _op = Tween(begin: 0.0, end: 1.0)
         .animate(CurvedAnimation(parent: _c,
-            curve: const Interval(0, 0.5, curve: Curves.easeOut)));
+            curve: const Interval(0, 0.45, curve: Curves.easeOut)));
     _c.forward();
   }
 
@@ -2448,8 +2782,8 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = widget.s.primaryContainer;
-    final textColor = widget.s.onPrimaryContainer;
+    final bubbleColor = widget.s.primary;
+    final textColor = widget.s.onPrimary;
 
     return AnimatedBuilder(
       animation: _c,
@@ -2710,6 +3044,11 @@ class _StreamingBubble extends StatefulWidget {
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
+  final ValueNotifier<String> openCanvasContentNotifier;
+  final ValueNotifier<bool> openCanvasDoneNotifier;
+  final LocalCanvasItem? Function() openCanvasFinalItem;
+  final ValueNotifier<String> openWidgetContentNotifier;
+  final ValueNotifier<bool> openWidgetDoneNotifier;
   const _StreamingBubble({
     required this.s,
     required this.elements,
@@ -2719,6 +3058,11 @@ class _StreamingBubble extends StatefulWidget {
     required this.onEnableWidgets,
     required this.onSuggestionTap,
     required this.onOpenCanvas,
+    required this.openCanvasContentNotifier,
+    required this.openCanvasDoneNotifier,
+    required this.openCanvasFinalItem,
+    required this.openWidgetContentNotifier,
+    required this.openWidgetDoneNotifier,
   });
 
   @override
@@ -2764,8 +3108,11 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: _CanvasProgressCard(
               s: s,
-              label: label,
+              title: label,
               item: item,
+              contentNotifier: widget.openCanvasContentNotifier,
+              doneNotifier: widget.openCanvasDoneNotifier,
+              finalItem: widget.openCanvasFinalItem,
               onOpenCanvas: widget.onOpenCanvas,
             ),
           ));
@@ -2773,7 +3120,13 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
           anyContent = true;
           children.add(Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: _WidgetProgressCard(s: s, label: label, block: block),
+            child: _WidgetProgressCard(
+              s: s,
+              label: label,
+              block: block,
+              contentNotifier: widget.openWidgetContentNotifier,
+              doneNotifier: widget.openWidgetDoneNotifier,
+            ),
           ));
         case _StreamGenericOpenBlock(:final label):
           anyContent = true;

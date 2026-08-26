@@ -213,7 +213,7 @@ class _ScreenBackButtonState extends State<ScreenBackButton> {
           width: 40, height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: widget.s.cardBackground, shape: BoxShape.circle),
-          child: AppIcon('chevron_left.svg', size: 20, color: widget.s.onSurface),
+          child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
         ),
       ),
     );

@@ -316,6 +316,20 @@ class _AppDrawerState extends State<AppDrawer> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 56),
+              if (_selectedSection == 0)
+                _ArchivedConversationsButton(
+                  s: s,
+                  onTap: () {
+                    widget.onClose();
+                    Navigator.of(context).push<String>(_FadePageRoute(
+                      builder: (_) => const ArchivedConversationsScreen(),
+                    )).then((conversationId) {
+                      if (conversationId != null) {
+                        widget.onOpenConversation?.call(conversationId);
+                      }
+                    });
+                  },
+                ),
               Expanded(
                 child: _buildConvBody(context, s, pinned, others),
               ),
@@ -415,21 +429,58 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> others,
   ) {
     if (_selectedSection == 1) {
-      return ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        children: AppKind.values.map((app) => _AppMenuTile(
-          s: s,
-          app: app,
-          onTap: () {
-            Navigator.of(context).pop(); // fecha o drawer
-            switch (app) {
-              case AppKind.docs:   Navigator.push(context, MaterialPageRoute(builder: (_) => const DocsScreen())); break;
-              case AppKind.sheets: Navigator.push(context, MaterialPageRoute(builder: (_) => const SheetsScreen())); break;
-              case AppKind.slides: Navigator.push(context, MaterialPageRoute(builder: (_) => const SlidesScreen())); break;
-              case AppKind.sound:  Navigator.push(context, MaterialPageRoute(builder: (_) => const SoundScreen())); break;
-            }
-          },
-        )).toList(),
+      return CupertinoScrollbar(
+        thickness: 3,
+        thicknessWhileDragging: 5.5,
+        radius: const Radius.circular(3),
+        radiusWhileDragging: const Radius.circular(3),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+          children: [
+            _ConversationGroupHeader(
+              s: s,
+              label: 'Apps',
+              expanded: true,
+              onTap: () {},
+              interactive: false,
+            ),
+            _LooseRows(
+              s: s,
+              children: [
+                for (final app in AppKind.values)
+                  _AppMenuTile(
+                    s: s,
+                    app: app,
+                    onTap: () {
+                      Navigator.of(context).pop(); // fecha o drawer
+                      switch (app) {
+                        case AppKind.docs:
+                          Navigator.of(context).push(CupertinoPageRoute(
+                            builder: (_) => const DocsScreen(),
+                          ));
+                          break;
+                        case AppKind.sheets:
+                          Navigator.of(context).push(CupertinoPageRoute(
+                            builder: (_) => const SheetsScreen(),
+                          ));
+                          break;
+                        case AppKind.slides:
+                          Navigator.of(context).push(CupertinoPageRoute(
+                            builder: (_) => const SlidesScreen(),
+                          ));
+                          break;
+                        case AppKind.sound:
+                          Navigator.of(context).push(CupertinoPageRoute(
+                            builder: (_) => const SoundScreen(),
+                          ));
+                          break;
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
       );
     }
 
@@ -513,14 +564,19 @@ class _AppDrawerState extends State<AppDrawer> {
       ));
     }
 
-    return CupertinoScrollbar(
-      thickness: 3,
-      thicknessWhileDragging: 5.5,
-      radius: const Radius.circular(3),
-      radiusWhileDragging: const Radius.circular(3),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-        children: sections,
+    return RefreshIndicator(
+      color: s.primary,
+      backgroundColor: s.cardBackground,
+      onRefresh: () => conversationsController.load(),
+      child: CupertinoScrollbar(
+        thickness: 3,
+        thicknessWhileDragging: 5.5,
+        radius: const Radius.circular(3),
+        radiusWhileDragging: const Radius.circular(3),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          children: sections,
+        ),
       ),
     );
   }
@@ -533,19 +589,21 @@ class _ConversationGroupHeader extends StatelessWidget {
   final String label;
   final bool expanded;
   final VoidCallback onTap;
+  final bool interactive;
 
   const _ConversationGroupHeader({
     required this.s,
     required this.label,
     required this.expanded,
     required this.onTap,
+    this.interactive = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTap: interactive ? onTap : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -562,16 +620,18 @@ class _ConversationGroupHeader extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            AnimatedRotation(
-              turns: expanded ? 0.5 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: AppIcon(
-                'chevron_down',
-                size: 14,
-                color: s.onSurfaceVariant,
+            if (interactive) ...[
+              const SizedBox(width: 8),
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: AppIcon(
+                  'chevron_down',
+                  size: 14,
+                  color: s.onSurfaceVariant,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1501,23 +1561,298 @@ class _AccountPopupRowState extends State<_AccountPopupRow> {
 
 // ── Menu de apps ─────────────────────────────────────────────
 
-class _AppMenuTile extends StatelessWidget {
+class _AppMenuTile extends StatefulWidget {
   final AppColorScheme s;
   final AppKind app;
   final VoidCallback onTap;
   const _AppMenuTile({required this.s, required this.app, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(children: [
-            Image.asset(app.iconAsset, width: 28, height: 28),
+  State<_AppMenuTile> createState() => _AppMenuTileState();
+}
+
+class _AppMenuTileState extends State<_AppMenuTile> {
+  bool _h = false;
+
+  static const double _iconSize = 44;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: Container(
+        color: _h ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Image.asset(
+              widget.app.iconAsset,
+              width: _iconSize,
+              height: _iconSize,
+              fit: BoxFit.contain,
+            ),
             const SizedBox(width: 14),
-            Text(app.label, style: TextStyle(fontSize: 15, color: s.onSurface)),
-          ]),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectionContainer.disabled(
+                    child: Text(
+                      widget.app.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  SelectionContainer.disabled(
+                    child: Text(
+                      widget.app.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: s.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE CONVERSAS ARQUIVADAS — sem container
+// ══════════════════════════════════════════════════════════════
+
+class _ArchivedConversationsButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _ArchivedConversationsButton({required this.s, required this.onTap});
+  @override State<_ArchivedConversationsButton> createState() => _ArchivedConversationsButtonState();
+}
+
+class _ArchivedConversationsButtonState extends State<_ArchivedConversationsButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: Opacity(
+        opacity: _p ? 0.6 : 1.0,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              AppIcon('archive', size: 18, color: s.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Text(
+                'Conversas arquivadas',
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: s.onSurface),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA DE CONVERSAS ARQUIVADAS
+// ══════════════════════════════════════════════════════════════
+
+class ArchivedConversationsScreen extends StatefulWidget {
+  const ArchivedConversationsScreen({super.key});
+  @override State<ArchivedConversationsScreen> createState() => _ArchivedConversationsScreenState();
+}
+
+class _ArchivedConversationsScreenState extends State<ArchivedConversationsScreen> with ThemeReactive<ArchivedConversationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    conversationsController.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    conversationsController.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() { if (mounted) setState(() {}); }
+
+  void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item, AppColorScheme s) {
+    HapticFeedback.lightImpact();
+    showConversationOptionsPopupAt(
+      context,
+      s,
+      position: globalPos,
+      item: item,
+      onOpen: () => Navigator.of(context).pop(item.id),
+      onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
+      onArchive: () => conversationsController.archive(item.id, !item.archived),
+      onRename: () => showRenameSheet(
+        context, s,
+        currentTitle: item.title,
+        onConfirm: (newTitle) => conversationsController.rename(item.id, newTitle),
+      ),
+      onDelete: () => showCraftBottomSheet(
+        context: context,
+        s: s,
+        child: Builder(builder: (sheetContext) => _DeleteConversationSheet(
+          s: s,
+          title: item.title,
+          onConfirm: () {
+            Navigator.pop(sheetContext);
+            conversationsController.delete(item.id);
+          },
+        )),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    final archived = conversationsController.items.where((c) => c.archived).toList();
+
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Row(children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 36, height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow),
+                      child: AppIcon('back', color: s.onSurface, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('Conversas arquivadas',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: s.onSurface)),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: archived.isEmpty
+                    ? Center(
+                        child: Text('Sem conversas arquivadas.',
+                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)),
+                      )
+                    : RefreshIndicator(
+                        color: s.primary,
+                        backgroundColor: s.cardBackground,
+                        onRefresh: () => conversationsController.load(),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(4, 0, 4, 24),
+                          itemCount: archived.length,
+                          itemBuilder: (_, i) {
+                            final item = archived[i];
+                            return _ArchivedConvTile(
+                              s: s,
+                              item: item,
+                              onTap: () {
+                                Navigator.of(context).pop(item.id);
+                              },
+                              onOptionsAt: (pos) => _openConvPopupAt(context, pos, item, s),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArchivedConvTile extends StatefulWidget {
+  final AppColorScheme s;
+  final ConversationItem item;
+  final VoidCallback onTap;
+  final ValueChanged<Offset> onOptionsAt;
+  const _ArchivedConvTile({
+    required this.s,
+    required this.item,
+    required this.onTap,
+    required this.onOptionsAt,
+  });
+  @override State<_ArchivedConvTile> createState() => _ArchivedConvTileState();
+}
+
+class _ArchivedConvTileState extends State<_ArchivedConvTile> {
+  bool _h = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      onLongPressStart: (d) {
+        HapticFeedback.lightImpact();
+        widget.onOptionsAt(d.globalPosition);
+      },
+      child: Container(
+        color: _h ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Expanded(
+            child: Text(
+              widget.item.title,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.onSurface),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 }

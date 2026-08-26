@@ -366,13 +366,13 @@ String _resolveFormattingCommands(String expr) {
   );
 
   result = result.replaceAllMapped(
-  RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
-  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
-);
-result = result.replaceAllMapped(
-  RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
-  (m) => '\u0006COLOR{\$1}{\$2}\u0006',
-);
+    RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{${m.group(1)}}{${m.group(2)}}\u0006',
+  );
+  result = result.replaceAllMapped(
+    RegExp(r'\\textcolor\{([^{}]+)\}\{([^{}]+)\}'),
+    (m) => '\u0006COLOR{${m.group(1)}}{${m.group(2)}}\u0006',
+  );
 
   for (final acc in ['hat', 'bar', 'vec', 'dot', 'ddot', 'tilde']) {
     result = result.replaceAllMapped(
@@ -927,49 +927,63 @@ class _RichTextBlockParser {
 
       // ─────────────────────────────────────────────────────────
       // BLOCO DE CITAÇÃO (blockquote) — agrupa linhas ">" consecutivas
-      // e remove tags [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]
+      // e transforma tags [!NOTE], [!TIP], [!IMPORTANT], [!WARNING],
+      // [!CAUTION] em cards visuais com cabeçalho sem ícone.
       // ─────────────────────────────────────────────────────────
       if (trimmed.startsWith('>')) {
         flushTable();
         final quoteLines = <String>[];
+        String? admonitionType;
+        bool firstLine = true;
+
         while (i < lines.length) {
           final currentTrimmed = lines[i].trim();
           if (!currentTrimmed.startsWith('>')) break;
 
-          // Remove o ">" e espaço opcional
           var content = currentTrimmed.replaceFirst(RegExp(r'^>\s?'), '');
 
-          // Remove qualquer tag [![...]] se presente
-          content = content.replaceFirst(
-            RegExp(r'^\s*\[![^\]]*\]\s*'),
-            '',
-          );
+          if (firstLine) {
+            final tagMatch = RegExp(r'^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*').firstMatch(content);
+            if (tagMatch != null) {
+              admonitionType = tagMatch.group(1);
+              content = content.substring(tagMatch.end);
+            }
+            firstLine = false;
+          }
 
-          quoteLines.add(content);
+          if (content.trim().isNotEmpty || quoteLines.isNotEmpty) {
+            quoteLines.add(content);
+          }
           i++;
         }
 
-        final quoteText = quoteLines.join('\n');
-        widgets.add(
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 3,
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: s.outline,
-                    borderRadius: BorderRadius.circular(2),
+        final quoteText = quoteLines.join('\n').trim();
+
+        if (admonitionType != null) {
+          widgets.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: _AdmonitionCard(type: admonitionType, text: quoteText, s: s),
+          ));
+        } else {
+          widgets.add(
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 3,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: s.outline,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _formattedText(quoteText, s),
-                ),
-              ],
+                  Expanded(child: _formattedText(quoteText, s)),
+                ],
+              ),
             ),
-          ),
-        );
+          );
+        }
         continue;
       }
 
@@ -1165,6 +1179,74 @@ class _RichTextBlockParser {
           height: 1.45,
         ),
         children: inlineSpans(raw, s, fontSize: fontSize),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ADMONITION CARD — sem ícone, com cabeçalho sempre visível
+// ══════════════════════════════════════════════════════════════
+
+class _AdmonitionCard extends StatelessWidget {
+  final String type;
+  final String text;
+  final AppColorScheme s;
+  const _AdmonitionCard({required this.type, required this.text, required this.s});
+
+  static const Map<String, String> _labels = {
+    'NOTE': 'Nota',
+    'TIP': 'Dica',
+    'IMPORTANT': 'Importante',
+    'WARNING': 'Aviso',
+    'CAUTION': 'Cuidado',
+  };
+
+  Color get _accentColor => switch (type) {
+        'NOTE' => s.primary,
+        'TIP' => s.success,
+        'IMPORTANT' => s.primary,
+        'WARNING' => s.warning,
+        'CAUTION' => s.error,
+        _ => s.onSurfaceVariant,
+      };
+
+  bool get _isIndispensable => type == 'IMPORTANT';
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _accentColor;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(s.isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _labels[type] ?? 'Nota',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: accent,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 14.5,
+              color: s.onSurface,
+              height: 1.45,
+              fontFamily: _isIndispensable ? 'IndispensableSerif' : null,
+              fontStyle: _isIndispensable ? FontStyle.italic : null,
+            ),
+          ),
+        ],
       ),
     );
   }

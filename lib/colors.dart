@@ -264,9 +264,11 @@ extension EmojiFrequencyX on EmojiFrequency {
 class AppPreferencesNotifier extends ChangeNotifier {
   static const _kPromptKey = 'app_preferences_prompt';
   static const _kEmojiKey = 'app_preferences_emoji';
+  static const _kFontScaleKey = 'app_preferences_font_scale';
 
   String prompt = '';
   EmojiFrequency emojiFrequency = EmojiFrequency.never;
+  double fontScale = 0.35;
 
   Future<void> load() async {
     try {
@@ -276,6 +278,7 @@ class AppPreferencesNotifier extends ChangeNotifier {
       if (emojiRaw != null) {
         emojiFrequency = EmojiFrequencyX.fromStorage(emojiRaw);
       }
+      fontScale = prefs.getDouble(_kFontScaleKey) ?? 0.35;
       notifyListeners();
     } catch (_) {}
   }
@@ -294,6 +297,19 @@ class AppPreferencesNotifier extends ChangeNotifier {
     _persistEmoji();
   }
 
+  void setFontScale(double value) {
+    if ((fontScale - value).abs() < 0.001) return;
+    fontScale = value;
+    notifyListeners();
+    _persistFontScale();
+  }
+
+  /// Multiplicador real aplicado ao tamanho de fonte base — mapeia o
+  /// slider (0.0–1.0) para um intervalo de escala visualmente útil
+  /// (85% a 135% do tamanho base), espelhando o cálculo que já
+  /// existia isolado dentro de _FontSizeCard.
+  double get textScaleFactor => 0.85 + (fontScale * 0.5);
+
   Future<void> _persistPrompt() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -305,6 +321,13 @@ class AppPreferencesNotifier extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kEmojiKey, emojiFrequency.storageValue);
+    } catch (_) {}
+  }
+
+  Future<void> _persistFontScale() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_kFontScaleKey, fontScale);
     } catch (_) {}
   }
 }
