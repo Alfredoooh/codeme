@@ -67,6 +67,13 @@ class AppColorScheme {
       kPrimaryColorPairs[primaryPairIndex.clamp(0, kPrimaryColorPairs.length - 1)];
 
   Color get primary => isDark ? _pair.dark : _pair.light;
+
+  /// Cor primária atual em formato "#RRGGBB", pronta para injetar
+  /// no HTML do editor via editorApi.setPrimaryColor(hex). Usa
+  /// sempre a variante correta (light/dark) porque lê de `primary`.
+  String get primaryColorHex =>
+      '#${primary.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
   Color get onPrimary          => isDark ? _darken(primary, 0.75) : Colors.white;
   Color get primaryContainer   => isDark ? _darken(primary, 0.55) : _lighten(primary, 0.85);
   Color get onPrimaryContainer => isDark ? _lighten(primary, 0.55) : _darken(primary, 0.60);

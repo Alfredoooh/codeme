@@ -11,10 +11,9 @@
     --slide-bg: #FFFFFF;
     --slide-text: #1A1A1A;
     --slide-shadow: rgba(0,0,0,0.18);
-    --selection: #2F7BF6;
+    --craft-primary: #0F6CBD;
     --thumb-bg: #FFFFFF;
     --thumb-border: #DADCE0;
-    --thumb-active-border: #2F7BF6;
     --thumb-add-border: #C4C7CC;
     --thumb-add-color: #9AA0A6;
     --strip-bg: #FFFFFF;
@@ -26,10 +25,8 @@
     --slide-bg: #1C1C1E;
     --slide-text: #F2F2F2;
     --slide-shadow: rgba(0,0,0,0.4);
-    --selection: #0A84FF;
     --thumb-bg: #1C1C1E;
     --thumb-border: #3A3A3C;
-    --thumb-active-border: #0A84FF;
     --thumb-add-border: #48484A;
     --thumb-add-color: #6E6E73;
     --strip-bg: #1C1C1E;
@@ -102,7 +99,7 @@
     transition: box-shadow 0.15s ease;
   }
   .slide-element.selected {
-    outline: 2px solid var(--selection);
+    outline: 2px solid var(--craft-primary);
     outline-offset: 2px;
   }
   .slide-element[data-type="text"] {
@@ -133,20 +130,41 @@
     pointer-events: none;
   }
 
-  .element-resize-handle {
+  /* ── Resize handles estilo PowerPoint mobile ─────────────────
+     8 pontos (4 cantos + 4 lados). O quadrado visível é pequeno,
+     mas cada handle tem uma zona de toque maior (::before) para
+     não obrigar a precisão cirúrgica num ecrã de telemóvel. */
+  .resize-handle {
     position: absolute;
-    right: -7px;
-    bottom: -7px;
-    width: 18px;
-    height: 18px;
-    background: var(--selection);
-    border: 2px solid #FFFFFF;
-    border-radius: 50%;
+    width: 12px;
+    height: 12px;
+    background: #FFFFFF;
+    border: 2px solid var(--craft-primary);
+    border-radius: 3px;
     display: none;
-    z-index: 5;
+    z-index: 6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   }
-  .slide-element.selected .element-resize-handle {
+  .resize-handle::before {
+    content: '';
+    position: absolute;
+    top: -12px; left: -12px; right: -12px; bottom: -12px;
+  }
+  .slide-element.selected .resize-handle {
     display: block;
+  }
+
+  .resize-handle[data-pos="nw"] { top: -7px;  left: -7px;  cursor: nwse-resize; }
+  .resize-handle[data-pos="n"]  { top: -7px;  left: 50%; margin-left: -6px; cursor: ns-resize; }
+  .resize-handle[data-pos="ne"] { top: -7px;  right: -7px; cursor: nesw-resize; }
+  .resize-handle[data-pos="e"]  { top: 50%; margin-top: -6px; right: -7px; cursor: ew-resize; }
+  .resize-handle[data-pos="se"] { bottom: -7px; right: -7px; cursor: nwse-resize; }
+  .resize-handle[data-pos="s"]  { bottom: -7px; left: 50%; margin-left: -6px; cursor: ns-resize; }
+  .resize-handle[data-pos="sw"] { bottom: -7px; left: -7px; cursor: nesw-resize; }
+  .resize-handle[data-pos="w"]  { top: 50%; margin-top: -6px; left: -7px; cursor: ew-resize; }
+
+  .resize-handle.round {
+    border-radius: 50%;
   }
 
   #thumbStrip {
@@ -175,7 +193,7 @@
     transition: border-color 0.15s ease, transform 0.15s ease;
   }
   .thumb-item.active {
-    border-color: var(--thumb-active-border);
+    border-color: var(--craft-primary);
     transform: translateY(-2px);
   }
   .thumb-item .thumb-scaled {
@@ -241,6 +259,8 @@
   var SLIDE_W = 960;
   var SLIDE_H = 540;
   var THUMB_SCALE = 96 / SLIDE_W;
+  var HANDLE_POSITIONS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  var MIN_SIZE = 24;
 
   var mainStage = document.getElementById('mainStage');
   var slideCanvas = document.getElementById('slideCanvas');
@@ -269,6 +289,9 @@
     }
   }
 
+  // Isto continua a mexer SÓ na .slide-16-9 (currentSlideEl). O
+  // #mainStage e o #thumbStrip nunca recebem transform nenhum,
+  // por isso o zoom fica sempre isolado à página do slide.
   function ajustarZoom() {
     var margem = isPreviewMode ? 0 : 28;
     var larguraDisponivel = mainStage.clientWidth - margem;
@@ -336,17 +359,13 @@
       }
 
       if (!isPreviewMode) {
-        var handle = document.createElement('div');
-        handle.className = 'element-resize-handle';
-        div.appendChild(handle);
-        ligarResizeHandle(handle, div, el);
+        criarHandlesDeRedimensionamento(div, el);
 
         div.addEventListener('click', function (evento) {
           evento.stopPropagation();
           selecionarElemento(el.id);
         });
 
-        // Arraste suave do elemento
         ligarArrasteElemento(div, el);
       }
 
@@ -356,9 +375,20 @@
     atualizarThumbAtiva();
   }
 
-  function ligarResizeHandle(handle, div, el) {
+  function criarHandlesDeRedimensionamento(div, el) {
+    var isCircle = el.type === 'shape' && el.shapeKind === 'circle';
+    HANDLE_POSITIONS.forEach(function (pos) {
+      var handle = document.createElement('div');
+      handle.className = 'resize-handle' + (isCircle ? ' round' : '');
+      handle.setAttribute('data-pos', pos);
+      div.appendChild(handle);
+      ligarResizeHandle(handle, div, el, pos);
+    });
+  }
+
+  function ligarResizeHandle(handle, div, el, pos) {
     var arrastando = false;
-    var startX = 0, startY = 0, startW = 0, startH = 0;
+    var startX = 0, startY = 0, startW = 0, startH = 0, startElX = 0, startElY = 0;
 
     function posClient(evento) {
       if (evento.touches && evento.touches.length) {
@@ -371,23 +401,66 @@
       evento.preventDefault();
       evento.stopPropagation();
       arrastando = true;
-      var pos = posClient(evento);
-      startX = pos.x;
-      startY = pos.y;
+      var pos0 = posClient(evento);
+      startX = pos0.x;
+      startY = pos0.y;
       startW = el.w;
       startH = el.h;
+      startElX = el.x;
+      startElY = el.y;
     }
 
     function aoMover(evento) {
       if (!arrastando) return;
       evento.preventDefault();
-      var pos = posClient(evento);
-      var deltaX = (pos.x - startX) / fitScale;
-      var deltaY = (pos.y - startY) / fitScale;
-      el.w = Math.max(24, startW + deltaX);
-      el.h = Math.max(24, startH + deltaY);
+      var pos0 = posClient(evento);
+      var deltaX = (pos0.x - startX) / fitScale;
+      var deltaY = (pos0.y - startY) / fitScale;
+
+      var novoX = startElX, novoY = startElY, novoW = startW, novoH = startH;
+
+      if (pos.indexOf('e') !== -1) {
+        novoW = Math.max(MIN_SIZE, startW + deltaX);
+      }
+      if (pos.indexOf('w') !== -1) {
+        var larguraTentativa = startW - deltaX;
+        if (larguraTentativa >= MIN_SIZE) {
+          novoW = larguraTentativa;
+          novoX = startElX + deltaX;
+        } else {
+          novoW = MIN_SIZE;
+          novoX = startElX + (startW - MIN_SIZE);
+        }
+      }
+      if (pos.indexOf('s') !== -1) {
+        novoH = Math.max(MIN_SIZE, startH + deltaY);
+      }
+      if (pos.indexOf('n') !== -1) {
+        var alturaTentativa = startH - deltaY;
+        if (alturaTentativa >= MIN_SIZE) {
+          novoH = alturaTentativa;
+          novoY = startElY + deltaY;
+        } else {
+          novoH = MIN_SIZE;
+          novoY = startElY + (startH - MIN_SIZE);
+        }
+      }
+
+      novoX = Math.max(0, novoX);
+      novoY = Math.max(0, novoY);
+      if (novoX + novoW > SLIDE_W) novoW = SLIDE_W - novoX;
+      if (novoY + novoH > SLIDE_H) novoH = SLIDE_H - novoY;
+
+      el.x = novoX;
+      el.y = novoY;
+      el.w = novoW;
+      el.h = novoH;
+
+      div.style.left = el.x + 'px';
+      div.style.top = el.y + 'px';
       div.style.width = el.w + 'px';
       div.style.height = el.h + 'px';
+
       if (el.type === 'chart') {
         var key = currentSlideIndex + ':' + el.id;
         if (chartInstancesSlides[key]) {
@@ -424,7 +497,7 @@
     }
 
     function aoIniciar(evento) {
-      if (evento.target.classList.contains('element-resize-handle')) return;
+      if (evento.target.classList.contains('resize-handle')) return;
       arrastando = true;
       moved = false;
       var pos = posClient(evento);
@@ -775,6 +848,16 @@
     }
   }
 
+  // Recebe a cor primária escolhida em Settings > Personalização >
+  // Cor primária. Chamado pelo Flutter (slides_screen.dart) sempre
+  // que appTheme notifica uma mudança, e também logo após o load
+  // inicial do WebView. Só atualiza a custom property, tudo o resto
+  // (seleção, thumb ativa, handles) lê --craft-primary via CSS.
+  function setPrimaryColor(hex) {
+    if (!hex || typeof hex !== 'string') return;
+    document.documentElement.style.setProperty('--craft-primary', hex);
+  }
+
   window.editorApi = {
     addSlide: addSlide,
     goToSlide: goToSlide,
@@ -792,7 +875,8 @@
     setContent: setContent,
     setContentFromAi: setContentFromAi,
     getSlideCount: getSlideCount,
-    setThemeMode: setThemeMode
+    setThemeMode: setThemeMode,
+    setPrimaryColor: setPrimaryColor
   };
 
   function iniciar() {

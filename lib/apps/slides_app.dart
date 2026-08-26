@@ -30,12 +30,18 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
   void initState() {
     super.initState();
     editTabController.addListener(_onPendingLoad);
+    // ThemeReactive já ouve appTheme para o setState() geral (rebuild
+    // dos widgets Flutter). Este segundo listener é só para empurrar
+    // a cor para dentro do WebView, que não faz parte da árvore de
+    // widgets e por isso não é atualizado pelo rebuild do ThemeReactive.
+    appTheme.addListener(_pushPrimaryColorToWebView);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingLoad());
   }
 
   @override
   void dispose() {
     editTabController.removeListener(_onPendingLoad);
+    appTheme.removeListener(_pushPrimaryColorToWebView);
     try { _ctrl?.dispose(); } catch (_) {}
     super.dispose();
   }
@@ -65,6 +71,15 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
   }
 
   void _runJs(String script) => _ctrl?.evaluateJavascript(source: script);
+
+  // Manda a cor primária atual (já formatada como #RRGGBB por
+  // AppColorScheme.primaryColorHex) para dentro do editor. Chamado
+  // no onLoadStop (primeira carga) e sempre que appTheme notifica
+  // (o utilizador mudou a cor em Definições > Personalização).
+  void _pushPrimaryColorToWebView() {
+    final s = AppTheme.of(context);
+    _runJs("editorApi.setPrimaryColor('${s.primaryColorHex}')");
+  }
 
   void _onSaveDocument(String json) {
     if (_restoringContent) return;
@@ -282,6 +297,7 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
                   onLoadStop: (c, _) {
                     _onPendingLoad();
                     c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
+                    c.evaluateJavascript(source: "editorApi.setPrimaryColor('${s.primaryColorHex}')");
                   },
                 ),
               ),
