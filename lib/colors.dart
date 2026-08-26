@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const Curve kCupertino    = Cubic(0.25, 0.1,  0.25, 1.0);
@@ -93,7 +94,7 @@ class AppColorScheme {
   Color get hover              => isDark ? const Color(0x16FFFFFF) : const Color(0x08000000);
   Color get pressed            => isDark ? const Color(0x22FFFFFF) : const Color(0x10000000);
 
-  // Navegação e tabs — agora seguem a cor primária
+  // Navegação e tabs
   Color get navBarBg           => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFBFBFC);
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
   Color get navIconActive      => isDark ? Colors.white : primary;
@@ -126,10 +127,20 @@ class AppColorScheme {
   Color get incognitoSurface    => const Color(0xFF1C1C1E);
   Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
   Color get sheetBackdrop => const Color(0xFF0B0B0D);
+
+  // NOVO: estilo da barra de status
+  SystemUiOverlayStyle get statusBarStyle => SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarDividerColor: Colors.transparent,
+      );
 }
 
 // ══════════════════════════════════════════════════════════════
-// THEME NOTIFIER — agora inclui a cor primária persistida
+// THEME NOTIFIER
 // ══════════════════════════════════════════════════════════════
 
 class AppThemeNotifier extends ChangeNotifier {
@@ -219,7 +230,7 @@ class AppThemeNotifier extends ChangeNotifier {
 final AppThemeNotifier appTheme = AppThemeNotifier();
 
 // ══════════════════════════════════════════════════════════════
-// PREFERÊNCIAS GLOBAIS (prompt e emojis)
+// PREFERÊNCIAS GLOBAIS
 // ══════════════════════════════════════════════════════════════
 
 enum EmojiFrequency { never, rare, medium, often }

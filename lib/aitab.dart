@@ -4056,34 +4056,30 @@ Future<void> showAppsConnectSheet(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _OptionsSwitchRow(
+              _AppSwitchRow(
                 s: s,
-                assetName: AppKind.docs.iconAsset,
-                label: AppKind.docs.label,
+                app: AppKind.docs,
                 value: localDocs,
                 onChanged: (v) { setModalState(() => localDocs = v); onDocsChanged(v); },
               ),
               const SizedBox(height: 8),
-              _OptionsSwitchRow(
+              _AppSwitchRow(
                 s: s,
-                assetName: AppKind.sheets.iconAsset,
-                label: AppKind.sheets.label,
+                app: AppKind.sheets,
                 value: localSheets,
                 onChanged: (v) { setModalState(() => localSheets = v); onSheetsChanged(v); },
               ),
               const SizedBox(height: 8),
-              _OptionsSwitchRow(
+              _AppSwitchRow(
                 s: s,
-                assetName: AppKind.slides.iconAsset,
-                label: AppKind.slides.label,
+                app: AppKind.slides,
                 value: localSlides,
                 onChanged: (v) { setModalState(() => localSlides = v); onSlidesChanged(v); },
               ),
               const SizedBox(height: 8),
-              _OptionsSwitchRow(
+              _AppSwitchRow(
                 s: s,
-                assetName: AppKind.sound.iconAsset,
-                label: AppKind.sound.label,
+                app: AppKind.sound,
                 value: localSound,
                 onChanged: (v) { setModalState(() => localSound = v); onSoundChanged(v); },
               ),
@@ -4093,6 +4089,39 @@ Future<void> showAppsConnectSheet(
       );
     }),
   );
+}
+
+class _AppSwitchRow extends StatelessWidget {
+  final AppColorScheme s;
+  final AppKind app;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _AppSwitchRow({
+    required this.s,
+    required this.app,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: s.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Image.asset(app.iconAsset, width: 18, height: 18),
+          const SizedBox(width: 10),
+          Text(app.label, style: TextStyle(fontSize: 14, color: s.onSurface)),
+          const Spacer(),
+          _CustomSwitch(value: value, onChanged: onChanged, s: s),
+        ],
+      ),
+    );
+  }
 }
 
 class _ModelOptionRow extends StatelessWidget {
