@@ -2,13 +2,40 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Folha de Cálculo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
+  :root {
+    --sheet-bg: #FFFFFF;
+    --sheet-header-bg: #F1F3F4;
+    --sheet-header-text: #444444;
+    --sheet-border: #DADCE0;
+    --sheet-cell-border: #E8EAED;
+    --sheet-cell-bg: #FFFFFF;
+    --sheet-cell-text: #1A1A1A;
+    --sheet-selection: #2F7BF6;
+    --sheet-hover: #F5F7F8;
+    --sheet-cell-font-size: 12px;
+  }
+
+  body.dark {
+    --sheet-bg: #1C1C1E;
+    --sheet-header-bg: #2C2C2E;
+    --sheet-header-text: #A0A0A5;
+    --sheet-border: #3A3A3C;
+    --sheet-cell-border: #2C2C2E;
+    --sheet-cell-bg: #1C1C1E;
+    --sheet-cell-text: #F2F2F2;
+    --sheet-selection: #0A84FF;
+    --sheet-hover: #2C2C2E;
+  }
+
   * {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
   }
+
   html, body {
     margin: 0;
     padding: 0;
@@ -17,6 +44,7 @@
     background: transparent;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
   }
 
   #gridScroll {
@@ -25,7 +53,7 @@
     height: 100%;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
-    background: #FFFFFF;
+    background: var(--sheet-bg);
   }
 
   #gridTable {
@@ -34,36 +62,39 @@
   }
 
   .col-header, .row-header {
-    background: #F1F3F4;
-    font-size: 11px;
+    background: var(--sheet-header-bg);
+    font-size: 11px !important; /* Tamanho fixo, nunca muda */
     font-weight: 600;
-    color: #444;
+    color: var(--sheet-header-text);
     text-align: center;
     user-select: none;
     position: sticky;
     z-index: 2;
   }
+
   .col-header {
     top: 0;
     height: 24px;
-    border-right: 1px solid #DADCE0;
-    border-bottom: 1px solid #DADCE0;
+    border-right: 1px solid var(--sheet-border);
+    border-bottom: 1px solid var(--sheet-border);
   }
+
   .row-header {
     left: 0;
     width: 40px;
     min-width: 40px;
-    border-right: 1px solid #DADCE0;
-    border-bottom: 1px solid #DADCE0;
+    border-right: 1px solid var(--sheet-border);
+    border-bottom: 1px solid var(--sheet-border);
   }
+
   .corner {
     position: sticky;
     top: 0;
     left: 0;
     z-index: 3;
-    background: #F1F3F4;
-    border-right: 1px solid #DADCE0;
-    border-bottom: 1px solid #DADCE0;
+    background: var(--sheet-header-bg);
+    border-right: 1px solid var(--sheet-border);
+    border-bottom: 1px solid var(--sheet-border);
     width: 40px;
     min-width: 40px;
     height: 24px;
@@ -73,44 +104,45 @@
     width: 96px;
     min-width: 96px;
     height: 26px;
-    border-right: 1px solid #E8EAED;
-    border-bottom: 1px solid #E8EAED;
+    border-right: 1px solid var(--sheet-cell-border);
+    border-bottom: 1px solid var(--sheet-cell-border);
     padding: 0 6px;
-    font-size: 12px;
-    color: #1a1a1a;
+    font-size: var(--sheet-cell-font-size);
+    color: var(--sheet-cell-text);
     outline: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     vertical-align: middle;
-    background: #FFFFFF;
+    background: var(--sheet-cell-bg);
     position: relative;
   }
+
+  .cell:hover {
+    background: var(--sheet-hover);
+  }
+
   .cell.selected {
-    outline: 2px solid #2F7BF6;
+    outline: 2px solid var(--sheet-selection);
     outline-offset: -2px;
-    position: relative;
     z-index: 1;
   }
+
   .cell.number {
     text-align: right;
   }
+
   .cell[data-bold="1"] { font-weight: 700; }
   .cell[data-italic="1"] { font-style: italic; }
   .cell[data-underline="1"] { text-decoration: underline; }
 
-  /* ── Célula com imagem (renderização web rica em spreadsheet) ──
-     Uma célula pode conter uma imagem (via renderCellImage) em vez de
-     texto puro. A célula aumenta de altura automaticamente para caber
-     a miniatura; o texto normal da célula (se algum) fica escondido
-     enquanto houver imagem, para não sobrepor. */
   .cell.has-image {
     height: 64px;
     padding: 3px;
     white-space: normal;
     overflow: visible;
-    vertical-align: middle;
   }
+
   .cell.has-image img {
     max-width: 100%;
     max-height: 58px;
@@ -119,50 +151,25 @@
     border-radius: 2px;
     object-fit: contain;
   }
+
   .cell.has-image img.img-broken {
     min-height: 40px;
     min-width: 40px;
-    background: #F2F2F2;
-    border: 1px dashed #CCCCCC;
+    background: var(--sheet-hover);
+    border: 1px dashed var(--sheet-border);
   }
 
-  /* ── Rodapé "+ Adicionar linhas" ── */
-  #addRowsBar {
-    position: sticky;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding: 10px 0;
-    background: #FFFFFF;
-    border-top: 1px solid #E8EAED;
-  }
-  #addRowsBtn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 16px;
-    border-radius: 999px;
-    background: #F1F3F4;
-    color: #2F7BF6;
-    font-size: 12.5px;
-    font-weight: 600;
-    border: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  #addRowsBtn:active {
-    background: #E4E6E8;
-  }
-
-  /* ── Modo preview (usado dentro do DocumentWidgetCard, Flutter) ── */
-  body.preview-mode #gridScroll {
+  .cell.has-chart {
+    height: 120px;
+    width: 180px;
+    min-width: 180px;
+    padding: 2px;
     overflow: hidden;
-    pointer-events: none;
   }
-  body.preview-mode #addRowsBar {
-    display: none;
+
+  .cell.has-chart canvas {
+    width: 100% !important;
+    height: 100% !important;
   }
 </style>
 </head>
@@ -170,9 +177,6 @@
 
 <div id="gridScroll">
   <table id="gridTable"></table>
-  <div id="addRowsBar">
-    <button id="addRowsBtn" type="button">+ Adicionar 50 linhas</button>
-  </div>
 </div>
 
 <script>
@@ -181,25 +185,11 @@
 
   var COLS = 26;
   var ROWS = 150;
-
   var gridTable = document.getElementById('gridTable');
-  var addRowsBtn = document.getElementById('addRowsBtn');
-  var cellsData = {}; // 'A1' -> { value, formula, bold, italic, underline, align, color, fill, image }
+  var cellsData = {};
   var selectedCellKey = null;
   var saveTimeout = null;
-  var isPreviewMode = false;
-
-  function detectarModoPreview() {
-    try {
-      var params = new URLSearchParams(window.location.search);
-      isPreviewMode = params.get('preview') === '1';
-    } catch (e) {
-      isPreviewMode = false;
-    }
-    if (isPreviewMode) {
-      document.body.classList.add('preview-mode');
-    }
-  }
+  var chartInstances = {};
 
   function colLetter(idx) {
     var letra = '';
@@ -233,15 +223,12 @@
 
     var tbody = document.createElement('tbody');
     var fragmento = document.createDocumentFragment();
-
     for (var r = 0; r < ROWS; r++) {
       fragmento.appendChild(criarLinhaEl(r));
     }
     tbody.appendChild(fragmento);
     gridTable.appendChild(tbody);
 
-    // Delegação de eventos num único listener no tbody em vez de
-    // um listener por célula — essencial para não travar o WebView.
     tbody.addEventListener('focusin', aoFocar);
     tbody.addEventListener('focusout', aoDesfocar);
     tbody.addEventListener('input', aoEditar);
@@ -253,11 +240,10 @@
     rowHeader.className = 'row-header';
     rowHeader.textContent = String(r + 1);
     tr.appendChild(rowHeader);
-
     for (var cc = 0; cc < COLS; cc++) {
       var td = document.createElement('td');
       td.className = 'cell';
-      td.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
+      td.setAttribute('contenteditable', 'true');
       td.setAttribute('data-key', cellKey(cc, r));
       tr.appendChild(td);
     }
@@ -273,10 +259,9 @@
     }
     selectedCellKey = td.getAttribute('data-key');
     td.classList.add('selected');
-
-    if (window.AndroidBridge && window.AndroidBridge.onCellSelected) {
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
       var dados = cellsData[selectedCellKey] || {};
-      window.AndroidBridge.onCellSelected(selectedCellKey, JSON.stringify(dados));
+      window.flutter_inappwebview.callHandler('onCellSelected', selectedCellKey, JSON.stringify(dados));
     }
   }
 
@@ -289,28 +274,21 @@
   function aoEditar(evento) {
     var td = evento.target.closest ? evento.target.closest('.cell') : null;
     if (!td) return;
-    // Se a célula tem imagem, edição de texto direto no contenteditable
-    // fica desativada nesse td (renderCellImage já marca has-image e
-    // o utilizador remove a imagem explicitamente antes de escrever
-    // texto ali de novo — ver removeCellImage).
-    if (td.classList.contains('has-image')) return;
+    if (td.classList.contains('has-image') || td.classList.contains('has-chart')) return;
     var key = td.getAttribute('data-key');
     var valor = td.textContent;
     if (!cellsData[key]) cellsData[key] = {};
     cellsData[key].value = valor;
-
     var ehNumero = valor.trim() !== '' && !isNaN(valor.trim());
     td.classList.toggle('number', ehNumero);
-
     agendarGravacao();
   }
 
   function agendarGravacao() {
-    if (isPreviewMode) return;
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
-      if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
-        window.AndroidBridge.saveDocument(getContent());
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler('saveDocument', getContent());
       }
     }, 500);
   }
@@ -321,26 +299,18 @@
     el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
-  // ── Renderização de imagem por célula ──────────────────────────
-  // Permite que uma célula contenha uma imagem em vez de/além do
-  // texto — parte do requisito "tudo que um html consegue renderizar
-  // o sheets também consegue". Usa-se tanto pelo toolbar do
-  // utilizador como pela IA (setContentFromAi, que já suporta o campo
-  // "image" por célula, ver setContent abaixo).
-
   function renderCellImage(key, url) {
     var td = gridTable.querySelector('[data-key="' + key + '"]');
     if (!td) return;
+    destroyCellChart(key);
+    removeCellImage(key);
     if (!cellsData[key]) cellsData[key] = {};
     cellsData[key].image = url;
-
     td.classList.add('has-image');
     td.innerHTML = '';
     var img = document.createElement('img');
     img.src = url;
-    img.addEventListener('error', function () {
-      img.classList.add('img-broken');
-    });
+    img.addEventListener('error', function () { img.classList.add('img-broken'); });
     td.appendChild(img);
     agendarGravacao();
   }
@@ -350,36 +320,74 @@
     if (!td) return;
     if (cellsData[key]) delete cellsData[key].image;
     td.classList.remove('has-image');
-    td.innerHTML = '';
-    td.textContent = (cellsData[key] && cellsData[key].value) || '';
+    if (!td.classList.contains('has-chart')) {
+      td.innerHTML = '';
+      td.textContent = (cellsData[key] && cellsData[key].value) || '';
+    }
     agendarGravacao();
   }
 
-  // ── API exposta ao toolbar Dart (específica de sheets) ─────────
+  function destroyCellChart(key) {
+    if (chartInstances[key]) {
+      chartInstances[key].destroy();
+      delete chartInstances[key];
+    }
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (td) {
+      td.classList.remove('has-chart');
+      td.innerHTML = '';
+    }
+  }
+
+  function renderCellChart(key, config) {
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (!td) return;
+    destroyCellChart(key);
+    if (!cellsData[key]) cellsData[key] = {};
+    cellsData[key].chart = config;
+    td.classList.add('has-chart');
+    td.innerHTML = '';
+    var canvas = document.createElement('canvas');
+    td.appendChild(canvas);
+    var chartConfig = typeof config === 'string' ? JSON.parse(config) : config;
+    if (window.Chart) {
+      chartInstances[key] = new Chart(canvas.getContext('2d'), chartConfig);
+    }
+    agendarGravacao();
+  }
+
+  function removeCellChart(key) {
+    destroyCellChart(key);
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (td) {
+      td.classList.remove('has-chart');
+      td.innerHTML = '';
+      td.textContent = (cellsData[key] && cellsData[key].value) || '';
+    }
+    if (cellsData[key]) delete cellsData[key].chart;
+    agendarGravacao();
+  }
 
   function applyFormat(command) {
     if (!selectedCellKey) return;
     var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
     if (!el) return;
     if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
-
     switch (command) {
       case 'bold':
-        var novoBold = el.getAttribute('data-bold') === '1' ? '0' : '1';
-        el.setAttribute('data-bold', novoBold);
-        cellsData[selectedCellKey].bold = novoBold === '1';
+        var nb = el.getAttribute('data-bold') === '1' ? '0' : '1';
+        el.setAttribute('data-bold', nb);
+        cellsData[selectedCellKey].bold = nb === '1';
         break;
       case 'italic':
-        var novoItalic = el.getAttribute('data-italic') === '1' ? '0' : '1';
-        el.setAttribute('data-italic', novoItalic);
-        cellsData[selectedCellKey].italic = novoItalic === '1';
+        var ni = el.getAttribute('data-italic') === '1' ? '0' : '1';
+        el.setAttribute('data-italic', ni);
+        cellsData[selectedCellKey].italic = ni === '1';
         break;
       case 'underline':
-        var novoUnderline = el.getAttribute('data-underline') === '1' ? '0' : '1';
-        el.setAttribute('data-underline', novoUnderline);
-        cellsData[selectedCellKey].underline = novoUnderline === '1';
-        break;
-      default:
+        var nu = el.getAttribute('data-underline') === '1' ? '0' : '1';
+        el.setAttribute('data-underline', nu);
+        cellsData[selectedCellKey].underline = nu === '1';
         break;
     }
     agendarGravacao();
@@ -419,12 +427,11 @@
     var tbody = gridTable.querySelector('tbody');
     var linhaBase = 0;
     if (selectedCellKey) {
-      var match = selectedCellKey.match(/^[A-Z]+(\d+)$/);
-      if (match) linhaBase = parseInt(match[1], 10);
+      var m = selectedCellKey.match(/^[A-Z]+(\d+)$/);
+      if (m) linhaBase = parseInt(m[1], 10);
     } else {
       linhaBase = ROWS;
     }
-
     var tr = document.createElement('tr');
     var rowHeader = document.createElement('th');
     rowHeader.className = 'row-header';
@@ -435,14 +442,9 @@
       td.setAttribute('contenteditable', 'true');
       tr.appendChild(td);
     }
-
-    var linhasExistentes = tbody.children;
-    if (linhaBase >= linhasExistentes.length) {
-      tbody.appendChild(tr);
-    } else {
-      tbody.insertBefore(tr, linhasExistentes[linhaBase]);
-    }
-
+    var linhas = tbody.children;
+    if (linhaBase >= linhas.length) tbody.appendChild(tr);
+    else tbody.insertBefore(tr, linhas[linhaBase]);
     ROWS++;
     renumerarLinhas();
     agendarGravacao();
@@ -451,11 +453,9 @@
   function addMoreRows(quantidade) {
     var n = Math.max(1, Math.min(500, quantidade || 50));
     var tbody = gridTable.querySelector('tbody');
-    var fragmento = document.createDocumentFragment();
-    for (var i = 0; i < n; i++) {
-      fragmento.appendChild(criarLinhaEl(ROWS + i));
-    }
-    tbody.appendChild(fragmento);
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < n; i++) frag.appendChild(criarLinhaEl(ROWS + i));
+    tbody.appendChild(frag);
     ROWS += n;
     agendarGravacao();
   }
@@ -463,25 +463,21 @@
   function renumerarLinhas() {
     var tbody = gridTable.querySelector('tbody');
     var linhas = tbody.children;
-    var novoCellsData = {};
-
+    var novo = {};
     for (var r = 0; r < linhas.length; r++) {
       var tr = linhas[r];
       tr.children[0].textContent = String(r + 1);
       for (var c = 1; c <= COLS; c++) {
         var td = tr.children[c];
         if (!td) continue;
-        var novaKey = cellKey(c - 1, r);
-        var chaveAntiga = td.getAttribute('data-key');
-        td.setAttribute('data-key', novaKey);
-        if (chaveAntiga && cellsData[chaveAntiga]) {
-          novoCellsData[novaKey] = cellsData[chaveAntiga];
-        } else if (cellsData[novaKey]) {
-          novoCellsData[novaKey] = cellsData[novaKey];
-        }
+        var nk = cellKey(c - 1, r);
+        var antiga = td.getAttribute('data-key');
+        td.setAttribute('data-key', nk);
+        if (antiga && cellsData[antiga]) novo[nk] = cellsData[antiga];
+        else if (cellsData[nk]) novo[nk] = cellsData[nk];
       }
     }
-    cellsData = novoCellsData;
+    cellsData = novo;
   }
 
   function applyFormula(formula) {
@@ -494,25 +490,17 @@
     agendarGravacao();
   }
 
-  function getContent() {
-    return JSON.stringify(cellsData);
-  }
+  function getContent() { return JSON.stringify(cellsData); }
 
-  /// Aplica um objeto cellsData (formato {"cells": {...}} ou o objeto
-  /// de células diretamente) à grid, incluindo o campo "image" novo
-  /// por célula. Usado tanto para restaurar um documento guardado
-  /// (setContent normal) como pelo caminho da IA (setContentFromAi,
-  /// que delega diretamente para aqui — ver função abaixo).
   function aplicarCellsData(dados) {
+    Object.keys(chartInstances).forEach(function (k) { destroyCellChart(k); });
     cellsData = dados;
     Object.keys(dados).forEach(function (key) {
       var el = gridTable.querySelector('[data-key="' + key + '"]');
       if (!el) return;
       var d = dados[key];
-      if (d.image) {
-        renderCellImage(key, d.image);
-        return;
-      }
+      if (d.chart) { renderCellChart(key, d.chart); return; }
+      if (d.image) { renderCellImage(key, d.image); return; }
       if (d.value !== undefined) el.textContent = d.value;
       if (d.bold) el.setAttribute('data-bold', '1');
       if (d.italic) el.setAttribute('data-italic', '1');
@@ -528,36 +516,79 @@
   function setContent(json) {
     try {
       var parsed = JSON.parse(json || '{}');
-      // Aceita tanto o formato cru {"A1": {...}} como o formato
-      // envelopado {"cells": {"A1": {...}}} que kAiSystemPrompt (lado
-      // Dart) instrui a IA a gerar — normaliza para o formato cru
-      // internamente, mas getContent() continua a devolver sempre o
-      // formato cru (sem "cells"), inalterado desde sempre, para não
-      // quebrar quem já lia/escrevia neste formato antes.
       var dados = parsed && parsed.cells ? parsed.cells : parsed;
       aplicarCellsData(dados || {});
-    } catch (e) {
-      // JSON inválido — mantém grid vazia
+    } catch (e) {}
+  }
+
+  function setContentFromAi(json) { setContent(json); return true; }
+
+  function setThemeMode(mode) {
+    var isDark = (mode === 'dark') || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.body.classList.toggle('dark', isDark);
+    if (window.Chart) {
+      Chart.defaults.color = isDark ? '#F2F2F2' : '#1A1A1A';
+      Object.keys(chartInstances).forEach(function (key) {
+        var chart = chartInstances[key];
+        if (chart && chart.options) {
+          chart.options.plugins = chart.options.plugins || {};
+          chart.options.plugins.legend = chart.options.plugins.legend || {};
+          chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+          chart.options.plugins.legend.labels.color = Chart.defaults.color;
+          chart.update();
+        }
+      });
     }
   }
 
-  /// ATUALIZAÇÃO (sheets reais gerados pela IA): esta função era
-  /// antes uma segunda camada de defesa que devolvia false sem fazer
-  /// nada, para impedir a IA de escrever na folha de cálculo. Esse
-  /// bloqueio foi removido do lado Dart (aitab.dart não descarta mais
-  /// blocos [[canvas:sheet:...]]) — esta função passa a ser o ponto
-  /// de entrada REAL chamado quando um documento sheet criado pela IA
-  /// é carregado no editor. Aceita exatamente o mesmo formato JSON
-  /// documentado em kAiSystemPrompt: {"cells": {"A1": {...}, ...}}.
-  function setContentFromAi(json) {
-    setContent(json);
-    return true;
+  function setFontScale(scale) {
+    var size = Math.round(12 * scale);
+    document.documentElement.style.setProperty('--sheet-cell-font-size', size + 'px');
   }
 
-  function getSlideCount() {
-    // Mantido por paridade de interface com slides.html, não usado
-    // em sheets — sempre 1 "página" lógica (a grid inteira).
-    return 1;
+  function getSelectedCellKey() { return selectedCellKey; }
+
+  function openColorPickerForCell() {
+    if (!selectedCellKey) return;
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('openColorPicker', 'setCellColor');
+    }
+  }
+
+  function openImagePickerForCell() {
+    if (!selectedCellKey) return;
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('openImagePicker', function (url) {
+        if (url && selectedCellKey) renderCellImage(selectedCellKey, url);
+      });
+    }
+  }
+
+  function openLinkSheetForCell() {
+    if (!selectedCellKey) return;
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('openLinkSheet', function (url, text) {
+        if (selectedCellKey && url) {
+          var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+          if (el) {
+            el.textContent = text || url;
+            if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+            cellsData[selectedCellKey].value = text || url;
+            cellsData[selectedCellKey].link = url;
+            agendarGravacao();
+          }
+        }
+      });
+    }
+  }
+
+  function openAiEditForSelection() {
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    var selection = el ? el.textContent : '';
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('openAiEditForSelection', selection);
+    }
   }
 
   window.editorApi = {
@@ -570,30 +601,24 @@
     applyFormula: applyFormula,
     renderCellImage: renderCellImage,
     removeCellImage: removeCellImage,
+    renderCellChart: renderCellChart,
+    removeCellChart: removeCellChart,
     scrollToCell: scrollParaCelula,
     getContent: getContent,
     setContent: setContent,
-    setContentFromAi: setContentFromAi
+    setContentFromAi: setContentFromAi,
+    setThemeMode: setThemeMode,
+    setFontScale: setFontScale,
+    getSelectedCellKey: getSelectedCellKey,
+    openColorPickerForCell: openColorPickerForCell,
+    openImagePickerForCell: openImagePickerForCell,
+    openLinkSheetForCell: openLinkSheetForCell,
+    openAiEditForSelection: openAiEditForSelection
   };
 
   function iniciar() {
-    detectarModoPreview();
     construirGrid();
-    if (!isPreviewMode) {
-      addRowsBtn.addEventListener('click', function () { addMoreRows(50); });
-    }
-
-    var conteudoInicial = '';
-    if (window.AndroidBridge && window.AndroidBridge.loadDocument) {
-      try {
-        conteudoInicial = window.AndroidBridge.loadDocument() || '';
-      } catch (e) {
-        conteudoInicial = '';
-      }
-    }
-    if (conteudoInicial) {
-      setContent(conteudoInicial);
-    }
+    setThemeMode('system');
   }
 
   if (document.readyState === 'loading') {
@@ -603,6 +628,5 @@
   }
 })();
 </script>
-
 </body>
 </html>

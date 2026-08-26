@@ -2,27 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 const Curve kCupertino    = Cubic(0.25, 0.1,  0.25, 1.0);
 const Curve kCupertinoIn  = Cubic(0.42, 0.0,  1.0,  1.0);
 const Curve kCupertinoOut = Cubic(0.0,  0.0,  0.58, 1.0);
 
 // ══════════════════════════════════════════════════════════════
-// PALETA DE CORES PRIMÁRIAS SELECIONÁVEIS
+// PALETA DE CORES PRIMÁRIAS (Pares Claro/Escuro)
 // ══════════════════════════════════════════════════════════════
 
-const List<Color> kPrimaryColorOptions = [
-  Color(0xFFFF6044), // Coral (padrão)
-  Color(0xFF007AFF), // Azul
-  Color(0xFF34C759), // Verde
-  Color(0xFFFF9500), // Laranja
-  Color(0xFFAF52DE), // Roxo
-  Color(0xFFFF375F), // Rosa
-  Color(0xFF30D158), // Verde-limão
-  Color(0xFF64D2FF), // Ciano
-];
+const Color kMicrosoftBlueLight = Color(0xFF0F6CBD);
+const Color kMicrosoftBlueDark  = Color(0xFF479EF5);
+const Color kDefaultPrimaryColor = kMicrosoftBlueLight;
 
-const Color kDefaultPrimaryColor = Color(0xFFFF6044);
+class FluentColorPair {
+  final Color light;
+  final Color dark;
+  const FluentColorPair(this.light, this.dark);
+}
+
+const List<FluentColorPair> kPrimaryColorPairs = [
+  FluentColorPair(Color(0xFF0F6CBD), Color(0xFF479EF5)),
+  FluentColorPair(Color(0xFF8764B8), Color(0xFFB4A0FF)),
+  FluentColorPair(Color(0xFFC239B3), Color(0xFFE68AD8)),
+  FluentColorPair(Color(0xFFD13438), Color(0xFFF1707B)),
+  FluentColorPair(Color(0xFFCA5010), Color(0xFFFF8C5A)),
+  FluentColorPair(Color(0xFF986F0B), Color(0xFFFFCC66)),
+  FluentColorPair(Color(0xFF0B6A0B), Color(0xFF6BCB6B)),
+  FluentColorPair(Color(0xFF00767A), Color(0xFF4DD0D6)),
+  FluentColorPair(Color(0xFF038387), Color(0xFF3FD9DE)),
+  FluentColorPair(Color(0xFF515C6B), Color(0xFF9BA7B4)),
+];
 
 // ══════════════════════════════════════════════════════════════
 // MODO DE TEMA
@@ -49,15 +60,20 @@ extension AppThemeModeX on AppThemeMode {
 
 class AppColorScheme {
   final bool isDark;
-  final Color primaryColor;
-  
-  const AppColorScheme(this.isDark, [this.primaryColor = kDefaultPrimaryColor]);
+  final int primaryPairIndex;
+  const AppColorScheme(this.isDark, [this.primaryPairIndex = 0]);
 
-  // Cor primária dinâmica — calcula cores derivadas via HSL
-  Color get primary            => primaryColor;
-  Color get onPrimary          => isDark ? _darken(primaryColor, 0.75) : Colors.white;
-  Color get primaryContainer   => isDark ? _darken(primaryColor, 0.55) : _lighten(primaryColor, 0.85);
-  Color get onPrimaryContainer => isDark ? _lighten(primaryColor, 0.55) : _darken(primaryColor, 0.60);
+  FluentColorPair get _pair =>
+      kPrimaryColorPairs[primaryPairIndex.clamp(0, kPrimaryColorPairs.length - 1)];
+
+  Color get primary => isDark ? _pair.dark : _pair.light;
+  Color get onPrimary          => isDark ? _darken(primary, 0.75) : Colors.white;
+  Color get primaryContainer   => isDark ? _darken(primary, 0.55) : _lighten(primary, 0.85);
+  Color get onPrimaryContainer => isDark ? _lighten(primary, 0.55) : _darken(primary, 0.60);
+
+  // Cores da bolha do usuário
+  Color get userBubbleBg   => isDark ? cardBackground : primary;
+  Color get userBubbleText => isDark ? onSurface : onPrimary;
 
   static Color _lighten(Color c, double amount) {
     final hsl = HSLColor.fromColor(c);
@@ -128,7 +144,6 @@ class AppColorScheme {
   Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
   Color get sheetBackdrop => const Color(0xFF0B0B0D);
 
-  // NOVO: estilo da barra de status
   SystemUiOverlayStyle get statusBarStyle => SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
@@ -145,11 +160,11 @@ class AppColorScheme {
 
 class AppThemeNotifier extends ChangeNotifier {
   static const _kModeKey = 'app_theme_mode';
-  static const _kPrimaryColorKey = 'app_primary_color';
+  static const _kPrimaryPairKey = 'app_primary_pair_index';
 
   AppThemeMode mode = AppThemeMode.system;
   bool isIncognito = false;
-  Color primaryColor = kDefaultPrimaryColor;
+  int primaryPairIndex = 0;
 
   bool get _systemIsDark =>
       SchedulerBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
@@ -180,9 +195,9 @@ class AppThemeNotifier extends ChangeNotifier {
           mode = legacyDark ? AppThemeMode.dark : AppThemeMode.light;
         }
       }
-      final colorValue = prefs.getInt(_kPrimaryColorKey);
-      if (colorValue != null) {
-        primaryColor = Color(colorValue);
+      final pairIdx = prefs.getInt(_kPrimaryPairKey);
+      if (pairIdx != null && pairIdx >= 0 && pairIdx < kPrimaryColorPairs.length) {
+        primaryPairIndex = pairIdx;
       }
       notifyListeners();
     } catch (_) {}
@@ -203,11 +218,11 @@ class AppThemeNotifier extends ChangeNotifier {
     setMode(value ? AppThemeMode.dark : AppThemeMode.light);
   }
 
-  void setPrimaryColor(Color color) {
-    if (primaryColor.value == color.value) return;
-    primaryColor = color;
+  void setPrimaryPairIndex(int index) {
+    if (primaryPairIndex == index) return;
+    primaryPairIndex = index;
     notifyListeners();
-    _persistPrimaryColor();
+    _persistPrimaryPair();
   }
 
   Future<void> _persistMode() async {
@@ -217,10 +232,10 @@ class AppThemeNotifier extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> _persistPrimaryColor() async {
+  Future<void> _persistPrimaryPair() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_kPrimaryColorKey, primaryColor.value);
+      await prefs.setInt(_kPrimaryPairKey, primaryPairIndex);
     } catch (_) {}
   }
 
@@ -310,6 +325,26 @@ class AppPreferencesNotifier extends ChangeNotifier {
   /// existia isolado dentro de _FontSizeCard.
   double get textScaleFactor => 0.85 + (fontScale * 0.5);
 
+  Future<void> setEmojiFrequencyRemote(EmojiFrequency freq, String? token) async {
+    setEmojiFrequency(freq);
+    if (token == null) return;
+    try {
+      await ProfileApiService.updateAccount(token, preferences: {
+        'emojiFrequency': freq.storageValue,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> setPromptRemote(String value, String? token) async {
+    setPrompt(value);
+    if (token == null) return;
+    try {
+      await ProfileApiService.updateAccount(token, preferences: {
+        'customPrompt': value,
+      });
+    } catch (_) {}
+  }
+
   Future<void> _persistPrompt() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -343,7 +378,7 @@ class AppTheme extends StatelessWidget {
   const AppTheme({super.key, required this.child});
 
   static AppColorScheme of(BuildContext context) =>
-      AppColorScheme(appTheme.isDark, appTheme.primaryColor);
+      AppColorScheme(appTheme.isDark, appTheme.primaryPairIndex);
 
   static bool isIncognito(BuildContext context) => appTheme.isIncognito;
 

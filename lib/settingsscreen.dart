@@ -45,9 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
       authController.user = AppUser.fromJson(me);
       await SessionManager.updateUser(authController.user!);
       authController.notifyListeners();
-    } catch (_) {
-      // Sem sorte agora — mantém o que já estava carregado localmente.
-    }
+    } catch (_) {}
     if (mounted) setState(() => _refreshing = false);
   }
 
@@ -1262,7 +1260,7 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PERSONALIZAÇÃO (inalterada)
+// PERSONALIZAÇÃO
 // ══════════════════════════════════════════════════════════════
 
 class _PersonalizationScreen extends StatelessWidget {
@@ -1348,7 +1346,7 @@ class _PersonalizationScreen extends StatelessWidget {
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
-                        color: appTheme.primaryColor,
+                        color: appTheme.isDark ? kPrimaryColorPairs[appTheme.primaryPairIndex].dark : kPrimaryColorPairs[appTheme.primaryPairIndex].light,
                         shape: BoxShape.circle,
                         border: Border.all(color: s.outline),
                       ),
@@ -1385,7 +1383,7 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    appPreferences.setPrompt(_ctrl.text.trim());
+    appPreferences.setPromptRemote(_ctrl.text.trim(), authController.token);
     await Future.delayed(const Duration(milliseconds: 200));
     if (mounted) Navigator.pop(context);
   }
@@ -1508,7 +1506,7 @@ class _EmojiFrequencySheet extends StatelessWidget {
               freq: freq,
               selected: appPreferences.emojiFrequency == freq,
               onTap: () {
-                appPreferences.setEmojiFrequency(freq);
+                appPreferences.setEmojiFrequencyRemote(freq, authController.token);
                 Navigator.pop(context);
               },
             ),
@@ -1588,30 +1586,28 @@ class _PrimaryColorSheet extends StatelessWidget {
           Wrap(
             spacing: 14,
             runSpacing: 14,
-            children: kPrimaryColorOptions.map((color) {
-              final selected = appTheme.primaryColor.value == color.value;
+            children: List.generate(kPrimaryColorPairs.length, (i) {
+              final pair = kPrimaryColorPairs[i];
+              final displayColor = s.isDark ? pair.dark : pair.light;
+              final selected = appTheme.primaryPairIndex == i;
               return GestureDetector(
                 onTap: () {
-                  appTheme.setPrimaryColor(color);
+                  appTheme.setPrimaryPairIndex(i);
                   Navigator.pop(context);
                 },
                 child: Container(
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: color,
+                    color: displayColor,
                     shape: BoxShape.circle,
-                    border: selected
-                        ? Border.all(color: s.onSurface, width: 3)
-                        : null,
+                    border: selected ? Border.all(color: s.onSurface, width: 3) : null,
                   ),
                   alignment: Alignment.center,
-                  child: selected
-                      ? const AppIcon('check', color: Colors.white, size: 20)
-                      : null,
+                  child: selected ? const AppIcon('check', color: Colors.white, size: 20) : null,
                 ),
               );
-            }).toList(),
+            }),
           ),
         ],
       ),

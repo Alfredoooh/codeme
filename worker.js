@@ -1,10 +1,10 @@
 import { extractText, getDocumentProxy } from "unpdf";
 
 // ══════════════════════════════════════════════════════════════
-// WORKER — DeepSeek (3 modelos), streaming, título automático
-// obrigatório, resposta com marcador de "processo" para o cliente
-// poder ocultar streaming de blocos especiais (documentos, tabelas,
-// gráficos) atrás de um pill, exatamente como pedido.
+// WORKER — DeepSeek V4 (Flash + Pro, thinking on/off), streaming,
+// título automático obrigatório, resposta com marcador de "processo"
+// para o cliente poder ocultar streaming de blocos especiais
+// (documentos, tabelas, gráficos) atrás de um pill.
 // ══════════════════════════════════════════════════════════════
 
 const CORS_HEADERS = {
@@ -15,10 +15,30 @@ const CORS_HEADERS = {
 
 const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
 
+// Modelos atuais da API DeepSeek (V4). Os nomes antigos
+// deepseek-chat / deepseek-reasoner foram descontinuados em
+// 24/07/2026 — não usar mais.
 const DEEPSEEK_MODELS = {
-  flash: { model: "deepseek-chat", max_tokens: 4096,  temperature: 1.0 },
-  pro:   { model: "deepseek-chat", max_tokens: 8192,  temperature: 0.55 },
-  reasoning: { model: "deepseek-reasoner", max_tokens: 8192, temperature: 1.0 },
+  flash: {
+    model: "deepseek-v4-flash",
+    max_tokens: 8192,
+    temperature: 1.0,
+    thinking: "disabled",
+  },
+  pro: {
+    model: "deepseek-v4-pro",
+    max_tokens: 8192,
+    temperature: 1.0,
+    thinking: "disabled",
+  },
+  reasoning: {
+    model: "deepseek-v4-flash",
+    max_tokens: 65536,
+    thinking: "enabled",
+    reasoning_effort: "high",
+    // temperature omitida de propósito: a API ignora esse campo
+    // quando thinking está enabled.
+  },
 };
 
 const GROQ_BASE = "https://api.groq.com/openai/v1";
@@ -211,10 +231,10 @@ function extractSpkiFromCert(certDer) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DEEPSEEK — chamadas de chat (stream e não-stream). Formato
+// DEEPSEEK V4 — chamadas de chat (stream e não-stream). Formato
 // OpenAI-compatible: messages: [{role, content}], stream: bool.
-// A mensagem de sistema vai sempre como primeiro item do array,
-// exatamente como o Groq já fazia neste worker.
+// thinking / reasoning_effort controlam o modo de raciocínio no
+// V4-Flash — não são mais nomes de modelo separados.
 // ══════════════════════════════════════════════════════════════
 
 function buildSystemInstruction(language, customSystemPrompt) {
@@ -238,16 +258,22 @@ function buildDeepseekMessages(messages, systemPrompt, language) {
 async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, stream) {
   const cfg = DEEPSEEK_MODELS[modelKey] || DEEPSEEK_MODELS.flash;
   const allMessages = buildDeepseekMessages(messages, systemPrompt, language);
+
+  const requestBody = {
+    model: cfg.model,
+    messages: allMessages,
+    max_tokens: cfg.max_tokens,
+    stream: !!stream,
+  };
+
+  if (cfg.temperature !== undefined) requestBody.temperature = cfg.temperature;
+  if (cfg.thinking !== undefined) requestBody.thinking = cfg.thinking;
+  if (cfg.reasoning_effort !== undefined) requestBody.reasoning_effort = cfg.reasoning_effort;
+
   return fetch(DEEPSEEK_BASE + "/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
-    body: JSON.stringify({
-      model: cfg.model,
-      messages: allMessages,
-      max_tokens: cfg.max_tokens,
-      temperature: cfg.temperature,
-      stream: !!stream,
-    }),
+    body: JSON.stringify(requestBody),
   });
 }
 
@@ -260,10 +286,11 @@ async function deepseekGenerateTitle(apiKey, message, language) {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek-v4-flash",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 24,
         temperature: 0.4,
+        thinking: "disabled",
         stream: false,
       }),
     });
@@ -369,158 +396,7 @@ async function expandMessagesWithAttachments(messages) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROJECTS
-// ══════════════════════════════════════════════════════════════
-
-const PROJECT_FILE_KINDS = [
-  "chat", "pdf", "docx", "xlsx", "pptx",
-  "doc", "sheet", "slide", "code", "other",
-];
-
-async function loadProjectIndex(env, userId) {
-  const raw = await env.IPC_USERS.get("projidx:" + userId);
-  return raw ? JSON.parse(raw) : [];
-}
-
-async function saveProjectIndex(env, userId, ids) {
-  await env.IPC_USERS.put("projidx:" + userId, JSON.stringify(ids));
-}
-
-async function getProjectNode(env, userId, id) {
-  const raw = await env.IPC_USERS.get("proj:" + userId + ":" + id);
-  return raw ? JSON.parse(raw) : null;
-}
-
-async function putProjectNode(env, node) {
-  await env.IPC_USERS.put("proj:" + node.userId + ":" + node.id, JSON.stringify(node));
-}
-
-async function deleteProjectNode(env, userId, id) {
-  await env.IPC_USERS.delete("proj:" + userId + ":" + id);
-}
-
-function collectDescendantIds(allNodes, rootId) {
-  const result = [rootId];
-  let frontier = [rootId];
-  while (frontier.length > 0) {
-    const next = [];
-    for (const node of allNodes) {
-      if (frontier.includes(node.parentId)) {
-        result.push(node.id);
-        next.push(node.id);
-      }
-    }
-    frontier = next;
-  }
-  return result;
-}
-
-async function handleListProjects(request, env) {
-  const payload = await getAuthUser(request, env);
-  if (!payload) return error("Não autenticado", 401);
-  const ids = await loadProjectIndex(env, payload.id);
-  const all = await Promise.all(ids.map(function(id) { return getProjectNode(env, payload.id, id); }));
-  const nodes = all.filter(function(n) { return n !== null; });
-  return json({ nodes });
-}
-
-async function handleCreateProjectNode(request, env) {
-  const payload = await getAuthUser(request, env);
-  if (!payload) return error("Não autenticado", 401);
-  const body = await request.json().catch(function() { return null; });
-  if (!body || !body.type || !body.name) return error("Campos 'type' e 'name' obrigatórios");
-  if (!["project", "folder", "file"].includes(body.type)) return error("'type' inválido (project | folder | file)");
-  if (body.type === "file") {
-    if (!body.fileKind || !PROJECT_FILE_KINDS.includes(body.fileKind)) {
-      return error("'fileKind' obrigatório e deve ser um de: " + PROJECT_FILE_KINDS.join(", "));
-    }
-  }
-  if (body.parentId) {
-    const parent = await getProjectNode(env, payload.id, body.parentId);
-    if (!parent) return error("Pasta/projeto pai não encontrado", 404);
-    if (parent.type === "file") return error("Não é possível criar dentro de um ficheiro");
-  }
-  const id  = crypto.randomUUID();
-  const now = Date.now();
-  const node = {
-    id, userId: payload.id,
-    parentId: body.parentId || null,
-    type: body.type,
-    name: body.name,
-    fileKind: body.type === "file" ? body.fileKind : null,
-    conversationId: body.conversationId || null,
-    content: body.content !== undefined ? body.content : null,
-    fileData: body.fileData !== undefined ? body.fileData : null,
-    mimeType: body.mimeType || null,
-    createdAt: now, updatedAt: now,
-  };
-  if (node.fileData && node.fileData.length > 5600000) {
-    return error("Ficheiro demasiado grande (máx ~4MB)");
-  }
-  await putProjectNode(env, node);
-  const ids = await loadProjectIndex(env, payload.id);
-  ids.push(id);
-  await saveProjectIndex(env, payload.id, ids);
-  return json(node, 201);
-}
-
-async function handleGetProjectNode(request, env) {
-  const payload = await getAuthUser(request, env);
-  if (!payload) return error("Não autenticado", 401);
-  const id   = new URL(request.url).pathname.split("/").pop();
-  const node = await getProjectNode(env, payload.id, id);
-  if (!node) return error("Não encontrado", 404);
-  return json(node);
-}
-
-async function handleUpdateProjectNode(request, env) {
-  const payload = await getAuthUser(request, env);
-  if (!payload) return error("Não autenticado", 401);
-  const id   = new URL(request.url).pathname.split("/").pop();
-  const node = await getProjectNode(env, payload.id, id);
-  if (!node) return error("Não encontrado", 404);
-  const body = await request.json().catch(function() { return null; });
-  if (!body) return error("Body inválido");
-  if (body.name           !== undefined) node.name           = body.name;
-  if (body.content        !== undefined) node.content        = body.content;
-  if (body.fileData       !== undefined) node.fileData       = body.fileData;
-  if (body.conversationId !== undefined) node.conversationId = body.conversationId;
-  if (body.parentId       !== undefined) {
-    if (body.parentId === node.id) return error("Um nó não pode ser pai de si próprio");
-    if (body.parentId) {
-      const parent = await getProjectNode(env, payload.id, body.parentId);
-      if (!parent) return error("Pasta/projeto pai não encontrado", 404);
-      if (parent.type === "file") return error("Não é possível mover para dentro de um ficheiro");
-    }
-    node.parentId = body.parentId;
-  }
-  if (node.fileData && node.fileData.length > 5600000) {
-    return error("Ficheiro demasiado grande (máx ~4MB)");
-  }
-  node.updatedAt = Date.now();
-  await putProjectNode(env, node);
-  return json(node);
-}
-
-async function handleDeleteProjectNode(request, env) {
-  const payload = await getAuthUser(request, env);
-  if (!payload) return error("Não autenticado", 401);
-  const id   = new URL(request.url).pathname.split("/").pop();
-  const node = await getProjectNode(env, payload.id, id);
-  if (!node) return error("Não encontrado", 404);
-  const ids     = await loadProjectIndex(env, payload.id);
-  const allRaw  = await Promise.all(ids.map(function(i) { return getProjectNode(env, payload.id, i); }));
-  const allNodes = allRaw.filter(function(n) { return n !== null; });
-  const toDelete = (node.type === "file") ? [id] : collectDescendantIds(allNodes, id);
-  await Promise.all(toDelete.map(function(delId) { return deleteProjectNode(env, payload.id, delId); }));
-  const updatedIds = ids.filter(function(i) { return !toDelete.includes(i); });
-  await saveProjectIndex(env, payload.id, updatedIds);
-  return json({ success: true, deleted: toDelete.length });
-}
-
-// ══════════════════════════════════════════════════════════════
-// AGENDA — eventos simples por utilizador, mesmo padrão de KV
-// storage já usado para conversas e projetos.
+// AGENDA — eventos simples por utilizador.
 // ══════════════════════════════════════════════════════════════
 
 async function handleListEvents(request, env) {
@@ -596,6 +472,21 @@ async function handleDeleteEvent(request, env) {
   return json({ success: true });
 }
 
+// ══════════════════════════════════════════════════════════════
+// PROJECTS (auxiliares mantidos apenas para o admin poder limpar
+// dados legados de utilizadores criados antes desta versão. Não
+// há endpoints públicos para criar/editar/listar projetos.)
+// ══════════════════════════════════════════════════════════════
+
+async function loadProjectIndex(env, userId) {
+  const raw = await env.IPC_USERS.get("projidx:" + userId);
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function deleteProjectNode(env, userId, id) {
+  await env.IPC_USERS.delete("proj:" + userId + ":" + id);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
@@ -618,7 +509,6 @@ export default {
     if (path === "/ai/summarize"                         && request.method === "POST")   return handleAiSummarize(request, env);
     if (path === "/ai/transcribe"                        && request.method === "POST")   return handleAiTranscribe(request, env);
     if (path === "/ai/suggest"                           && request.method === "GET")    return handleAiSuggest(request, env);
-    if (path === "/ai/edit-document"                     && request.method === "POST")   return handleAiEditDocument(request, env);
     if (path === "/credits/balance"                      && request.method === "GET")    return handleCreditsBalance(request, env);
     if (path === "/credits/checkout"                     && request.method === "POST")   return handleCreditsCheckout(request, env);
     if (path === "/credits/webhook"                      && request.method === "POST")   return handleCreditsWebhook(request, env);
@@ -631,12 +521,6 @@ export default {
     if (path.match(/^\/conversations\/[^/]+$/)           && request.method === "DELETE") return handleDeleteConversation(request, env);
     if (path.match(/^\/conversations\/[^/]+\/pin$/)      && request.method === "PUT")    return handlePinConversation(request, env);
     if (path.match(/^\/conversations\/[^/]+\/archive$/)  && request.method === "PUT")    return handleArchiveConversation(request, env);
-
-    if (path === "/projects"                              && request.method === "GET")    return handleListProjects(request, env);
-    if (path === "/projects"                              && request.method === "POST")   return handleCreateProjectNode(request, env);
-    if (path.match(/^\/projects\/[^/]+$/)                 && request.method === "GET")    return handleGetProjectNode(request, env);
-    if (path.match(/^\/projects\/[^/]+$/)                 && request.method === "PUT")    return handleUpdateProjectNode(request, env);
-    if (path.match(/^\/projects\/[^/]+$/)                 && request.method === "DELETE") return handleDeleteProjectNode(request, env);
 
     if (path === "/events"                                && request.method === "GET")    return handleListEvents(request, env);
     if (path === "/events"                                && request.method === "POST")   return handleCreateEvent(request, env);
@@ -909,7 +793,7 @@ async function handleCreateConversation(request, env) {
     id, userId: payload.id,
     title:    body.title    || "Nova conversa",
     messages: body.messages || [],
-    model:    body.model    || "deepseek-chat",
+    model:    body.model    || "deepseek-v4-flash",
     pinned: false, archived: false,
     tags: body.tags || [],
     createdAt: now, updatedAt: now,
@@ -1045,11 +929,6 @@ async function handleSearchConversations(request, env) {
   return json({ conversations: results });
 }
 
-// ══════════════════════════════════════════════════════════════
-// /ai/title — mantido para compatibilidade com o cliente atual,
-// agora usa DeepSeek em vez de Gemini.
-// ══════════════════════════════════════════════════════════════
-
 async function handleAiTitle(request, env) {
   const payload = await getAuthUser(request, env);
   if (!payload) return error("Não autenticado", 401);
@@ -1060,7 +939,8 @@ async function handleAiTitle(request, env) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// /ai/chat — DeepSeek (3 modelos) ou Groq, stream ou não.
+// /ai/chat — DeepSeek V4 (flash | pro | reasoning) ou Groq,
+// stream ou não.
 // ══════════════════════════════════════════════════════════════
 
 async function handleAiChat(request, env) {
@@ -1141,10 +1021,11 @@ async function handleAiSummarize(request, env) {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model: "deepseek-v4-flash",
       messages: [{ role: "user", content: prompt + text }],
       max_tokens: 512,
       temperature: 0.5,
+      thinking: "disabled",
       stream: false,
     }),
   });
@@ -1209,77 +1090,6 @@ async function handleAiSuggest(request, env) {
   });
 }
 
-// ══════════════════════════════════════════════════════════════
-// AI EDIT DOCUMENT — agora DeepSeek. Continua a devolver APENAS o
-// conteúdo atualizado, sem texto explicativo à volta.
-// ══════════════════════════════════════════════════════════════
-
-async function handleAiEditDocument(request, env) {
-  const payload = await getAuthUser(request, env);
-  if (!payload) return error("Não autenticado", 401);
-  const body = await request.json().catch(function() { return null; });
-  if (!body || !body.currentContent || !body.instruction) {
-    return error("Campos 'currentContent' e 'instruction' obrigatórios");
-  }
-  const userData = await env.IPC_USERS.get("user:" + payload.id);
-  if (!userData) return error("Utilizador não encontrado", 404);
-  const userObj = JSON.parse(userData);
-  if (userObj.blocked) return error("Esta conta foi bloqueada", 403);
-  const currentCredits = userObj.credits ?? 0;
-  if (currentCredits <= 0) return json({ error: "credits_exhausted", message: "Sem créditos. Recarrega para continuar." }, 402);
-  userObj.credits = currentCredits - 1;
-  await env.IPC_USERS.put("user:" + payload.id, JSON.stringify(userObj));
-
-  const docType   = body.docType || "doc";
-  const selection = body.selection || null;
-
-  const systemPrompt =
-    "Es um editor automatico de documentos. Recebes o conteudo atual de um documento " +
-    "(tipo: " + docType + ") e uma instrucao do utilizador para o alterar. " +
-    "A tua UNICA tarefa e devolver o conteudo COMPLETO e ATUALIZADO do documento, " +
-    "no MESMO formato em que o recebeste (HTML puro para 'doc', JSON valido para " +
-    "'sheet'/'slide'), aplicando so as alteracoes pedidas e mantendo " +
-    "tudo o resto exatamente igual. " +
-    "REGRAS ABSOLUTAS: nunca expliques o que fizeste; nunca escrevas texto fora do " +
-    "documento; nunca uses blocos de codigo markdown (```); nunca adiciones comentarios; " +
-    "a tua resposta e SEMPRE apenas o documento atualizado, do inicio ao fim, pronto a " +
-    "ser inserido diretamente no editor.";
-
-  const userContent = selection
-    ? "DOCUMENTO ATUAL COMPLETO:\n" + body.currentContent +
-      "\n\nTRECHO SELECIONADO PELO UTILIZADOR (foca a alteracao aqui, mas devolve o " +
-      "documento completo):\n" + selection +
-      "\n\nINSTRUCAO: " + body.instruction
-    : "DOCUMENTO ATUAL:\n" + body.currentContent + "\n\nINSTRUCAO: " + body.instruction;
-
-  if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
-  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
-    body: JSON.stringify({
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      max_tokens: 8192,
-      temperature: 0.4,
-      stream: false,
-    }),
-  });
-  if (!dsRes.ok) {
-    const errText = await dsRes.text();
-    return error("Erro ao editar documento: " + errText, dsRes.status);
-  }
-  const data = await dsRes.json();
-  let updatedContent = data.choices?.[0]?.message?.content || "";
-  updatedContent = updatedContent
-    .replace(/^```[a-zA-Z]*\n/, "")
-    .replace(/```\s*$/, "")
-    .trim();
-  return json({ content: updatedContent });
-}
-
 async function handleCreditsBalance(request, env) {
   const payload = await getAuthUser(request, env);
   if (!payload) return error("Não autenticado", 401);
@@ -1314,15 +1124,19 @@ async function handleCreditsCheckout(request, env) {
 async function handleCreditsWebhook(request, env) {
   const signature = request.headers.get("X-Webhook-Signature") || "";
   const rawBody   = await request.text();
-  if (env.GOPAY_WEBHOOK_SECRET && signature) {
-    const key = await crypto.subtle.importKey(
-      "raw", new TextEncoder().encode(env.GOPAY_WEBHOOK_SECRET),
-      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
-    );
-    const sigBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
-    const expected = btoa(String.fromCharCode(...new Uint8Array(sigBytes)));
-    if (expected !== signature) return error("Assinatura inválida", 401);
+  if (!env.GOPAY_WEBHOOK_SECRET) {
+    console.error("[NEXA WEBHOOK] GOPAY_WEBHOOK_SECRET não configurado — recusando webhook por segurança");
+    return error("Webhook não configurado", 500);
   }
+  if (!signature) return error("Assinatura ausente", 401);
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(env.GOPAY_WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sigBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sigBytes)));
+  if (expected !== signature) return error("Assinatura inválida", 401);
+
   let event;
   try { event = JSON.parse(rawBody); } catch { return error("Body inválido"); }
   const eventType  = event.event || event.type || "";
@@ -1477,8 +1291,10 @@ async function handleAdminDeleteUser(request, env) {
   const convIds  = convsRaw ? JSON.parse(convsRaw) : [];
   await Promise.all(convIds.map(function(cid) { return env.IPC_USERS.delete("conv:" + cid); }));
   await env.IPC_USERS.delete("convs:" + id);
-  const projIdxRaw = await env.IPC_USERS.get("projidx:" + id);
-  const projIds    = projIdxRaw ? JSON.parse(projIdxRaw) : [];
+  // Limpeza de dados de projeto legados (não há mais endpoints
+  // públicos para criar novos projetos, mas contas antigas podem
+  // ainda ter registos em KV que precisam ser removidos).
+  const projIds = await loadProjectIndex(env, id);
   await Promise.all(projIds.map(function(pid) { return deleteProjectNode(env, id, pid); }));
   await env.IPC_USERS.delete("projidx:" + id);
   if (u.email)       await env.IPC_USERS.delete("email:" + u.email);

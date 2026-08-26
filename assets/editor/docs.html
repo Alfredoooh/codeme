@@ -6,6 +6,32 @@
 <title>Documento</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
+  :root {
+    --doc-bg: #E8EAED;
+    --page-bg: #FFFFFF;
+    --page-text: #1A1A1A;
+    --page-border: #CCCCCC;
+    --page-shadow: rgba(0,0,0,0.16);
+    --selection: #2F7BF6;
+    --page-number: #9A9A9A;
+    --placeholder-bg: #F2F2F2;
+    --placeholder-border: #CCCCCC;
+    --table-border: #D0D0D0;
+  }
+
+  body.dark {
+    --doc-bg: #121313;
+    --page-bg: #1C1C1E;
+    --page-text: #F2F2F2;
+    --page-border: #3A3A3C;
+    --page-shadow: rgba(0,0,0,0.4);
+    --selection: #0A84FF;
+    --page-number: #6E6E73;
+    --placeholder-bg: #2C2C2E;
+    --placeholder-border: #48484A;
+    --table-border: #3A3A3C;
+  }
+
   * {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
@@ -33,6 +59,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    background: var(--doc-bg);
   }
 
   #pagesStack {
@@ -44,19 +71,20 @@
   }
 
   .page-a4 {
-    background: #FFFFFF;
+    background: var(--page-bg);
     width: 794px;
     height: 1123px;
     padding: 96px 72px;
     border-radius: 0;
-    border: 1px solid #CCCCCC;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.16);
+    border: 1px solid var(--page-border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 12px 32px var(--page-shadow);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
+    color: var(--page-text);
   }
 
   .conteudo {
@@ -65,7 +93,7 @@
     width: 100%;
     font-size: 15px;
     line-height: 1.6;
-    color: #1a1a1a;
+    color: inherit;
     outline: none;
     overflow: hidden;
     overflow-wrap: break-word;
@@ -73,13 +101,9 @@
     -webkit-user-select: text;
     user-select: text;
   }
-  .conteudo p {
-    margin: 0;
-  }
-  .conteudo img {
-    max-width: 100%;
-    height: auto;
-  }
+  .conteudo p { margin: 0; }
+  .conteudo a { color: var(--selection); text-decoration: underline; }
+  .conteudo img { max-width: 100%; height: auto; }
 
   .page-number {
     position: absolute;
@@ -88,40 +112,27 @@
     left: 0;
     text-align: center;
     font-size: 10px;
-    color: #9a9a9a;
+    color: var(--page-number);
     pointer-events: none;
   }
 
   .doc-table { border-collapse: collapse; width: 100%; margin: 4px 0; }
-  .doc-table td { border: 1px solid #d0d0d0; padding: 8px; min-width: 32px; height: 26px; vertical-align: top; }
+  .doc-table td { border: 1px solid var(--table-border); padding: 8px; min-width: 32px; height: 26px; vertical-align: top; }
   .doc-table-wrap { position: relative; display: block; margin: 8px 0; }
 
-  a { color: #2F7BF6; text-decoration: underline; }
-
-  /* ── Formas inseridas (retângulo, círculo, linha, seta) ── */
   .doc-shape-wrap {
     position: relative;
     display: inline-block;
     margin: 8px 4px;
     vertical-align: middle;
   }
-  .doc-shape-wrap[data-locked="0"] {
-    outline: 1px dashed transparent;
-  }
   .doc-shape-wrap.shape-selected {
-    outline: 2px solid #2F7BF6;
+    outline: 2px solid var(--selection);
     outline-offset: 2px;
   }
-  .doc-shape-rect {
-    border-radius: 4px;
-  }
-  .doc-shape-circle {
-    border-radius: 50%;
-  }
-  .doc-shape-line {
-    height: 3px !important;
-    border-radius: 2px;
-  }
+  .doc-shape-rect { border-radius: 4px; }
+  .doc-shape-circle { border-radius: 50%; }
+  .doc-shape-line { height: 3px !important; border-radius: 2px; }
   .doc-shape-arrow-head {
     position: absolute;
     right: -2px;
@@ -134,14 +145,13 @@
     border-left: 12px solid currentColor;
   }
 
-  /* ── Resize handle simples para formas e imagens ── */
   .resize-handle {
     position: absolute;
     right: -6px;
     bottom: -6px;
     width: 16px;
     height: 16px;
-    background: #2F7BF6;
+    background: var(--selection);
     border: 2px solid #FFFFFF;
     border-radius: 50%;
     cursor: nwse-resize;
@@ -152,6 +162,7 @@
   .doc-chart-wrap.chart-selected .resize-handle {
     display: block;
   }
+
   .doc-img-wrap {
     position: relative;
     display: inline-block;
@@ -165,19 +176,15 @@
     border-radius: 2px;
   }
   .doc-img-wrap.img-selected img {
-    outline: 2px solid #2F7BF6;
+    outline: 2px solid var(--selection);
     outline-offset: 2px;
   }
-  /* Estado de carregamento/erro para imagens remotas (URL via link) —
-     evita que uma imagem partida quebre o layout do documento; mostra
-     um placeholder discreto em vez do ícone quebrado nativo do WebView. */
   .doc-img-wrap img.img-broken {
     min-height: 60px;
-    background: #F2F2F2;
-    border: 1px dashed #CCCCCC;
+    background: var(--placeholder-bg);
+    border: 1px dashed var(--placeholder-border);
   }
 
-  /* ── Gráficos inseridos (Chart.js) ── */
   .doc-chart-wrap {
     position: relative;
     display: block;
@@ -192,19 +199,10 @@
     height: 100% !important;
   }
   .doc-chart-wrap.chart-selected {
-    outline: 2px solid #2F7BF6;
+    outline: 2px solid var(--selection);
     outline-offset: 2px;
   }
 
-  /* ── Modo preview (usado dentro do DocumentWidgetCard, Flutter) ──
-     Quando a página é carregada com ?preview=1 na URL (ver iniciar()),
-     o documento fica completamente não-interativo (sem contenteditable,
-     sem scroll do utilizador, sem seleção) e o corpo aplica um leve
-     zoom-out via JS (ajustarZoomPreview) para caber numa miniatura. O
-     Flutter (InAppWebView) é responsável por dimensionar o próprio
-     iframe/WebView ao tamanho do card; este modo só desliga a
-     interatividade e deixa o conteúdo pronto para ser fotografado
-     visualmente pelo card. */
   body.preview-mode #canvasScroll {
     overflow: hidden;
     pointer-events: none;
@@ -213,7 +211,7 @@
     align-items: center;
   }
   body.preview-mode .page-a4 {
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 6px 16px rgba(0,0,0,0.14);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 6px 16px var(--page-shadow);
   }
 </style>
 </head>
@@ -243,32 +241,27 @@
   var selectedShapeEl = null;
   var selectedImgEl = null;
   var selectedChartEl = null;
-  var chartInstances = {}; // chartId -> instância Chart.js viva
+  var chartInstances = {};
   var isPreviewMode = false;
 
   function detectarModoPreview() {
     try {
       var params = new URLSearchParams(window.location.search);
       isPreviewMode = params.get('preview') === '1';
-    } catch (e) {
-      isPreviewMode = false;
-    }
-    if (isPreviewMode) {
-      document.body.classList.add('preview-mode');
-    }
+    } catch (e) { isPreviewMode = false; }
+    if (isPreviewMode) document.body.classList.add('preview-mode');
   }
 
   function ajustarZoom() {
-    var margem = isPreviewMode ? 0 : 24;
-    var larguraDisponivel = canvasScroll.clientWidth;
-    var escala = Math.min((larguraDisponivel - margem) / PAGE_W, 1);
+    var margem = isPreviewMode ? 0 : 16;
+    var larguraDisponivel = canvasScroll.clientWidth - margem;
+    var escala = Math.min(larguraDisponivel / PAGE_W, 1);
     fitScale = (escala > 0 && isFinite(escala)) ? escala : 1;
     pagesStack.style.transform = 'scale(' + fitScale + ')';
   }
 
   function criarFolha() {
     var id = nextFolhaId++;
-
     var pageEl = document.createElement('div');
     pageEl.className = 'page-a4';
     pageEl.style.width = PAGE_W + 'px';
@@ -330,9 +323,7 @@
   }
 
   function obterOuCriarProximaPagina(idxAtual) {
-    if (idxAtual + 1 < folhas.length) {
-      return idxAtual + 1;
-    }
+    if (idxAtual + 1 < folhas.length) return idxAtual + 1;
     criarFolha();
     return idxAtual + 1;
   }
@@ -348,18 +339,12 @@
       var proximoIdx = obterOuCriarProximaPagina(idx);
       var proximaConteudo = getConteudoEl(proximoIdx);
       if (!proximaConteudo) break;
-
-      if (proximaConteudo.firstChild) {
-        proximaConteudo.insertBefore(ultimoElemento, proximaConteudo.firstChild);
-      } else {
-        proximaConteudo.appendChild(ultimoElemento);
-      }
-
+      if (proximaConteudo.firstChild) proximaConteudo.insertBefore(ultimoElemento, proximaConteudo.firstChild);
+      else proximaConteudo.appendChild(ultimoElemento);
       empurrouAlgo = true;
       guarda++;
       conteudo = getConteudoEl(idx);
     }
-
     return empurrouAlgo;
   }
 
@@ -368,30 +353,21 @@
     var conteudo = getConteudoEl(idx);
     var proximaConteudo = getConteudoEl(idx + 1);
     if (!conteudo || !proximaConteudo || !proximaConteudo.firstElementChild) return false;
-
     var puxouAlgo = false;
     var guarda = 0;
-
     while (proximaConteudo.firstElementChild && guarda < 500) {
       var candidato = proximaConteudo.firstElementChild;
-
       conteudo.appendChild(candidato);
       var causaOverflow = conteudo.scrollHeight > conteudo.clientHeight + 1;
-
       if (causaOverflow) {
-        if (proximaConteudo.firstChild) {
-          proximaConteudo.insertBefore(candidato, proximaConteudo.firstChild);
-        } else {
-          proximaConteudo.appendChild(candidato);
-        }
+        if (proximaConteudo.firstChild) proximaConteudo.insertBefore(candidato, proximaConteudo.firstChild);
+        else proximaConteudo.appendChild(candidato);
         break;
       } else {
         puxouAlgo = true;
       }
-
       guarda++;
     }
-
     return puxouAlgo;
   }
 
@@ -401,9 +377,7 @@
       if (conteudo && conteudo.children.length === 0) {
         var folha = folhas.pop();
         folha.pageEl.remove();
-      } else {
-        break;
-      }
+      } else break;
     }
     atualizarNumerosPagina();
   }
@@ -412,18 +386,12 @@
     var selecao = window.getSelection();
     if (selecao.rangeCount === 0) return null;
     var range = selecao.getRangeAt(0);
-    return {
-      startContainer: range.startContainer,
-      startOffset: range.startOffset,
-      endContainer: range.endContainer,
-      endOffset: range.endOffset
-    };
+    return { startContainer: range.startContainer, startOffset: range.startOffset, endContainer: range.endContainer, endOffset: range.endOffset };
   }
 
   function restaurarSelecao(posicao) {
     if (!posicao) return;
     if (!document.contains(posicao.startContainer)) return;
-
     try {
       var range = document.createRange();
       range.setStart(posicao.startContainer, posicao.startOffset);
@@ -431,44 +399,30 @@
       var selecao = window.getSelection();
       selecao.removeAllRanges();
       selecao.addRange(range);
-    } catch (erro) {
-      // Perder o cursor exato num rebalance raro não é crítico.
-    }
+    } catch (erro) {}
   }
 
   function reequilibrarDocumento() {
     if (isRebalancing) return;
     isRebalancing = true;
-
     var posicaoSelecao = obterPosicaoSelecao();
-
-    for (var i = 0; i < folhas.length; i++) {
-      normalizarFilhosSoltos(folhas[i].contentEl);
-    }
-
+    for (var i = 0; i < folhas.length; i++) normalizarFilhosSoltos(folhas[i].contentEl);
     var mudouEmpurrando = true;
     var guardaGeral = 0;
     while (mudouEmpurrando && guardaGeral < 100) {
       mudouEmpurrando = false;
-      for (var j = 0; j < folhas.length; j++) {
-        if (empurrarTransbordoDaPagina(j)) mudouEmpurrando = true;
-      }
+      for (var j = 0; j < folhas.length; j++) if (empurrarTransbordoDaPagina(j)) mudouEmpurrando = true;
       guardaGeral++;
     }
-
     var mudouPuxando = true;
     var guardaPuxar = 0;
     while (mudouPuxando && guardaPuxar < 100) {
       mudouPuxando = false;
-      for (var k = 0; k < folhas.length - 1; k++) {
-        if (puxarConteudoDaProximaPagina(k)) mudouPuxando = true;
-      }
+      for (var k = 0; k < folhas.length - 1; k++) if (puxarConteudoDaProximaPagina(k)) mudouPuxando = true;
       guardaPuxar++;
     }
-
     removerPaginasVaziasNoFim();
     restaurarSelecao(posicaoSelecao);
-
     isRebalancing = false;
   }
 
@@ -482,15 +436,12 @@
     evento.preventDefault();
     var htmlColado = evento.clipboardData ? evento.clipboardData.getData('text/html') : '';
     var textoColado = evento.clipboardData ? evento.clipboardData.getData('text/plain') : '';
-
-    if (htmlColado) {
-      document.execCommand('insertHTML', false, htmlColado);
-    } else {
+    if (htmlColado) document.execCommand('insertHTML', false, htmlColado);
+    else {
       var linhas = textoColado.split(/\n+/).filter(function (l) { return l.trim() !== ''; });
       var htmlParagrafos = linhas.map(function (l) { return '<p>' + l + '</p>'; }).join('');
       document.execCommand('insertHTML', false, htmlParagrafos || '<p>' + textoColado + '</p>');
     }
-
     handleInput();
   }
 
@@ -504,36 +455,26 @@
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
       var html = getContent();
-      if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
-        window.AndroidBridge.saveDocument(html);
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler('saveDocument', html);
       }
     }, 500);
   }
 
   function getContent() {
-    return folhas.map(function (f) { return f.contentEl.innerHTML; })
-      .join('<div class="page-break-marker"></div>');
+    return folhas.map(function (f) { return f.contentEl.innerHTML; }).join('<div class="page-break-marker"></div>');
   }
 
   function destruirTodosOsCharts() {
-    Object.keys(chartInstances).forEach(function (id) {
-      try { chartInstances[id].destroy(); } catch (e) {}
-    });
+    Object.keys(chartInstances).forEach(function (id) { try { chartInstances[id].destroy(); } catch (e) {} });
     chartInstances = {};
   }
 
-  /// Marca visualmente qualquer <img> cujo carregamento falhe (ex: URL
-  /// remota inválida/inacessível gerada pela IA), em vez de deixar o
-  /// ícone de imagem quebrada nativo do WebView, que fica feio dentro
-  /// do documento. Chamado depois de setContent() e depois de inserir
-  /// uma imagem nova.
   function monitorizarErrosDeImagem(escopoEl) {
     var imgs = escopoEl.querySelectorAll('img:not([data-error-bound])');
     imgs.forEach(function (img) {
       img.setAttribute('data-error-bound', '1');
-      img.addEventListener('error', function () {
-        img.classList.add('img-broken');
-      });
+      img.addEventListener('error', function () { img.classList.add('img-broken'); });
     });
   }
 
@@ -545,16 +486,13 @@
     selectedShapeEl = null;
     selectedImgEl = null;
     selectedChartEl = null;
-
     var parts = (html || '').split('<div class="page-break-marker"></div>');
     var htmls = parts.length ? parts : ['<p><br></p>'];
-
     htmls.forEach(function (h) {
       var folha = criarFolha();
       folha.contentEl.innerHTML = h || '<p><br></p>';
       monitorizarErrosDeImagem(folha.contentEl);
     });
-
     reativarHandlersDeFormasEImagens();
     reidratarGraficos();
     reequilibrarDocumento();
@@ -574,54 +512,24 @@
   function focarSePreciso() {
     if (isPreviewMode) return;
     var el = getActiveContentEl();
-    if (el && document.activeElement !== el) {
-      el.focus();
-    }
+    if (el && document.activeElement !== el) el.focus();
   }
-
-  // ── Comandos básicos de texto ────────────────────────────────
 
   function exec(command) {
     focarSePreciso();
     switch (command) {
-      case 'bold':
-        document.execCommand('bold');
-        break;
-      case 'italic':
-        document.execCommand('italic');
-        break;
-      case 'underline':
-        document.execCommand('underline');
-        break;
-      case 'strikethrough':
-        document.execCommand('strikeThrough');
-        break;
-      case 'alignLeft':
-        document.execCommand('justifyLeft');
-        break;
-      case 'alignCenter':
-        document.execCommand('justifyCenter');
-        break;
-      case 'alignRight':
-        document.execCommand('justifyRight');
-        break;
-      case 'alignJustify':
-        document.execCommand('justifyFull');
-        break;
-      case 'bulletList':
-        document.execCommand('insertUnorderedList');
-        break;
-      case 'numberedList':
-        document.execCommand('insertOrderedList');
-        break;
-      case 'undo':
-        document.execCommand('undo');
-        break;
-      case 'redo':
-        document.execCommand('redo');
-        break;
-      default:
-        break;
+      case 'bold': document.execCommand('bold'); break;
+      case 'italic': document.execCommand('italic'); break;
+      case 'underline': document.execCommand('underline'); break;
+      case 'strikethrough': document.execCommand('strikeThrough'); break;
+      case 'alignLeft': document.execCommand('justifyLeft'); break;
+      case 'alignCenter': document.execCommand('justifyCenter'); break;
+      case 'alignRight': document.execCommand('justifyRight'); break;
+      case 'alignJustify': document.execCommand('justifyFull'); break;
+      case 'bulletList': document.execCommand('insertUnorderedList'); break;
+      case 'numberedList': document.execCommand('insertOrderedList'); break;
+      case 'undo': document.execCommand('undo'); break;
+      case 'redo': document.execCommand('redo'); break;
     }
     handleInput();
   }
@@ -639,8 +547,6 @@
     handleInput();
   }
 
-  // ── Cor de texto e destaque (highlight/marcador) ─────────────
-
   function setColor(hexColor) {
     focarSePreciso();
     document.execCommand('styleWithCSS', false, true);
@@ -651,8 +557,7 @@
   function setHighlight(hexColor) {
     focarSePreciso();
     document.execCommand('styleWithCSS', false, true);
-    var aplicou = document.execCommand('hiliteColor', false, hexColor);
-    if (!aplicou) {
+    if (!document.execCommand('hiliteColor', false, hexColor)) {
       document.execCommand('backColor', false, hexColor);
     }
     handleInput();
@@ -665,8 +570,6 @@
     handleInput();
   }
 
-  // ── Tabelas ───────────────────────────────────────────────────
-
   function insertTable(rows, cols) {
     focarSePreciso();
     var r = Math.max(1, Math.min(20, rows || 2));
@@ -674,9 +577,7 @@
     var html = '<div class="doc-table-wrap" contenteditable="false"><table class="doc-table"><tbody>';
     for (var ri = 0; ri < r; ri++) {
       html += '<tr>';
-      for (var ci = 0; ci < c; ci++) {
-        html += '<td contenteditable="true"><br></td>';
-      }
+      for (var ci = 0; ci < c; ci++) html += '<td contenteditable="true"><br></td>';
       html += '</tr>';
     }
     html += '</tbody></table></div><p><br></p>';
@@ -684,20 +585,9 @@
     handleInput();
   }
 
-  // ── Imagens ───────────────────────────────────────────────────
-  // insertImageAtCursor aceita tanto data-url (vindas do picker local)
-  // como URLs remotas normais (https://...) — funciona identicamente
-  // em ambos os casos, porque é apenas o atributo src de um <img>. Sem
-  // isto seria preciso um caminho separado; um <img src> comum já
-  // carrega qualquer URL pública, incluindo as que a IA insere via
-  // [[canvas:doc:...]].
-
   function insertImageAtCursor(url) {
     focarSePreciso();
-    var html = '<span class="doc-img-wrap" contenteditable="false">' +
-      '<img src="' + url + '" />' +
-      '<div class="resize-handle"></div>' +
-      '</span>&nbsp;';
+    var html = '<span class="doc-img-wrap" contenteditable="false"><img src="' + url + '" /><div class="resize-handle"></div></span>&nbsp;';
     document.execCommand('insertHTML', false, html);
     handleInput();
     setTimeout(function () {
@@ -714,30 +604,15 @@
     handleInput();
   }
 
-  // ── Formas (retângulo, círculo, linha, seta) ────────────────
-
   function insertShape(shapeKind, hexColor) {
     focarSePreciso();
     var cor = hexColor || '#2F7BF6';
     var id = 'shape_' + (nextShapeId++);
     var w = shapeKind === 'line' ? 160 : 100;
     var h = shapeKind === 'line' ? 3 : 100;
-    var extraClass = shapeKind === 'circle' ? 'doc-shape-circle'
-      : shapeKind === 'line' ? 'doc-shape-line'
-      : shapeKind === 'arrow' ? 'doc-shape-line'
-      : 'doc-shape-rect';
-
-    var innerArrow = shapeKind === 'arrow'
-      ? '<div class="doc-shape-arrow-head" style="color:' + cor + '"></div>'
-      : '';
-
-    var html = '<span class="doc-shape-wrap" data-shape-id="' + id + '" data-shape-kind="' +
-      shapeKind + '" contenteditable="false">' +
-      '<span class="' + extraClass + '" data-shape-body="1" style="display:block; width:' + w +
-      'px; height:' + h + 'px; background:' + cor + ';">' + innerArrow + '</span>' +
-      '<span class="resize-handle"></span>' +
-      '</span>&nbsp;';
-
+    var extraClass = shapeKind === 'circle' ? 'doc-shape-circle' : shapeKind === 'line' ? 'doc-shape-line' : shapeKind === 'arrow' ? 'doc-shape-line' : 'doc-shape-rect';
+    var innerArrow = shapeKind === 'arrow' ? '<div class="doc-shape-arrow-head" style="color:' + cor + '"></div>' : '';
+    var html = '<span class="doc-shape-wrap" data-shape-id="' + id + '" data-shape-kind="' + shapeKind + '" contenteditable="false"><span class="' + extraClass + '" data-shape-body="1" style="display:block;width:' + w + 'px;height:' + h + 'px;background:' + cor + ';">' + innerArrow + '</span><span class="resize-handle"></span></span>&nbsp;';
     document.execCommand('insertHTML', false, html);
     handleInput();
     setTimeout(reativarHandlersDeFormasEImagens, 30);
@@ -766,15 +641,17 @@
     handleInput();
   }
 
-  // ── Gráficos (Chart.js) ───────────────────────────────────────
+  function deleteSelectedChart() {
+    if (!selectedChartEl) return;
+    var id = selectedChartEl.getAttribute('data-chart-id');
+    if (id && chartInstances[id]) { try { chartInstances[id].destroy(); } catch (e) {} delete chartInstances[id]; }
+    selectedChartEl.remove();
+    selectedChartEl = null;
+    handleInput();
+  }
 
   function escaparParaAtributo(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function desescaparDeAtributo(str) {
@@ -787,16 +664,9 @@
     focarSePreciso();
     var id = 'chart_' + (nextChartId++);
     var configStr = typeof chartConfigJson === 'string' ? chartConfigJson : JSON.stringify(chartConfigJson);
-
-    var html = '<div class="doc-chart-wrap" data-chart-id="' + id + '" data-chart-config="' +
-      escaparParaAtributo(configStr) + '" contenteditable="false">' +
-      '<canvas></canvas>' +
-      '<span class="resize-handle"></span>' +
-      '</div><p><br></p>';
-
+    var html = '<div class="doc-chart-wrap" data-chart-id="' + id + '" data-chart-config="' + escaparParaAtributo(configStr) + '" contenteditable="false"><canvas></canvas><span class="resize-handle"></span></div><p><br></p>';
     document.execCommand('insertHTML', false, html);
     handleInput();
-
     setTimeout(function () {
       var wrap = document.querySelector('.doc-chart-wrap[data-chart-id="' + id + '"]');
       if (wrap) inicializarChartNoWrapper(wrap, id, configStr);
@@ -808,19 +678,9 @@
     var canvas = wrapEl.querySelector('canvas');
     if (!canvas || typeof Chart === 'undefined') return;
     var config;
-    try {
-      config = JSON.parse(configStr);
-    } catch (e) {
-      return;
-    }
-    if (chartInstances[id]) {
-      try { chartInstances[id].destroy(); } catch (e) {}
-    }
-    try {
-      chartInstances[id] = new Chart(canvas.getContext('2d'), config);
-    } catch (e) {
-      // config inválida vinda da IA — não bloqueia o resto do documento
-    }
+    try { config = JSON.parse(configStr); } catch (e) { return; }
+    if (chartInstances[id]) { try { chartInstances[id].destroy(); } catch (e) {} }
+    try { chartInstances[id] = new Chart(canvas.getContext('2d'), config); } catch (e) {}
   }
 
   function reidratarGraficos() {
@@ -837,31 +697,10 @@
     });
   }
 
-  function deleteSelectedChart() {
-    if (!selectedChartEl) return;
-    var id = selectedChartEl.getAttribute('data-chart-id');
-    if (id && chartInstances[id]) {
-      try { chartInstances[id].destroy(); } catch (e) {}
-      delete chartInstances[id];
-    }
-    selectedChartEl.remove();
-    selectedChartEl = null;
-    handleInput();
-  }
-
   function deselecionarTudo() {
-    if (selectedShapeEl) {
-      selectedShapeEl.classList.remove('shape-selected');
-      selectedShapeEl = null;
-    }
-    if (selectedImgEl) {
-      selectedImgEl.classList.remove('img-selected');
-      selectedImgEl = null;
-    }
-    if (selectedChartEl) {
-      selectedChartEl.classList.remove('chart-selected');
-      selectedChartEl = null;
-    }
+    if (selectedShapeEl) { selectedShapeEl.classList.remove('shape-selected'); selectedShapeEl = null; }
+    if (selectedImgEl) { selectedImgEl.classList.remove('img-selected'); selectedImgEl = null; }
+    if (selectedChartEl) { selectedChartEl.classList.remove('chart-selected'); selectedChartEl = null; }
   }
 
   function aoClicarNoConteudo(evento) {
@@ -869,14 +708,13 @@
     var shapeWrap = alvo.closest ? alvo.closest('.doc-shape-wrap') : null;
     var imgWrap = alvo.closest ? alvo.closest('.doc-img-wrap') : null;
     var chartWrap = alvo.closest ? alvo.closest('.doc-chart-wrap') : null;
-
     if (shapeWrap) {
       evento.preventDefault();
       deselecionarTudo();
       selectedShapeEl = shapeWrap;
       shapeWrap.classList.add('shape-selected');
-      if (window.AndroidBridge && window.AndroidBridge.onShapeSelected) {
-        window.AndroidBridge.onShapeSelected(shapeWrap.getAttribute('data-shape-id'));
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler('onShapeSelected', shapeWrap.getAttribute('data-shape-id'));
       }
       return;
     }
@@ -885,9 +723,6 @@
       deselecionarTudo();
       selectedImgEl = imgWrap;
       imgWrap.classList.add('img-selected');
-      if (window.AndroidBridge && window.AndroidBridge.onImageSelected) {
-        window.AndroidBridge.onImageSelected('1');
-      }
       return;
     }
     if (chartWrap) {
@@ -895,87 +730,47 @@
       deselecionarTudo();
       selectedChartEl = chartWrap;
       chartWrap.classList.add('chart-selected');
-      if (window.AndroidBridge && window.AndroidBridge.onChartSelected) {
-        window.AndroidBridge.onChartSelected(chartWrap.getAttribute('data-chart-id'));
-      }
       return;
     }
     deselecionarTudo();
   }
-
-  // ── Arraste do handle de redimensionar (touch + mouse) ───────
 
   function reativarHandlersDeFormasEImagens() {
     var handles = document.querySelectorAll('.resize-handle');
     handles.forEach(function (handle) {
       if (handle.getAttribute('data-bound') === '1') return;
       handle.setAttribute('data-bound', '1');
-
-      var arrastando = false;
-      var startX = 0, startY = 0, startW = 0, startH = 0;
-      var wrapEl = null;
-      var bodyEl = null;
-      var isChart = false;
-      var chartIdParaRedimensionar = null;
-
-      function pegarWrap() {
-        return handle.closest('.doc-shape-wrap') || handle.closest('.doc-img-wrap') || handle.closest('.doc-chart-wrap');
-      }
-
-      function posClient(evento) {
-        if (evento.touches && evento.touches.length) {
-          return { x: evento.touches[0].clientX, y: evento.touches[0].clientY };
-        }
-        return { x: evento.clientX, y: evento.clientY };
-      }
-
+      var arrastando = false, startX = 0, startY = 0, startW = 0, startH = 0, wrapEl = null, bodyEl = null, isChart = false, chartId = null;
+      function pegarWrap() { return handle.closest('.doc-shape-wrap') || handle.closest('.doc-img-wrap') || handle.closest('.doc-chart-wrap'); }
+      function posClient(evento) { return evento.touches && evento.touches.length ? { x: evento.touches[0].clientX, y: evento.touches[0].clientY } : { x: evento.clientX, y: evento.clientY }; }
       function aoIniciar(evento) {
-        evento.preventDefault();
-        evento.stopPropagation();
-        wrapEl = pegarWrap();
-        if (!wrapEl) return;
+        evento.preventDefault(); evento.stopPropagation();
+        wrapEl = pegarWrap(); if (!wrapEl) return;
         isChart = wrapEl.classList.contains('doc-chart-wrap');
-        if (isChart) {
-          bodyEl = wrapEl;
-          chartIdParaRedimensionar = wrapEl.getAttribute('data-chart-id');
-        } else {
-          bodyEl = wrapEl.querySelector('[data-shape-body]') || wrapEl.querySelector('img');
-        }
+        if (isChart) { bodyEl = wrapEl; chartId = wrapEl.getAttribute('data-chart-id'); }
+        else bodyEl = wrapEl.querySelector('[data-shape-body]') || wrapEl.querySelector('img');
         if (!bodyEl) return;
         arrastando = true;
         var pos = posClient(evento);
-        startX = pos.x;
-        startY = pos.y;
-        startW = bodyEl.offsetWidth;
-        startH = bodyEl.offsetHeight;
+        startX = pos.x; startY = pos.y;
+        startW = bodyEl.offsetWidth; startH = bodyEl.offsetHeight;
       }
-
       function aoMover(evento) {
         if (!arrastando || !bodyEl) return;
         evento.preventDefault();
         var pos = posClient(evento);
         var deltaX = (pos.x - startX) / fitScale;
         var deltaY = (pos.y - startY) / fitScale;
-        var novaLargura = Math.max(20, startW + deltaX);
-        var novaAltura = Math.max(20, startH + deltaY);
-        bodyEl.style.width = novaLargura + 'px';
-        if (bodyEl.tagName !== 'IMG' || true) {
-          bodyEl.style.height = novaAltura + 'px';
-        }
-        if (isChart && chartIdParaRedimensionar && chartInstances[chartIdParaRedimensionar]) {
-          try { chartInstances[chartIdParaRedimensionar].resize(); } catch (e) {}
-        }
+        bodyEl.style.width = Math.max(20, startW + deltaX) + 'px';
+        bodyEl.style.height = Math.max(20, startH + deltaY) + 'px';
+        if (isChart && chartId && chartInstances[chartId]) { try { chartInstances[chartId].resize(); } catch (e) {} }
       }
-
       function aoTerminar() {
         if (!arrastando) return;
         arrastando = false;
-        if (isChart && chartIdParaRedimensionar && chartInstances[chartIdParaRedimensionar]) {
-          try { chartInstances[chartIdParaRedimensionar].resize(); } catch (e) {}
-        }
+        if (isChart && chartId && chartInstances[chartId]) { try { chartInstances[chartId].resize(); } catch (e) {} }
         agendarGravacao();
       }
-
       handle.addEventListener('mousedown', aoIniciar);
       handle.addEventListener('touchstart', aoIniciar, { passive: false });
       window.addEventListener('mousemove', aoMover);
@@ -985,13 +780,10 @@
     });
   }
 
-  // ── Orientação de página ─────────────────────────────────────
-
   function setPageOrientation(orientacao) {
     var novaLargura = orientacao === 'landscape' ? 1123 : 794;
     var novaAltura = orientacao === 'landscape' ? 794 : 1123;
-    PAGE_W = novaLargura;
-    PAGE_H = novaAltura;
+    PAGE_W = novaLargura; PAGE_H = novaAltura;
     for (var i = 0; i < folhas.length; i++) {
       folhas[i].pageEl.style.width = PAGE_W + 'px';
       folhas[i].pageEl.style.height = PAGE_H + 'px';
@@ -1000,7 +792,23 @@
     reequilibrarDocumento();
   }
 
-  // ── API exposta ao toolbar Dart e/ou à IA (canvas automático) ─
+  function trazerParaFrente() {
+    var el = selectedShapeEl || selectedImgEl || selectedChartEl;
+    if (!el) return;
+    var conteudo = el.closest('.conteudo');
+    if (!conteudo) return;
+    conteudo.appendChild(el);
+    handleInput();
+  }
+
+  function enviarParaTras() {
+    var el = selectedShapeEl || selectedImgEl || selectedChartEl;
+    if (!el) return;
+    var conteudo = el.closest('.conteudo');
+    if (!conteudo) return;
+    conteudo.insertBefore(el, conteudo.firstChild);
+    handleInput();
+  }
 
   window.editorApi = {
     exec: exec,
@@ -1018,6 +826,8 @@
     deleteSelectedImage: deleteSelectedImage,
     deleteSelectedChart: deleteSelectedChart,
     setPageOrientation: setPageOrientation,
+    trazerParaFrente: trazerParaFrente,
+    enviarParaTras: enviarParaTras,
     getContent: getContent,
     setContent: setContent
   };
@@ -1027,33 +837,18 @@
     ajustarZoom();
     window.addEventListener('resize', ajustarZoom);
     window.addEventListener('orientationchange', ajustarZoom);
-
     document.execCommand('defaultParagraphSeparator', false, 'p');
-
     var conteudoInicial = '';
-    if (window.AndroidBridge && window.AndroidBridge.loadDocument) {
-      try {
-        conteudoInicial = window.AndroidBridge.loadDocument() || '';
-      } catch (e) {
-        conteudoInicial = '';
-      }
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      // O Flutter injeta via setContent após onLoadStop.
     }
-
-    if (conteudoInicial) {
-      setContent(conteudoInicial);
-    } else {
-      criarFolha();
-      reequilibrarDocumento();
-    }
+    if (conteudoInicial) setContent(conteudoInicial);
+    else { criarFolha(); reequilibrarDocumento(); }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', iniciar);
-  } else {
-    iniciar();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+  else iniciar();
 })();
 </script>
-
 </body>
 </html>

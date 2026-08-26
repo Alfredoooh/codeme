@@ -2,10 +2,40 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=4.0, user-scalable=yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Apresentação</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
+  :root {
+    --slides-bg: #EDEEF0;
+    --slide-bg: #FFFFFF;
+    --slide-text: #1A1A1A;
+    --slide-shadow: rgba(0,0,0,0.18);
+    --selection: #2F7BF6;
+    --thumb-bg: #FFFFFF;
+    --thumb-border: #DADCE0;
+    --thumb-active-border: #2F7BF6;
+    --thumb-add-border: #C4C7CC;
+    --thumb-add-color: #9AA0A6;
+    --strip-bg: #FFFFFF;
+    --strip-border: #E5E5EA;
+  }
+
+  body.dark {
+    --slides-bg: #121313;
+    --slide-bg: #1C1C1E;
+    --slide-text: #F2F2F2;
+    --slide-shadow: rgba(0,0,0,0.4);
+    --selection: #0A84FF;
+    --thumb-bg: #1C1C1E;
+    --thumb-border: #3A3A3C;
+    --thumb-active-border: #0A84FF;
+    --thumb-add-border: #48484A;
+    --thumb-add-color: #6E6E73;
+    --strip-bg: #1C1C1E;
+    --strip-border: #2C2C2E;
+  }
+
   * {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
@@ -35,7 +65,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #EDEEF0;
+    background: var(--slides-bg);
   }
 
   #slideCanvas {
@@ -43,14 +73,25 @@
   }
 
   .slide-16-9 {
-    background: #FFFFFF;
+    background: var(--slide-bg);
     width: 960px;
     height: 540px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.18);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 8px 24px var(--slide-shadow);
     border-radius: 6px;
     position: relative;
     transform-origin: center;
     overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  .slide-16-9.anim-out {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  .slide-16-9.anim-in {
+    opacity: 1;
+    transform: scale(1);
   }
 
   .slide-element {
@@ -58,14 +99,15 @@
     outline: none;
     -webkit-user-select: text;
     user-select: text;
+    transition: box-shadow 0.15s ease;
   }
   .slide-element.selected {
-    outline: 2px solid #2F7BF6;
+    outline: 2px solid var(--selection);
     outline-offset: 2px;
   }
   .slide-element[data-type="text"] {
     font-size: 24px;
-    color: #1a1a1a;
+    color: var(--slide-text);
     line-height: 1.4;
     cursor: text;
   }
@@ -76,8 +118,8 @@
     pointer-events: none;
   }
   .slide-element[data-type="image"] img.img-broken {
-    background: #F2F2F2;
-    border: 1px dashed #CCCCCC;
+    background: var(--slide-bg);
+    border: 1px dashed var(--thumb-border);
   }
   .slide-element[data-type="shape"] {
     border-radius: 4px;
@@ -85,9 +127,6 @@
   .slide-element[data-type="shape"].shape-circle {
     border-radius: 50%;
   }
-  /* ── Gráfico embebido num slide (Chart.js) — novo tipo de elemento,
-     paralelo ao já existente em docs.html, para o requisito de
-     "renderizar tudo que uma página web consegue" também em slides. ── */
   .slide-element[data-type="chart"] canvas {
     width: 100% !important;
     height: 100% !important;
@@ -100,7 +139,7 @@
     bottom: -7px;
     width: 18px;
     height: 18px;
-    background: #2F7BF6;
+    background: var(--selection);
     border: 2px solid #FFFFFF;
     border-radius: 50%;
     display: none;
@@ -110,46 +149,11 @@
     display: block;
   }
 
-  #slideCounter {
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    background: rgba(0,0,0,0.55);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 999px;
-    pointer-events: none;
-    z-index: 4;
-  }
-
-  .nav-arrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.9);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    color: #333;
-    z-index: 4;
-    user-select: none;
-  }
-  .nav-arrow.prev { left: 10px; }
-  .nav-arrow.next { right: 10px; }
-  .nav-arrow.hidden { opacity: 0.25; pointer-events: none; }
-
   #thumbStrip {
     height: 92px;
     flex-shrink: 0;
-    background: #FFFFFF;
-    border-top: 1px solid #E5E5EA;
+    background: var(--strip-bg);
+    border-top: 1px solid var(--strip-border);
     display: flex;
     align-items: center;
     overflow-x: auto;
@@ -163,14 +167,16 @@
     width: 96px;
     height: 54px;
     border-radius: 5px;
-    background: #FFFFFF;
-    border: 2px solid #DADCE0;
+    background: var(--thumb-bg);
+    border: 2px solid var(--thumb-border);
     position: relative;
     overflow: hidden;
     box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    transition: border-color 0.15s ease, transform 0.15s ease;
   }
   .thumb-item.active {
-    border-color: #2F7BF6;
+    border-color: var(--thumb-active-border);
+    transform: translateY(-2px);
   }
   .thumb-item .thumb-scaled {
     position: absolute;
@@ -186,8 +192,8 @@
     left: 4px;
     font-size: 9px;
     font-weight: 700;
-    color: #FFFFFF;
-    text-shadow: 0 0 2px rgba(0,0,0,0.6);
+    color: var(--slide-text);
+    text-shadow: 0 0 2px rgba(0,0,0,0.2);
     z-index: 2;
   }
   .thumb-add {
@@ -195,24 +201,25 @@
     width: 96px;
     height: 54px;
     border-radius: 5px;
-    border: 2px dashed #C4C7CC;
+    border: 2px dashed var(--thumb-add-border);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #9AA0A6;
+    color: var(--thumb-add-color);
     font-size: 22px;
     font-weight: 300;
+    transition: background 0.15s ease;
+  }
+  .thumb-add:active {
+    background: var(--thumb-bg);
   }
 
-  /* ── Modo preview (usado dentro do DocumentWidgetCard, Flutter) ── */
+  /* Modo preview */
   body.preview-mode #thumbStrip {
     display: none;
   }
   body.preview-mode #mainStage {
     pointer-events: none;
-  }
-  body.preview-mode .nav-arrow {
-    display: none;
   }
 </style>
 </head>
@@ -223,9 +230,6 @@
     <div id="slideCanvas">
       <div class="slide-16-9" id="currentSlide"></div>
     </div>
-    <div id="slideCounter">1 / 1</div>
-    <div class="nav-arrow prev hidden" id="navPrev">‹</div>
-    <div class="nav-arrow next hidden" id="navNext">›</div>
   </div>
   <div id="thumbStrip"></div>
 </div>
@@ -241,10 +245,7 @@
   var mainStage = document.getElementById('mainStage');
   var slideCanvas = document.getElementById('slideCanvas');
   var currentSlideEl = document.getElementById('currentSlide');
-  var slideCounterEl = document.getElementById('slideCounter');
   var thumbStrip = document.getElementById('thumbStrip');
-  var navPrev = document.getElementById('navPrev');
-  var navNext = document.getElementById('navNext');
 
   var slides = [{ id: 0, elements: [] }];
   var currentSlideIndex = 0;
@@ -253,7 +254,8 @@
   var fitScale = 1;
   var saveTimeout = null;
   var isPreviewMode = false;
-  var chartInstancesSlides = {}; // "slideIdx:elId" -> instância Chart.js viva
+  var chartInstancesSlides = {};
+  var animating = false;
 
   function detectarModoPreview() {
     try {
@@ -323,8 +325,6 @@
       } else if (el.type === 'chart') {
         var canvas = document.createElement('canvas');
         div.appendChild(canvas);
-        // Diferido para o próximo frame, para garantir que o canvas já
-        // tem dimensões de layout corretas antes do Chart.js medir.
         (function (canvasEl, config, key) {
           requestAnimationFrame(function () {
             if (typeof Chart === 'undefined') return;
@@ -345,12 +345,14 @@
           evento.stopPropagation();
           selecionarElemento(el.id);
         });
+
+        // Arraste suave do elemento
+        ligarArrasteElemento(div, el);
       }
 
       currentSlideEl.appendChild(div);
     });
 
-    atualizarContadorENavegacao();
     atualizarThumbAtiva();
   }
 
@@ -409,13 +411,66 @@
     window.addEventListener('touchend', aoTerminar);
   }
 
+  function ligarArrasteElemento(div, el) {
+    var arrastando = false;
+    var startX = 0, startY = 0, startElX = 0, startElY = 0;
+    var moved = false;
+
+    function posClient(evento) {
+      if (evento.touches && evento.touches.length) {
+        return { x: evento.touches[0].clientX, y: evento.touches[0].clientY };
+      }
+      return { x: evento.clientX, y: evento.clientY };
+    }
+
+    function aoIniciar(evento) {
+      if (evento.target.classList.contains('element-resize-handle')) return;
+      arrastando = true;
+      moved = false;
+      var pos = posClient(evento);
+      startX = pos.x;
+      startY = pos.y;
+      startElX = el.x;
+      startElY = el.y;
+    }
+
+    function aoMover(evento) {
+      if (!arrastando) return;
+      evento.preventDefault();
+      moved = true;
+      var pos = posClient(evento);
+      var deltaX = (pos.x - startX) / fitScale;
+      var deltaY = (pos.y - startY) / fitScale;
+      el.x = Math.max(0, Math.min(SLIDE_W - el.w, startElX + deltaX));
+      el.y = Math.max(0, Math.min(SLIDE_H - el.h, startElY + deltaY));
+      div.style.left = el.x + 'px';
+      div.style.top = el.y + 'px';
+    }
+
+    function aoTerminar() {
+      if (!arrastando) return;
+      arrastando = false;
+      if (moved) {
+        agendarGravacao();
+        renderizarThumbs();
+      }
+    }
+
+    div.addEventListener('mousedown', aoIniciar);
+    div.addEventListener('touchstart', aoIniciar, { passive: false });
+    window.addEventListener('mousemove', aoMover);
+    window.addEventListener('touchmove', aoMover, { passive: false });
+    window.addEventListener('mouseup', aoTerminar);
+    window.addEventListener('touchend', aoTerminar);
+  }
+
   function selecionarElemento(id) {
     selectedElementId = id;
     currentSlideEl.querySelectorAll('.slide-element').forEach(function (elDiv) {
       elDiv.classList.toggle('selected', elDiv.getAttribute('data-id') === String(id));
     });
-    if (window.AndroidBridge && window.AndroidBridge.onElementSelected) {
-      window.AndroidBridge.onElementSelected(String(id));
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('onElementSelected', String(id));
     }
   }
 
@@ -432,45 +487,11 @@
     if (isPreviewMode) return;
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
-      if (window.AndroidBridge && window.AndroidBridge.saveDocument) {
-        window.AndroidBridge.saveDocument(getContent());
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler('saveDocument', getContent());
       }
     }, 500);
   }
-
-  function atualizarContadorENavegacao() {
-    slideCounterEl.textContent = (currentSlideIndex + 1) + ' / ' + slides.length;
-    navPrev.classList.toggle('hidden', currentSlideIndex === 0);
-    navNext.classList.toggle('hidden', currentSlideIndex === slides.length - 1);
-  }
-
-  navPrev.addEventListener('click', function () { goToSlide(currentSlideIndex - 1); });
-  navNext.addEventListener('click', function () { goToSlide(currentSlideIndex + 1); });
-
-  (function ligarSwipe() {
-    var startX = 0, startY = 0, tocando = false;
-    mainStage.addEventListener('touchstart', function (evento) {
-      if (isPreviewMode) return;
-      if (evento.touches.length !== 1) return;
-      tocando = true;
-      startX = evento.touches[0].clientX;
-      startY = evento.touches[0].clientY;
-    }, { passive: true });
-
-    mainStage.addEventListener('touchend', function (evento) {
-      if (isPreviewMode) return;
-      if (!tocando) return;
-      tocando = false;
-      var endX = evento.changedTouches[0].clientX;
-      var endY = evento.changedTouches[0].clientY;
-      var deltaX = endX - startX;
-      var deltaY = endY - startY;
-      if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-        if (deltaX < 0) goToSlide(currentSlideIndex + 1);
-        else goToSlide(currentSlideIndex - 1);
-      }
-    }, { passive: true });
-  })();
 
   function renderizarThumbs() {
     thumbStrip.innerHTML = '';
@@ -508,9 +529,6 @@
           mini.style.background = el.color || '#2F7BF6';
           mini.style.borderRadius = el.shapeKind === 'circle' ? '50%' : '4px';
         } else if (el.type === 'chart') {
-          // Miniatura de gráfico: placeholder sólido leve em vez de
-          // renderizar um segundo Chart.js por thumbnail (custoso e
-          // desnecessário numa faixa de miniaturas).
           mini.style.background = '#EEF2F8';
           mini.style.border = '1px solid #D8DEE8';
         }
@@ -519,10 +537,7 @@
 
       var number = document.createElement('div');
       number.className = 'thumb-number';
-      number.style.color = '#333';
-      number.style.textShadow = 'none';
       number.textContent = String(idx + 1);
-
       thumb.appendChild(scaled);
       thumb.appendChild(number);
       thumb.addEventListener('click', function () { goToSlide(idx); });
@@ -547,7 +562,7 @@
     if (ativo) ativo.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }
 
-  // ── API exposta ao toolbar Dart (específica de slides) ─────────
+  // ── API ───────────────────────────────────────────────────────
 
   function addSlide() {
     slides.push({ id: slides.length, elements: [] });
@@ -558,11 +573,20 @@
   }
 
   function goToSlide(index) {
-    if (index < 0 || index >= slides.length) return;
-    currentSlideIndex = index;
-    selectedElementId = null;
-    renderizarSlideAtual();
-    atualizarThumbAtiva();
+    if (index < 0 || index >= slides.length || animating) return;
+    animating = true;
+    currentSlideEl.classList.add('anim-out');
+    setTimeout(function () {
+      currentSlideIndex = index;
+      selectedElementId = null;
+      renderizarSlideAtual();
+      currentSlideEl.classList.remove('anim-out');
+      currentSlideEl.classList.add('anim-in');
+      setTimeout(function () {
+        currentSlideEl.classList.remove('anim-in');
+        animating = false;
+      }, 250);
+    }, 250);
   }
 
   function deleteCurrentSlide() {
@@ -620,10 +644,6 @@
     agendarGravacao();
   }
 
-  /// Insere um gráfico Chart.js no slide atual — mesmo formato de
-  /// configuração usado em docs.html (data-ai-chart), aqui recebido
-  /// diretamente como objeto/string JSON. Parte do requisito
-  /// "renderizar tudo que uma página web consegue" também em slides.
   function insertChart(chartConfigJson) {
     var config = typeof chartConfigJson === 'string' ? JSON.parse(chartConfigJson) : chartConfigJson;
     var slide = slides[currentSlideIndex];
@@ -725,17 +745,9 @@
     try {
       var dados = JSON.parse(json || '{}');
       aplicarSlidesData(dados);
-    } catch (e) {
-      // JSON inválido — mantém slide único vazio
-    }
+    } catch (e) {}
   }
 
-  /// ATUALIZAÇÃO (slides reais gerados pela IA): tal como em
-  /// sheets.html, esta função era antes uma segunda camada de defesa
-  /// que recusava conteúdo vindo da IA. Esse bloqueio foi removido do
-  /// lado Dart — agora é o ponto de entrada real para uma apresentação
-  /// criada via [[canvas:slide:...]], usando exatamente o formato
-  /// documentado em kAiSystemPrompt: {"slides": [...], "currentSlideIndex": 0}.
   function setContentFromAi(json) {
     setContent(json);
     return true;
@@ -743,6 +755,24 @@
 
   function getSlideCount() {
     return slides.length;
+  }
+
+  function setThemeMode(mode) {
+    var isDark = (mode === 'dark') || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.body.classList.toggle('dark', isDark);
+    if (window.Chart) {
+      Chart.defaults.color = isDark ? '#F2F2F2' : '#1A1A1A';
+      Object.keys(chartInstancesSlides).forEach(function (key) {
+        var chart = chartInstancesSlides[key];
+        if (chart && chart.options) {
+          chart.options.plugins = chart.options.plugins || {};
+          chart.options.plugins.legend = chart.options.plugins.legend || {};
+          chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+          chart.options.plugins.legend.labels.color = Chart.defaults.color;
+          chart.update();
+        }
+      });
+    }
   }
 
   window.editorApi = {
@@ -761,7 +791,8 @@
     getContent: getContent,
     setContent: setContent,
     setContentFromAi: setContentFromAi,
-    getSlideCount: getSlideCount
+    getSlideCount: getSlideCount,
+    setThemeMode: setThemeMode
   };
 
   function iniciar() {
@@ -771,19 +802,14 @@
     window.addEventListener('orientationchange', ajustarZoom);
 
     var conteudoInicial = '';
-    if (window.AndroidBridge && window.AndroidBridge.loadDocument) {
-      try {
-        conteudoInicial = window.AndroidBridge.loadDocument() || '';
-      } catch (e) {
-        conteudoInicial = '';
-      }
-    }
+    // O Flutter injeta via setContent após onLoadStop
     if (conteudoInicial) {
       setContent(conteudoInicial);
     } else {
       renderizarSlideAtual();
     }
     renderizarThumbs();
+    setThemeMode('system');
   }
 
   if (document.readyState === 'loading') {
@@ -793,6 +819,5 @@
   }
 })();
 </script>
-
 </body>
 </html>

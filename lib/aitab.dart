@@ -91,7 +91,6 @@ correta — nunca precisas de explicar a notação, apenas escrevê-la.
 ''';
 
 const String kAiDocInstructions = '''
-
 Quando o utilizador pedir para criares, escreveres ou editares um documento
 de texto, gera o conteúdo e embrulha-o EXATAMENTE neste formato, no fim da
 tua resposta:
@@ -128,7 +127,6 @@ gráfico interativo real no documento.
 ''';
 
 const String kAiSheetInstructions = '''
-
 Quando o utilizador pedir para criares uma FOLHA DE CÁLCULO, gera o
 conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
 
@@ -149,7 +147,6 @@ JSON válido, sem comentários, sem vírgulas a mais.
 ''';
 
 const String kAiSlideInstructions = '''
-
 Quando o utilizador pedir para criares uma APRESENTAÇÃO ou SLIDES, gera o
 conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
 
@@ -169,7 +166,6 @@ apresentação), "x", "y", "w", "h" em pixels. Gera sempre JSON válido.
 ''';
 
 const String kAiSoundInstructions = '''
-
 Tens acesso ao app Sound para pesquisar música. Quando o pedido for
 sobre encontrar/tocar música, usa o formato:
 [[sound_search:termo de pesquisa]]
@@ -178,7 +174,6 @@ pesquisa. A app trata do resto.
 ''';
 
 const String kAiWidgetsInstructions = '''
-
 Tens também acesso a widgets visuais interativos, que aparecem diretamente
 dentro da conversa (nunca em canvas). Quando fizer sentido para a resposta,
 gera um bloco de código com uma das seguintes linguagens especiais, contendo
@@ -199,7 +194,6 @@ mostrar o JSON cru.
 ''';
 
 const String kAiWebSearchInstructions = '''
-
 Tens acesso a pesquisa na web em tempo real para esta conversa. Quando a
 pergunta do utilizador beneficiar de informação atual, recente ou que possa
 ter mudado (notícias, preços, eventos, versões de software, datas), utiliza
@@ -415,11 +409,11 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
     _ov = OverlayEntry(builder: (ctx) {
       final s = widget.s;
       final screenSize = MediaQuery.of(ctx).size;
-      final desiredTop = off.dy + sz.height + 6;
+      final desiredTop = off.dy + sz.height + 2;
       final overflowsBottom = desiredTop + widget.estimatedHeight > screenSize.height - 24;
       final opensUp = overflowsBottom;
       final top = opensUp ? null : desiredTop;
-      final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
+      final bottom = opensUp ? screenSize.height - off.dy + 2 : null;
       final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - widget.width - 12);
 
       return Stack(children: [
@@ -644,10 +638,10 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
       const width = 260.0;
       const estimatedHeight = 230.0;
       final screenSize = MediaQuery.of(ctx).size;
-      final desiredTop = off.dy + sz.height + 6;
+      final desiredTop = off.dy + sz.height + 2;
       final opensUp = desiredTop + estimatedHeight > screenSize.height - 24;
       final top = opensUp ? null : desiredTop;
-      final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
+      final bottom = opensUp ? screenSize.height - off.dy + 2 : null;
       final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - width - 12);
 
       return Stack(children: [
@@ -926,7 +920,6 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
   final widgetParse = parseAiWidgetBlocks(canvasScan.textWithMarkers);
   var remaining = widgetParse.textWithMarkers;
 
-  // Impede que conteúdo parcial de blocos abertos apareça como texto.
   final openStart = _findOpenBlockStart(remaining);
   if (openStart != -1) {
     remaining = remaining.substring(0, openStart);
@@ -1334,58 +1327,63 @@ class _CanvasProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (item != null) {
-      return SimpleCanvasCard(s: s, item: item!, onTap: () => onOpenCanvas(item!));
-    }
-    return GestureDetector(
-      onTap: () => showCanvasStreamingModal(
-        context, s,
-        title: title,
-        contentNotifier: contentNotifier,
-        doneNotifier: doneNotifier,
-        finalItem: finalItem,
-        onOpenCanvas: onOpenCanvas,
-      ),
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: s.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const NexaLoaderLogo(size: 20),
+    return ValueListenableBuilder<bool>(
+      valueListenable: doneNotifier,
+      builder: (_, done, __) {
+        if (done && item != null) {
+          return SimpleCanvasCard(s: s, item: item!, onTap: () => onOpenCanvas(item!));
+        }
+        return GestureDetector(
+          onTap: () => showCanvasStreamingModal(
+            context, s,
+            title: title,
+            contentNotifier: contentNotifier,
+            doneNotifier: doneNotifier,
+            finalItem: finalItem,
+            onOpenCanvas: onOpenCanvas,
+          ),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: s.cardBackground,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: s.cardShadow,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: s.primaryContainer.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 2),
-                  Text('A gerar...', style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
-                ],
-              ),
+                  child: const NexaLoaderLogo(size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+                      ),
+                      const SizedBox(height: 2),
+                      Text('A gerar...', style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 16),
+              ],
             ),
-            AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 16),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1407,45 +1405,50 @@ class _WidgetProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (block != null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: buildAiWidget(block!, s),
-      );
-    }
-    return GestureDetector(
-      onTap: () => showWidgetStreamingModal(
-        context, s,
-        title: label,
-        contentNotifier: contentNotifier,
-        doneNotifier: doneNotifier,
-      ),
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: s.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40, height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const NexaLoaderLogo(size: 20),
+    return ValueListenableBuilder<bool>(
+      valueListenable: doneNotifier,
+      builder: (_, done, __) {
+        if (done && block != null) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: buildAiWidget(block!, s),
+          );
+        }
+        return GestureDetector(
+          onTap: () => showWidgetStreamingModal(
+            context, s,
+            title: label,
+            contentNotifier: contentNotifier,
+            doneNotifier: doneNotifier,
+          ),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: s.cardBackground,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: s.cardShadow,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+            child: Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: s.primaryContainer.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const NexaLoaderLogo(size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1662,8 +1665,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _slidesEnabled = true;
   bool     _soundEnabled  = false;
   bool     _showScrollToBottom = false;
-  String   _streamingText = '';
-  String?  _streamingThink;
   String?  _conversationId;
   AiModel  _model        = AiModel.deepseekFlash;
   EditorType? _attachedTool;
@@ -1672,12 +1673,17 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final List<AttachedFile> _attachedFiles = [];
   int _attachedFileIdSeq = 0;
 
+  final ValueNotifier<String> _streamingTextNotifier = ValueNotifier<String>('');
+  final ValueNotifier<String?> _streamingThinkNotifier = ValueNotifier<String?>(null);
+
   final ValueNotifier<String> _openCanvasContentNotifier = ValueNotifier<String>('');
   final ValueNotifier<bool> _openCanvasDoneNotifier = ValueNotifier<bool>(false);
   LocalCanvasItem? _openCanvasFinalItem;
 
   final ValueNotifier<String> _openWidgetContentNotifier = ValueNotifier<String>('');
   final ValueNotifier<bool> _openWidgetDoneNotifier = ValueNotifier<bool>(false);
+
+  DateTime? _lastScrollTime;
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
@@ -1772,10 +1778,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _conversationId = id;
       _incognito = false;
       _sending = false;
-      _streamingText = '';
-      _streamingThink = null;
       _attachedFiles.clear();
     });
+    _streamingTextNotifier.value = '';
+    _streamingThinkNotifier.value = null;
     _openCanvasContentNotifier.value = '';
     _openCanvasDoneNotifier.value = false;
     _openCanvasFinalItem = null;
@@ -1825,28 +1831,28 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _updateOpenCanvasNotifier() {
-    final openMatch = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(_streamingText).toList();
+    final openMatch = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(_streamingTextNotifier.value).toList();
     if (openMatch.isEmpty) return;
     final last = openMatch.last;
-    final afterLast = _streamingText.substring(last.start);
+    final afterLast = _streamingTextNotifier.value.substring(last.start);
     if (afterLast.contains(']]')) return;
-    final markerEnd = _streamingText.indexOf('||', last.start);
-    final partial = markerEnd >= 0 ? _streamingText.substring(markerEnd + 2) : '';
+    final markerEnd = _streamingTextNotifier.value.indexOf('||', last.start);
+    final partial = markerEnd >= 0 ? _streamingTextNotifier.value.substring(markerEnd + 2) : '';
     _openCanvasContentNotifier.value = partial;
   }
 
   void _updateOpenWidgetNotifier() {
-    final openMatch = RegExp(r'```(widget_[a-z]+)').allMatches(_streamingText).toList();
+    final openMatch = RegExp(r'```(widget_[a-z]+)').allMatches(_streamingTextNotifier.value).toList();
     if (openMatch.isEmpty) return;
     final last = openMatch.last;
-    final afterLast = _streamingText.substring(last.start);
+    final afterLast = _streamingTextNotifier.value.substring(last.start);
     final closesAfter = afterLast.contains('```', 3);
     if (closesAfter) return;
-    final markerEnd = _streamingText.indexOf('\n', last.start);
+    final markerEnd = _streamingTextNotifier.value.indexOf('\n', last.start);
     if (markerEnd == -1) {
       _openWidgetContentNotifier.value = '';
     } else {
-      _openWidgetContentNotifier.value = _streamingText.substring(markerEnd + 1);
+      _openWidgetContentNotifier.value = _streamingTextNotifier.value.substring(markerEnd + 1);
     }
   }
 
@@ -1887,9 +1893,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _attachedTool = null;
       _attachedFiles.clear();
       _sending = true;
-      _streamingText = '';
-      _streamingThink = null;
     });
+    _streamingTextNotifier.value = '';
+    _streamingThinkNotifier.value = null;
     _openCanvasContentNotifier.value = '';
     _openCanvasDoneNotifier.value = false;
     _openCanvasFinalItem = null;
@@ -1923,20 +1929,18 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         if (!mounted) return;
         switch (event) {
           case ChatTokenEvent(text: final text):
-            setState(() {
-              _streamingText += text;
-            });
+            _streamingTextNotifier.value += text;
             _updateOpenCanvasNotifier();
             _updateOpenWidgetNotifier();
-            _scrollToEnd();
+            _throttledScrollToEnd();
             break;
           case ChatThinkEvent(text: final text):
-            setState(() => _streamingThink = (_streamingThink ?? '') + text);
+            _streamingThinkNotifier.value = (_streamingThinkNotifier.value ?? '') + text;
             break;
           case ChatDoneEvent(fullText: final fullText):
-            final finalText = fullText.isNotEmpty ? fullText : _streamingText;
+            final finalText = fullText.isNotEmpty ? fullText : _streamingTextNotifier.value;
             final scan = _markCanvasItems(finalText, _nextCanvasId);
-            final thinkingText = _streamingThink != null ? cleanAiText(_streamingThink!) : '';
+            final thinkingText = _streamingThinkNotifier.value != null ? cleanAiText(_streamingThinkNotifier.value!) : '';
             final bodyWithCanvasBlocks = _resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
             final combined = thinkingText.isNotEmpty
                 ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$bodyWithCanvasBlocks'
@@ -1948,9 +1952,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               }
               _canvases.addAll(scan.items);
               _sending = false;
-              _streamingText = '';
-              _streamingThink = null;
             });
+            _streamingTextNotifier.value = '';
+            _streamingThinkNotifier.value = null;
             if (scan.items.isNotEmpty) {
               _openCanvasDoneNotifier.value = true;
               _openCanvasFinalItem = scan.items.last;
@@ -1974,21 +1978,21 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           case ChatErrorEvent(message: final message):
             setState(() {
               _sending = false;
-              _streamingText = '';
-              _streamingThink = null;
               _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
             });
+            _streamingTextNotifier.value = '';
+            _streamingThinkNotifier.value = null;
             _scrollToEnd();
             break;
           case ChatCreditsExhaustedEvent():
             setState(() {
               _sending = false;
-              _streamingText = '';
-              _streamingThink = null;
               _msgs.add(const ChatMessage(
                   role: 'assistant',
                   content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
             });
+            _streamingTextNotifier.value = '';
+            _streamingThinkNotifier.value = null;
             _scrollToEnd();
             authController.refreshBalance();
             break;
@@ -1998,10 +2002,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         if (!mounted) return;
         setState(() {
           _sending = false;
-          _streamingText = '';
-          _streamingThink = null;
           _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
         });
+        _streamingTextNotifier.value = '';
+        _streamingThinkNotifier.value = null;
         _scrollToEnd();
       },
     );
@@ -2020,8 +2024,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     if (!_sending) return;
     _streamSub?.cancel();
     _streamSub = null;
-    final partial = _streamingText;
-    final thinkingText = _streamingThink != null ? cleanAiText(_streamingThink!) : '';
+    final partial = _streamingTextNotifier.value;
+    final thinkingText = _streamingThinkNotifier.value != null ? cleanAiText(_streamingThinkNotifier.value!) : '';
     final scan = _markCanvasItems(partial, _nextCanvasId);
     final bodyWithCanvasBlocks = _resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
     setState(() {
@@ -2033,9 +2037,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       }
       _canvases.addAll(scan.items);
       _sending = false;
-      _streamingText = '';
-      _streamingThink = null;
     });
+    _streamingTextNotifier.value = '';
+    _streamingThinkNotifier.value = null;
     _notifyHeader();
     _persistConversation();
   }
@@ -2099,6 +2103,19 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         } else {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
         }
+      }
+    });
+  }
+
+  void _throttledScrollToEnd() {
+    final now = DateTime.now();
+    if (_lastScrollTime != null && now.difference(_lastScrollTime!) < const Duration(milliseconds: 200)) {
+      return;
+    }
+    _lastScrollTime = now;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
   }
@@ -2264,11 +2281,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _canvases.clear();
           _incognito = false;
           _sending = false;
-          _streamingText = '';
-          _streamingThink = null;
           _conversationId = null;
           _attachedFiles.clear();
         });
+        _streamingTextNotifier.value = '';
+        _streamingThinkNotifier.value = null;
         _openCanvasContentNotifier.value = '';
         _openCanvasDoneNotifier.value = false;
         _openCanvasFinalItem = null;
@@ -2285,11 +2302,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _canvases.clear();
           _incognito = true;
           _sending = false;
-          _streamingText = '';
-          _streamingThink = null;
           _conversationId = null;
           _attachedFiles.clear();
         });
+        _streamingTextNotifier.value = '';
+        _streamingThinkNotifier.value = null;
         _openCanvasContentNotifier.value = '';
         _openCanvasDoneNotifier.value = false;
         _openCanvasFinalItem = null;
@@ -2324,11 +2341,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _canvases.clear();
           _incognito = false;
           _sending = false;
-          _streamingText = '';
-          _streamingThink = null;
           _conversationId = null;
           _attachedFiles.clear();
         });
+        _streamingTextNotifier.value = '';
+        _streamingThinkNotifier.value = null;
         _openCanvasContentNotifier.value = '';
         _openCanvasDoneNotifier.value = false;
         _openCanvasFinalItem = null;
@@ -2394,6 +2411,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _scroll.dispose();
     _inputFocus.dispose();
     _streamSub?.cancel();
+    _streamingTextNotifier.dispose();
+    _streamingThinkNotifier.dispose();
     _openCanvasContentNotifier.dispose();
     _openCanvasDoneNotifier.dispose();
     _openWidgetContentNotifier.dispose();
@@ -2450,65 +2469,72 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               child: Stack(children: [
                 _incognito
                     ? const _IncognitoState()
-                    : (_msgs.isEmpty && _streamingText.isEmpty)
+                    : (_msgs.isEmpty && _streamingTextNotifier.value.isEmpty)
                         ? _EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
                             padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
+                              Widget item;
                               if (showDisclaimer && i == totalCount - 1) {
-                                return const _DisclaimerFooter();
-                              }
-                              if (i >= _msgs.length) {
-                                final elements = _parseStreamingContent(_streamingText, _nextCanvasId);
-                                final isThinkingOnly = _streamingText.isEmpty && (_streamingThink == null || _streamingThink!.isEmpty);
-                                return _StreamingBubble(
-                                  s: s,
-                                  elements: elements,
-                                  thinking: _streamingThink != null
-                                      ? cleanAiText(_streamingThink!)
-                                      : null,
-                                  showLogoLoader: isThinkingOnly,
-                                  widgetsEnabled: _widgetsEnabled,
-                                  onEnableWidgets: () => setWidgetsEnabled(true),
-                                  onSuggestionTap: sendSuggestedMessage,
-                                  onOpenCanvas: _onOpenCanvas,
-                                  openCanvasContentNotifier: _openCanvasContentNotifier,
-                                  openCanvasDoneNotifier: _openCanvasDoneNotifier,
-                                  openCanvasFinalItem: () => _openCanvasFinalItem,
-                                  openWidgetContentNotifier: _openWidgetContentNotifier,
-                                  openWidgetDoneNotifier: _openWidgetDoneNotifier,
+                                item = const _DisclaimerFooter();
+                              } else if (i >= _msgs.length) {
+                                item = ValueListenableBuilder<String>(
+                                  valueListenable: _streamingTextNotifier,
+                                  builder: (_, text, __) {
+                                    final elements = _parseStreamingContent(text, _nextCanvasId);
+                                    final thinking = _streamingThinkNotifier.value;
+                                    final isThinkingOnly = text.isEmpty && (thinking == null || thinking.isEmpty);
+                                    return _StreamingBubble(
+                                      s: s,
+                                      elements: elements,
+                                      thinking: thinking != null ? cleanAiText(thinking) : null,
+                                      showLogoLoader: isThinkingOnly,
+                                      widgetsEnabled: _widgetsEnabled,
+                                      onEnableWidgets: () => setWidgetsEnabled(true),
+                                      onSuggestionTap: sendSuggestedMessage,
+                                      onOpenCanvas: _onOpenCanvas,
+                                      openCanvasContentNotifier: _openCanvasContentNotifier,
+                                      openCanvasDoneNotifier: _openCanvasDoneNotifier,
+                                      openCanvasFinalItem: () => _openCanvasFinalItem,
+                                      openWidgetContentNotifier: _openWidgetContentNotifier,
+                                      openWidgetDoneNotifier: _openWidgetDoneNotifier,
+                                    );
+                                  },
                                 );
+                              } else {
+                                final msg = _msgs[i];
+                                if (msg.role == 'user') {
+                                  item = _Bubble(
+                                    s: s,
+                                    text: msg.content,
+                                    onEdit: () => _onBubbleEdit(i),
+                                    onCopy: () => _onBubbleCopy(i),
+                                    onDelete: () => _onBubbleDelete(i),
+                                    onSelectText: () => _onBubbleSelectText(i),
+                                  );
+                                } else {
+                                  final scan = _scanForCanvasItems(msg.content, () => '');
+                                  final thinkScan = _extractThinking(scan.cleanText);
+                                  final msgCanvases = _canvasesForMessage(msg.content);
+                                  item = _AssistantBubble(
+                                    s: s,
+                                    text: cleanAiText(thinkScan.cleanText),
+                                    thinking: thinkScan.thinking,
+                                    canvases: msgCanvases,
+                                    onOpenCanvas: _onOpenCanvas,
+                                    onThumbUp: () => _onAssistantThumbUp(i),
+                                    onThumbDown: () => _onAssistantThumbDown(i),
+                                    onCopy: () => _onAssistantCopy(i),
+                                    onRefresh: () => _onAssistantRefresh(i),
+                                    widgetsEnabled: _widgetsEnabled,
+                                    onEnableWidgets: () => setWidgetsEnabled(true),
+                                    onSuggestionTap: sendSuggestedMessage,
+                                  );
+                                }
                               }
-                              final msg = _msgs[i];
-                              if (msg.role == 'user') {
-                                return _Bubble(
-                                  s: s,
-                                  text: msg.content,
-                                  onEdit: () => _onBubbleEdit(i),
-                                  onCopy: () => _onBubbleCopy(i),
-                                  onDelete: () => _onBubbleDelete(i),
-                                  onSelectText: () => _onBubbleSelectText(i),
-                                );
-                              }
-                              final scan = _scanForCanvasItems(msg.content, () => '');
-                              final thinkScan = _extractThinking(scan.cleanText);
-                              final msgCanvases = _canvasesForMessage(msg.content);
-                              return _AssistantBubble(
-                                s: s,
-                                text: cleanAiText(thinkScan.cleanText),
-                                thinking: thinkScan.thinking,
-                                canvases: msgCanvases,
-                                onOpenCanvas: _onOpenCanvas,
-                                onThumbUp: () => _onAssistantThumbUp(i),
-                                onThumbDown: () => _onAssistantThumbDown(i),
-                                onCopy: () => _onAssistantCopy(i),
-                                onRefresh: () => _onAssistantRefresh(i),
-                                widgetsEnabled: _widgetsEnabled,
-                                onEnableWidgets: () => setWidgetsEnabled(true),
-                                onSuggestionTap: sendSuggestedMessage,
-                              );
+                              return RepaintBoundary(child: item);
                             },
                           ),
               ]),
@@ -2563,7 +2589,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ),
           ),
 
-          if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
+          if (!_incognito && (_msgs.isNotEmpty || _streamingTextNotifier.value.isNotEmpty))
             Positioned(
               left: 0, right: 0,
               bottom: _bottomBarHeight + 8,
@@ -2769,8 +2795,8 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = widget.s.hover; // cor do card de pré-visualização
-    final textColor = widget.s.onSurface;
+    final bubbleColor = widget.s.userBubbleBg;
+    final textColor = widget.s.userBubbleText;
 
     return AnimatedBuilder(
       animation: _c,
@@ -3079,13 +3105,16 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
           final cleaned = cleanAiText(text);
           if (cleaned.trim().isEmpty) continue;
           anyContent = true;
-          children.add(RichAiText(
-            text: cleaned,
-            s: s,
-            widgetsEnabled: widget.widgetsEnabled,
-            onEnableWidgets: widget.onEnableWidgets,
-            onSuggestionTap: widget.onSuggestionTap,
-          ));
+          children.add(
+            SelectableText(
+              cleaned,
+              style: TextStyle(
+                fontSize: 15.5,
+                height: 1.45,
+                color: s.onSurface,
+              ),
+            ),
+          );
         case _StreamCanvasBlock(:final label, :final item):
           anyContent = true;
           children.add(Padding(
@@ -3214,9 +3243,6 @@ class _ThinkingCollapsible extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// BLINKING GRID LOADER
-// ══════════════════════════════════════════════════════════════
 class BlinkingGridLoader extends StatefulWidget {
   final Color color;
   final double dotSize;
@@ -3301,9 +3327,6 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MESSAGE ACTIONS POPUP
-// ══════════════════════════════════════════════════════════════
 void showMessageActionsPopup(
   BuildContext context,
   AppColorScheme s, {
@@ -3330,9 +3353,9 @@ void showMessageActionsPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const menuHeight = 216.0;
-    final desiredTop = anchorOffset.dy - 6 - menuHeight;
+    final desiredTop = anchorOffset.dy - 2 - menuHeight;
     final opensUp = desiredTop >= 40;
-    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
+    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 2;
     final right = (screenSize.width - (anchorOffset.dx + anchorSize.width)).clamp(12.0, screenSize.width - 244);
 
     return Stack(children: [
@@ -3457,9 +3480,6 @@ class _MessageActionRowState extends State<_MessageActionRow> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SELECT TEXT SHEET
-// ══════════════════════════════════════════════════════════════
 Future<void> showSelectTextSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -3495,9 +3515,6 @@ Future<void> showSelectTextSheet(
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// ATTACHED FILES SHEET
-// ══════════════════════════════════════════════════════════════
 Future<void> showAttachedFilesSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -3624,9 +3641,6 @@ class _AttachedFileRow extends StatelessWidget {
       );
 }
 
-// ══════════════════════════════════════════════════════════════
-// CHAT INPUT
-// ══════════════════════════════════════════════════════════════
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
@@ -3865,9 +3879,6 @@ class _AttachedFilesPill extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// ATTACH POPUP
-// ══════════════════════════════════════════════════════════════
 enum _AttachAction { files, photos, camera }
 
 void showAttachPopup(
@@ -3903,9 +3914,9 @@ void showAttachPopup(
     const estimatedHeight = 200.0;
     final screenSize = MediaQuery.of(ctx).size;
 
-    final desiredTop = anchorOffset.dy - 6 - estimatedHeight;
+    final desiredTop = anchorOffset.dy - 2 - estimatedHeight;
     final opensUp = desiredTop >= 40;
-    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
+    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 2;
     final left = anchorOffset.dx.clamp(8.0, screenSize.width - width - 8);
 
     final entries = <PopupMenuEntry<_AttachAction>>[
@@ -3990,9 +4001,6 @@ void showAttachPopup(
   controller.forward();
 }
 
-// ══════════════════════════════════════════════════════════════
-// CANVAS SHEET
-// ══════════════════════════════════════════════════════════════
 Future<void> showCanvasSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -4116,9 +4124,6 @@ class _CanvasCardState extends State<_CanvasCard> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// VOICE RECORD SHEET
-// ══════════════════════════════════════════════════════════════
 Future<void> showVoiceRecordSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -4253,9 +4258,6 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// BOTTOM SHEET DE OPÇÕES DE IA
-// ══════════════════════════════════════════════════════════════
 Future<void> showAiOptionsSheet(
   BuildContext context,
   AppColorScheme s, {

@@ -31,7 +31,7 @@ const Map<ApiProvider, ProviderConfig> kProviderMap = {
 class ChatMessage {
   final String role; // "user" | "assistant"
   final String content;
-  final List<Map<String, dynamic>>? attachments; // enviado, mas worker ignora
+  final List<Map<String, dynamic>>? attachments;
   const ChatMessage({required this.role, required this.content, this.attachments});
 
   Map<String, dynamic> toJson() => {
@@ -61,7 +61,6 @@ class CreditsExhaustedException extends ApiException {
   CreditsExhaustedException() : super('Sem créditos. Recarrega para continuar.', statusCode: 402);
 }
 
-// ── Eventos de stream emitidos por streamChat ──────────────────
 sealed class ChatStreamEvent {}
 
 class ChatTokenEvent extends ChatStreamEvent {
@@ -200,151 +199,6 @@ class CanvasParser {
     if (tag == 'doc') return CanvasKind.doc;
     return null;
   }
-}
-
-// ══════════════════════════════════════════════════════════════
-// PROJECTS
-// ══════════════════════════════════════════════════════════════
-enum ProjectNodeType { project, folder, file }
-
-extension ProjectNodeTypeX on ProjectNodeType {
-  String get wire => const {
-        ProjectNodeType.project: 'project',
-        ProjectNodeType.folder:  'folder',
-        ProjectNodeType.file:    'file',
-      }[this]!;
-
-  static ProjectNodeType fromWire(String tag) {
-    switch (tag) {
-      case 'folder': return ProjectNodeType.folder;
-      case 'file':   return ProjectNodeType.file;
-      default:       return ProjectNodeType.project;
-    }
-  }
-}
-
-enum ProjectFileKind {
-  chat, pdf, docx, xlsx, pptx, doc, sheet, slide, code, other,
-}
-
-extension ProjectFileKindX on ProjectFileKind {
-  String get wire => const {
-        ProjectFileKind.chat:  'chat',
-        ProjectFileKind.pdf:   'pdf',
-        ProjectFileKind.docx:  'docx',
-        ProjectFileKind.xlsx:  'xlsx',
-        ProjectFileKind.pptx:  'pptx',
-        ProjectFileKind.doc:   'doc',
-        ProjectFileKind.sheet: 'sheet',
-        ProjectFileKind.slide: 'slide',
-        ProjectFileKind.code:  'code',
-        ProjectFileKind.other: 'other',
-      }[this]!;
-
-  static ProjectFileKind fromWire(String? tag) {
-    switch (tag) {
-      case 'chat':   return ProjectFileKind.chat;
-      case 'pdf':    return ProjectFileKind.pdf;
-      case 'docx':   return ProjectFileKind.docx;
-      case 'xlsx':   return ProjectFileKind.xlsx;
-      case 'pptx':   return ProjectFileKind.pptx;
-      case 'doc':    return ProjectFileKind.doc;
-      case 'sheet':  return ProjectFileKind.sheet;
-      case 'slide':  return ProjectFileKind.slide;
-      case 'code':   return ProjectFileKind.code;
-      default:       return ProjectFileKind.other;
-    }
-  }
-
-  String get svgAsset => const {
-        ProjectFileKind.chat:   'ai_tab.svg',
-        ProjectFileKind.pdf:    'doc.png',
-        ProjectFileKind.docx:   'doc.png',
-        ProjectFileKind.xlsx:   'sheet.png',
-        ProjectFileKind.pptx:   'slide.png',
-        ProjectFileKind.doc:    'doc.png',
-        ProjectFileKind.sheet:  'sheet.png',
-        ProjectFileKind.slide:  'slide.png',
-        ProjectFileKind.code:   'doc.png',
-        ProjectFileKind.other:  'doc.png',
-      }[this]!;
-
-  String get label => const {
-        ProjectFileKind.chat:   'Conversa',
-        ProjectFileKind.pdf:    'PDF',
-        ProjectFileKind.docx:   'Word',
-        ProjectFileKind.xlsx:   'Excel',
-        ProjectFileKind.pptx:   'PowerPoint',
-        ProjectFileKind.doc:    'Documento',
-        ProjectFileKind.sheet:  'Folha de cálculo',
-        ProjectFileKind.slide:  'Apresentação',
-        ProjectFileKind.code:   'Código',
-        ProjectFileKind.other:  'Ficheiro',
-      }[this]!;
-}
-
-class ProjectNode {
-  final String id;
-  final String? parentId;
-  final ProjectNodeType type;
-  final String name;
-  final ProjectFileKind? fileKind;
-  final String? conversationId;
-  final String? content;
-  final String? fileData;
-  final String? mimeType;
-  final int createdAt;
-  final int updatedAt;
-
-  const ProjectNode({
-    required this.id,
-    required this.parentId,
-    required this.type,
-    required this.name,
-    this.fileKind,
-    this.conversationId,
-    this.content,
-    this.fileData,
-    this.mimeType,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  bool get isContainer => type == ProjectNodeType.project || type == ProjectNodeType.folder;
-
-  ProjectNode copyWith({
-    String? name,
-    String? parentId,
-    String? content,
-    String? fileData,
-    String? conversationId,
-  }) => ProjectNode(
-        id: id,
-        parentId: parentId ?? this.parentId,
-        type: type,
-        name: name ?? this.name,
-        fileKind: fileKind,
-        conversationId: conversationId ?? this.conversationId,
-        content: content ?? this.content,
-        fileData: fileData ?? this.fileData,
-        mimeType: mimeType,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-      );
-
-  factory ProjectNode.fromJson(Map<String, dynamic> j) => ProjectNode(
-        id: j['id']?.toString() ?? '',
-        parentId: j['parentId']?.toString(),
-        type: ProjectNodeTypeX.fromWire(j['type']?.toString() ?? 'project'),
-        name: j['name']?.toString() ?? 'Sem nome',
-        fileKind: j['fileKind'] != null ? ProjectFileKindX.fromWire(j['fileKind']?.toString()) : null,
-        conversationId: j['conversationId']?.toString(),
-        content: j['content']?.toString(),
-        fileData: j['fileData']?.toString(),
-        mimeType: j['mimeType']?.toString(),
-        createdAt: (j['createdAt'] is num) ? (j['createdAt'] as num).toInt() : 0,
-        updatedAt: (j['updatedAt'] is num) ? (j['updatedAt'] as num).toInt() : 0,
-      );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -686,100 +540,6 @@ class ConversationsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROJECTS API
-// ══════════════════════════════════════════════════════════════
-class ProjectsApiService {
-  static Future<List<ProjectNode>> list(String token) async {
-    try {
-      final res = await http.get(
-        Uri.parse('$kApiBase/projects'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (res.statusCode < 200 || res.statusCode >= 300) return [];
-      final data = _decode(res.body);
-      final nodes = data['nodes'];
-      if (nodes is! List) return [];
-      return nodes.whereType<Map<String, dynamic>>().map(ProjectNode.fromJson).toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  static Future<ProjectNode?> create(
-    String token, {
-    required ProjectNodeType type,
-    required String name,
-    String? parentId,
-    ProjectFileKind? fileKind,
-    String? conversationId,
-    String? content,
-    String? fileData,
-    String? mimeType,
-  }) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$kApiBase/projects'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({
-          'type': type.wire,
-          'name': name,
-          if (parentId != null) 'parentId': parentId,
-          if (fileKind != null) 'fileKind': fileKind.wire,
-          if (conversationId != null) 'conversationId': conversationId,
-          if (content != null) 'content': content,
-          if (fileData != null) 'fileData': fileData,
-          if (mimeType != null) 'mimeType': mimeType,
-        }),
-      );
-      if (res.statusCode < 200 || res.statusCode >= 300) return null;
-      return ProjectNode.fromJson(_decode(res.body));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<ProjectNode?> update(
-    String token,
-    String id, {
-    String? name,
-    String? parentId,
-    String? content,
-    String? fileData,
-    String? conversationId,
-  }) async {
-    try {
-      final body = <String, dynamic>{};
-      if (name != null) body['name'] = name;
-      if (parentId != null) body['parentId'] = parentId;
-      if (content != null) body['content'] = content;
-      if (fileData != null) body['fileData'] = fileData;
-      if (conversationId != null) body['conversationId'] = conversationId;
-      final res = await http.put(
-        Uri.parse('$kApiBase/projects/$id'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode(body),
-      );
-      if (res.statusCode < 200 || res.statusCode >= 300) return null;
-      return ProjectNode.fromJson(_decode(res.body));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<bool> delete(String token, String id) async {
-    try {
-      final res = await http.delete(
-        Uri.parse('$kApiBase/projects/$id'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      return res.statusCode >= 200 && res.statusCode < 300;
-    } catch (_) {
-      return false;
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // EVENTS API
 // ══════════════════════════════════════════════════════════════
 class EventItem {
@@ -965,7 +725,6 @@ class AiApiService {
               if (handledAsChoices) continue;
             }
 
-            // Fallback Gemini (mantido para compatibilidade)
             final candidates = decoded['candidates'];
             if (candidates is List && candidates.isNotEmpty) {
               final first = candidates[0];
@@ -990,9 +749,7 @@ class AiApiService {
                 return;
               }
             }
-          } catch (_) {
-            // ignora linha não-JSON
-          }
+          } catch (_) {}
         }
       }
 
@@ -1064,31 +821,6 @@ class AiApiService {
       throw ApiException(data['error']?.toString() ?? 'Erro ao resumir', statusCode: res.statusCode);
     }
     return data['summary']?.toString() ?? '';
-  }
-
-  static Future<String> editDocument({
-    required String token,
-    required String currentContent,
-    required String instruction,
-    required String docType,
-    String? selection,
-  }) async {
-    final res = await http.post(
-      Uri.parse('$kApiBase/ai/edit-document'),
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-      body: jsonEncode({
-        'currentContent': currentContent,
-        'instruction': instruction,
-        'docType': docType,
-        if (selection != null) 'selection': selection,
-      }),
-    );
-    final data = _decode(res.body);
-    if (res.statusCode == 402) throw CreditsExhaustedException();
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw ApiException(data['error']?.toString() ?? 'Erro ao editar documento', statusCode: res.statusCode);
-    }
-    return data['content']?.toString() ?? currentContent;
   }
 }
 
