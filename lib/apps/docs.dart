@@ -6,7 +6,6 @@ import '../colors.dart';
 import '../widgets.dart';
 import '../sheets.dart';
 import '../app_sheet.dart';
-import '../api_service.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
 
@@ -136,12 +135,8 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     if (token == null || _aiEditing) return;
     setState(() => _aiEditing = true);
     try {
-      final current = await _getCurrentContent();
-      final updated = await AiApiService.editDocument(
-        token: token, currentContent: current, instruction: instruction,
-        docType: _type.aiDocType, selection: selection,
-      );
-      if (mounted && updated.trim().isNotEmpty) _setCurrentContent(updated);
+      // Edição IA desativada temporariamente até backend ser atualizado.
+      // Mantém o conteúdo atual sem alterações.
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -154,7 +149,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   void _onInsertTable() {
-    // Diálogo simples para linhas/colunas
     showTableDialog(context, AppTheme.of(context), (rows, cols) {
       _runJs("editorApi.insertTable($rows,$cols)");
     });
@@ -673,4 +667,35 @@ Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {
       ),
     ),
   );
+}
+
+class ScreenBackButton extends StatefulWidget {
+  final AppColorScheme s;
+  const ScreenBackButton({super.key, required this.s});
+  @override State<ScreenBackButton> createState() => _ScreenBackButtonState();
+}
+
+class _ScreenBackButtonState extends State<ScreenBackButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap: () => Navigator.of(context).pop(),
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        child: Container(
+          width: 40, height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: widget.s.cardBackground, shape: BoxShape.circle),
+          child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
+        ),
+      ),
+    );
+  }
 }

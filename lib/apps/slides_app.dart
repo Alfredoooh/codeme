@@ -6,7 +6,6 @@ import '../colors.dart';
 import '../widgets.dart';
 import '../sheets.dart';
 import '../app_sheet.dart';
-import '../api_service.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
 import 'docs.dart' show ScreenBackButton;
@@ -137,12 +136,7 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
     if (token == null || _aiEditing) return;
     setState(() => _aiEditing = true);
     try {
-      final current = await _getCurrentContent();
-      final updated = await AiApiService.editDocument(
-        token: token, currentContent: current, instruction: instruction,
-        docType: _type.aiDocType, selection: selection,
-      );
-      if (mounted && updated.trim().isNotEmpty) _setCurrentContent(updated);
+      // Edição IA desativada temporariamente até backend ser atualizado.
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

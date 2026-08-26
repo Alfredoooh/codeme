@@ -6,7 +6,6 @@ import '../colors.dart';
 import '../widgets.dart';
 import '../sheets.dart';
 import '../app_sheet.dart';
-import '../api_service.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
 import 'docs.dart' show ScreenBackButton;
@@ -140,12 +139,7 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     if (token == null || _aiEditing) return;
     setState(() => _aiEditing = true);
     try {
-      final current = await _getCurrentContent();
-      final updated = await AiApiService.editDocument(
-        token: token, currentContent: current, instruction: instruction,
-        docType: _type.aiDocType, selection: selection,
-      );
-      if (mounted && updated.trim().isNotEmpty) _setCurrentContent(updated);
+      // Edição IA desativada temporariamente até backend ser atualizado.
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -208,10 +202,7 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
               const SizedBox(height: 8),
               Container(
                 width: 36, height: 4,
-                decoration: BoxDecoration(
-                  color: s.outline.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(999),
-                ),
+                decoration: BoxDecoration(color: s.outline.withOpacity(0.4), borderRadius: BorderRadius.circular(999)),
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -368,11 +359,7 @@ class _ScreenHeader extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface),
             ),
           ),
           Container(
@@ -415,11 +402,7 @@ class _HeaderIconButton extends StatelessWidget {
       child: Container(
         width: 40, height: 40,
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          shape: BoxShape.circle,
-          boxShadow: s.cardShadow,
-        ),
+        decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow),
         child: AppIcon(assetName, size: 20, color: s.onSurface),
       ),
     );
@@ -464,10 +447,7 @@ class _SheetBottomToolbar extends StatelessWidget {
       child: Container(
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          boxShadow: s.navBarShadow,
-        ),
+        decoration: BoxDecoration(color: s.cardBackground, boxShadow: s.navBarShadow),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -524,43 +504,17 @@ Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {
         children: [
           Text('Configuração do gráfico', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
           const SizedBox(height: 12),
-          TextField(
-            controller: ctrl,
-            minLines: 3,
-            maxLines: 6,
-            decoration: InputDecoration(
-              hintText: '{"type":"bar","data":{"labels":["A","B"],"datasets":[{"label":"Série","data":[1,2]}]}}',
-              filled: true,
-              fillColor: s.hover,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          TextField(controller: ctrl, minLines: 3, maxLines: 6, decoration: const InputDecoration(hintText: '{"type":"bar",...}')),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
+              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
             ),
           ),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.hover, borderRadius: BorderRadius.circular(999)),
-                  child: const Text('Cancelar'),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context, ctrl.text.trim()),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
-                ),
-              ),
-            ),
-          ]),
         ],
       ),
     ),
@@ -579,36 +533,17 @@ Future<String?> showImageUrlDialog(BuildContext context, AppColorScheme s) {
         children: [
           Text('URL da imagem', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
           const SizedBox(height: 12),
-          TextField(
-            controller: ctrl,
-            decoration: const InputDecoration(hintText: 'https://'),
-          ),
+          TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'https://')),
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.hover, borderRadius: BorderRadius.circular(999)),
-                  child: const Text('Cancelar'),
-                ),
-              ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
+              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context, ctrl.text.trim()),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
-                ),
-              ),
-            ),
-          ]),
+          ),
         ],
       ),
     ),
