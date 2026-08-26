@@ -112,21 +112,6 @@ class ConversationsController extends ChangeNotifier {
     await ConversationsApiService.pin(token, id, pinned);
   }
 
-  Future<void> archive(String id, bool archived) async {
-    final token = authController.token;
-    if (token == null) return;
-    final idx = items.indexWhere((c) => c.id == id);
-    if (idx == -1) return;
-    final old = items[idx];
-    items[idx] = ConversationItem(
-      id: old.id, title: old.title, preview: old.preview,
-      pinned: old.pinned, archived: archived, updatedAt: old.updatedAt,
-    );
-    _sortByRecency();
-    notifyListeners();
-    await ConversationsApiService.archive(token, id, archived);
-  }
-
   Future<void> rename(String id, String newTitle) async {
     final token = authController.token;
     if (token == null) return;
@@ -272,7 +257,6 @@ class _AppDrawerState extends State<AppDrawer> {
       item: item,
       onOpen: () => _openConversation(item),
       onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
-      onArchive: () => conversationsController.archive(item.id, !item.archived),
       onRename: () => _openRenamePopup(context, item),
       onDelete: () => _confirmDeletePopup(context, item),
     );
@@ -316,20 +300,6 @@ class _AppDrawerState extends State<AppDrawer> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 56),
-              if (_selectedSection == 0)
-                _ArchivedConversationsButton(
-                  s: s,
-                  onTap: () {
-                    widget.onClose();
-                    Navigator.of(context).push<String>(_FadePageRoute(
-                      builder: (_) => const ArchivedConversationsScreen(),
-                    )).then((conversationId) {
-                      if (conversationId != null) {
-                        widget.onOpenConversation?.call(conversationId);
-                      }
-                    });
-                  },
-                ),
               Expanded(
                 child: _buildConvBody(context, s, pinned, others),
               ),
@@ -452,7 +422,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     s: s,
                     app: app,
                     onTap: () {
-                      Navigator.of(context).pop(); // fecha o drawer
+                      _closeDrawer();
                       switch (app) {
                         case AppKind.docs:
                           Navigator.of(context).push(CupertinoPageRoute(
@@ -991,7 +961,7 @@ class _ConvTileState extends State<_ConvTile> {
   }
 }
 
-// ── Popup de opções da conversa ───────────────────────────────
+// ── Popup de opções da conversa (sem arquivar) ───────────────
 
 void showConversationOptionsPopupAt(
   BuildContext context,
@@ -1000,7 +970,6 @@ void showConversationOptionsPopupAt(
   required ConversationItem item,
   required VoidCallback onOpen,
   required VoidCallback onTogglePin,
-  required VoidCallback onArchive,
   required VoidCallback onRename,
   required VoidCallback onDelete,
 }) {
@@ -1019,7 +988,7 @@ void showConversationOptionsPopupAt(
 
   final screenSize = MediaQuery.of(context).size;
   const width = 232.0;
-  const estimatedHeight = 230.0;
+  const estimatedHeight = 190.0; // reduzido
 
   final openLeft = position.dx + width > screenSize.width - 12;
   final openUp = position.dy + estimatedHeight > screenSize.height - 12;
@@ -1079,11 +1048,6 @@ void showConversationOptionsPopupAt(
                     s: s, assetName: item.pinned ? 'pin_slash' : 'pin',
                     label: item.pinned ? 'Desafixar' : 'Fixar',
                     onTap: () { close(); onTogglePin(); },
-                  ),
-                  _ConvPopupRow(
-                    s: s, assetName: 'archive',
-                    label: item.archived ? 'Desarquivar' : 'Arquivar',
-                    onTap: () { close(); onArchive(); },
                   ),
                   _ConvPopupRow(
                     s: s, assetName: 'pencil', label: 'Renomear',
@@ -1635,223 +1599,6 @@ class _AppMenuTileState extends State<_AppMenuTile> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// BOTÃO DE CONVERSAS ARQUIVADAS — sem container
-// ══════════════════════════════════════════════════════════════
-
-class _ArchivedConversationsButton extends StatefulWidget {
-  final AppColorScheme s;
-  final VoidCallback onTap;
-  const _ArchivedConversationsButton({required this.s, required this.onTap});
-  @override State<_ArchivedConversationsButton> createState() => _ArchivedConversationsButtonState();
-}
-
-class _ArchivedConversationsButtonState extends State<_ArchivedConversationsButton> {
-  bool _p = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap: () {
-        HapticFeedback.lightImpact();
-        widget.onTap();
-      },
-      child: Opacity(
-        opacity: _p ? 0.6 : 1.0,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              AppIcon('archive', size: 18, color: s.onSurfaceVariant),
-              const SizedBox(width: 10),
-              Text(
-                'Conversas arquivadas',
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: s.onSurface),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// TELA DE CONVERSAS ARQUIVADAS
-// ══════════════════════════════════════════════════════════════
-
-class ArchivedConversationsScreen extends StatefulWidget {
-  const ArchivedConversationsScreen({super.key});
-  @override State<ArchivedConversationsScreen> createState() => _ArchivedConversationsScreenState();
-}
-
-class _ArchivedConversationsScreenState extends State<ArchivedConversationsScreen> with ThemeReactive<ArchivedConversationsScreen> {
-  @override
-  void initState() {
-    super.initState();
-    conversationsController.addListener(_onChanged);
-  }
-
-  @override
-  void dispose() {
-    conversationsController.removeListener(_onChanged);
-    super.dispose();
-  }
-
-  void _onChanged() { if (mounted) setState(() {}); }
-
-  void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item, AppColorScheme s) {
-    HapticFeedback.lightImpact();
-    showConversationOptionsPopupAt(
-      context,
-      s,
-      position: globalPos,
-      item: item,
-      onOpen: () => Navigator.of(context).pop(item.id),
-      onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
-      onArchive: () => conversationsController.archive(item.id, !item.archived),
-      onRename: () => showRenameSheet(
-        context, s,
-        currentTitle: item.title,
-        onConfirm: (newTitle) => conversationsController.rename(item.id, newTitle),
-      ),
-      onDelete: () => showCraftBottomSheet(
-        context: context,
-        s: s,
-        child: Builder(builder: (sheetContext) => _DeleteConversationSheet(
-          s: s,
-          title: item.title,
-          onConfirm: () {
-            Navigator.pop(sheetContext);
-            conversationsController.delete(item.id);
-          },
-        )),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    final archived = conversationsController.items.where((c) => c.archived).toList();
-
-    return Material(
-      type: MaterialType.transparency,
-      child: ColoredBox(
-        color: s.pageBackground,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Row(children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 36, height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow),
-                      child: AppIcon('back', color: s.onSurface, size: 18),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text('Conversas arquivadas',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: s.onSurface)),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: archived.isEmpty
-                    ? Center(
-                        child: Text('Sem conversas arquivadas.',
-                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant)),
-                      )
-                    : RefreshIndicator(
-                        color: s.primary,
-                        backgroundColor: s.cardBackground,
-                        onRefresh: () => conversationsController.load(),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(4, 0, 4, 24),
-                          itemCount: archived.length,
-                          itemBuilder: (_, i) {
-                            final item = archived[i];
-                            return _ArchivedConvTile(
-                              s: s,
-                              item: item,
-                              onTap: () {
-                                Navigator.of(context).pop(item.id);
-                              },
-                              onOptionsAt: (pos) => _openConvPopupAt(context, pos, item, s),
-                            );
-                          },
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ArchivedConvTile extends StatefulWidget {
-  final AppColorScheme s;
-  final ConversationItem item;
-  final VoidCallback onTap;
-  final ValueChanged<Offset> onOptionsAt;
-  const _ArchivedConvTile({
-    required this.s,
-    required this.item,
-    required this.onTap,
-    required this.onOptionsAt,
-  });
-  @override State<_ArchivedConvTile> createState() => _ArchivedConvTileState();
-}
-
-class _ArchivedConvTileState extends State<_ArchivedConvTile> {
-  bool _h = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap: () {
-        HapticFeedback.lightImpact();
-        widget.onTap();
-      },
-      onLongPressStart: (d) {
-        HapticFeedback.lightImpact();
-        widget.onOptionsAt(d.globalPosition);
-      },
-      child: Container(
-        color: _h ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(children: [
-          Expanded(
-            child: Text(
-              widget.item.title,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.onSurface),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ]),
       ),
     );
   }

@@ -926,9 +926,9 @@ class _RichTextBlockParser {
       }
 
       // ─────────────────────────────────────────────────────────
-      // BLOCO DE CITAÇÃO (blockquote) — agrupa linhas ">" consecutivas
-      // e transforma tags [!NOTE], [!TIP], [!IMPORTANT], [!WARNING],
-      // [!CAUTION] em cards visuais com cabeçalho sem ícone.
+      // BLOCO DE CITAÇÃO (blockquote) — mantém estilo original,
+      // apenas adiciona o rótulo do admonition em cima, sem ícone,
+      // sem cor de fundo.
       // ─────────────────────────────────────────────────────────
       if (trimmed.startsWith('>')) {
         flushTable();
@@ -960,9 +960,42 @@ class _RichTextBlockParser {
         final quoteText = quoteLines.join('\n').trim();
 
         if (admonitionType != null) {
+          final label = _admonitionLabel(admonitionType);
           widgets.add(Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
-            child: _AdmonitionCard(type: admonitionType, text: quoteText, s: s),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 3,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: s.outline,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: s.onSurfaceVariant,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        _formattedText(quoteText, s),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ));
         } else {
           widgets.add(
@@ -1097,6 +1130,15 @@ class _RichTextBlockParser {
     return widgets;
   }
 
+  static String _admonitionLabel(String type) => switch (type) {
+        'NOTE' => 'Nota',
+        'TIP' => 'Dica',
+        'IMPORTANT' => 'Importante',
+        'WARNING' => 'Aviso',
+        'CAUTION' => 'Cuidado',
+        _ => 'Nota',
+      };
+
   static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 15.5}) {
     final linkColor = s.onSurface;
 
@@ -1179,74 +1221,6 @@ class _RichTextBlockParser {
           height: 1.45,
         ),
         children: inlineSpans(raw, s, fontSize: fontSize),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// ADMONITION CARD — sem ícone, com cabeçalho sempre visível
-// ══════════════════════════════════════════════════════════════
-
-class _AdmonitionCard extends StatelessWidget {
-  final String type;
-  final String text;
-  final AppColorScheme s;
-  const _AdmonitionCard({required this.type, required this.text, required this.s});
-
-  static const Map<String, String> _labels = {
-    'NOTE': 'Nota',
-    'TIP': 'Dica',
-    'IMPORTANT': 'Importante',
-    'WARNING': 'Aviso',
-    'CAUTION': 'Cuidado',
-  };
-
-  Color get _accentColor => switch (type) {
-        'NOTE' => s.primary,
-        'TIP' => s.success,
-        'IMPORTANT' => s.primary,
-        'WARNING' => s.warning,
-        'CAUTION' => s.error,
-        _ => s.onSurfaceVariant,
-      };
-
-  bool get _isIndispensable => type == 'IMPORTANT';
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = _accentColor;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(s.isDark ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border(left: BorderSide(color: accent, width: 3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _labels[type] ?? 'Nota',
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: accent,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14.5,
-              color: s.onSurface,
-              height: 1.45,
-              fontFamily: _isIndispensable ? 'IndispensableSerif' : null,
-              fontStyle: _isIndispensable ? FontStyle.italic : null,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -22,9 +22,6 @@ import 'apps/sheets_app.dart';
 import 'apps/slides_app.dart';
 import 'apps/sound.dart';
 
-// ══════════════════════════════════════════════════════════════
-// HELPER: mapeia EditorType para nome de asset SVG
-// ══════════════════════════════════════════════════════════════
 String _iconForEditorType(EditorType type) {
   switch (type) {
     case EditorType.docs:       return 'doc';
@@ -33,9 +30,6 @@ String _iconForEditorType(EditorType type) {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// AI MODEL — 3 modelos DeepSeek reais (flash/pro/reasoning)
-// ══════════════════════════════════════════════════════════════
 enum AiModel { deepseekFlash, deepseekPro, deepseekReasoning }
 
 extension AiModelX on AiModel {
@@ -64,9 +58,6 @@ extension AiModelX on AiModel {
       }[this]!;
 }
 
-// ══════════════════════════════════════════════════════════════
-// SYSTEM PROMPT
-// ══════════════════════════════════════════════════════════════
 const String kAiSystemPrompt = '''
 Respondes sempre em português europeu, de forma clara e bem estruturada.
 Usa formatação markdown completa sempre que ajudar a organizar a informação:
@@ -217,9 +208,6 @@ resultados encontrados. Quando citares algo encontrado na pesquisa, sê claro
 sobre a fonte de forma natural no texto.
 ''';
 
-// ══════════════════════════════════════════════════════════════
-// TEXT CLEANUP
-// ══════════════════════════════════════════════════════════════
 String cleanAiText(String raw) {
   return raw
       .replaceAll(_kExplicitCanvasRe, '')
@@ -227,9 +215,6 @@ String cleanAiText(String raw) {
       .trim();
 }
 
-// ══════════════════════════════════════════════════════════════
-// LOCAL CANVAS
-// ══════════════════════════════════════════════════════════════
 class _CanvasScanResult {
   final String cleanText;
   final List<LocalCanvasItem> items;
@@ -302,9 +287,6 @@ String _resolveCanvasMarkersToBlocks(
   return result;
 }
 
-// ══════════════════════════════════════════════════════════════
-// THINKING EXTRACTION
-// ══════════════════════════════════════════════════════════════
 final RegExp _kThinkingRe = RegExp(
   r'\[\[THINKING\]\]([\s\S]*?)\[\[/THINKING\]\]',
 );
@@ -328,9 +310,6 @@ _ThinkingScanResult _extractThinking(String raw) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// ATTACHED FILES
-// ══════════════════════════════════════════════════════════════
 class AttachedFile {
   final String id;
   final String name;
@@ -346,9 +325,6 @@ class AttachedFile {
   String get base64Data => base64Encode(bytes);
 }
 
-// ══════════════════════════════════════════════════════════════
-// CONVERSATION MENU
-// ══════════════════════════════════════════════════════════════
 enum ConversationAction { newChat, incognito, rename, delete }
 
 extension ConversationActionX on ConversationAction {
@@ -596,9 +572,6 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON
-// ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
@@ -842,9 +815,6 @@ class _MenuActionRowState extends State<_MenuActionRow> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SIMPLE CANVAS CARD
-// ══════════════════════════════════════════════════════════════
 class SimpleCanvasCard extends StatelessWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
@@ -922,9 +892,6 @@ class SimpleCanvasCard extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// STREAM ELEMENTS
-// ══════════════════════════════════════════════════════════════
 sealed class _StreamElement {}
 
 class _StreamText extends _StreamElement {
@@ -957,7 +924,13 @@ class _OpenBlockInfo {
 List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen) {
   final canvasScan = _markCanvasItems(raw, idGen);
   final widgetParse = parseAiWidgetBlocks(canvasScan.textWithMarkers);
-  final remaining = widgetParse.textWithMarkers;
+  var remaining = widgetParse.textWithMarkers;
+
+  // Impede que conteúdo parcial de blocos abertos apareça como texto.
+  final openStart = _findOpenBlockStart(remaining);
+  if (openStart != -1) {
+    remaining = remaining.substring(0, openStart);
+  }
 
   final combinedMarkerRe = RegExp(r'\u0000(CV|WB)(\d+)\u0000');
   final parts = remaining.split(combinedMarkerRe);
@@ -993,6 +966,39 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
   }
 
   return elements;
+}
+
+int _findOpenBlockStart(String text) {
+  int start = -1;
+
+  final canvasMatches = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(text).toList();
+  if (canvasMatches.isNotEmpty) {
+    final last = canvasMatches.last;
+    final after = text.substring(last.start);
+    if (!after.contains(']]')) {
+      start = math.max(start, last.start);
+    }
+  }
+
+  final widgetMatches = RegExp(r'```(widget_[a-z]+)').allMatches(text).toList();
+  if (widgetMatches.isNotEmpty) {
+    final last = widgetMatches.last;
+    final after = text.substring(last.start);
+    if (!after.contains('```', 3)) {
+      start = math.max(start, last.start);
+    }
+  }
+
+  final soundMatches = RegExp(r'\[\[sound_search:').allMatches(text).toList();
+  if (soundMatches.isNotEmpty) {
+    final last = soundMatches.last;
+    final after = text.substring(last.start);
+    if (!after.contains(']]')) {
+      start = math.max(start, last.start);
+    }
+  }
+
+  return start;
 }
 
 String _labelForCanvasKind(LocalCanvasKind kind) => switch (kind) {
@@ -1096,9 +1102,6 @@ bool _endsWithPartialMarker(String text) {
   return false;
 }
 
-// ══════════════════════════════════════════════════════════════
-// NEXA LOADER LOGO COM SHIMMER (quadrados + brilho contínuo)
-// ══════════════════════════════════════════════════════════════
 class _NexaDotSpec {
   final double left;
   final double top;
@@ -1269,9 +1272,6 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// STREAMING CARDS DE PROGRESSO
-// ══════════════════════════════════════════════════════════════
 class _StreamingMarkdownCard extends StatelessWidget {
   final AppColorScheme s;
   final String label;
@@ -1450,9 +1450,6 @@ class _WidgetProgressCard extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MODAL DE STREAMING — canvas em criação
-// ══════════════════════════════════════════════════════════════
 Future<void> showCanvasStreamingModal(
   BuildContext context,
   AppColorScheme s, {
@@ -1582,9 +1579,6 @@ class _CanvasStreamingModalContent extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MODAL DE STREAMING — widget (só leitura)
-// ══════════════════════════════════════════════════════════════
 Future<void> showWidgetStreamingModal(
   BuildContext context,
   AppColorScheme s, {
@@ -1632,9 +1626,6 @@ Future<void> showWidgetStreamingModal(
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// AI TAB
-// ══════════════════════════════════════════════════════════════
 class AiTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
   final String? initialConversationId;
@@ -2627,8 +2618,6 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Rodapé fixo de aviso ─────────────────────────────────────
-
 class _DisclaimerFooter extends StatelessWidget {
   const _DisclaimerFooter();
 
@@ -2651,8 +2640,6 @@ class _DisclaimerFooter extends StatelessWidget {
     );
   }
 }
-
-// ── Botão circular flutuante de "ir para o fim" ──────────────
 
 class _ScrollToBottomButton extends StatefulWidget {
   final AppColorScheme s;
@@ -2782,8 +2769,8 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = widget.s.primary;
-    final textColor = widget.s.onPrimary;
+    final bubbleColor = widget.s.hover; // cor do card de pré-visualização
+    final textColor = widget.s.onSurface;
 
     return AnimatedBuilder(
       animation: _c,
@@ -3032,9 +3019,6 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// STREAMING BUBBLE
-// ══════════════════════════════════════════════════════════════
 class _StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
   final List<_StreamElement> elements;
