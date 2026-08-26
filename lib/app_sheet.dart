@@ -64,3 +64,88 @@ Future<T?> showAppSheet<T>(
     ),
   );
 }
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE EDIÇÃO COM IA
+// Usado pelos editores (docs, sheets, slides) para pedir uma
+// instrução de edição ao utilizador.
+// ══════════════════════════════════════════════════════════════
+Future<String?> showAiEditModal(
+  BuildContext context,
+  AppColorScheme s, {
+  bool hasSelection = false,
+}) {
+  final ctrl = TextEditingController();
+  return showAppSheet<String>(
+    context: context,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(ctx).viewInsets.bottom,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              hasSelection ? 'Editar seleção com IA' : 'Editar com IA',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: s.onSurface,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: TextStyle(fontSize: 15, color: s.onSurface),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Descreve a alteração...',
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: s.onSurfaceVariant,
+                ),
+                filled: true,
+                fillColor: s.hover,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(ctx, ctrl.text.trim());
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: s.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Aplicar',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: s.onPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}

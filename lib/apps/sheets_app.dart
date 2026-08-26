@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../sheets.dart';
+import '../app_sheet.dart'; // ← novo import
 import '../api_service.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
