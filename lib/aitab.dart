@@ -25,7 +25,7 @@ String _iconForEditorType(EditorType type) {
   switch (type) {
     case EditorType.docs:       return 'doc';
     case EditorType.sheets:     return 'table';
-    case EditorType.slides:     return 'grid';
+    case EditorType.slides:     return 'stacks';
     case EditorType.whiteboard: return 'pencil';
   }
 }
@@ -3658,7 +3658,7 @@ Future<void> showCanvasSheet(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            AppIcon('grid', color: s.onSurface, size: 18),
+            AppIcon('stacks', color: s.onSurface, size: 18),
             const SizedBox(width: 8),
             Text('Canvas desta conversa',
                 style: TextStyle(
@@ -3966,7 +3966,7 @@ Future<void> showAiOptionsSheet(
               const SizedBox(height: 8),
               _OptionsActionRow(
                 s: s,
-                assetName: 'grid',
+                assetName: 'stacks',
                 label: 'Canvas',
                 onTap: () {
                   Navigator.pop(ctx);
@@ -3987,7 +3987,7 @@ Future<void> showAiOptionsSheet(
               const SizedBox(height: 8),
               _OptionsSwitchRow(
                 s: s,
-                assetName: 'sparkles',
+                assetName: 'skills',
                 label: 'Competências',
                 value: localWidgets,
                 onChanged: (v) {
