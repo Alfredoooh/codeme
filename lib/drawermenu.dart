@@ -11,7 +11,7 @@ import 'auth_service.dart';
 import 'api_service.dart';
 import 'chat_search.dart';
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
+import 'sheets.dart';
 
 // ══════════════════════════════════════════════════════════════
 // TABS
@@ -25,7 +25,6 @@ extension AppTabX on AppTab {
         AppTab.edit: 'edit_tab.svg',
       }[this]!;
 
-  // Agora aponta para o mesmo asset sem sufixo filled
   String get svgFilled => svg;
 
   String get label => const {
@@ -172,7 +171,7 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER — renderizado dentro do painel deslizante em main.dart
+// DRAWER
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -202,8 +201,10 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
-  // 0 = Conversas, 1 = Fixadas, 2 = Apps
+  // 0 = Conversas, 1 = Apps
   int _selectedSection = 0;
+  bool _pinnedExpanded = true;
+  bool _allExpanded = true;
 
   @override
   void initState() {
@@ -327,8 +328,6 @@ class _AppDrawerState extends State<AppDrawer> {
             ],
           ),
 
-          // Header — avatar à esquerda, segmented central e botão de
-          // fechar o drawer à direita.
           Positioned(
             top: 0, left: 0, right: 0,
             child: Container(
@@ -345,17 +344,15 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
               child: Row(
                 children: [
-                  // Avatar circular — substitui o texto "Menu"
                   _AvatarCircleButton(
                     s: s,
                     onTap: widget.onSettings,
                   ),
                   const SizedBox(width: 12),
-                  // Segmented control no meio do header
                   Expanded(
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 260),
+                        constraints: const BoxConstraints(maxWidth: 240),
                         child: _DrawerSegmentedControl(
                           s: s,
                           selectedIndex: _selectedSection,
@@ -369,7 +366,6 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Botão de fechar o drawer
                   _CircleIconButton(
                     s: s,
                     assetName: 'double_arrow_right',
@@ -382,7 +378,6 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           ),
 
-          // Rodapé — apenas search pill e botão de nova conversa
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
@@ -424,7 +419,7 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> pinned,
     List<ConversationItem> others,
   ) {
-    if (_selectedSection == 2) {
+    if (_selectedSection == 1) {
       return Center(
         child: Text(
           'Sem apps ainda',
@@ -465,15 +460,52 @@ class _AppDrawerState extends State<AppDrawer> {
       );
     }
 
-    final activeList = _selectedSection == 0 ? others : pinned;
+    final sections = <Widget>[];
 
-    if (activeList.isEmpty) {
-      return Center(
-        child: Text(
-          _selectedSection == 0 ? 'Sem conversas' : 'Sem conversas fixadas',
-          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-        ),
-      );
+    if (pinned.isNotEmpty) {
+      sections.add(_ConversationGroupHeader(
+        s: s,
+        label: 'Fixadas',
+        expanded: _pinnedExpanded,
+        onTap: () => setState(() => _pinnedExpanded = !_pinnedExpanded),
+      ));
+      if (_pinnedExpanded) {
+        sections.add(_LooseRows(
+          s: s,
+          children: [
+            for (final item in pinned)
+              _ConvTile(
+                s: s,
+                item: item,
+                active: item.id == widget.activeConversationId,
+                onTap: () => _openConversation(item),
+                onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+              ),
+          ],
+        ));
+      }
+    }
+
+    sections.add(_ConversationGroupHeader(
+      s: s,
+      label: 'Todas as conversas',
+      expanded: _allExpanded,
+      onTap: () => setState(() => _allExpanded = !_allExpanded),
+    ));
+    if (_allExpanded) {
+      sections.add(_LooseRows(
+        s: s,
+        children: [
+          for (final item in others)
+            _ConvTile(
+              s: s,
+              item: item,
+              active: item.id == widget.activeConversationId,
+              onTap: () => _openConversation(item),
+              onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+            ),
+        ],
+      ));
     }
 
     return CupertinoScrollbar(
@@ -483,28 +515,66 @@ class _AppDrawerState extends State<AppDrawer> {
       radiusWhileDragging: const Radius.circular(3),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-        children: [
-          _LooseRows(
-            s: s,
-            children: [
-              for (final item in activeList)
-                _ConvTile(
-                  s: s,
-                  item: item,
-                  active: item.id == widget.activeConversationId,
-                  onTap: () => _openConversation(item),
-                  onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
+        children: sections,
       ),
     );
   }
 }
 
-// ── Avatar circular para o header — agora com 40px, igual ao botão de fechar ──
+// ── Cabeçalho de grupo expansível ─────────────────────────────
+
+class _ConversationGroupHeader extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  const _ConversationGroupHeader({
+    required this.s,
+    required this.label,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: SelectionContainer.disabled(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: s.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+            AnimatedRotation(
+              turns: expanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: AppIcon(
+                'chevron_down',
+                size: 14,
+                color: s.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Avatar circular ───────────────────────────────────────────
 
 class _AvatarCircleButton extends StatefulWidget {
   final AppColorScheme s;
@@ -516,8 +586,8 @@ class _AvatarCircleButton extends StatefulWidget {
 class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
 
-  static const double _buttonSize = 40; // alinhado ao botão de fechar
-  static const double _imageSize = 36;
+  static const double _buttonSize = 40;
+  static const double _imageSize = 40; // imagem ocupa todo o container
   static const double _fontSize = 16;
 
   Uint8List? _decodeAvatar(String raw) {
@@ -606,7 +676,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   }
 }
 
-// ── Segmented control do drawer — altura 40px, pill preenchendo quase tudo ──
+// ── Segmented control do drawer ───────────────────────────────
 
 class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
@@ -623,10 +693,10 @@ class _DrawerSegmentedControl extends StatefulWidget {
 }
 
 class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
-  static const _options = ['Conversas', 'Fixadas', 'Apps'];
+  static const _options = ['Conversas', 'Apps'];
 
-  static const double _containerHeight = 40; // alinhado ao botão de fechar
-  static const double _pillHeight = 36;
+  static const double _containerHeight = 40;
+  static const double _pillHeight = 32; // pill reduzido
   static const double _outerPadding = 2;
 
   int? _pressedIndex;
@@ -722,8 +792,7 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
-// ── Botão circular genérico — com suporte a onTapDown para
-// ancoragem de popups. ─────────────────────────────────────────
+// ── Botão circular genérico ───────────────────────────────────
 
 class _CircleIconButton extends StatefulWidget {
   final AppColorScheme s;
@@ -792,7 +861,7 @@ class _LooseRows extends StatelessWidget {
   }
 }
 
-// ── Conversa individual — sem swipe, apenas tap e long press ──
+// ── Conversa individual ───────────────────────────────────────
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -1133,7 +1202,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
   }
 }
 
-// ── Sheet de renomeação ────────────────────────────────────────
+// ── Sheet de renomeação ───────────────────────────────────────
 
 Future<void> showRenameSheet(
   BuildContext context,
@@ -1210,9 +1279,7 @@ Future<void> showRenameSheet(
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// SEARCH PILL — substitui o AccountPill
-// ══════════════════════════════════════════════════════════════
+// ── SEARCH PILL ───────────────────────────────────────────────
 
 class _SearchPill extends StatefulWidget {
   final AppColorScheme s;
@@ -1268,7 +1335,7 @@ class _SearchPillState extends State<_SearchPill> {
   }
 }
 
-// ── Popup de opções da conta ──────────────────────────────────
+// ── Popup de opções da conta ─────────────────────────────────
 
 void showAccountOptionsPopupAt(
   BuildContext context,
@@ -1376,8 +1443,6 @@ void showAccountOptionsPopupAt(
   Overlay.of(context).insert(entry);
   controller.forward();
 }
-
-// ── Linha do popup da conta ──────────────────────────────────
 
 class _AccountPopupRow extends StatefulWidget {
   final AppColorScheme s;
