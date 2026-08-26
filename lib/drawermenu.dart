@@ -12,25 +12,24 @@ import 'api_service.dart';
 import 'chat_search.dart';
 import 'app_sheet.dart';
 import 'sheets.dart';
+import 'apps/app_types.dart';
+import 'apps/docs.dart';
+import 'apps/sheets_app.dart';
+import 'apps/slides_app.dart';
+import 'apps/sound.dart';
 
 // ══════════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════════
 
-enum AppTab { ai, edit }
+enum AppTab { ai }
 
 extension AppTabX on AppTab {
-  String get svg => const {
-        AppTab.ai:   'ai_tab.svg',
-        AppTab.edit: 'edit_tab.svg',
-      }[this]!;
+  String get svg => 'ai_tab.svg';
 
   String get svgFilled => svg;
 
-  String get label => const {
-        AppTab.ai:   'IA',
-        AppTab.edit: 'Editor',
-      }[this]!;
+  String get label => 'IA';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -178,8 +177,6 @@ class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onClose;
   final VoidCallback onSettings;
-  final AppTab currentTab;
-  final ValueChanged<AppTab> onSelectTab;
   final ValueChanged<String>? onOpenConversation;
   final VoidCallback? onNewChat;
   final String? activeConversationId;
@@ -189,8 +186,6 @@ class AppDrawer extends StatefulWidget {
     required this.s,
     required this.onClose,
     required this.onSettings,
-    required this.currentTab,
-    required this.onSelectTab,
     this.onOpenConversation,
     this.onNewChat,
     this.activeConversationId,
@@ -420,11 +415,21 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> others,
   ) {
     if (_selectedSection == 1) {
-      return Center(
-        child: Text(
-          'Sem apps ainda',
-          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-        ),
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        children: AppKind.values.map((app) => _AppMenuTile(
+          s: s,
+          app: app,
+          onTap: () {
+            Navigator.of(context).pop(); // fecha o drawer
+            switch (app) {
+              case AppKind.docs:   Navigator.push(context, MaterialPageRoute(builder: (_) => const DocsScreen())); break;
+              case AppKind.sheets: Navigator.push(context, MaterialPageRoute(builder: (_) => const SheetsScreen())); break;
+              case AppKind.slides: Navigator.push(context, MaterialPageRoute(builder: (_) => const SlidesScreen())); break;
+              case AppKind.sound:  Navigator.push(context, MaterialPageRoute(builder: (_) => const SoundScreen())); break;
+            }
+          },
+        )).toList(),
       );
     }
 
@@ -1492,4 +1497,27 @@ class _AccountPopupRowState extends State<_AccountPopupRow> {
       ),
     );
   }
+}
+
+// ── Menu de apps ─────────────────────────────────────────────
+
+class _AppMenuTile extends StatelessWidget {
+  final AppColorScheme s;
+  final AppKind app;
+  final VoidCallback onTap;
+  const _AppMenuTile({required this.s, required this.app, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(children: [
+            Image.asset(app.iconAsset, width: 28, height: 28),
+            const SizedBox(width: 14),
+            Text(app.label, style: TextStyle(fontSize: 15, color: s.onSurface)),
+          ]),
+        ),
+      );
 }

@@ -38,6 +38,7 @@ flutter:
   assets:
     - assets/icons/outline/
     - assets/icons/png/
+    - assets/icons/apps/
     - assets/editor/docs.html
     - assets/editor/sheets.html
     - assets/editor/slides.html

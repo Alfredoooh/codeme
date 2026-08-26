@@ -28,7 +28,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfx/pdfx.dart' as pdfx_pkg;
 import 'package:share_plus/share_plus.dart';
 
-import 'aitab.dart' show LocalCanvasItem, LocalCanvasKind;
+import 'apps/app_types.dart' show LocalCanvasItem, LocalCanvasKind;
 
 // ══════════════════════════════════════════════════════════════
 // EXPORT SERVICE — converte um LocalCanvasItem (doc/sheet/slide/
@@ -83,9 +83,6 @@ class ExportService {
         break;
       case LocalCanvasKind.slide:
         await _buildSlidePages(doc, item.content);
-        break;
-      case LocalCanvasKind.whiteboard:
-        doc.addPage(pw.Page(build: (_) => pw.Center(child: pw.Text('Pré-visualização de quadro branco não suportada em PDF.'))));
         break;
     }
     return doc.save();

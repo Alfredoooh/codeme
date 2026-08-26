@@ -14,11 +14,14 @@ import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
 import 'aitab.dart';
-import 'editorscreen.dart';
 import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
+import 'apps/app_types.dart';
+import 'apps/docs.dart';
+import 'apps/sheets_app.dart';
+import 'apps/slides_app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,10 +52,7 @@ class _CraftLabAppState extends State<CraftLabApp> {
   @override
   void initState() {
     super.initState();
-    // Reage imediatamente a mudanças de tema para atualizar o
-    // status bar / navigation bar sem atraso.
     appTheme.addListener(_syncSystemUi);
-    // Sincroniza logo no arranque.
     _syncSystemUi();
   }
 
@@ -80,8 +80,6 @@ class _CraftLabAppState extends State<CraftLabApp> {
     return AppTheme(
       child: Builder(builder: (ctx) {
         final s = AppTheme.of(ctx);
-        // Garante que, mesmo que o listener não seja chamado por
-        // qualquer motivo, o estilo seja coerente no rebuild.
         _syncSystemUi();
 
         return MaterialApp(
@@ -124,9 +122,7 @@ class _RootShellState extends State<RootShell>
 
   bool get _drawerOpen => _drawerCtrl.value > 0.5;
 
-  AppTab     _tab        = AppTab.ai;
-  EditorType _editorType = EditorType.docs;
-  bool       _hasMessages = false;
+  bool _hasMessages = false;
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
@@ -146,12 +142,6 @@ class _RootShellState extends State<RootShell>
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
   }
 
-  void _selectTab(AppTab t) {
-    _closeDrawer();
-    if (t != _tab) setState(() => _tab = t);
-  }
-
-  void _setEditorType(EditorType t) => setState(() => _editorType = t);
   void _onMessageSent() {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
@@ -171,7 +161,6 @@ class _RootShellState extends State<RootShell>
 
   void _onOpenConversation(String id) {
     setState(() {
-      _tab = AppTab.ai;
       _pendingConversationLoad = id;
       _hasMessages = true;
     });
@@ -185,30 +174,18 @@ class _RootShellState extends State<RootShell>
     editTabController.requestLoadLocal(item);
   }
 
-  String get _tabTitle {
-    switch (_tab) {
-      case AppTab.ai:   return '';
-      case AppTab.edit: return _editorType.label;
-    }
-  }
-
   Widget _buildTab() {
-    switch (_tab) {
-      case AppTab.ai:
-        return AiTabHost(
-          key: ValueKey('ai_$_aiTabInstance'),
-          aiTabKey: _aiTabKey,
-          onFirstMessage: _onMessageSent,
-          externalAction: _pendingConversationAction,
-          onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
-          initialConversationId: _pendingConversationLoad,
-          onConversationLoadConsumed: _onConversationLoadConsumed,
-          onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
-          onCanvasCreated: _onCanvasCreated,
-        );
-      case AppTab.edit:
-        return EditorScreen(editorType: _editorType);
-    }
+    return AiTabHost(
+      key: ValueKey('ai_$_aiTabInstance'),
+      aiTabKey: _aiTabKey,
+      onFirstMessage: _onMessageSent,
+      externalAction: _pendingConversationAction,
+      onExternalActionConsumed: () => setState(() => _pendingConversationAction = null),
+      initialConversationId: _pendingConversationLoad,
+      onConversationLoadConsumed: _onConversationLoadConsumed,
+      onHasMessagesChanged: (v) => setState(() => _hasMessages = v),
+      onCanvasCreated: _onCanvasCreated,
+    );
   }
 
   static const Duration _drawerAnim = Duration(milliseconds: 320);
@@ -217,74 +194,51 @@ class _RootShellState extends State<RootShell>
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final isAiTab = _tab == AppTab.ai;
     final _drawerWidth = MediaQuery.of(context).size.width;
 
-    final bodyContent = isAiTab
-        ? Stack(children: [
-            Positioned.fill(
-              top: 0,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve: kCupertinoOut,
-                switchOutCurve: kCupertinoIn,
-                transitionBuilder: (child, anim) =>
-                    FadeTransition(opacity: anim, child: child),
-                child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
-              ),
-            ),
-            Positioned(
-              top: 0, left: 0, right: 0,
-              child: AnimatedBuilder(
-                animation: _AiTabHeaderRefresh.of(context),
-                builder: (_, __) {
-                  final st = _aiTabKey.currentState;
-                  return _AppHeader(
-                    s: s,
-                    title: _tabTitle,
-                    onMenu: _toggleDrawer,
-                    transparent: true,
-                    headerBackground: s.pageBackground,
-                    trailing: AiConversationMenuButton(
-                      s: s,
-                      hasMessages: _hasMessages,
-                      onSelect: _onConversationAction,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ])
-        : Column(children: [
-            _AppHeader(
+    final bodyContent = Stack(children: [
+      Positioned.fill(
+        top: 0,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: kCupertinoOut,
+          switchOutCurve: kCupertinoIn,
+          transitionBuilder: (child, anim) =>
+              FadeTransition(opacity: anim, child: child),
+          child: KeyedSubtree(key: const ValueKey('ai'), child: _buildTab()),
+        ),
+      ),
+      Positioned(
+        top: 0, left: 0, right: 0,
+        child: AnimatedBuilder(
+          animation: _AiTabHeaderRefresh.of(context),
+          builder: (_, __) {
+            final st = _aiTabKey.currentState;
+            return _AppHeader(
               s: s,
-              title: _tabTitle,
+              title: '',
               onMenu: _toggleDrawer,
-              transparent: false,
-              headerBackground: s.surface,
-              trailing: _tab == AppTab.edit
-                  ? EditTypeButton(
-                      s: s, current: _editorType, onSelect: _setEditorType)
-                  : null,
-            ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve:  kCupertinoOut,
-                switchOutCurve: kCupertinoIn,
-                transitionBuilder: (child, anim) =>
-                    FadeTransition(opacity: anim, child: child),
-                child: KeyedSubtree(key: ValueKey(_tab), child: _buildTab()),
+              transparent: true,
+              headerBackground: s.pageBackground,
+              trailing: AiConversationMenuButton(
+                s: s,
+                hasMessages: _hasMessages,
+                onSelect: _onConversationAction,
               ),
-            ),
-          ]);
+            );
+          },
+        ),
+      ),
+    ]);
 
     return RootShellNavigation(
       switchToEditTab: (type) {
-        setState(() {
-          _editorType = type;
-          _tab = AppTab.edit;
-        });
+        final screen = switch (type) {
+          EditorType.docs   => const DocsScreen(),
+          EditorType.sheets => const SheetsScreen(),
+          EditorType.slides => const SlidesScreen(),
+        };
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
       },
       child: Scaffold(
         backgroundColor: s.surface,
@@ -380,8 +334,6 @@ class _RootShellState extends State<RootShell>
                         s: s,
                         onClose: _closeDrawer,
                         onSettings: _openSettings,
-                        currentTab: _tab,
-                        onSelectTab: _selectTab,
                         onOpenConversation: _onOpenConversation,
                         onNewChat: () =>
                             _onConversationAction(ConversationAction.newChat),

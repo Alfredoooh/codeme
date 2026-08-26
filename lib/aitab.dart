@@ -9,14 +9,18 @@ import 'package:image_picker/image_picker.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'richtext.dart';
-import 'editorscreen.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'aiwidgets.dart';
 import 'exportservice.dart';
 import 'drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
 import 'app_sheet.dart';
-import 'sheets.dart'; // ← adicionado
+import 'sheets.dart';
+import 'apps/app_types.dart';
+import 'apps/docs.dart';
+import 'apps/sheets_app.dart';
+import 'apps/slides_app.dart';
+import 'apps/sound.dart';
 
 // ══════════════════════════════════════════════════════════════
 // HELPER: mapeia EditorType para nome de asset SVG
@@ -26,7 +30,6 @@ String _iconForEditorType(EditorType type) {
     case EditorType.docs:       return 'doc';
     case EditorType.sheets:     return 'table';
     case EditorType.slides:     return 'stacks';
-    case EditorType.whiteboard: return 'pencil';
   }
 }
 
@@ -94,6 +97,9 @@ x_{ij}, letras gregas com \\alpha, \\beta, \\pi, \\Delta, etc., e operadores
 como \\leq, \\geq, \\neq, \\times, \\cdot, \\sum, \\int, \\infty, \\rightarrow.
 A aplicação converte tudo automaticamente para uma apresentação visual
 correta — nunca precisas de explicar a notação, apenas escrevê-la.
+''';
+
+const String kAiDocInstructions = '''
 
 Quando o utilizador pedir para criares, escreveres ou editares um documento
 de texto, gera o conteúdo e embrulha-o EXATAMENTE neste formato, no fim da
@@ -128,6 +134,9 @@ disso um marcador neste formato exato dentro do html:
 O JSON dentro de data-ai-chart segue o formato de configuração nativo do
 Chart.js (type, data, options). A aplicação substitui este marcador por um
 gráfico interativo real no documento.
+''';
+
+const String kAiSheetInstructions = '''
 
 Quando o utilizador pedir para criares uma FOLHA DE CÁLCULO, gera o
 conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
@@ -146,6 +155,9 @@ Campos aceites em cada célula: "value" (texto ou número, obrigatório),
 "fill" (cor de fundo da célula em hex, opcional). Usa referências de
 célula normais (colunas A-Z, linhas numeradas a partir de 1). Gera sempre
 JSON válido, sem comentários, sem vírgulas a mais.
+''';
+
+const String kAiSlideInstructions = '''
 
 Quando o utilizador pedir para criares uma APRESENTAÇÃO ou SLIDES, gera o
 conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
@@ -163,19 +175,15 @@ Cada elemento tem "type": "text" (com "html", "fontSize", "color"),
 "shape" (com "shapeKind": "rect" ou "circle", e "color"). Todos os
 elementos precisam de "id" (número único crescente dentro da
 apresentação), "x", "y", "w", "h" em pixels. Gera sempre JSON válido.
+''';
 
-Nunca mostres qualquer bloco [[canvas:...]] ao utilizador como texto
-explicado — ele é processado automaticamente pela aplicação e transformado
-num cartão de documento navegável, com pré-visualização real e opções de
-abrir no editor ou descarregar.
+const String kAiSoundInstructions = '''
 
-IMPORTANTE: blocos de código normais (```dart, ```python, ```js, ```html,
-```css, etc.) NUNCA devem ser embrulhados em [[canvas:...]] — mesmo que sejam
-uma página HTML completa, um componente, ou um ficheiro inteiro. Blocos de
-código ficam sempre como blocos de código markdown normais, visíveis
-diretamente na conversa, exatamente como qualquer outra resposta técnica.
-Só documentos (doc), folhas de cálculo (sheet) e apresentações (slide) usam
-o formato [[canvas:...]] — nunca código.
+Tens acesso ao app Sound para pesquisar música. Quando o pedido for
+sobre encontrar/tocar música, usa o formato:
+[[sound_search:termo de pesquisa]]
+Não geres letras, faixas ou metadados inventados — só a query de
+pesquisa. A app trata do resto.
 ''';
 
 const String kAiWidgetsInstructions = '''
@@ -222,38 +230,8 @@ String cleanAiText(String raw) {
 // ══════════════════════════════════════════════════════════════
 // LOCAL CANVAS
 // ══════════════════════════════════════════════════════════════
-enum LocalCanvasKind { doc, sheet, slide, whiteboard }
-
-extension LocalCanvasKindX on LocalCanvasKind {
-  EditorType get editorType {
-    switch (this) {
-      case LocalCanvasKind.sheet:      return EditorType.sheets;
-      case LocalCanvasKind.slide:      return EditorType.slides;
-      case LocalCanvasKind.whiteboard: return EditorType.whiteboard;
-      case LocalCanvasKind.doc:        return EditorType.docs;
-    }
-  }
-
-  String get shortLabel => const {
-        LocalCanvasKind.doc:        'Documento',
-        LocalCanvasKind.sheet:      'Folha de cálculo',
-        LocalCanvasKind.slide:      'Apresentação',
-        LocalCanvasKind.whiteboard: 'Quadro branco',
-      }[this]!;
-}
-
-class LocalCanvasItem {
-  final String id;
-  final LocalCanvasKind kind;
-  final String title;
-  final String content;
-  const LocalCanvasItem({
-    required this.id,
-    required this.kind,
-    required this.title,
-    required this.content,
-  });
-}
+// Removido enum LocalCanvasKind daqui — agora está em app_types.dart
+// (a definição local foi eliminada)
 
 class _CanvasScanResult {
   final String cleanText;
@@ -262,14 +240,15 @@ class _CanvasScanResult {
 }
 
 final RegExp _kExplicitCanvasRe = RegExp(
-  r'\[\[canvas:(doc|sheet|slide|whiteboard):(.*?)\|\|([\s\S]*?)\]\]',
+  r'\[\[canvas:(doc|sheet|slide):(.*?)\|\|([\s\S]*?)\]\]',
 );
+
+final RegExp _kSoundSearchRe = RegExp(r'\[\[sound_search:(.*?)\]\]');
 
 LocalCanvasKind _canvasKindFromString(String kindStr) {
   return switch (kindStr) {
     'sheet' => LocalCanvasKind.sheet,
     'slide' => LocalCanvasKind.slide,
-    'whiteboard' => LocalCanvasKind.whiteboard,
     _ => LocalCanvasKind.doc,
   };
 }
@@ -468,7 +447,6 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
       final opensUp = overflowsBottom;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
-      // CORREÇÃO: fórmula do right alinha corretamente com a direita do botão
       final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - widget.width - 12);
 
       return Stack(children: [
@@ -622,8 +600,7 @@ class _PopupRowState<T> extends State<_PopupRow<T>> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AI CONVERSATION MENU BUTTON — ancorado corretamente via
-// GlobalKey + RenderBox, mesmo princípio do drawermenu.
+// AI CONVERSATION MENU BUTTON
 // ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
@@ -701,7 +678,6 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
       final opensUp = desiredTop + estimatedHeight > screenSize.height - 24;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
-      // CORREÇÃO: fórmula do right alinha corretamente com a direita do botão
       final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - width - 12);
 
       return Stack(children: [
@@ -1025,7 +1001,6 @@ List<_StreamElement> _parseStreamingContent(String raw, String Function() idGen)
 String _labelForCanvasKind(LocalCanvasKind kind) => switch (kind) {
       LocalCanvasKind.sheet => 'Criando folha de cálculo...',
       LocalCanvasKind.slide => 'Criando apresentação...',
-      LocalCanvasKind.whiteboard => 'Criando quadro branco...',
       LocalCanvasKind.doc => 'Criando documento...',
     };
 
@@ -1037,7 +1012,7 @@ String _labelForWidgetId(String widgetId) => switch (widgetId) {
     };
 
 _StreamElement _openBlockToElement(String raw, _OpenBlockInfo info) {
-  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(raw).toList();
+  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(raw).toList();
   final widgetOpenMatch = RegExp(r'```(widget_[a-z]+)').allMatches(raw).toList();
 
   if (canvasOpenMatch.isNotEmpty &&
@@ -1051,7 +1026,7 @@ _StreamElement _openBlockToElement(String raw, _OpenBlockInfo info) {
 }
 
 _OpenBlockInfo? _detectOpenBlockInfo(String text) {
-  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide|whiteboard):').allMatches(text).toList();
+  final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(text).toList();
   if (canvasOpenMatch.isNotEmpty) {
     final last = canvasOpenMatch.last;
     final afterLast = text.substring(last.start);
@@ -1061,7 +1036,6 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
       final label = switch (kindStr) {
         'sheet' => 'Criando folha de cálculo...',
         'slide' => 'Criando apresentação...',
-        'whiteboard' => 'Criando quadro branco...',
         _ => 'Criando documento...',
       };
       return _OpenBlockInfo(label);
@@ -1085,6 +1059,15 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
     }
   }
 
+  final soundOpenMatch = RegExp(r'\[\[sound_search:').allMatches(text).toList();
+  if (soundOpenMatch.isNotEmpty) {
+    final last = soundOpenMatch.last;
+    final afterLast = text.substring(last.start);
+    if (!afterLast.contains(']]')) {
+      return const _OpenBlockInfo('A pesquisar música...');
+    }
+  }
+
   if (_endsWithPartialMarker(text)) {
     return const _OpenBlockInfo('Criando...');
   }
@@ -1094,6 +1077,7 @@ _OpenBlockInfo? _detectOpenBlockInfo(String text) {
 
 const List<String> _kPartialMarkerPrefixes = [
   '[[canvas:',
+  '[[sound_search:',
   '```widget_market',
   '```widget_calendar',
   '```widget_map',
@@ -1196,7 +1180,6 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
       _c.repeat();
       _shimmer.repeat();
     } else {
-      // Congela num frame com todos os pontos visíveis
       _c.value = 0.5;
       _shimmer.value = 0.5;
     }
@@ -1264,7 +1247,6 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
           );
 
           if (widget.tintColor != null) {
-            // Sem shimmer quando tintColor definido
             return content;
           }
 
@@ -1427,6 +1409,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _sending      = false;
   bool     _widgetsEnabled = true;
   bool     _webSearchEnabled = false;
+  bool     _docsEnabled   = true;
+  bool     _sheetsEnabled = true;
+  bool     _slidesEnabled = true;
+  bool     _soundEnabled  = false;
   bool     _showScrollToBottom = false;
   String   _streamingText = '';
   String?  _streamingThink;
@@ -1443,6 +1429,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   int get canvasCount => _canvases.length;
   bool get widgetsEnabled => _widgetsEnabled;
   bool get webSearchEnabled => _webSearchEnabled;
+  bool get docsEnabled => _docsEnabled;
+  bool get sheetsEnabled => _sheetsEnabled;
+  bool get slidesEnabled => _slidesEnabled;
+  bool get soundEnabled => _soundEnabled;
   String? get conversationId => _conversationId;
 
   bool get _hasMessages => _msgs.isNotEmpty;
@@ -1452,9 +1442,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final FocusNode _inputFocus = FocusNode();
   final GlobalKey _attachButtonKey = GlobalKey();
 
-  // NOVO: para medir a altura da barra inferior
   final GlobalKey _bottomBarKey = GlobalKey();
-  double _bottomBarHeight = 96; // valor inicial razoável
+  double _bottomBarHeight = 96;
 
   @override
   void initState() {
@@ -1499,6 +1488,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     setState(() => _webSearchEnabled = v);
     _notifyHeader();
   }
+
+  void setDocsEnabled(bool v)   { setState(() => _docsEnabled = v); }
+  void setSheetsEnabled(bool v) { setState(() => _sheetsEnabled = v); }
+  void setSlidesEnabled(bool v) { setState(() => _slidesEnabled = v); }
+  void setSoundEnabled(bool v)  { setState(() => _soundEnabled = v); }
 
   void openCanvasPopupExternally() => _openCanvasPopup();
 
@@ -1557,6 +1551,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
     if (_widgetsEnabled) prompt += kAiWidgetsInstructions;
     if (_webSearchEnabled) prompt += kAiWebSearchInstructions;
+    if (_docsEnabled) prompt += kAiDocInstructions;
+    if (_sheetsEnabled) prompt += kAiSheetInstructions;
+    if (_slidesEnabled) prompt += kAiSlideInstructions;
+    if (_soundEnabled) prompt += kAiSoundInstructions;
     return prompt;
   }
 
@@ -1662,6 +1660,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             });
             _notifyHeader();
             _scrollToEnd();
+            _checkSoundSearch(combined);
             if (isFirst && _conversationId == null && !_incognito) {
               _createConversationWithGeneratedTitle(t);
             } else {
@@ -1705,6 +1704,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _scrollToEnd();
       },
     );
+  }
+
+  void _checkSoundSearch(String text) {
+    final match = _kSoundSearchRe.firstMatch(text);
+    if (match == null) return;
+    final query = match.group(1)?.trim() ?? '';
+    if (query.isEmpty) return;
+    soundTabController.requestSearch(query);
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SoundScreen()));
   }
 
   void _pauseGeneration() {
@@ -1917,12 +1925,33 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       onWebSearchChanged: setWebSearchEnabled,
       onWidgetsChanged: setWidgetsEnabled,
       onOpenCanvas: _openCanvasPopup,
+      onOpenApps: _openAppsConnectSheet,
+    );
+  }
+
+  void _openAppsConnectSheet() {
+    showAppsConnectSheet(
+      context,
+      AppTheme.of(context),
+      docsEnabled: _docsEnabled,
+      sheetsEnabled: _sheetsEnabled,
+      slidesEnabled: _slidesEnabled,
+      soundEnabled: _soundEnabled,
+      onDocsChanged: setDocsEnabled,
+      onSheetsChanged: setSheetsEnabled,
+      onSlidesChanged: setSlidesEnabled,
+      onSoundChanged: setSoundEnabled,
     );
   }
 
   void _onOpenCanvas(LocalCanvasItem item) {
     editTabController.requestLoadLocal(item);
-    AiTabHostNavigation.of(context)?.goToEditTab(item.kind.editorType);
+    final screen = switch (item.kind.editorType) {
+      EditorType.docs   => const DocsScreen(),
+      EditorType.sheets => const SheetsScreen(),
+      EditorType.slides => const SlidesScreen(),
+    };
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   void _onConversationAction(ConversationAction action) {
@@ -2066,7 +2095,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     return matched;
   }
 
-  // NOVO: mede a altura real da barra inferior
   void _measureBottomBar() {
     final ctx = _bottomBarKey.currentContext;
     if (ctx == null) return;
@@ -2089,7 +2117,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final showDisclaimer = _msgs.isNotEmpty || _sending;
     final totalCount = baseCount + (showDisclaimer ? 1 : 0);
 
-    // Agenda a medição da altura da barra após o frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _measureBottomBar());
 
     return GestureDetector(
@@ -2107,7 +2134,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? _EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
-                            // CORREÇÃO: padding inferior dinâmico
                             padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
@@ -2160,20 +2186,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                               );
                             },
                           ),
-                // O botão de voltar ao fundo foi movido para o Stack exterior
               ]),
             ),
           ]),
 
-          // Container mãe do bottom bar — transparente/gradiente em
-          // cima, sólido embaixo, exatamente o mesmo princípio do
-          // container que envolve o botão "Terminar sessão" em
-          // settingsscreen.dart. O input flutuante (_ChatInput) faz
-          // o papel do "botão" dentro deste container mãe.
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
-              key: _bottomBarKey, // ← key para medir altura
+              key: _bottomBarKey,
               padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -2218,7 +2238,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ),
           ),
 
-          // Botão de voltar ao fundo, agora posicionado acima da barra inferior
           if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
             Positioned(
               left: 0, right: 0,
@@ -2274,7 +2293,7 @@ class _IncognitoState extends StatelessWidget {
   }
 }
 
-// ── Rodapé fixo de aviso — alinhado à direita ──────────────────
+// ── Rodapé fixo de aviso ─────────────────────────────────────
 
 class _DisclaimerFooter extends StatelessWidget {
   const _DisclaimerFooter();
@@ -2299,7 +2318,7 @@ class _DisclaimerFooter extends StatelessWidget {
   }
 }
 
-// ── Botão circular flutuante de "ir para o fim" ─────────────────
+// ── Botão circular flutuante de "ir para o fim" ──────────────
 
 class _ScrollToBottomButton extends StatefulWidget {
   final AppColorScheme s;
@@ -2429,7 +2448,6 @@ class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // CORREÇÃO: usar cores dinâmicas do tema
     final bubbleColor = widget.s.primaryContainer;
     final textColor = widget.s.onPrimaryContainer;
 
@@ -2569,7 +2587,6 @@ class _ThinkingHistoryCollapsibleState extends State<_ThinkingHistoryCollapsible
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
-                  // CORREÇÃO: NexaLoaderLogo parado em vez de sparkles
                   const NexaLoaderLogo(size: 15, animated: false),
                   const SizedBox(width: 8),
                   Expanded(
@@ -2682,7 +2699,7 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STREAMING BUBBLE — com pensamento colapsável e cards de progresso
+// STREAMING BUBBLE
 // ══════════════════════════════════════════════════════════════
 class _StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
@@ -2786,8 +2803,6 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
     );
   }
 }
-
-// ── Componente de pensamento colapsável durante streaming ─────
 
 class _ThinkingCollapsible extends StatelessWidget {
   final AppColorScheme s;
@@ -2981,7 +2996,6 @@ void showMessageActionsPopup(
     final desiredTop = anchorOffset.dy - 6 - menuHeight;
     final opensUp = desiredTop >= 40;
     final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
-    // CORREÇÃO: fórmula do right alinha corretamente com a direita do âncora
     final right = (screenSize.width - (anchorOffset.dx + anchorSize.width)).clamp(12.0, screenSize.width - 244);
 
     return Stack(children: [
@@ -3274,7 +3288,7 @@ class _AttachedFileRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT — botão de enviar branco durante resposta
+// CHAT INPUT
 // ══════════════════════════════════════════════════════════════
 class _ChatInput extends StatelessWidget {
   final AppColorScheme s;
@@ -3357,7 +3371,7 @@ class _ChatInput extends StatelessWidget {
               controller: ctrl,
               focusNode: focusNode,
               minLines: 1, maxLines: 6,
-              textCapitalization: TextCapitalization.sentences, // CORREÇÃO
+              textCapitalization: TextCapitalization.sentences,
               style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15).copyWith(color: s.onSurface),
               cursorColor: s.primary,
               decoration: InputDecoration(
@@ -3915,6 +3929,7 @@ Future<void> showAiOptionsSheet(
   required ValueChanged<bool> onWebSearchChanged,
   required ValueChanged<bool> onWidgetsChanged,
   required VoidCallback onOpenCanvas,
+  required VoidCallback onOpenApps,
 }) {
   return showCraftBottomSheet<void>(
     context: context,
@@ -3974,6 +3989,16 @@ Future<void> showAiOptionsSheet(
                 },
               ),
               const SizedBox(height: 8),
+              _OptionsActionRow(
+                s: s,
+                assetName: 'apps',
+                label: 'Apps',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onOpenApps();
+                },
+              ),
+              const SizedBox(height: 8),
               _OptionsSwitchRow(
                 s: s,
                 assetName: 'globe',
@@ -3994,6 +4019,73 @@ Future<void> showAiOptionsSheet(
                   setModalState(() => localWidgets = v);
                   onWidgetsChanged(v);
                 },
+              ),
+            ],
+          ),
+        ),
+      );
+    }),
+  );
+}
+
+Future<void> showAppsConnectSheet(
+  BuildContext context,
+  AppColorScheme s, {
+  required bool docsEnabled,
+  required bool sheetsEnabled,
+  required bool slidesEnabled,
+  required bool soundEnabled,
+  required ValueChanged<bool> onDocsChanged,
+  required ValueChanged<bool> onSheetsChanged,
+  required ValueChanged<bool> onSlidesChanged,
+  required ValueChanged<bool> onSoundChanged,
+}) {
+  return showCraftBottomSheet<void>(
+    context: context,
+    s: s,
+    title: 'Apps',
+    child: Builder(builder: (ctx) {
+      var localDocs = docsEnabled;
+      var localSheets = sheetsEnabled;
+      var localSlides = slidesEnabled;
+      var localSound = soundEnabled;
+
+      return StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _OptionsSwitchRow(
+                s: s,
+                assetName: AppKind.docs.iconAsset,
+                label: AppKind.docs.label,
+                value: localDocs,
+                onChanged: (v) { setModalState(() => localDocs = v); onDocsChanged(v); },
+              ),
+              const SizedBox(height: 8),
+              _OptionsSwitchRow(
+                s: s,
+                assetName: AppKind.sheets.iconAsset,
+                label: AppKind.sheets.label,
+                value: localSheets,
+                onChanged: (v) { setModalState(() => localSheets = v); onSheetsChanged(v); },
+              ),
+              const SizedBox(height: 8),
+              _OptionsSwitchRow(
+                s: s,
+                assetName: AppKind.slides.iconAsset,
+                label: AppKind.slides.label,
+                value: localSlides,
+                onChanged: (v) { setModalState(() => localSlides = v); onSlidesChanged(v); },
+              ),
+              const SizedBox(height: 8),
+              _OptionsSwitchRow(
+                s: s,
+                assetName: AppKind.sound.iconAsset,
+                label: AppKind.sound.label,
+                value: localSound,
+                onChanged: (v) { setModalState(() => localSound = v); onSoundChanged(v); },
               ),
             ],
           ),
