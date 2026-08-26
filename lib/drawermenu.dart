@@ -504,8 +504,7 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 }
 
-// ── Avatar circular para o header — mantém o botão em 40, só a
-// imagem interna cresce um pouco. ──────────────────────────────
+// ── Avatar circular para o header — agora com 40px, igual ao botão de fechar ──
 
 class _AvatarCircleButton extends StatefulWidget {
   final AppColorScheme s;
@@ -517,9 +516,9 @@ class _AvatarCircleButton extends StatefulWidget {
 class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
 
-  static const double _buttonSize = 44;
-  static const double _imageSize = 40;
-  static const double _fontSize = 17;
+  static const double _buttonSize = 40; // alinhado ao botão de fechar
+  static const double _imageSize = 36;
+  static const double _fontSize = 16;
 
   Uint8List? _decodeAvatar(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -607,8 +606,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   }
 }
 
-// ── Segmented control do drawer — container mais alto, pill mantém
-// o mesmo tamanho mas agora com mais respiro acima/abaixo. ──────
+// ── Segmented control do drawer — altura 40px, pill preenchendo quase tudo ──
 
 class _DrawerSegmentedControl extends StatefulWidget {
   final AppColorScheme s;
@@ -627,8 +625,8 @@ class _DrawerSegmentedControl extends StatefulWidget {
 class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   static const _options = ['Conversas', 'Fixadas', 'Apps'];
 
-  static const double _containerHeight = 50;
-  static const double _pillHeight = 46;
+  static const double _containerHeight = 40; // alinhado ao botão de fechar
+  static const double _pillHeight = 36;
   static const double _outerPadding = 2;
 
   int? _pressedIndex;
