@@ -544,20 +544,20 @@ class _ConversationGroupHeader extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: SelectionContainer.disabled(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                    color: s.onSurfaceVariant,
-                  ),
+            SelectionContainer.disabled(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                  color: s.onSurfaceVariant,
                 ),
               ),
             ),
+            const SizedBox(width: 8),
             AnimatedRotation(
               turns: expanded ? 0.5 : 0,
               duration: const Duration(milliseconds: 200),
@@ -587,7 +587,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
 
   static const double _buttonSize = 40;
-  static const double _imageSize = 40; // imagem ocupa todo o container
+  static const double _imageSize = 40;
   static const double _fontSize = 16;
 
   Uint8List? _decodeAvatar(String raw) {
@@ -696,7 +696,7 @@ class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
   static const _options = ['Conversas', 'Apps'];
 
   static const double _containerHeight = 40;
-  static const double _pillHeight = 32; // pill reduzido
+  static const double _pillHeight = 32;
   static const double _outerPadding = 2;
 
   int? _pressedIndex;
@@ -718,9 +718,9 @@ class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
           AnimatedPositioned(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            left: segmentWidth * widget.selectedIndex.clamp(0, _options.length - 1),
+            left: segmentWidth * widget.selectedIndex.clamp(0, _options.length - 1) + 2,
             top: pillTop,
-            width: segmentWidth,
+            width: segmentWidth - 4,
             height: _pillHeight,
             child: Container(
               decoration: BoxDecoration(

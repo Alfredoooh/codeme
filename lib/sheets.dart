@@ -5,11 +5,12 @@ import 'widgets.dart';
 import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
-// BASE BOTTOM SHEET
+// BASE BOTTOM SHEET — Material 3 modal bottom sheet
 // ══════════════════════════════════════════════════════════════
-// Sheet normal (sem efeito de push/scale do CupertinoSheetRoute),
-// bordas totalmente curvas como os popups, handle bar mantido,
-// e animação super suave.
+// Sobe do fundo do ecrã, sem nenhum efeito de push/scale/encolher
+// por trás (isso é CupertinoSheetRoute, ficou em app_sheet.dart e
+// não é usado aqui). Cantos arredondados só no topo (padrão M3),
+// handle bar (drag handle) mantido, cores do tema da app.
 
 Future<T?> showCraftBottomSheet<T>({
   required BuildContext context,
@@ -20,43 +21,20 @@ Future<T?> showCraftBottomSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    useSafeArea: true,
+    backgroundColor: s.cardBackground,
     barrierColor: Colors.black.withOpacity(0.4),
     elevation: 0,
-    transitionAnimationController: null,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-    builder: (ctx) => _SmoothSheetTransition(
-      child: _SheetShell(
-        s: s,
-        title: title,
-        child: child,
-      ),
+    showDragHandle: false, // handle próprio abaixo, com a cor certa
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (ctx) => _SheetShell(
+      s: s,
+      title: title,
+      child: child,
     ),
   );
-}
-
-class _SmoothSheetTransition extends StatelessWidget {
-  final Widget child;
-  const _SmoothSheetTransition({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 340),
-      curve: Curves.easeOutCubic,
-      builder: (context, v, _) {
-        return Opacity(
-          opacity: v,
-          child: Transform.translate(
-            offset: Offset(0, (1 - v) * 24),
-            child: child,
-          ),
-        );
-      },
-      child: child,
-    );
-  }
 }
 
 class _SheetShell extends StatelessWidget {
@@ -69,47 +47,35 @@ class _SheetShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: s.floatingShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 10),
-              Center(
-                child: Container(
-                  width: 36, height: 4.5,
-                  decoration: BoxDecoration(
-                    color: s.outline.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
+              width: 32, height: 4,
+              decoration: BoxDecoration(
+                color: s.outline.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(999),
               ),
-              const SizedBox(height: 10),
-              if (title != null) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                  child: Text(title!,
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: s.onSurface)),
-                ),
-                const SizedBox(height: 4),
-              ],
-              child,
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 10),
+          if (title != null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Text(title!,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface)),
+            ),
+            const SizedBox(height: 4),
+          ],
+          child,
+          const SizedBox(height: 12),
+        ],
       ),
     );
   }

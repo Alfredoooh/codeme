@@ -1,31 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab.dart
-// ══════════════════════════════════════════════════════════════
-// ATUALIZADO:
-// 1) Popups ancorados manualmente via RenderBox.
-// 2) Botão de enviar: branco durante resposta, ícone pause.svg.
-// 3) Loader Nexa com shimmer.
-// 4) Pensamento colapsável no streaming e no histórico.
-// 5) Criação de documentos/canvas/widgets durante streaming sem expor JSON.
-// 6) Ordem real de texto, widgets e canvas preservada.
-// 7) Placeholder: "Conversar com DeepSeek...".
-// 8) Aviso final alinhado à direita, fonte 10.5.
-// 9) Container do input bar com efeito de transparência (gradiente
-//    progressivo no topo, sólido embaixo) — mesmo princípio do
-//    container mãe do botão de sair em settingsscreen.dart.
-// 10) Cards de progresso para canvas/widgets com transição suave e sem conteúdo cru.
-// 11) Opções de IA com estado local (switches atualizam imediatamente).
-// 12) Cards de sheet com tom de fundo do sheet (sem sombras).
-// 13) CORREÇÕES APLICADAS:
-//     - NexaLoaderLogo agora suporta `tintColor` e `animated`.
-//     - Empty state: logo maior (112) com cor primária no tema claro.
-//     - Histórico de pensamento usa NexaLoaderLogo parado em vez de sparkles.
-//     - Bolha do utilizador usa cores dinâmicas (primaryContainer/onPrimaryContainer).
-//     - Input com capitalização automática de frases.
-//     - Preferências de prompt e frequência de emojis integradas no system prompt.
-//     - Sheets migrados para showCraftBottomSheet (sheets.dart).
-//     - Popups de mensagem e de menu de conversa ancorados via RenderBox.
-// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -496,7 +468,8 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
       final opensUp = overflowsBottom;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
-      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - widget.width - 12);
+      // CORREÇÃO: fórmula do right alinha corretamente com a direita do botão
+      final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - widget.width - 12);
 
       return Stack(children: [
         Positioned.fill(
@@ -728,7 +701,8 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
       final opensUp = desiredTop + estimatedHeight > screenSize.height - 24;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 6 : null;
-      final right = (screenSize.width - off.dx - sz.width).clamp(12.0, screenSize.width - width - 12);
+      // CORREÇÃO: fórmula do right alinha corretamente com a direita do botão
+      final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - width - 12);
 
       return Stack(children: [
         Positioned.fill(
@@ -1478,6 +1452,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final FocusNode _inputFocus = FocusNode();
   final GlobalKey _attachButtonKey = GlobalKey();
 
+  // NOVO: para medir a altura da barra inferior
+  final GlobalKey _bottomBarKey = GlobalKey();
+  double _bottomBarHeight = 96; // valor inicial razoável
+
   @override
   void initState() {
     super.initState();
@@ -2088,6 +2066,18 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     return matched;
   }
 
+  // NOVO: mede a altura real da barra inferior
+  void _measureBottomBar() {
+    final ctx = _bottomBarKey.currentContext;
+    if (ctx == null) return;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final h = box.size.height;
+    if ((h - _bottomBarHeight).abs() > 0.5) {
+      setState(() => _bottomBarHeight = h);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -2098,6 +2088,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final baseCount = _msgs.length + (_sending ? 1 : 0);
     final showDisclaimer = _msgs.isNotEmpty || _sending;
     final totalCount = baseCount + (showDisclaimer ? 1 : 0);
+
+    // Agenda a medição da altura da barra após o frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureBottomBar());
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -2114,7 +2107,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? _EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
-                            padding: EdgeInsets.fromLTRB(16, headerHeight, 16, 8),
+                            // CORREÇÃO: padding inferior dinâmico
+                            padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
                               if (showDisclaimer && i == totalCount - 1) {
@@ -2166,24 +2160,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                               );
                             },
                           ),
-                if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
-                  Positioned(
-                    left: 0, right: 0,
-                    bottom: 8,
-                    child: Center(
-                      child: AnimatedOpacity(
-                        opacity: _showScrollToBottom ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 180),
-                        child: IgnorePointer(
-                          ignoring: !_showScrollToBottom,
-                          child: _ScrollToBottomButton(
-                            s: s,
-                            onTap: () => _scrollToEnd(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                // O botão de voltar ao fundo foi movido para o Stack exterior
               ]),
             ),
           ]),
@@ -2196,6 +2173,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: Container(
+              key: _bottomBarKey, // ← key para medir altura
               padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -2239,6 +2217,26 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               ),
             ),
           ),
+
+          // Botão de voltar ao fundo, agora posicionado acima da barra inferior
+          if (!_incognito && (_msgs.isNotEmpty || _streamingText.isNotEmpty))
+            Positioned(
+              left: 0, right: 0,
+              bottom: _bottomBarHeight + 8,
+              child: Center(
+                child: AnimatedOpacity(
+                  opacity: _showScrollToBottom ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 180),
+                  child: IgnorePointer(
+                    ignoring: !_showScrollToBottom,
+                    child: _ScrollToBottomButton(
+                      s: s,
+                      onTap: () => _scrollToEnd(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ]),
       ),
     );
@@ -2983,7 +2981,8 @@ void showMessageActionsPopup(
     final desiredTop = anchorOffset.dy - 6 - menuHeight;
     final opensUp = desiredTop >= 40;
     final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 6;
-    final right = (screenSize.width - anchorOffset.dx - anchorSize.width).clamp(12.0, screenSize.width - 244);
+    // CORREÇÃO: fórmula do right alinha corretamente com a direita do âncora
+    final right = (screenSize.width - (anchorOffset.dx + anchorSize.width)).clamp(12.0, screenSize.width - 244);
 
     return Stack(children: [
       Positioned.fill(
