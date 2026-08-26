@@ -5,6 +5,7 @@
 // e showCupertinoDialog em toda a app.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'; // ← adicionado para TextField, InputDecoration etc.
 import 'colors.dart';
 
 /// Abre um modal no estilo Cupertino "paper sheet" — a tela por trás
@@ -77,7 +78,7 @@ Future<String?> showAiEditModal(
 }) {
   final ctrl = TextEditingController();
   return showAppSheet<String>(
-    context: context,
+    context,
     builder: (ctx) => Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(ctx).viewInsets.bottom,
