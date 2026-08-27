@@ -1,5 +1,3 @@
-import { extractText, getDocumentProxy } from "unpdf";
-
 // ══════════════════════════════════════════════════════════════
 // WORKER — DeepSeek V4 (Flash + Pro, thinking on/off), streaming,
 // título automático obrigatório, resposta com marcador de "processo"
@@ -23,18 +21,18 @@ const DEEPSEEK_MODELS = {
     model: "deepseek-v4-flash",
     max_tokens: 8192,
     temperature: 1.0,
-    thinking: "disabled",
+    thinking: { type: "disabled" },
   },
   pro: {
     model: "deepseek-v4-pro",
     max_tokens: 8192,
     temperature: 1.0,
-    thinking: "disabled",
+    thinking: { type: "disabled" },
   },
   reasoning: {
     model: "deepseek-v4-flash",
     max_tokens: 65536,
-    thinking: "enabled",
+    thinking: { type: "enabled" },
     reasoning_effort: "high",
     // temperature omitida de propósito: a API ignora esse campo
     // quando thinking está enabled.
@@ -290,7 +288,7 @@ async function deepseekGenerateTitle(apiKey, message, language) {
         messages: [{ role: "user", content: prompt }],
         max_tokens: 24,
         temperature: 0.4,
-        thinking: "disabled",
+        thinking: { type: "disabled" },
         stream: false,
       }),
     });
@@ -348,51 +346,15 @@ async function groqChatStream(apiKey, messages, model, systemPrompt, language) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PDF EXTRACTION (unpdf)
+// ANEXOS — versão sem extração de PDF. Anexos deixam de ser
+// processados no servidor; qualquer texto extra tem de vir já
+// pronto no campo `content` da mensagem, tratado no cliente.
 // ══════════════════════════════════════════════════════════════
 
-async function extractPdfText(base64Data) {
-  try {
-    const binaryStr = atob(base64Data);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-    const pdf = await getDocumentProxy(bytes);
-    const { text } = await extractText(pdf, { mergePages: true });
-    return text || "";
-  } catch (e) {
-    console.error("[NEXA PDF EXTRACT ERROR]", e.message);
-    return null;
-  }
-}
-
 async function expandMessagesWithAttachments(messages) {
-  const expanded = [];
-  for (const m of messages) {
-    if (!m.attachments || m.attachments.length === 0) {
-      expanded.push(m);
-      continue;
-    }
-    let extraText = "";
-    for (const att of m.attachments) {
-      const mime = (att.mimeType || "").toLowerCase();
-      if (mime === "application/pdf" && att.base64) {
-        const text = await extractPdfText(att.base64);
-        if (text && text.trim().length > 0) {
-          const truncated = text.length > 12000 ? text.slice(0, 12000) + "\n[...texto truncado...]" : text;
-          extraText += "\n\n[Conteúdo extraído do PDF \"" + (att.name || "documento.pdf") + "\"]:\n" + truncated;
-        } else {
-          extraText += "\n\n[Não foi possível extrair texto do PDF \"" + (att.name || "documento.pdf") + "\" — pode ser um PDF de imagens/scan.]";
-        }
-      }
-      // Imagens e outros tipos: ignorados aqui: o cliente já informa
-      // o utilizador que não são analisados nesta versão.
-    }
-    expanded.push({
-      role: m.role,
-      content: extraText ? m.content + extraText : m.content,
-    });
-  }
-  return expanded;
+  return messages.map(function(m) {
+    return { role: m.role, content: m.content };
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1025,7 +987,7 @@ async function handleAiSummarize(request, env) {
       messages: [{ role: "user", content: prompt + text }],
       max_tokens: 512,
       temperature: 0.5,
-      thinking: "disabled",
+      thinking: { type: "disabled" },
       stream: false,
     }),
   });
