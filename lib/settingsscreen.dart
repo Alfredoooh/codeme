@@ -440,7 +440,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
 
-              // Appbar vazio (apenas botão voltar)
+              // Appbar vazio
               Positioned(
                 top: 0,
                 left: 0,
@@ -549,7 +549,6 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
     final nameFontSize = 18.0 - (4.0 * progress); // de 18 para 14
 
     // Interpolação de posições
-    final expandedCenter = _maxExtent / 2 - 20; // centro aproximado
     final collapsedLeft = 16.0;
     final avatarTop = (_maxExtent - avatarSize) / 2 -
         (20.0 * progress); // move para cima ao colapsar
@@ -571,9 +570,10 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
         children: [
           // Avatar
           Positioned(
-            left: progress == 1.0
-                ? collapsedLeft
-                : (MediaQuery.of(context).size.width - avatarSize) / 2,
+            left: Tween<double>(
+              begin: (MediaQuery.of(context).size.width - 88.0) / 2,
+              end: collapsedLeft,
+            ).transform(progress),
             top: avatarTop,
             child: GestureDetector(
               onTap: onAvatarTap,
@@ -610,61 +610,80 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
           ),
 
           // Botão de editar (lápis) sobre o avatar
-          if (progress < 0.9) // só aparece quando expandido
-            Positioned(
-              left: progress == 1.0
-                  ? collapsedLeft + avatarSize - 10
-                  : (MediaQuery.of(context).size.width + avatarSize) / 2 - 20,
-              top: avatarTop + avatarSize - 10,
-              child: GestureDetector(
-                onTap: onEditTap,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.cardBackground,
-                    shape: BoxShape.circle,
-                    boxShadow: s.cardShadow,
-                  ),
-                  child: AppIcon('pencil', size: 14, color: s.onSurface),
-                ),
-              ),
-            ),
+          if (progress < 0.9)
+            Builder(builder: (context) {
+              final avatarLeft = Tween<double>(
+                begin: (MediaQuery.of(context).size.width - 88.0) / 2,
+                end: collapsedLeft,
+              ).transform(progress);
+              final avatarCenterX = avatarLeft + avatarSize / 2;
+              final avatarCenterY = avatarTop + avatarSize / 2;
 
-          // Nome (aparece ao lado quando colapsado, abaixo quando expandido)
-          if (progress < 0.5)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: avatarTop + avatarSize + 8,
-              child: Center(
-                child: Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: nameFontSize,
-                    fontWeight: FontWeight.w700,
-                    color: s.onSurface,
+              const angle = 0.785398; // 45° em radianos
+              final radius = avatarSize / 2;
+              final badgeSize = 30.0;
+
+              final badgeCenterX = avatarCenterX + radius * 0.707;
+              final badgeCenterY = avatarCenterY + radius * 0.707;
+
+              return Positioned(
+                left: badgeCenterX - badgeSize / 2,
+                top: badgeCenterY - badgeSize / 2,
+                child: Opacity(
+                  opacity: (1.0 - (progress / 0.9)).clamp(0.0, 1.0),
+                  child: GestureDetector(
+                    onTap: onEditTap,
+                    child: Container(
+                      width: badgeSize,
+                      height: badgeSize,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: s.cardBackground,
+                        shape: BoxShape.circle,
+                        boxShadow: s.cardShadow,
+                        border: Border.all(
+                            color: s.pageBackground, width: 2),
+                      ),
+                      child: AppIcon('pencil',
+                          size: 14, color: s.onSurface),
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            )
-          else
-            Positioned(
-              left: nameLeft,
-              top: nameTop,
+              );
+            }),
+
+          // Nome
+          Positioned(
+            left: Tween<double>(
+              begin: 0.0,
+              end: nameLeft,
+            ).transform(progress),
+            right: progress < 1.0
+                ? Tween<double>(
+                    begin: 0.0,
+                    end: MediaQuery.of(context).size.width -
+                        nameLeft -
+                        150,
+                  ).transform(progress)
+                : null,
+            top: Tween<double>(
+              begin: avatarTop + 88.0 + 8,
+              end: nameTop,
+            ).transform(progress),
+            child: Align(
+              alignment: Alignment.lerp(
+                  Alignment.center, Alignment.centerLeft, progress)!,
               child: Text(
                 name,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: nameFontSize,
+                  fontWeight: FontWeight.w700,
                   color: s.onSurface,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+          ),
 
           // Loading overlay
           if (loading)
@@ -692,7 +711,7 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
 }
 
 // ══════════════════════════════════════════════════════════════
-// AVATAR VIEWER + EDITOR (agora quadrado)
+// AVATAR VIEWER + EDITOR (quadrado, botão quadrado colado)
 // ══════════════════════════════════════════════════════════════
 
 class _AvatarViewerScreen extends StatefulWidget {
@@ -793,7 +812,7 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
                     height: squareSize,
                     decoration: BoxDecoration(
                       color: s.primary,
-                      borderRadius: BorderRadius.zero, // sem border radius
+                      borderRadius: BorderRadius.zero,
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.35),
@@ -824,31 +843,31 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
                           ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                // Botão "Carregar nova imagem"
+                // Botão "Carregar nova imagem" — quadrado, colado, mesmo comprimento
                 GestureDetector(
                   onTap: _uploading ? null : _pickAndEdit,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
+                    width: squareSize, // mesmo comprimento da imagem
+                    height: 56,
                     decoration: BoxDecoration(
-                      color: s.primary,
-                      borderRadius: BorderRadius.circular(999),
+                      color: s.isDark ? Colors.white : s.primary,
+                      borderRadius: BorderRadius.zero,
                     ),
+                    alignment: Alignment.center,
                     child: _uploading
                         ? SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation(s.onPrimary),
+                              valueColor: AlwaysStoppedAnimation(
+                                  s.isDark ? Colors.black : s.onPrimary),
                             ),
                           )
                         : Text(
                             'Carregar nova imagem',
                             style: TextStyle(
-                              color: s.onPrimary,
+                              color: s.isDark ? Colors.black : s.onPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
@@ -883,7 +902,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
   bool _obscureNew = true;
   bool _saving = false;
   String? _error;
-  bool _forgotMode = false; // ainda não implementado — mostra info
+  bool _forgotMode = false;
 
   @override
   void dispose() {
@@ -914,7 +933,6 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
     try {
       final token = authController.token;
       if (token == null) throw ApiException('Sessão expirada');
-      // passa a password actual para o worker validar
       await ProfileApiService.updateAccount(token,
           password: newPw, currentPassword: current);
       if (mounted) Navigator.pop(context);
@@ -975,7 +993,6 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                         fontWeight: FontWeight.w500)),
               ),
             ] else ...[
-              // Campo: palavra-passe actual
               Text('Palavra-passe actual',
                   style: TextStyle(
                       fontSize: 13,
@@ -992,7 +1009,6 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                     setState(() => _obscureCurrent = !_obscureCurrent),
               ),
               const SizedBox(height: 4),
-              // Esqueci link
               Align(
                 alignment: Alignment.centerRight,
                 child: GestureDetector(
@@ -1010,8 +1026,6 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-
-              // Campo: nova palavra-passe
               Text('Nova palavra-passe',
                   style: TextStyle(
                       fontSize: 13,

@@ -1,3 +1,7 @@
+// ══════════════════════════════════════════════════════════════
+// ARQUIVO: lib/apps/sound.dart
+// ══════════════════════════════════════════════════════════════
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +9,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
 import '../widgets.dart';
+import '../all_apps_screen.dart';
 
 // ══════════════════════════════════════════════════════════════
 // MODELOS
@@ -231,11 +236,12 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   }
 
   void _openApps() {
+    // Abre a tela isolada de todos os apps (lib/all_apps_screen.dart).
     Navigator.of(context).push(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 340),
         reverseTransitionDuration: const Duration(milliseconds: 280),
-        pageBuilder: (_, anim, __) => const AppsScreen(),
+        pageBuilder: (_, anim, __) => const AllAppsScreen(),
         transitionsBuilder: _fadeThroughTransition,
       ),
     );
@@ -416,7 +422,6 @@ class _FeedCardState extends State<_FeedCard> {
                         child: Icon(Icons.music_note,
                             color: Colors.white, size: 34),
                       ),
-                    // Gradiente + botão de play/pause sobre a capa
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -680,7 +685,8 @@ class _SoundAppBar extends StatelessWidget {
   }
 }
 
-// Botão circular reutilizável (mesma base do ScreenBackButton)
+// Botão circular reutilizável — 100% circular (shape: BoxShape.circle,
+// sem borderRadius, então não há como "vazar" quina alguma).
 class _CircularIconButton extends StatefulWidget {
   final AppColorScheme s;
   final double size;
@@ -805,6 +811,13 @@ class _FloatingPlayerBar extends StatelessWidget {
   }
 }
 
+// Cor de fundo da cápsula: escurece s.cardBackground via alphaBlend,
+// em vez de depender de um getter novo (s.playerBarBackground) que
+// não existe em AppColorScheme e já quebrou o build uma vez.
+Color _pillBackground(AppColorScheme s) {
+  return Color.alphaBlend(Colors.black.withOpacity(0.72), s.cardBackground);
+}
+
 // Cápsula escura com capa + título/artista + botão play/pause
 class _PlayerPill extends StatelessWidget {
   final AppColorScheme s;
@@ -828,7 +841,7 @@ class _PlayerPill extends StatelessWidget {
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: s.playerBarBackground,
+        color: _pillBackground(s),
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
@@ -954,7 +967,7 @@ class _PlayerSkeletonPillState extends State<_PlayerSkeletonPill>
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: s.playerBarBackground.withOpacity(0.6 + baseOpacity),
+            color: _pillBackground(s).withOpacity(0.6 + baseOpacity),
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(
@@ -1459,166 +1472,6 @@ class _SearchResultTile extends StatelessWidget {
             size: 28,
           ),
         ]),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// TELA DE APPS — aberta ao tocar no botão circular de apps
-// ══════════════════════════════════════════════════════════════
-//
-// PLACEHOLDER: não tenho a lista real dos apps do seu aplicativo, então
-// isto está com 6 itens de exemplo. Troque `_placeholderApps` pela sua
-// lista real (ou me passe os nomes/rotas que eu encaixo aqui).
-
-class _AppEntry {
-  final String name;
-  final IconData icon;
-  final VoidCallback? onTap;
-  const _AppEntry({required this.name, required this.icon, this.onTap});
-}
-
-class AppsScreen extends StatelessWidget {
-  const AppsScreen({super.key});
-
-  static const List<_AppEntry> _placeholderApps = [
-    _AppEntry(name: 'Sound', icon: Icons.music_note),
-    _AppEntry(name: 'Chat', icon: Icons.chat_bubble),
-    _AppEntry(name: 'Notas', icon: Icons.note_alt),
-    _AppEntry(name: 'Calendário', icon: Icons.calendar_today),
-    _AppEntry(name: 'Câmera', icon: Icons.camera_alt),
-    _AppEntry(name: 'Fotos', icon: Icons.photo_library),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    return Material(
-      color: s.pageBackground,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  ScreenBackButton(s: s),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Apps',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: s.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                itemCount: _placeholderApps.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 18,
-                  crossAxisSpacing: 18,
-                  childAspectRatio: 0.85,
-                ),
-                itemBuilder: (_, i) {
-                  final app = _placeholderApps[i];
-                  return _AppTile(s: s, app: app, index: i);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AppTile extends StatefulWidget {
-  final AppColorScheme s;
-  final _AppEntry app;
-  final int index;
-  const _AppTile({required this.s, required this.app, required this.index});
-
-  @override
-  State<_AppTile> createState() => _AppTileState();
-}
-
-class _AppTileState extends State<_AppTile> with SingleTickerProviderStateMixin {
-  bool _pressed = false;
-  late final AnimationController _enterController;
-  late final Animation<double> _enterAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _enterController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 380),
-    );
-    _enterAnim = CurvedAnimation(parent: _enterController, curve: Curves.easeOutCubic);
-    Future.delayed(Duration(milliseconds: 30 * widget.index), () {
-      if (mounted) _enterController.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _enterController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return FadeTransition(
-      opacity: _enterAnim,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.85, end: 1.0).animate(_enterAnim),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTap: widget.app.onTap,
-          child: AnimatedScale(
-            scale: _pressed ? 0.92 : 1.0,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOutCubic,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: s.cardBackground,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: s.cardShadowSoft,
-                  ),
-                  child: Icon(widget.app.icon, color: s.primary, size: 26),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.app.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: s.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
