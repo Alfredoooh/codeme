@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../apps/app_types.dart';
-import 'colors.dart';
+import '../colors.dart';
 
 class AnimatedCanvasIcon extends StatefulWidget {
   final EditorType editorType;
