@@ -10,7 +10,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle;
 import 'colors.dart';
 import 'widgets.dart';
 import 'apps/app_types.dart'; // onde AppKind está declarado — ajuste se necessário
