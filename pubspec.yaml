@@ -14,7 +14,7 @@ dependencies:
     sdk: flutter
   flutter_inappwebview: ^6.1.5
   flutter_svg: ^2.0.10+1
-  file_picker: ^11.1.0
+  file_picker: any
   image_picker: ^1.2.3
   geolocator: any
   http: any
@@ -27,8 +27,8 @@ dependencies:
   html: ^0.15.0
   archive: ^3.4.0
   pdfx: ^2.6.0
-  share_plus: ^13.0.0
-  path_provider: ^2.1.5
+  share_plus: any
+  path_provider: any
   flutter_highlight: ^0.7.0
   highlight: ^0.7.0
   visibility_detector: ^0.4.0+2
