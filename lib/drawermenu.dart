@@ -185,10 +185,12 @@ class _AppDrawerState extends State<AppDrawer> {
   int _selectedSection = 0;
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
+  late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _selectedSection);
     conversationsController.addListener(_onConvsChanged);
     authController.addListener(_onAuthChanged);
     _syncConversations();
@@ -196,6 +198,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     conversationsController.removeListener(_onConvsChanged);
     authController.removeListener(_onAuthChanged);
     super.dispose();
@@ -301,27 +304,18 @@ class _AppDrawerState extends State<AppDrawer> {
             children: [
               const SizedBox(height: 56),
               Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
-                    final slide = Tween<Offset>(
-                      begin: const Offset(0.04, 0),
-                      end: Offset.zero,
-                    ).animate(animation);
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: slide,
-                        child: child,
-                      ),
-                    );
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    if (index != _selectedSection) {
+                      setState(() => _selectedSection = index);
+                    }
                   },
-                  child: KeyedSubtree(
-                    key: ValueKey(_selectedSection),
-                    child: _buildConvBody(context, s, pinned, others),
-                  ),
+                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                  children: [
+                    _buildConversationsPage(context, s, pinned, others),
+                    _buildAppsPage(context, s),
+                  ],
                 ),
               ),
               const SizedBox(height: 120),
@@ -360,6 +354,11 @@ class _AppDrawerState extends State<AppDrawer> {
                             if (i == _selectedSection) return;
                             HapticFeedback.selectionClick();
                             setState(() => _selectedSection = i);
+                            _pageController.animateToPage(
+                              i,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                            );
                           },
                         ),
                       ),
@@ -414,65 +413,12 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  Widget _buildConvBody(
+  Widget _buildConversationsPage(
     BuildContext context,
     AppColorScheme s,
     List<ConversationItem> pinned,
     List<ConversationItem> others,
   ) {
-    if (_selectedSection == 1) {
-      return Scrollbar(
-        thumbVisibility: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-          children: [
-            _ConversationGroupHeader(
-              s: s,
-              label: 'Apps',
-              expanded: true,
-              onTap: () {},
-              interactive: false,
-            ),
-            _LooseRows(
-              s: s,
-              children: [
-                for (final app in AppKind.values)
-                  _AppMenuTile(
-                    s: s,
-                    app: app,
-                    onTap: () {
-                      _closeDrawer();
-                      switch (app) {
-                        case AppKind.docs:
-                          Navigator.of(context).push(CupertinoPageRoute(
-                            builder: (_) => const DocsScreen(),
-                          ));
-                          break;
-                        case AppKind.sheets:
-                          Navigator.of(context).push(CupertinoPageRoute(
-                            builder: (_) => const SheetsScreen(),
-                          ));
-                          break;
-                        case AppKind.slides:
-                          Navigator.of(context).push(CupertinoPageRoute(
-                            builder: (_) => const SlidesScreen(),
-                          ));
-                          break;
-                        case AppKind.sound:
-                          Navigator.of(context).push(CupertinoPageRoute(
-                            builder: (_) => const SoundScreen(),
-                          ));
-                          break;
-                      }
-                    },
-                  ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
         child: SizedBox(
@@ -566,6 +512,59 @@ class _AppDrawerState extends State<AppDrawer> {
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
           children: sections,
         ),
+      ),
+    );
+  }
+
+  Widget _buildAppsPage(BuildContext context, AppColorScheme s) {
+    return Scrollbar(
+      thumbVisibility: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+        children: [
+          _ConversationGroupHeader(
+            s: s,
+            label: 'Apps',
+            expanded: true,
+            onTap: () {},
+            interactive: false,
+          ),
+          _LooseRows(
+            s: s,
+            children: [
+              for (final app in AppKind.values)
+                _AppMenuTile(
+                  s: s,
+                  app: app,
+                  onTap: () {
+                    _closeDrawer();
+                    switch (app) {
+                      case AppKind.docs:
+                        Navigator.of(context).push(CupertinoPageRoute(
+                          builder: (_) => const DocsScreen(),
+                        ));
+                        break;
+                      case AppKind.sheets:
+                        Navigator.of(context).push(CupertinoPageRoute(
+                          builder: (_) => const SheetsScreen(),
+                        ));
+                        break;
+                      case AppKind.slides:
+                        Navigator.of(context).push(CupertinoPageRoute(
+                          builder: (_) => const SlidesScreen(),
+                        ));
+                        break;
+                      case AppKind.sound:
+                        Navigator.of(context).push(CupertinoPageRoute(
+                          builder: (_) => const SoundScreen(),
+                        ));
+                        break;
+                    }
+                  },
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

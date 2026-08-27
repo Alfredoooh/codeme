@@ -1,6 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// SETTINGS SCREEN — completo
-// ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -169,6 +166,48 @@ class _SettingsScreenState extends State<SettingsScreen>
     ));
   }
 
+  // Novo: abrir diretamente o picker/cropper para atualizar avatar
+  Future<void> _pickAvatarDirectly() async {
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null || !mounted) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Editar avatar',
+          toolbarColor: AppTheme.of(context).cardBackground,
+          toolbarWidgetColor: AppTheme.of(context).onSurface,
+          activeControlsWidgetColor: AppTheme.of(context).primary,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: false,
+          hideBottomControls: false,
+        ),
+        IOSUiSettings(
+          title: 'Editar avatar',
+          aspectRatioLockEnabled: false,
+          rotateButtonsHidden: false,
+        ),
+      ],
+    );
+
+    if (cropped == null || !mounted) return;
+
+    final bytes = await cropped.readAsBytes();
+    final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    final token = authController.token;
+    if (token == null) return;
+    await ProfileApiService.updateAvatar(token, b64);
+    authController.user = authController.user?.copyWith(avatar: b64);
+    if (authController.user != null) {
+      await SessionManager.updateUser(authController.user!);
+    }
+    authController.notifyListeners();
+  }
+
   void _openAvatarViewer(BuildContext context, AppColorScheme s) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -181,7 +220,6 @@ class _SettingsScreenState extends State<SettingsScreen>
           onAvatarUpdated: (newAvatar) async {
             final token = authController.token;
             if (token == null) return;
-            // upload para o worker
             await ProfileApiService.updateAvatar(token, newAvatar);
             authController.user =
                 authController.user?.copyWith(avatar: newAvatar);
@@ -229,173 +267,180 @@ class _SettingsScreenState extends State<SettingsScreen>
           color: s.pageBackground,
           child: SafeArea(
             child: Stack(children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 58),
-                  Expanded(
-                    child: RefreshIndicator(
-                      color: s.primary,
-                      backgroundColor: s.cardBackground,
-                      onRefresh: _refreshMe,
-                      child: ListView(
-                        padding:
-                            const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                        children: [
-                          _ProfileHeader(
-                            s: s,
-                            user: user,
-                            loading: _refreshing,
-                            onAvatarTap: () =>
-                                _openAvatarViewer(context, s),
-                          ),
-                          const SizedBox(height: 32),
-                          _SectionLabel(s: s, label: 'Geral'),
-                          const SizedBox(height: 10),
-                          _SettingsGroup(s: s, rows: [
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'paintbrush',
-                              label: 'Aparência',
-                              onTap: () => _openAppearance(context, s),
-                              trailing: AppIcon('chevron_forward',
-                                  size: 16,
-                                  color: s.onSurfaceVariant),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'sliders',
-                              label: 'Personalização',
-                              onTap: () =>
-                                  _openPersonalization(context),
-                              trailing: AppIcon('chevron_forward',
-                                  size: 16,
-                                  color: s.onSurfaceVariant),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'database',
-                              label: 'Memória',
-                              onTap: () => _openMemory(context, s),
-                              trailing: AppIcon('chevron_forward',
-                                  size: 16,
-                                  color: s.onSurfaceVariant),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'briefcase',
-                              label: 'Área de trabalho',
-                              onTap: () => _openWorkspace(context),
-                              trailing: AppIcon('chevron_forward',
-                                  size: 16,
-                                  color: s.onSurfaceVariant),
-                            ),
-                          ]),
-                          const SizedBox(height: 28),
-                          _SectionLabel(s: s, label: 'Conta'),
-                          const SizedBox(height: 10),
-                          _SettingsGroup(s: s, rows: [
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'person',
-                              label: 'Nome',
-                              onTap: () => _editName(context, s),
-                              trailing: Text('Alterar',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.primary,
-                                      fontWeight: FontWeight.w500)),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'mail',
-                              label: 'Email',
-                              onTap: () {},
-                              trailing: Text(
-                                user?.email ?? '—',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.onSurfaceVariant),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'lock',
-                              label: 'Palavra-passe',
-                              onTap: () =>
-                                  _editPassword(context, s),
-                              trailing: Text('Alterar',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.primary,
-                                      fontWeight: FontWeight.w500)),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'credit',
-                              label: 'Créditos',
-                              onTap: () {},
-                              trailing: Text(
-                                '${user?.credits ?? 0}',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: s.onSurfaceVariant),
-                              ),
-                            ),
-                          ]),
-                          const SizedBox(height: 28),
-                          _SectionLabel(s: s, label: 'Sobre'),
-                          const SizedBox(height: 10),
-                          _SettingsGroup(s: s, rows: [
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'info',
-                              label: 'Versão',
-                              onTap: () {},
-                              trailing: Text('1.0.0',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.onSurfaceVariant)),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'license',
-                              label: 'Termos de serviço',
-                              onTap: () {},
-                              trailing: const SizedBox.shrink(),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'shield',
-                              label: 'Política de privacidade',
-                              onTap: () {},
-                              trailing: const SizedBox.shrink(),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'comment',
-                              label: 'Enviar feedback',
-                              onTap: () {},
-                              trailing: const SizedBox.shrink(),
-                            ),
-                            _SettingsRow(
-                              s: s,
-                              iconAsset: 'question',
-                              label: 'Ajuda e suporte',
-                              onTap: () {},
-                              trailing: const SizedBox.shrink(),
-                            ),
-                          ]),
-                          const SizedBox(height: 90),
-                        ],
+              // Conteúdo rolável com CustomScrollView para efeito de shrink
+              RefreshIndicator(
+                color: s.primary,
+                backgroundColor: s.cardBackground,
+                onRefresh: _refreshMe,
+                child: CustomScrollView(
+                  slivers: [
+                    // Header que encolhe
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _ProfileHeaderDelegate(
+                        s: s,
+                        user: user,
+                        loading: _refreshing,
+                        onAvatarTap: () =>
+                            _openAvatarViewer(context, s),
+                        onEditTap: _pickAvatarDirectly,
                       ),
                     ),
-                  ),
-                ],
+                    // Demais itens
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 0),
+                            _SectionLabel(s: s, label: 'Geral'),
+                            const SizedBox(height: 10),
+                            _SettingsGroup(s: s, rows: [
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'paintbrush',
+                                label: 'Aparência',
+                                onTap: () => _openAppearance(context, s),
+                                trailing: AppIcon('chevron_forward',
+                                    size: 16,
+                                    color: s.onSurfaceVariant),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'sliders',
+                                label: 'Personalização',
+                                onTap: () =>
+                                    _openPersonalization(context),
+                                trailing: AppIcon('chevron_forward',
+                                    size: 16,
+                                    color: s.onSurfaceVariant),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'database',
+                                label: 'Memória',
+                                onTap: () => _openMemory(context, s),
+                                trailing: AppIcon('chevron_forward',
+                                    size: 16,
+                                    color: s.onSurfaceVariant),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'briefcase',
+                                label: 'Área de trabalho',
+                                onTap: () => _openWorkspace(context),
+                                trailing: AppIcon('chevron_forward',
+                                    size: 16,
+                                    color: s.onSurfaceVariant),
+                              ),
+                            ]),
+                            const SizedBox(height: 28),
+                            _SectionLabel(s: s, label: 'Conta'),
+                            const SizedBox(height: 10),
+                            _SettingsGroup(s: s, rows: [
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'person',
+                                label: 'Nome',
+                                onTap: () => _editName(context, s),
+                                trailing: Text('Alterar',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: s.primary,
+                                        fontWeight: FontWeight.w500)),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'mail',
+                                label: 'Email',
+                                onTap: () {},
+                                trailing: Text(
+                                  user?.email ?? '—',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'lock',
+                                label: 'Palavra-passe',
+                                onTap: () =>
+                                    _editPassword(context, s),
+                                trailing: Text('Alterar',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: s.primary,
+                                        fontWeight: FontWeight.w500)),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'credit',
+                                label: 'Créditos',
+                                onTap: () {},
+                                trailing: Text(
+                                  '${user?.credits ?? 0}',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: s.onSurfaceVariant),
+                                ),
+                              ),
+                            ]),
+                            const SizedBox(height: 28),
+                            _SectionLabel(s: s, label: 'Sobre'),
+                            const SizedBox(height: 10),
+                            _SettingsGroup(s: s, rows: [
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'info',
+                                label: 'Versão',
+                                onTap: () {},
+                                trailing: Text('1.0.0',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: s.onSurfaceVariant)),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'license',
+                                label: 'Termos de serviço',
+                                onTap: () {},
+                                trailing: const SizedBox.shrink(),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'shield',
+                                label: 'Política de privacidade',
+                                onTap: () {},
+                                trailing: const SizedBox.shrink(),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'comment',
+                                label: 'Enviar feedback',
+                                onTap: () {},
+                                trailing: const SizedBox.shrink(),
+                              ),
+                              _SettingsRow(
+                                s: s,
+                                iconAsset: 'question',
+                                label: 'Ajuda e suporte',
+                                onTap: () {},
+                                trailing: const SizedBox.shrink(),
+                              ),
+                            ]),
+                            const SizedBox(height: 90),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
-              // Appbar
+              // Appbar vazio (apenas botão voltar)
               Positioned(
                 top: 0,
                 left: 0,
@@ -419,12 +464,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                       s: s,
                       onTap: () => Navigator.pop(context),
                     ),
-                    const SizedBox(width: 12),
-                    Text('Definições',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: s.onSurface)),
                   ]),
                 ),
               ),
@@ -461,7 +500,199 @@ class _SettingsScreenState extends State<SettingsScreen>
 }
 
 // ══════════════════════════════════════════════════════════════
-// AVATAR VIEWER + EDITOR
+// PROFILE HEADER DELEGATE (com shrink)
+// ══════════════════════════════════════════════════════════════
+
+class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final AppColorScheme s;
+  final AppUser? user;
+  final bool loading;
+  final VoidCallback onAvatarTap;
+  final VoidCallback onEditTap;
+
+  _ProfileHeaderDelegate({
+    required this.s,
+    required this.user,
+    required this.loading,
+    required this.onAvatarTap,
+    required this.onEditTap,
+  });
+
+  static const double _maxExtent = 180;
+  static const double _minExtent = 60;
+
+  @override
+  double get minExtent => _minExtent;
+  @override
+  double get maxExtent => _maxExtent;
+
+  Uint8List? _decodeAvatar(String raw) {
+    try {
+      final commaIdx = raw.indexOf(',');
+      final b64 = raw.startsWith('data:') && commaIdx != -1
+          ? raw.substring(commaIdx + 1)
+          : raw;
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final progress =
+        (shrinkOffset / (_maxExtent - _minExtent)).clamp(0.0, 1.0);
+
+    // Interpolação de tamanhos
+    final avatarSize = 88.0 - (48.0 * progress); // de 88 para 40
+    final nameFontSize = 18.0 - (4.0 * progress); // de 18 para 14
+
+    // Interpolação de posições
+    final expandedCenter = _maxExtent / 2 - 20; // centro aproximado
+    final collapsedLeft = 16.0;
+    final avatarTop = (_maxExtent - avatarSize) / 2 -
+        (20.0 * progress); // move para cima ao colapsar
+    final nameLeft = collapsedLeft + avatarSize + 8.0;
+    final nameTop = (_maxExtent - 20) / 2 -
+        (8.0 * progress); // centralizado verticalmente
+
+    // Decodificar avatar
+    final name = user?.name ?? 'Utilizador';
+    final avatarRaw = user?.avatar;
+    final avatarBytes = (avatarRaw != null && avatarRaw.isNotEmpty)
+        ? _decodeAvatar(avatarRaw)
+        : null;
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    return Container(
+      color: s.pageBackground,
+      child: Stack(
+        children: [
+          // Avatar
+          Positioned(
+            left: progress == 1.0
+                ? collapsedLeft
+                : (MediaQuery.of(context).size.width - avatarSize) / 2,
+            top: avatarTop,
+            child: GestureDetector(
+              onTap: onAvatarTap,
+              child: Hero(
+                tag: 'avatar',
+                child: Container(
+                  width: avatarSize,
+                  height: avatarSize,
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                      color: s.primary,
+                      shape: BoxShape.circle),
+                  child: avatarBytes != null
+                      ? Image.memory(
+                          avatarBytes,
+                          width: avatarSize,
+                          height: avatarSize,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Text(initial,
+                              style: TextStyle(
+                                  color: s.onPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: avatarSize * 0.35)),
+                        )
+                      : Text(initial,
+                          style: TextStyle(
+                              color: s.onPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: avatarSize * 0.35)),
+                ),
+              ),
+            ),
+          ),
+
+          // Botão de editar (lápis) sobre o avatar
+          if (progress < 0.9) // só aparece quando expandido
+            Positioned(
+              left: progress == 1.0
+                  ? collapsedLeft + avatarSize - 10
+                  : (MediaQuery.of(context).size.width + avatarSize) / 2 - 20,
+              top: avatarTop + avatarSize - 10,
+              child: GestureDetector(
+                onTap: onEditTap,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: s.cardBackground,
+                    shape: BoxShape.circle,
+                    boxShadow: s.cardShadow,
+                  ),
+                  child: AppIcon('pencil', size: 14, color: s.onSurface),
+                ),
+              ),
+            ),
+
+          // Nome (aparece ao lado quando colapsado, abaixo quando expandido)
+          if (progress < 0.5)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: avatarTop + avatarSize + 8,
+              child: Center(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: nameFontSize,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
+          else
+            Positioned(
+              left: nameLeft,
+              top: nameTop,
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+          // Loading overlay
+          if (loading)
+            Positioned.fill(
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor: const AlwaysStoppedAnimation(Colors.white),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) {
+    return true;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AVATAR VIEWER + EDITOR (agora quadrado)
 // ══════════════════════════════════════════════════════════════
 
 class _AvatarViewerScreen extends StatefulWidget {
@@ -498,7 +729,6 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
         await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
     if (picked == null || !mounted) return;
 
-    // Abrir editor (crop/rotate)
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
@@ -542,6 +772,9 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
     final initial =
         (user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'U';
 
+    // Largura do quadrado: quase toda a largura da tela (menos 32 de margem)
+    final squareSize = MediaQuery.of(context).size.width - 32;
+
     return GestureDetector(
       onTap: () => Navigator.pop(context),
       child: Material(
@@ -549,18 +782,18 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
         child: Center(
           child: GestureDetector(
             onTap: () {}, // absorve tap para não fechar ao clicar na imagem
-            child: Stack(
-              clipBehavior: Clip.none,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Avatar
+                // Quadrado com bordas retas
                 Hero(
                   tag: 'avatar',
                   child: Container(
-                    width: 220,
-                    height: 220,
+                    width: squareSize,
+                    height: squareSize,
                     decoration: BoxDecoration(
                       color: s.primary,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.zero, // sem border radius
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.35),
@@ -591,35 +824,35 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
                           ),
                   ),
                 ),
-
-                // Botão de edição — topo direito
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: _uploading ? null : _pickAndEdit,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: s.cardBackground,
-                        shape: BoxShape.circle,
-                        boxShadow: s.cardShadow,
-                      ),
-                      alignment: Alignment.center,
-                      child: _uploading
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation(s.primary),
-                              ),
-                            )
-                          : AppIcon('pencil',
-                              size: 16, color: s.onSurface),
+                const SizedBox(height: 24),
+                // Botão "Carregar nova imagem"
+                GestureDetector(
+                  onTap: _uploading ? null : _pickAndEdit,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: s.primary,
+                      borderRadius: BorderRadius.circular(999),
                     ),
+                    child: _uploading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation(s.onPrimary),
+                            ),
+                          )
+                        : Text(
+                            'Carregar nova imagem',
+                            style: TextStyle(
+                              color: s.onPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -943,127 +1176,6 @@ class _CircularBackButtonState extends State<_CircularBackButton> {
         ),
         child: AppIcon('back', color: s.onSurface, size: 18),
       ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// CABEÇALHO DE PERFIL
-// ══════════════════════════════════════════════════════════════
-
-class _ProfileHeader extends StatelessWidget {
-  final AppColorScheme s;
-  final AppUser? user;
-  final bool loading;
-  final VoidCallback onAvatarTap;
-  const _ProfileHeader({
-    required this.s,
-    required this.user,
-    required this.loading,
-    required this.onAvatarTap,
-  });
-
-  Uint8List? _decodeAvatar(String raw) {
-    try {
-      final commaIdx = raw.indexOf(',');
-      final b64 = raw.startsWith('data:') && commaIdx != -1
-          ? raw.substring(commaIdx + 1)
-          : raw;
-      return base64Decode(b64);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final name = user?.name ?? 'Utilizador';
-    final avatarRaw = user?.avatar;
-    final avatarBytes =
-        (avatarRaw != null && avatarRaw.isNotEmpty)
-            ? _decodeAvatar(avatarRaw)
-            : null;
-    final initial =
-        name.isNotEmpty ? name[0].toUpperCase() : 'U';
-
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onAvatarTap,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Hero(
-                tag: 'avatar',
-                child: Container(
-                  width: 88,
-                  height: 88,
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                      color: s.primary, shape: BoxShape.circle),
-                  child: avatarBytes != null
-                      ? Image.memory(
-                          avatarBytes,
-                          width: 88,
-                          height: 88,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Text(initial,
-                              style: TextStyle(
-                                  color: s.onPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 32)),
-                        )
-                      : Text(initial,
-                          style: TextStyle(
-                              color: s.onPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 32)),
-                ),
-              ),
-              if (loading)
-                Positioned.fill(
-                  child: Container(
-                    decoration: const BoxDecoration(shape: BoxShape.circle),
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        valueColor:
-                            const AlwaysStoppedAnimation(Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.cardBackground,
-                    shape: BoxShape.circle,
-                    boxShadow: s.cardShadow,
-                  ),
-                  child: AppIcon('pencil', size: 14, color: s.onSurface),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(name,
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: s.onSurface),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis),
-      ],
     );
   }
 }
@@ -1853,7 +1965,6 @@ class _PersonalizationScreen extends StatefulWidget {
 class _PersonalizationScreenState extends State<_PersonalizationScreen>
     with ThemeReactive<_PersonalizationScreen> {
 
-  // ouve mudanças nas prefs para actualizar os trailing em tempo real
   @override
   void initState() {
     super.initState();
@@ -1934,7 +2045,6 @@ class _PersonalizationScreenState extends State<_PersonalizationScreen>
                     label: 'Preferências de prompt',
                     onTap: () =>
                         _openPromptEditor(context, s),
-                    // trailing actualiza em tempo real via listener
                     trailing: Text(
                       appPreferences.prompt.isEmpty
                           ? 'Nenhuma'
@@ -2012,7 +2122,6 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    // actualiza imediatamente para o trailing mudar em tempo real
     appPreferences.setPromptRemote(
         _ctrl.text.trim(), authController.token);
     await Future.delayed(const Duration(milliseconds: 150));
