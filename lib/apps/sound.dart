@@ -135,7 +135,7 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     try {
       final searchResults = await _yt.search.search(query);
       final tracks = <SoundTrack>[];
-      await for (final video in searchResults) {
+      for (final video in searchResults) {
         tracks.add(SoundTrack(
           title: video.title,
           artist: video.author,
@@ -182,7 +182,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
 
   void _togglePlay(SoundTrack track) {
     if (_currentTrack == track) {
-      // Se é a mesma faixa, apenas pausa/retoma
       if (_player.playing) {
         _player.pause();
         setState(() => _isPlaying = false);
@@ -191,7 +190,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
         setState(() => _isPlaying = true);
       }
     } else {
-      // Nova faixa
       _playTrack(track);
     }
   }
@@ -301,6 +299,94 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
           ],
         );
       },
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TILE DE FAIXA
+// ══════════════════════════════════════════════════════════════
+
+class _TrackTile extends StatelessWidget {
+  final AppColorScheme s;
+  final SoundTrack track;
+  final bool isCurrent;
+  final bool isPlaying;
+  final VoidCallback onTap;
+
+  const _TrackTile({
+    required this.s,
+    required this.track,
+    required this.isCurrent,
+    required this.isPlaying,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = Color(int.parse(track.coverColorHex.replaceFirst('#', '0xFF')));
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: s.cardShadowSoft,
+        ),
+        child: Row(children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: cover,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.music_note, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  track.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  track.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: s.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isCurrent && isPlaying ? Icons.pause : Icons.play_arrow,
+              color: s.onPrimary,
+              size: 20,
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }
@@ -605,7 +691,7 @@ class _SoundSearchScreenState extends State<SoundSearchScreen> {
     try {
       final searchResults = await _yt.search.search(query);
       final tracks = <SoundTrack>[];
-      await for (final video in searchResults) {
+      for (final video in searchResults) {
         tracks.add(SoundTrack(
           title: video.title,
           artist: video.author,
