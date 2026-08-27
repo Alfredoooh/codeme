@@ -16,7 +16,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
   file_picker: ^8.0.0
   image_picker: ^1.2.3
-  image_cropper: ^7.1.0
+  image_cropper: any
   geolocator: any
   http: any
   shared_preferences: any
