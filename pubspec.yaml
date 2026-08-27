@@ -17,7 +17,8 @@ dependencies:
   file_picker: ^8.0.0
   image_picker: ^1.2.3
   image_cropper: any
-  ytdlp: any
+  youtube_explode_dart: ^2.0.0
+  just_audio: ^0.9.36
   geolocator: any
   http: any
   shared_preferences: any

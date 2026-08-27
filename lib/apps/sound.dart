@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ytdlp/ytdlp.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
 import '../widgets.dart';
 
@@ -13,12 +14,12 @@ class SoundTrack {
   final String title;
   final String artist;
   final String coverColorHex;
-  final String? url; // URL para reprodução/download
+  final String videoId;
   const SoundTrack({
     required this.title,
     required this.artist,
     required this.coverColorHex,
-    this.url,
+    required this.videoId,
   });
 }
 
@@ -61,6 +62,8 @@ class SoundScreen extends StatefulWidget {
 }
 
 class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScreen> {
+  final YoutubeExplode _yt = YoutubeExplode();
+  final AudioPlayer _player = AudioPlayer();
   List<Album> _albums = [];
   bool _loading = true;
   SoundTrack? _currentTrack;
@@ -70,12 +73,19 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   void initState() {
     super.initState();
     soundTabController.addListener(_onPendingSearch);
-    _fetchAlbums();
+    _fetchDefaultAlbums();
+    _player.playerStateStream.listen((state) {
+      if (state.playing != _isPlaying && mounted) {
+        setState(() => _isPlaying = state.playing);
+      }
+    });
   }
 
   @override
   void dispose() {
     soundTabController.removeListener(_onPendingSearch);
+    _player.dispose();
+    _yt.close();
     super.dispose();
   }
 
@@ -87,51 +97,54 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     }
   }
 
-  // Busca álbuns (exemplo: uma playlist pública do YouTube)
-  Future<void> _fetchAlbums() async {
+  // Carrega uma playlist fixa (substitua pelo ID real da playlist)
+  Future<void> _fetchDefaultAlbums() async {
     setState(() => _loading = true);
     try {
-      final yt = Ytdlp();
-      // Exemplo: buscar informações de uma playlist (substitua pela URL desejada)
-      final info = await yt.getPlaylistInfo('https://www.youtube.com/playlist?list=SEU_ID');
-      // Mapear para álbuns (agrupando por alguma lógica; aqui simplificamos como um único álbum)
-      final tracks = info.entries.map((e) => SoundTrack(
-            title: e.title,
-            artist: e.uploader ?? 'Desconhecido',
-            coverColorHex: '#2e8bc9', // cor fixa, poderia vir da thumbnail
-            url: e.url,
+      const playlistId = 'PLAYLIST_ID'; // ex.: 'PLrAXtmErZgO...'
+      final playlist = await _yt.playlists.get(playlistId);
+      final videos = await _yt.playlists.getVideos(playlist.id).toList();
+
+      final tracks = videos.map((video) => SoundTrack(
+            title: video.title,
+            artist: video.author,
+            coverColorHex: '#2e8bc9',
+            videoId: video.id.value,
           )).toList();
 
-      // Agrupar em álbum (aqui apenas um álbum com todas as faixas)
       final album = Album(
-        title: 'Playlist',
-        artist: 'Vários artistas',
+        title: playlist.title,
+        artist: playlist.author ?? 'Vários artistas',
         coverColorHex: '#2e8bc9',
         tracks: tracks,
       );
+
       setState(() {
         _albums = [album];
         _loading = false;
       });
     } catch (e) {
-      debugPrint('Erro ao buscar álbuns: $e');
+      debugPrint('Erro ao buscar playlist: $e');
       setState(() => _loading = false);
-      // fallback para lista vazia ou mock
     }
   }
 
-  // Pesquisa de faixas via yt-dlp (exemplo)
+  // Pesquisa de vídeos (faixas)
   Future<void> _searchTracks(String query) async {
     setState(() => _loading = true);
     try {
-      final yt = Ytdlp();
-      final result = await yt.search(query, maxResults: 20);
-      final tracks = result.map((r) => SoundTrack(
-            title: r.title,
-            artist: r.uploader ?? 'Desconhecido',
-            coverColorHex: '#2e8bc9',
-            url: r.url,
-          )).toList();
+      final searchResults = await _yt.search.search(query);
+      final tracks = <SoundTrack>[];
+      await for (final video in searchResults) {
+        tracks.add(SoundTrack(
+          title: video.title,
+          artist: video.author,
+          coverColorHex: '#2e8bc9',
+          videoId: video.id.value,
+        ));
+        if (tracks.length >= 20) break;
+      }
+
       setState(() {
         _albums = [
           Album(
@@ -149,16 +162,38 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     }
   }
 
-  void _togglePlay(SoundTrack track) {
-    setState(() {
-      if (_currentTrack == track) {
-        _isPlaying = !_isPlaying;
-      } else {
+  // Toca o áudio da faixa selecionada
+  Future<void> _playTrack(SoundTrack track) async {
+    try {
+      final video = await _yt.videos.get(track.videoId);
+      final manifest = await _yt.videos.streamsClient.getManifest(video.id);
+      final streamInfo = manifest.audioOnly.withHighestBitrate();
+
+      await _player.setUrl(streamInfo.url.toString());
+      await _player.play();
+      setState(() {
         _currentTrack = track;
         _isPlaying = true;
+      });
+    } catch (e) {
+      debugPrint('Erro ao tocar: $e');
+    }
+  }
+
+  void _togglePlay(SoundTrack track) {
+    if (_currentTrack == track) {
+      // Se é a mesma faixa, apenas pausa/retoma
+      if (_player.playing) {
+        _player.pause();
+        setState(() => _isPlaying = false);
+      } else {
+        _player.play();
+        setState(() => _isPlaying = true);
       }
-    });
-    // Aqui você pode integrar um player de áudio (ex.: just_audio) com a URL da faixa
+    } else {
+      // Nova faixa
+      _playTrack(track);
+    }
   }
 
   @override
@@ -172,20 +207,21 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
           color: s.pageBackground,
           child: SafeArea(
             child: Stack(children: [
-              // Conteúdo principal: lista de álbuns
               _buildAlbumList(s),
-
-              // Appbar
               _SoundAppBar(s: s),
-
-              // Bottombar flutuante (player / shimmer)
               _FloatingPlayerBar(
                 s: s,
                 currentTrack: _currentTrack,
                 isPlaying: _isPlaying,
                 onTogglePlay: () {
                   if (_currentTrack != null) {
-                    setState(() => _isPlaying = !_isPlaying);
+                    if (_player.playing) {
+                      _player.pause();
+                      setState(() => _isPlaying = false);
+                    } else {
+                      _player.play();
+                      setState(() => _isPlaying = true);
+                    }
                   }
                 },
                 onOpenFavorites: () {
@@ -215,14 +251,13 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 80, 16, 120), // espaço para bottombar
+      padding: const EdgeInsets.fromLTRB(16, 80, 16, 120),
       itemCount: _albums.length,
       itemBuilder: (_, albumIndex) {
         final album = _albums[albumIndex];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabeçalho do álbum
             Padding(
               padding: const EdgeInsets.only(bottom: 8, top: 12),
               child: Row(
@@ -256,7 +291,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
                 ],
               ),
             ),
-            // Faixas do álbum
             ...album.tracks.map((track) => _TrackTile(
                   s: s,
                   track: track,
@@ -300,9 +334,7 @@ class _SoundAppBar extends StatelessWidget {
             const Spacer(),
             // Botão de apps (ícone PNG de assets/icons/png/)
             GestureDetector(
-              onTap: () {
-                // Ação para abrir apps
-              },
+              onTap: () {},
               child: Container(
                 width: 40,
                 height: 40,
@@ -548,6 +580,7 @@ class _SoundSearchScreenState extends State<SoundSearchScreen> {
   String _query = '';
   List<SoundTrack> _results = [];
   bool _loading = false;
+  final YoutubeExplode _yt = YoutubeExplode();
 
   @override
   void initState() {
@@ -559,6 +592,7 @@ class _SoundSearchScreenState extends State<SoundSearchScreen> {
   void dispose() {
     _ctrl.dispose();
     _focus.dispose();
+    _yt.close();
     super.dispose();
   }
 
@@ -569,14 +603,17 @@ class _SoundSearchScreenState extends State<SoundSearchScreen> {
     }
     setState(() => _loading = true);
     try {
-      final yt = Ytdlp();
-      final result = await yt.search(query, maxResults: 20);
-      final tracks = result.map((r) => SoundTrack(
-            title: r.title,
-            artist: r.uploader ?? 'Desconhecido',
-            coverColorHex: '#2e8bc9',
-            url: r.url,
-          )).toList();
+      final searchResults = await _yt.search.search(query);
+      final tracks = <SoundTrack>[];
+      await for (final video in searchResults) {
+        tracks.add(SoundTrack(
+          title: video.title,
+          artist: video.author,
+          coverColorHex: '#2e8bc9',
+          videoId: video.id.value,
+        ));
+        if (tracks.length >= 20) break;
+      }
       setState(() {
         _results = tracks;
         _loading = false;
@@ -814,7 +851,7 @@ class _SearchResultTile extends StatelessWidget {
   }
 }
 
-// ── Botão voltar reutilizável (extraído do Settings) ─────────
+// ── Botão voltar reutilizável ─────────────────────────────────
 
 class ScreenBackButton extends StatefulWidget {
   final AppColorScheme s;
