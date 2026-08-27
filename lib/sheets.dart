@@ -2,15 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'colors.dart';
 import 'widgets.dart';
-import 'app_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
-// BASE BOTTOM SHEET — Material 3 modal bottom sheet
+// BASE BOTTOM SHEET
 // ══════════════════════════════════════════════════════════════
-// Sobe do fundo do ecrã, sem nenhum efeito de push/scale/encolher
-// por trás (isso é CupertinoSheetRoute, ficou em app_sheet.dart e
-// não é usado aqui). Cantos arredondados só no topo (padrão M3),
-// handle bar (drag handle) mantido, cores do tema da app.
 
 Future<T?> showCraftBottomSheet<T>({
   required BuildContext context,
@@ -25,7 +20,7 @@ Future<T?> showCraftBottomSheet<T>({
     backgroundColor: s.cardBackground,
     barrierColor: Colors.black.withOpacity(0.4),
     elevation: 0,
-    showDragHandle: false, // handle próprio abaixo, com a cor certa
+    showDragHandle: false,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
@@ -45,37 +40,49 @@ class _SheetShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 10),
-          Center(
-            child: Container(
-              width: 32, height: 4,
-              decoration: BoxDecoration(
-                color: s.outline.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(999),
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return ConstrainedBox(
+      // nunca ultrapassa 90% do ecrã
+      constraints: BoxConstraints(maxHeight: screenHeight * 0.90),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Center(
+              child: Container(
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: s.outline.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          if (title != null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text(title!,
+            const SizedBox(height: 10),
+            if (title != null) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Text(
+                  title!,
                   style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: s.onSurface)),
-            ),
-            const SizedBox(height: 4),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+            // child scrollável para o conteúdo não transbordar
+            Flexible(child: SingleChildScrollView(child: child)),
+            const SizedBox(height: 12),
           ],
-          child,
-          const SizedBox(height: 12),
-        ],
+        ),
       ),
     );
   }
@@ -99,13 +106,15 @@ Future<String?> showColorPickerSheet(BuildContext context, AppColorScheme s,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Wrap(
-        spacing: 12, runSpacing: 12,
+        spacing: 12,
+        runSpacing: 12,
         children: colors.map((hex) {
           final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
           return GestureDetector(
             onTap: () => Navigator.pop(context, hex),
             child: Container(
-              width: 42, height: 42,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 color: c,
                 shape: BoxShape.circle,
@@ -125,20 +134,39 @@ Future<String?> showColorPickerSheet(BuildContext context, AppColorScheme s,
 
 Future<void> showImagePickerSheet(BuildContext context, AppColorScheme s) {
   return showCraftBottomSheet<void>(
-    context: context, s: s,
+    context: context,
+    s: s,
     title: 'Inserir imagem',
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(children: [
-        _SrcOption(s: s, icon: 'image.svg',
-            label: 'Galeria de fotos', onTap: () => Navigator.pop(context)),
-        _SrcOption(s: s, icon: 'camera.svg',
-            label: 'Câmara', onTap: () => Navigator.pop(context)),
-        _SrcOption(s: s, icon: 'doc_text.svg',
-            label: 'Ficheiros', onTap: () => Navigator.pop(context)),
-        _SrcOption(s: s, icon: 'link.svg',
-            label: 'URL de imagem',
-            onTap: () { Navigator.pop(context); _urlDialog(context, s); }),
+        _SrcOption(
+          s: s,
+          icon: 'image.svg',
+          label: 'Galeria de fotos',
+          onTap: () => Navigator.pop(context),
+        ),
+        _SrcOption(
+          s: s,
+          icon: 'camera.svg',
+          label: 'Câmara',
+          onTap: () => Navigator.pop(context),
+        ),
+        _SrcOption(
+          s: s,
+          icon: 'doc_text.svg',
+          label: 'Ficheiros',
+          onTap: () => Navigator.pop(context),
+        ),
+        _SrcOption(
+          s: s,
+          icon: 'link.svg',
+          label: 'URL de imagem',
+          onTap: () {
+            Navigator.pop(context);
+            _urlDialog(context, s);
+          },
+        ),
       ]),
     ),
   );
@@ -159,11 +187,14 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('URL da imagem',
-              style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: s.onSurface)),
+          Text(
+            'URL da imagem',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: s.onSurface,
+            ),
+          ),
           const SizedBox(height: 12),
           CupertinoTextField(
             controller: ctrl,
@@ -186,10 +217,10 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
                   height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                      color: s.outline.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Text('Cancelar',
-                      style: TextStyle(color: s.onSurface)),
+                    color: s.outline.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text('Cancelar', style: TextStyle(color: s.onSurface)),
                 ),
               ),
             ),
@@ -201,12 +232,16 @@ Future<void> _urlDialog(BuildContext context, AppColorScheme s) {
                   height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                      color: s.primary,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Text('Inserir',
-                      style: TextStyle(
-                          color: s.onPrimary,
-                          fontWeight: FontWeight.w600)),
+                    color: s.primary,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Inserir',
+                    style: TextStyle(
+                      color: s.onPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -222,8 +257,12 @@ class _SrcOption extends StatelessWidget {
   final String icon;
   final String label;
   final VoidCallback onTap;
-  const _SrcOption(
-      {required this.s, required this.icon, required this.label, required this.onTap});
+  const _SrcOption({
+    required this.s,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -246,12 +285,16 @@ class _SrcOption extends StatelessWidget {
 // LINK SHEET
 // ══════════════════════════════════════════════════════════════
 
-Future<void> showLinkSheet(BuildContext context, AppColorScheme s,
-    void Function(String url, String text) onInsert) {
+Future<void> showLinkSheet(
+  BuildContext context,
+  AppColorScheme s,
+  void Function(String url, String text) onInsert,
+) {
   final urlC = TextEditingController();
   final txtC = TextEditingController();
   return showCraftBottomSheet<void>(
-    context: context, s: s,
+    context: context,
+    s: s,
     title: 'Inserir hiperligação',
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -268,8 +311,9 @@ Future<void> showLinkSheet(BuildContext context, AppColorScheme s,
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                    color: s.outline.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10)),
+                  color: s.outline.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 child: Text('Cancelar', style: TextStyle(color: s.onSurface)),
               ),
             ),
@@ -286,10 +330,16 @@ Future<void> showLinkSheet(BuildContext context, AppColorScheme s,
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                    color: s.primary, borderRadius: BorderRadius.circular(10)),
-                child: Text('Inserir',
-                    style: TextStyle(
-                        color: s.onPrimary, fontWeight: FontWeight.w600)),
+                  color: s.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Inserir',
+                  style: TextStyle(
+                    color: s.onPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ),
@@ -303,13 +353,18 @@ class _SheetField extends StatelessWidget {
   final AppColorScheme s;
   final TextEditingController ctrl;
   final String hint;
-  const _SheetField({required this.s, required this.ctrl, required this.hint});
+  const _SheetField({
+    required this.s,
+    required this.ctrl,
+    required this.hint,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-            color: s.outline.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8)),
+          color: s.outline.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: TextField(
           controller: ctrl,
@@ -318,7 +373,8 @@ class _SheetField extends StatelessWidget {
           decoration: InputDecoration(
             border: InputBorder.none,
             hintText: hint,
-            hintStyle: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+            hintStyle:
+                TextStyle(fontSize: 14, color: s.onSurfaceVariant),
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
           ),

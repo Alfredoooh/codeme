@@ -1,11 +1,13 @@
 // ══════════════════════════════════════════════════════════════
-// SETTINGS SCREEN
+// SETTINGS SCREEN — completo
 // ══════════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'auth_service.dart';
@@ -13,12 +15,18 @@ import 'api_service.dart';
 import 'app_sheet.dart';
 import 'sheets.dart';
 
+// ══════════════════════════════════════════════════════════════
+// SETTINGS SCREEN
+// ══════════════════════════════════════════════════════════════
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
-  @override State<SettingsScreen> createState() => _SettingsScreenState();
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with ThemeReactive<SettingsScreen> {
   bool _refreshing = false;
 
   @override
@@ -34,7 +42,9 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     super.dispose();
   }
 
-  void _onAuthChanged() { if (mounted) setState(() {}); }
+  void _onAuthChanged() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _refreshMe() async {
     final token = authController.token;
@@ -56,7 +66,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
       child: Builder(
         builder: (sheetContext) => _ConfirmActionSheet(
           s: s,
-          message: 'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
+          message:
+              'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
           confirmLabel: 'Terminar sessão',
           onConfirm: () {
             Navigator.pop(sheetContext);
@@ -87,7 +98,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
         onSave: (value) async {
           final token = authController.token;
           if (token == null) return;
-          final data = await ProfileApiService.updateAccount(token, name: value);
+          final data =
+              await ProfileApiService.updateAccount(token, name: value);
           authController.user = authController.user?.copyWith(
             name: data['name']?.toString() ?? value,
           );
@@ -104,20 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     showCraftBottomSheet(
       context: context,
       s: s,
-      child: _EditFieldSheet(
-        s: s,
-        title: 'Alterar palavra-passe',
-        label: 'Nova palavra-passe',
-        hint: 'Mínimo 6 caracteres',
-        initialValue: '',
-        obscure: true,
-        minLength: 6,
-        onSave: (value) async {
-          final token = authController.token;
-          if (token == null) return;
-          await ProfileApiService.updateAccount(token, password: value);
-        },
-      ),
+      child: _ChangePasswordSheet(s: s),
     );
   }
 
@@ -128,7 +127,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
       child: Builder(
         builder: (sheetContext) => _ConfirmActionSheet(
           s: s,
-          message: 'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
+          message:
+              'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
           confirmLabel: 'Eliminar tudo',
           destructive: true,
           onConfirm: () async {
@@ -151,7 +151,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   void _openMemory(BuildContext context, AppColorScheme s) {
     Navigator.of(context).push(CupertinoPageRoute(
       builder: (_) => _MemoryScreen(
-        onDeleteAllConversations: () => _confirmDeleteAllConversations(context, s),
+        onDeleteAllConversations: () =>
+            _confirmDeleteAllConversations(context, s),
       ),
     ));
   }
@@ -168,6 +169,43 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     ));
   }
 
+  void _openAvatarViewer(BuildContext context, AppColorScheme s) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.6),
+        transitionDuration: const Duration(milliseconds: 350),
+        reverseTransitionDuration: const Duration(milliseconds: 280),
+        pageBuilder: (ctx, anim, _) => _AvatarViewerScreen(
+          s: s,
+          onAvatarUpdated: (newAvatar) async {
+            final token = authController.token;
+            if (token == null) return;
+            // upload para o worker
+            await ProfileApiService.updateAvatar(token, newAvatar);
+            authController.user =
+                authController.user?.copyWith(avatar: newAvatar);
+            if (authController.user != null) {
+              await SessionManager.updateUser(authController.user!);
+            }
+            authController.notifyListeners();
+          },
+        ),
+        transitionsBuilder: (ctx, anim, _, child) {
+          final curved =
+              CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween(begin: 0.92, end: 1.0).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -176,10 +214,13 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
-        statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
+        statusBarIconBrightness:
+            s.isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness:
+            s.isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            s.isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarDividerColor: Colors.transparent,
       ),
       child: Material(
@@ -191,19 +232,24 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(height: 52 + 6),
+                  const SizedBox(height: 58),
                   Expanded(
                     child: RefreshIndicator(
                       color: s.primary,
                       backgroundColor: s.cardBackground,
                       onRefresh: _refreshMe,
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                        padding:
+                            const EdgeInsets.fromLTRB(20, 8, 20, 12),
                         children: [
-                          _ProfileHeader(s: s, user: user, loading: _refreshing),
-
+                          _ProfileHeader(
+                            s: s,
+                            user: user,
+                            loading: _refreshing,
+                            onAvatarTap: () =>
+                                _openAvatarViewer(context, s),
+                          ),
                           const SizedBox(height: 32),
-
                           _SectionLabel(s: s, label: 'Geral'),
                           const SizedBox(height: 10),
                           _SettingsGroup(s: s, rows: [
@@ -213,15 +259,18 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               label: 'Aparência',
                               onTap: () => _openAppearance(context, s),
                               trailing: AppIcon('chevron_forward',
-                                  size: 16, color: s.onSurfaceVariant),
+                                  size: 16,
+                                  color: s.onSurfaceVariant),
                             ),
                             _SettingsRow(
                               s: s,
                               iconAsset: 'sliders',
                               label: 'Personalização',
-                              onTap: () => _openPersonalization(context),
+                              onTap: () =>
+                                  _openPersonalization(context),
                               trailing: AppIcon('chevron_forward',
-                                  size: 16, color: s.onSurfaceVariant),
+                                  size: 16,
+                                  color: s.onSurfaceVariant),
                             ),
                             _SettingsRow(
                               s: s,
@@ -229,7 +278,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               label: 'Memória',
                               onTap: () => _openMemory(context, s),
                               trailing: AppIcon('chevron_forward',
-                                  size: 16, color: s.onSurfaceVariant),
+                                  size: 16,
+                                  color: s.onSurfaceVariant),
                             ),
                             _SettingsRow(
                               s: s,
@@ -237,12 +287,11 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               label: 'Área de trabalho',
                               onTap: () => _openWorkspace(context),
                               trailing: AppIcon('chevron_forward',
-                                  size: 16, color: s.onSurfaceVariant),
+                                  size: 16,
+                                  color: s.onSurfaceVariant),
                             ),
                           ]),
-
                           const SizedBox(height: 28),
-
                           _SectionLabel(s: s, label: 'Conta'),
                           const SizedBox(height: 10),
                           _SettingsGroup(s: s, rows: [
@@ -262,17 +311,20 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               iconAsset: 'mail',
                               label: 'Email',
                               onTap: () {},
-                              trailing: Text(user?.email ?? '—',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.onSurfaceVariant),
-                                  overflow: TextOverflow.ellipsis),
+                              trailing: Text(
+                                user?.email ?? '—',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: s.onSurfaceVariant),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             _SettingsRow(
                               s: s,
                               iconAsset: 'lock',
                               label: 'Palavra-passe',
-                              onTap: () => _editPassword(context, s),
+                              onTap: () =>
+                                  _editPassword(context, s),
                               trailing: Text('Alterar',
                                   style: TextStyle(
                                       fontSize: 14,
@@ -284,15 +336,15 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               iconAsset: 'credit',
                               label: 'Créditos',
                               onTap: () {},
-                              trailing: Text('${user?.credits ?? 0}',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.onSurfaceVariant)),
+                              trailing: Text(
+                                '${user?.credits ?? 0}',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: s.onSurfaceVariant),
+                              ),
                             ),
                           ]),
-
                           const SizedBox(height: 28),
-
                           _SectionLabel(s: s, label: 'Sobre'),
                           const SizedBox(height: 10),
                           _SettingsGroup(s: s, rows: [
@@ -335,7 +387,6 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                               trailing: const SizedBox.shrink(),
                             ),
                           ]),
-
                           const SizedBox(height: 90),
                         ],
                       ),
@@ -346,9 +397,12 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
               // Appbar
               Positioned(
-                top: 0, left: 0, right: 0,
+                top: 0,
+                left: 0,
+                right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16),
                   height: 52,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -377,9 +431,12 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
 
               // Bottombar
               Positioned(
-                left: 0, right: 0, bottom: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                  padding:
+                      const EdgeInsets.fromLTRB(20, 28, 20, 16),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
@@ -391,7 +448,8 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
                     ),
                   ),
                   child: _LogoutButton(
-                      s: s, onTap: () => _confirmLogout(context, s)),
+                      s: s,
+                      onTap: () => _confirmLogout(context, s)),
                 ),
               ),
             ]),
@@ -402,13 +460,464 @@ class _SettingsScreenState extends State<SettingsScreen> with ThemeReactive<Sett
   }
 }
 
-// ── Botão de voltar (inalterado) ───────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// AVATAR VIEWER + EDITOR
+// ══════════════════════════════════════════════════════════════
+
+class _AvatarViewerScreen extends StatefulWidget {
+  final AppColorScheme s;
+  final Future<void> Function(String base64Avatar) onAvatarUpdated;
+  const _AvatarViewerScreen({
+    required this.s,
+    required this.onAvatarUpdated,
+  });
+
+  @override
+  State<_AvatarViewerScreen> createState() => _AvatarViewerScreenState();
+}
+
+class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
+  bool _uploading = false;
+
+  Uint8List? _decodeAvatar(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final commaIdx = raw.indexOf(',');
+      final b64 = raw.startsWith('data:') && commaIdx != -1
+          ? raw.substring(commaIdx + 1)
+          : raw;
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pickAndEdit() async {
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null || !mounted) return;
+
+    // Abrir editor (crop/rotate)
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Editar avatar',
+          toolbarColor: widget.s.cardBackground,
+          toolbarWidgetColor: widget.s.onSurface,
+          activeControlsWidgetColor: widget.s.primary,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: false,
+          hideBottomControls: false,
+        ),
+        IOSUiSettings(
+          title: 'Editar avatar',
+          aspectRatioLockEnabled: false,
+          rotateButtonsHidden: false,
+        ),
+      ],
+    );
+
+    if (cropped == null || !mounted) return;
+
+    setState(() => _uploading = true);
+    try {
+      final bytes = await cropped.readAsBytes();
+      final b64 =
+          'data:image/jpeg;base64,${base64Encode(bytes)}';
+      await widget.onAvatarUpdated(b64);
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final user = authController.user;
+    final avatarBytes = _decodeAvatar(user?.avatar);
+    final initial =
+        (user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'U';
+
+    return GestureDetector(
+      onTap: () => Navigator.pop(context),
+      child: Material(
+        color: Colors.transparent,
+        child: Center(
+          child: GestureDetector(
+            onTap: () {}, // absorve tap para não fechar ao clicar na imagem
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Avatar
+                Hero(
+                  tag: 'avatar',
+                  child: Container(
+                    width: 220,
+                    height: 220,
+                    decoration: BoxDecoration(
+                      color: s.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 40,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: avatarBytes != null
+                        ? Image.memory(
+                            avatarBytes,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(initial,
+                                  style: TextStyle(
+                                      color: s.onPrimary,
+                                      fontSize: 72,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          )
+                        : Center(
+                            child: Text(initial,
+                                style: TextStyle(
+                                    color: s.onPrimary,
+                                    fontSize: 72,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                  ),
+                ),
+
+                // Botão de edição — topo direito
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: _uploading ? null : _pickAndEdit,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: s.cardBackground,
+                        shape: BoxShape.circle,
+                        boxShadow: s.cardShadow,
+                      ),
+                      alignment: Alignment.center,
+                      child: _uploading
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation(s.primary),
+                              ),
+                            )
+                          : AppIcon('pencil',
+                              size: 16, color: s.onSurface),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ALTERAR PALAVRA-PASSE (com verificação da actual)
+// ══════════════════════════════════════════════════════════════
+
+class _ChangePasswordSheet extends StatefulWidget {
+  final AppColorScheme s;
+  const _ChangePasswordSheet({required this.s});
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final _currentCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _saving = false;
+  String? _error;
+  bool _forgotMode = false; // ainda não implementado — mostra info
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final current = _currentCtrl.text.trim();
+    final newPw = _newCtrl.text.trim();
+
+    if (current.isEmpty) {
+      setState(() => _error = 'Introduz a palavra-passe actual');
+      return;
+    }
+    if (newPw.length < 6) {
+      setState(
+          () => _error = 'A nova palavra-passe deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final token = authController.token;
+      if (token == null) throw ApiException('Sessão expirada');
+      // passa a password actual para o worker validar
+      await ProfileApiService.updateAccount(token,
+          password: newPw, currentPassword: current);
+      if (mounted) Navigator.pop(context);
+    } on ApiException catch (e) {
+      setState(() {
+        _saving = false;
+        _error = e.message;
+      });
+    } catch (_) {
+      setState(() {
+        _saving = false;
+        _error = 'Não foi possível alterar a palavra-passe';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Alterar palavra-passe',
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface)),
+            const SizedBox(height: 16),
+
+            if (_forgotMode) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: s.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'A recuperação por email ainda não está disponível. Contacta o suporte para recuperar o acesso.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: s.onSurface,
+                      height: 1.45),
+                ),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => setState(() => _forgotMode = false),
+                child: Text('← Voltar',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: s.primary,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ] else ...[
+              // Campo: palavra-passe actual
+              Text('Palavra-passe actual',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              _PwField(
+                s: s,
+                ctrl: _currentCtrl,
+                hint: '••••••••',
+                obscure: _obscureCurrent,
+                hasError: _error != null,
+                onToggle: () =>
+                    setState(() => _obscureCurrent = !_obscureCurrent),
+              ),
+              const SizedBox(height: 4),
+              // Esqueci link
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _forgotMode = true;
+                    _error = null;
+                  }),
+                  child: Text(
+                    'Esqueci a palavra-passe',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: s.primary,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Campo: nova palavra-passe
+              Text('Nova palavra-passe',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              _PwField(
+                s: s,
+                ctrl: _newCtrl,
+                hint: 'Mínimo 6 caracteres',
+                obscure: _obscureNew,
+                hasError: _error != null,
+                onToggle: () =>
+                    setState(() => _obscureNew = !_obscureNew),
+              ),
+
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!,
+                    style: TextStyle(fontSize: 12, color: s.error)),
+              ],
+
+              const SizedBox(height: 20),
+              Row(children: [
+                Expanded(
+                  child: _SheetActionButton(
+                    s: s,
+                    label: 'Cancelar',
+                    filled: false,
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _saving ? null : _save,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: s.primary
+                            .withOpacity(_saving ? 0.6 : 1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: _saving
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                valueColor:
+                                    AlwaysStoppedAnimation(s.onPrimary),
+                              ),
+                            )
+                          : Text('Guardar',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: s.onPrimary)),
+                    ),
+                  ),
+                ),
+              ]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PwField extends StatelessWidget {
+  final AppColorScheme s;
+  final TextEditingController ctrl;
+  final String hint;
+  final bool obscure;
+  final bool hasError;
+  final VoidCallback onToggle;
+  const _PwField({
+    required this.s,
+    required this.ctrl,
+    required this.hint,
+    required this.obscure,
+    required this.hasError,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: hasError
+                  ? s.error
+                  : s.outline.withOpacity(0.5)),
+        ),
+        child: TextField(
+          controller: ctrl,
+          obscureText: obscure,
+          autofocus: false,
+          style: TextStyle(fontSize: 15, color: s.onSurface),
+          cursorColor: s.primary,
+          decoration: InputDecoration(
+            isDense: true,
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            hintText: hint,
+            hintStyle: TextStyle(
+                fontSize: 15,
+                color: s.onSurfaceVariant.withOpacity(0.6)),
+            suffixIcon: GestureDetector(
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: AppIcon(
+                  obscure ? 'eye' : 'eye_off',
+                  color: s.onSurfaceVariant,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE VOLTAR
+// ══════════════════════════════════════════════════════════════
 
 class _CircularBackButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
   const _CircularBackButton({required this.s, required this.onTap});
-  @override State<_CircularBackButton> createState() => _CircularBackButtonState();
+  @override
+  State<_CircularBackButton> createState() => _CircularBackButtonState();
 }
 
 class _CircularBackButtonState extends State<_CircularBackButton> {
@@ -418,13 +927,14 @@ class _CircularBackButtonState extends State<_CircularBackButton> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        width: 36, height: 36,
+        width: 36,
+        height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: _p ? s.pressed : s.cardBackground,
@@ -437,13 +947,21 @@ class _CircularBackButtonState extends State<_CircularBackButton> {
   }
 }
 
-// ── Cabeçalho (inalterado) ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// CABEÇALHO DE PERFIL
+// ══════════════════════════════════════════════════════════════
 
 class _ProfileHeader extends StatelessWidget {
   final AppColorScheme s;
   final AppUser? user;
   final bool loading;
-  const _ProfileHeader({required this.s, required this.user, required this.loading});
+  final VoidCallback onAvatarTap;
+  const _ProfileHeader({
+    required this.s,
+    required this.user,
+    required this.loading,
+    required this.onAvatarTap,
+  });
 
   Uint8List? _decodeAvatar(String raw) {
     try {
@@ -461,66 +979,81 @@ class _ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = user?.name ?? 'Utilizador';
     final avatarRaw = user?.avatar;
-    final avatarBytes = (avatarRaw != null && avatarRaw.isNotEmpty)
-        ? _decodeAvatar(avatarRaw)
-        : null;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+    final avatarBytes =
+        (avatarRaw != null && avatarRaw.isNotEmpty)
+            ? _decodeAvatar(avatarRaw)
+            : null;
+    final initial =
+        name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return Column(
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 88, height: 88,
-              alignment: Alignment.center,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
-              child: avatarBytes != null
-                  ? Image.memory(
-                      avatarBytes,
-                      width: 88, height: 88,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Text(initial,
+        GestureDetector(
+          onTap: onAvatarTap,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Hero(
+                tag: 'avatar',
+                child: Container(
+                  width: 88,
+                  height: 88,
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                      color: s.primary, shape: BoxShape.circle),
+                  child: avatarBytes != null
+                      ? Image.memory(
+                          avatarBytes,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Text(initial,
+                              style: TextStyle(
+                                  color: s.onPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 32)),
+                        )
+                      : Text(initial,
                           style: TextStyle(
                               color: s.onPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 32)),
-                    )
-                  : Text(initial,
-                      style: TextStyle(
-                          color: s.onPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 32)),
-            ),
-            if (loading)
-              Positioned.fill(
-                child: Container(
-                  decoration: const BoxDecoration(shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                ),
+              ),
+              if (loading)
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        valueColor:
+                            const AlwaysStoppedAnimation(Colors.white),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            Positioned(
-              right: -2, bottom: -2,
-              child: Container(
-                width: 30, height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: s.cardBackground,
-                  shape: BoxShape.circle,
-                  boxShadow: s.cardShadow,
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: s.cardBackground,
+                    shape: BoxShape.circle,
+                    boxShadow: s.cardShadow,
+                  ),
+                  child: AppIcon('pencil', size: 14, color: s.onSurface),
                 ),
-                child: AppIcon('pencil', size: 14, color: s.onSurface),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         Text(name,
@@ -535,7 +1068,9 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-// ── Componentes internos (inalterados) ────────────────────────
+// ══════════════════════════════════════════════════════════════
+// COMPONENTES INTERNOS
+// ══════════════════════════════════════════════════════════════
 
 class _SectionLabel extends StatelessWidget {
   final AppColorScheme s;
@@ -576,12 +1111,12 @@ class _SettingsGroup extends StatelessWidget {
   BorderRadius _radiusFor(int index, int count) {
     if (count == 1) return BorderRadius.circular(_outerRadius);
     final isFirst = index == 0;
-    final isLast  = index == count - 1;
+    final isLast = index == count - 1;
     return BorderRadius.only(
-      topLeft:     Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      topRight:    Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      bottomLeft:  Radius.circular(isLast  ? _outerRadius : _innerRadius),
-      bottomRight: Radius.circular(isLast  ? _outerRadius : _innerRadius),
+      topLeft: Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight: Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft: Radius.circular(isLast ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast ? _outerRadius : _innerRadius),
     );
   }
 }
@@ -614,14 +1149,16 @@ class _SettingsRow extends StatefulWidget {
   final Widget trailing;
   final Color? labelColor;
   final VoidCallback onTap;
-  const _SettingsRow(
-      {required this.s,
-      required this.iconAsset,
-      required this.label,
-      required this.trailing,
-      required this.onTap,
-      this.labelColor});
-  @override State<_SettingsRow> createState() => _SettingsRowState();
+  const _SettingsRow({
+    required this.s,
+    required this.iconAsset,
+    required this.label,
+    required this.trailing,
+    required this.onTap,
+    this.labelColor,
+  });
+  @override
+  State<_SettingsRow> createState() => _SettingsRowState();
 }
 
 class _SettingsRowState extends State<_SettingsRow> {
@@ -632,18 +1169,20 @@ class _SettingsRowState extends State<_SettingsRow> {
     final color = widget.labelColor ?? s.onSurface;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
       onTap: widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         color: _p ? s.hover : Colors.transparent,
         child: Row(
           children: [
             AppIcon(widget.iconAsset,
-                size: 19, color: widget.labelColor ?? s.onSurfaceVariant),
+                size: 19,
+                color: widget.labelColor ?? s.onSurfaceVariant),
             const SizedBox(width: 12),
             Expanded(
               child: Text(widget.label,
@@ -661,7 +1200,8 @@ class _LogoutButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
   const _LogoutButton({required this.s, required this.onTap});
-  @override State<_LogoutButton> createState() => _LogoutButtonState();
+  @override
+  State<_LogoutButton> createState() => _LogoutButtonState();
 }
 
 class _LogoutButtonState extends State<_LogoutButton> {
@@ -672,10 +1212,10 @@ class _LogoutButtonState extends State<_LogoutButton> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
       child: AnimatedScale(
         scale: _p ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 110),
@@ -720,14 +1260,12 @@ class _ConfirmActionSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: s.onSurface),
-          ),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: s.onSurface)),
           const SizedBox(height: 20),
           Row(children: [
             Expanded(
@@ -759,12 +1297,14 @@ class _SheetActionButton extends StatefulWidget {
   final String label;
   final bool filled;
   final VoidCallback onTap;
-  const _SheetActionButton(
-      {required this.s,
-      required this.label,
-      required this.filled,
-      required this.onTap});
-  @override State<_SheetActionButton> createState() => _SheetActionButtonState();
+  const _SheetActionButton({
+    required this.s,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+  @override
+  State<_SheetActionButton> createState() => _SheetActionButtonState();
 }
 
 class _SheetActionButtonState extends State<_SheetActionButton> {
@@ -775,10 +1315,10 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       widget.onTap,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
       child: AnimatedScale(
         scale: _p ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 110),
@@ -824,7 +1364,8 @@ class _EditFieldSheet extends StatefulWidget {
     this.minLength = 1,
   });
 
-  @override State<_EditFieldSheet> createState() => _EditFieldSheetState();
+  @override
+  State<_EditFieldSheet> createState() => _EditFieldSheetState();
 }
 
 class _EditFieldSheetState extends State<_EditFieldSheet> {
@@ -848,14 +1389,18 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
           : 'Este campo não pode ficar vazio');
       return;
     }
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       await widget.onSave(value);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       setState(() {
         _saving = false;
-        _error = e is ApiException ? e.message : 'Não foi possível guardar';
+        _error =
+            e is ApiException ? e.message : 'Não foi possível guardar';
       });
     }
   }
@@ -864,7 +1409,8 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
   Widget build(BuildContext context) {
     final s = widget.s;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
@@ -888,7 +1434,9 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                 color: s.cardBackground,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: _error != null ? s.error : s.outline.withOpacity(0.5)),
+                    color: _error != null
+                        ? s.error
+                        : s.outline.withOpacity(0.5)),
               ),
               child: TextField(
                 controller: _ctrl,
@@ -900,14 +1448,16 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 15),
                   hintText: widget.hint,
                   hintStyle: TextStyle(
-                      fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
+                      fontSize: 15,
+                      color: s.onSurfaceVariant.withOpacity(0.7)),
                   suffixIcon: widget.obscure
                       ? GestureDetector(
-                          onTap: () => setState(() => _obscureNow = !_obscureNow),
+                          onTap: () => setState(
+                              () => _obscureNow = !_obscureNow),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: AppIcon(
@@ -923,7 +1473,8 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(fontSize: 12, color: s.error)),
+              Text(_error!,
+                  style: TextStyle(fontSize: 12, color: s.error)),
             ],
             const SizedBox(height: 20),
             Row(children: [
@@ -944,15 +1495,18 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: s.primary.withOpacity(_saving ? 0.6 : 1),
+                      color: s.primary
+                          .withOpacity(_saving ? 0.6 : 1),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: _saving
                         ? SizedBox(
-                            width: 18, height: 18,
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.2,
-                              valueColor: AlwaysStoppedAnimation(s.onPrimary),
+                              valueColor: AlwaysStoppedAnimation(
+                                  s.onPrimary),
                             ),
                           )
                         : Text('Guardar',
@@ -972,15 +1526,17 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APARÊNCIA (com fonte global ligada ao slider)
+// APARÊNCIA
 // ══════════════════════════════════════════════════════════════
 
 class _AppearanceScreen extends StatefulWidget {
   const _AppearanceScreen();
-  @override State<_AppearanceScreen> createState() => _AppearanceScreenState();
+  @override
+  State<_AppearanceScreen> createState() => _AppearanceScreenState();
 }
 
-class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive<_AppearanceScreen> {
+class _AppearanceScreenState extends State<_AppearanceScreen>
+    with ThemeReactive<_AppearanceScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -996,7 +1552,8 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                 child: Row(children: [
-                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  _CircularBackButton(
+                      s: s, onTap: () => Navigator.pop(context)),
                   const SizedBox(width: 12),
                   Text('Aparência',
                       style: TextStyle(
@@ -1007,12 +1564,14 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
               ),
               const SizedBox(height: 20),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
                 child: _ThemeSegmentedControl(s: s),
               ),
               const SizedBox(height: 28),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                padding:
+                    const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text('Tamanho do texto',
                     style: TextStyle(
                         fontSize: 13,
@@ -1020,7 +1579,8 @@ class _AppearanceScreenState extends State<_AppearanceScreen> with ThemeReactive
                         color: s.onSurfaceVariant)),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
                 child: _FontSizeCard(
                   s: s,
                   value: appPreferences.fontScale,
@@ -1047,7 +1607,8 @@ class _ThemeSegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedIndex = _options.indexWhere((o) => o.$1 == appTheme.mode);
+    final selectedIndex =
+        _options.indexWhere((o) => o.$1 == appTheme.mode);
 
     return Container(
       height: 36,
@@ -1057,12 +1618,14 @@ class _ThemeSegmentedControl extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: LayoutBuilder(builder: (context, constraints) {
-        final segmentWidth = constraints.maxWidth / _options.length;
+        final segmentWidth =
+            constraints.maxWidth / _options.length;
         return Stack(children: [
           AnimatedPositioned(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
-            left: segmentWidth * selectedIndex.clamp(0, _options.length - 1),
+            left: segmentWidth *
+                selectedIndex.clamp(0, _options.length - 1),
             top: 0,
             bottom: 0,
             width: segmentWidth,
@@ -1086,8 +1649,12 @@ class _ThemeSegmentedControl extends StatelessWidget {
                         label,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: appTheme.mode == mode ? FontWeight.w600 : FontWeight.w500,
-                          color: appTheme.mode == mode ? s.onPrimary : s.onSurfaceVariant,
+                          fontWeight: appTheme.mode == mode
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: appTheme.mode == mode
+                              ? s.onPrimary
+                              : s.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -1105,7 +1672,8 @@ class _FontSizeCard extends StatelessWidget {
   final AppColorScheme s;
   final double value;
   final ValueChanged<double> onChanged;
-  const _FontSizeCard({required this.s, required this.value, required this.onChanged});
+  const _FontSizeCard(
+      {required this.s, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1124,7 +1692,8 @@ class _FontSizeCard extends StatelessWidget {
         Align(
           alignment: Alignment.centerRight,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: s.hover,
               borderRadius: BorderRadius.circular(999),
@@ -1138,7 +1707,8 @@ class _FontSizeCard extends StatelessWidget {
         const SizedBox(height: 14),
         Align(
           alignment: Alignment.centerLeft,
-          child: Text('O Universo é um vasto sistema de leis e mistérios.',
+          child: Text(
+              'O Universo é um vasto sistema de leis e mistérios.',
               style: TextStyle(
                   fontSize: 14 * previewScale,
                   color: s.onSurface,
@@ -1160,8 +1730,10 @@ class _ExpressiveSlider extends StatefulWidget {
   final AppColorScheme s;
   final double value;
   final ValueChanged<double> onChanged;
-  const _ExpressiveSlider({required this.s, required this.value, required this.onChanged});
-  @override State<_ExpressiveSlider> createState() => _ExpressiveSliderState();
+  const _ExpressiveSlider(
+      {required this.s, required this.value, required this.onChanged});
+  @override
+  State<_ExpressiveSlider> createState() => _ExpressiveSliderState();
 }
 
 class _ExpressiveSliderState extends State<_ExpressiveSlider> {
@@ -1174,7 +1746,8 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
   double _dragValue = 0;
   bool _dragging = false;
 
-  double get _effectiveValue => _dragging ? _dragValue : widget.value;
+  double get _effectiveValue =>
+      _dragging ? _dragValue : widget.value;
 
   void _handlePan(double dx, double width) {
     final usable = width - _thumbWidth;
@@ -1189,18 +1762,22 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
     return LayoutBuilder(builder: (context, constraints) {
       final width = constraints.maxWidth;
       final v = _effectiveValue;
-      final thumbX = (v * (width - _thumbWidth)).clamp(0.0, width - _thumbWidth);
+      final thumbX =
+          (v * (width - _thumbWidth)).clamp(0.0, width - _thumbWidth);
       final filledWidth = (thumbX - _gap).clamp(0.0, width);
 
       return GestureDetector(
         onPanStart: (d) {
-          setState(() { _dragging = true; _dragValue = widget.value; });
+          setState(() {
+            _dragging = true;
+            _dragValue = widget.value;
+          });
           _handlePan(d.localPosition.dx, width);
         },
         onPanUpdate: (d) => _handlePan(d.localPosition.dx, width),
         onPanEnd: (_) => setState(() => _dragging = false),
         onTapUp: (d) {
-          setState(() { _dragging = true; });
+          setState(() => _dragging = true);
           _handlePan(d.localPosition.dx, width);
           setState(() => _dragging = false);
         },
@@ -1213,7 +1790,8 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
             children: [
               Positioned(
                 top: (_thumbHeight - _trackHeight) / 2,
-                left: 0, right: 0,
+                left: 0,
+                right: 0,
                 child: Container(
                   height: _trackHeight,
                   decoration: BoxDecoration(
@@ -1233,8 +1811,10 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(999),
                       bottomLeft: const Radius.circular(999),
-                      topRight: const Radius.circular(_filledEndRadius),
-                      bottomRight: const Radius.circular(_filledEndRadius),
+                      topRight:
+                          const Radius.circular(_filledEndRadius),
+                      bottomRight:
+                          const Radius.circular(_filledEndRadius),
                     ),
                   ),
                 ),
@@ -1260,11 +1840,37 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PERSONALIZAÇÃO
+// PERSONALIZAÇÃO — tempo real
 // ══════════════════════════════════════════════════════════════
 
-class _PersonalizationScreen extends StatelessWidget {
+class _PersonalizationScreen extends StatefulWidget {
   const _PersonalizationScreen();
+  @override
+  State<_PersonalizationScreen> createState() =>
+      _PersonalizationScreenState();
+}
+
+class _PersonalizationScreenState extends State<_PersonalizationScreen>
+    with ThemeReactive<_PersonalizationScreen> {
+
+  // ouve mudanças nas prefs para actualizar os trailing em tempo real
+  @override
+  void initState() {
+    super.initState();
+    appPreferences.addListener(_onPrefsChanged);
+    appTheme.addListener(_onPrefsChanged);
+  }
+
+  @override
+  void dispose() {
+    appPreferences.removeListener(_onPrefsChanged);
+    appTheme.removeListener(_onPrefsChanged);
+    super.dispose();
+  }
+
+  void _onPrefsChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _openPromptEditor(BuildContext context, AppColorScheme s) {
     showCraftBottomSheet(
@@ -1282,7 +1888,8 @@ class _PersonalizationScreen extends StatelessWidget {
     );
   }
 
-  void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
+  void _openPrimaryColorPicker(
+      BuildContext context, AppColorScheme s) {
     showCraftBottomSheet(
       context: context,
       s: s,
@@ -1302,9 +1909,12 @@ class _PersonalizationScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                padding:
+                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
                 child: Row(children: [
-                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  _CircularBackButton(
+                      s: s,
+                      onTap: () => Navigator.pop(context)),
                   const SizedBox(width: 12),
                   Text('Personalização',
                       style: TextStyle(
@@ -1315,40 +1925,58 @@ class _PersonalizationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
                 child: _SettingsGroup(s: s, rows: [
                   _SettingsRow(
                     s: s,
                     iconAsset: 'text',
                     label: 'Preferências de prompt',
-                    onTap: () => _openPromptEditor(context, s),
+                    onTap: () =>
+                        _openPromptEditor(context, s),
+                    // trailing actualiza em tempo real via listener
                     trailing: Text(
-                      appPreferences.prompt.isEmpty ? 'Nenhuma' : 'Editado',
-                      style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                      appPreferences.prompt.isEmpty
+                          ? 'Nenhuma'
+                          : 'Editado',
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: s.onSurfaceVariant),
                     ),
                   ),
                   _SettingsRow(
                     s: s,
                     iconAsset: 'emoji',
                     label: 'Frequência de emojis',
-                    onTap: () => _openEmojiFrequency(context, s),
+                    onTap: () =>
+                        _openEmojiFrequency(context, s),
                     trailing: Text(
                       appPreferences.emojiFrequency.displayName,
-                      style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: s.onSurfaceVariant),
                     ),
                   ),
                   _SettingsRow(
                     s: s,
                     iconAsset: 'palette',
                     label: 'Cor primária',
-                    onTap: () => _openPrimaryColorPicker(context, s),
+                    onTap: () =>
+                        _openPrimaryColorPicker(context, s),
                     trailing: Container(
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
-                        color: appTheme.isDark ? kPrimaryColorPairs[appTheme.primaryPairIndex].dark : kPrimaryColorPairs[appTheme.primaryPairIndex].light,
+                        color: s.isDark
+                            ? kPrimaryColorPairs[
+                                    appTheme.primaryPairIndex]
+                                .dark
+                            : kPrimaryColorPairs[
+                                    appTheme.primaryPairIndex]
+                                .light,
                         shape: BoxShape.circle,
-                        border: Border.all(color: s.outline),
+                        border:
+                            Border.all(color: s.outline),
                       ),
                     ),
                   ),
@@ -1367,7 +1995,8 @@ class _PersonalizationScreen extends StatelessWidget {
 class _PromptEditorSheet extends StatefulWidget {
   final AppColorScheme s;
   const _PromptEditorSheet({required this.s});
-  @override State<_PromptEditorSheet> createState() => _PromptEditorSheetState();
+  @override
+  State<_PromptEditorSheet> createState() => _PromptEditorSheetState();
 }
 
 class _PromptEditorSheetState extends State<_PromptEditorSheet> {
@@ -1383,8 +2012,10 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    appPreferences.setPromptRemote(_ctrl.text.trim(), authController.token);
-    await Future.delayed(const Duration(milliseconds: 200));
+    // actualiza imediatamente para o trailing mudar em tempo real
+    appPreferences.setPromptRemote(
+        _ctrl.text.trim(), authController.token);
+    await Future.delayed(const Duration(milliseconds: 150));
     if (mounted) Navigator.pop(context);
   }
 
@@ -1392,7 +2023,8 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
   Widget build(BuildContext context) {
     final s = widget.s;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
@@ -1407,30 +2039,38 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
             const SizedBox(height: 8),
             Text(
               'Instruções que a IA deve seguir em todas as conversas. Ex.: "Responde sempre em português europeu".',
-              style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4),
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color: s.onSurfaceVariant,
+                  height: 1.4),
             ),
             const SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
                 color: s.cardBackground,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: s.outline.withOpacity(0.5)),
+                border: Border.all(
+                    color: s.outline.withOpacity(0.5)),
               ),
               child: TextField(
                 controller: _ctrl,
                 autofocus: true,
                 minLines: 3,
                 maxLines: 6,
-                textCapitalization: TextCapitalization.sentences,
-                style: TextStyle(fontSize: 15, color: s.onSurface),
+                textCapitalization:
+                    TextCapitalization.sentences,
+                style:
+                    TextStyle(fontSize: 15, color: s.onSurface),
                 cursorColor: s.primary,
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.all(16),
-                  hintText: 'Escreve aqui as tuas preferências...',
+                  hintText:
+                      'Escreve aqui as tuas preferências...',
                   hintStyle: TextStyle(
-                      fontSize: 15, color: s.onSurfaceVariant.withOpacity(0.7)),
+                      fontSize: 15,
+                      color: s.onSurfaceVariant.withOpacity(0.7)),
                 ),
               ),
             ),
@@ -1450,18 +2090,22 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
                   behavior: HitTestBehavior.opaque,
                   onTap: _saving ? null : _save,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 13),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: s.primary.withOpacity(_saving ? 0.6 : 1),
+                      color: s.primary
+                          .withOpacity(_saving ? 0.6 : 1),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: _saving
                         ? SizedBox(
-                            width: 18, height: 18,
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.2,
-                              valueColor: AlwaysStoppedAnimation(s.onPrimary),
+                              valueColor: AlwaysStoppedAnimation(
+                                  s.onPrimary),
                             ),
                           )
                         : Text('Guardar',
@@ -1506,7 +2150,8 @@ class _EmojiFrequencySheet extends StatelessWidget {
               freq: freq,
               selected: appPreferences.emojiFrequency == freq,
               onTap: () {
-                appPreferences.setEmojiFrequencyRemote(freq, authController.token);
+                appPreferences.setEmojiFrequencyRemote(
+                    freq, authController.token);
                 Navigator.pop(context);
               },
             ),
@@ -1534,10 +2179,13 @@ class _FrequencyOption extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 12),
         margin: const EdgeInsets.only(bottom: 4),
         decoration: BoxDecoration(
-          color: selected ? s.primaryContainer : Colors.transparent,
+          color: selected
+              ? s.primaryContainer
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -1547,13 +2195,18 @@ class _FrequencyOption extends StatelessWidget {
                 freq.displayName,
                 style: TextStyle(
                   fontSize: 15,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  color: selected ? s.onPrimaryContainer : s.onSurface,
+                  fontWeight: selected
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                  color: selected
+                      ? s.onPrimaryContainer
+                      : s.onSurface,
                 ),
               ),
             ),
             if (selected)
-              AppIcon('checkmark_circle', size: 20, color: s.onPrimaryContainer)
+              AppIcon('checkmark_circle',
+                  size: 20, color: s.onPrimaryContainer)
             else
               const SizedBox(width: 20),
           ],
@@ -1586,9 +2239,11 @@ class _PrimaryColorSheet extends StatelessWidget {
           Wrap(
             spacing: 14,
             runSpacing: 14,
-            children: List.generate(kPrimaryColorPairs.length, (i) {
+            children: List.generate(
+                kPrimaryColorPairs.length, (i) {
               final pair = kPrimaryColorPairs[i];
-              final displayColor = s.isDark ? pair.dark : pair.light;
+              final displayColor =
+                  s.isDark ? pair.dark : pair.light;
               final selected = appTheme.primaryPairIndex == i;
               return GestureDetector(
                 onTap: () {
@@ -1601,10 +2256,16 @@ class _PrimaryColorSheet extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: displayColor,
                     shape: BoxShape.circle,
-                    border: selected ? Border.all(color: s.onSurface, width: 3) : null,
+                    border: selected
+                        ? Border.all(
+                            color: s.onSurface, width: 3)
+                        : null,
                   ),
                   alignment: Alignment.center,
-                  child: selected ? const AppIcon('check', color: Colors.white, size: 20) : null,
+                  child: selected
+                      ? const AppIcon('check',
+                          color: Colors.white, size: 20)
+                      : null,
                 ),
               );
             }),
@@ -1616,7 +2277,7 @@ class _PrimaryColorSheet extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MEMÓRIA (inalterada)
+// MEMÓRIA
 // ══════════════════════════════════════════════════════════════
 
 class _MemoryScreen extends StatelessWidget {
@@ -1636,9 +2297,12 @@ class _MemoryScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                padding:
+                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
                 child: Row(children: [
-                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  _CircularBackButton(
+                      s: s,
+                      onTap: () => Navigator.pop(context)),
                   const SizedBox(width: 12),
                   Text('Memória',
                       style: TextStyle(
@@ -1649,15 +2313,20 @@ class _MemoryScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
                   'Gere os dados de conversas guardados na tua conta.',
-                  style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant, height: 1.4),
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      color: s.onSurfaceVariant,
+                      height: 1.4),
                 ),
               ),
               const SizedBox(height: 20),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
                 child: _SettingsGroup(s: s, rows: [
                   _SettingsRow(
                     s: s,
@@ -1678,7 +2347,7 @@ class _MemoryScreen extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ÁREA DE TRABALHO (inalterada)
+// ÁREA DE TRABALHO
 // ══════════════════════════════════════════════════════════════
 
 class _WorkspaceScreen extends StatelessWidget {
@@ -1697,9 +2366,12 @@ class _WorkspaceScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                padding:
+                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
                 child: Row(children: [
-                  _CircularBackButton(s: s, onTap: () => Navigator.pop(context)),
+                  _CircularBackButton(
+                      s: s,
+                      onTap: () => Navigator.pop(context)),
                   const SizedBox(width: 12),
                   Text('Área de trabalho',
                       style: TextStyle(
@@ -1710,7 +2382,8 @@ class _WorkspaceScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20),
                 child: _SettingsGroup(s: s, rows: [
                   _SettingsRow(
                     s: s,

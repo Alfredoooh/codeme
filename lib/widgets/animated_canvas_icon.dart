@@ -1,15 +1,18 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../apps/app_types.dart';
+import 'colors.dart';
 
 class AnimatedCanvasIcon extends StatefulWidget {
   final EditorType editorType;
   final double size;
   final bool animated;
+  final AppColorScheme s;
 
   const AnimatedCanvasIcon({
     super.key,
     required this.editorType,
+    required this.s,
     this.size = 44,
     this.animated = false,
   });
@@ -57,8 +60,6 @@ class _AnimatedCanvasIconState extends State<AnimatedCanvasIcon>
 
   @override
   Widget build(BuildContext context) {
-    // wrap idêntico ao HTML: width=48, height=44
-    // mas escalado proporcionalmente ao size pedido (base=44)
     final scale = widget.size / 44.0;
     return SizedBox(
       width: 48 * scale,
@@ -71,6 +72,8 @@ class _AnimatedCanvasIconState extends State<AnimatedCanvasIcon>
             progress: _controller.value,
             animated: widget.animated,
             scale: scale,
+            isDark: widget.s.isDark,
+            primary: widget.s.primary,
           ),
         ),
       ),
@@ -83,65 +86,107 @@ class _CanvasIconPainter extends CustomPainter {
   final double progress;
   final bool animated;
   final double scale;
+  final bool isDark;
+  final Color primary;
 
   _CanvasIconPainter({
     required this.editorType,
     required this.progress,
     required this.animated,
     required this.scale,
+    required this.isDark,
+    required this.primary,
   });
 
-  // Dimensões base (px do HTML)
-  // icon-wrap: 48 × 44
-  // paper:     36 × 46   (pode sair além do wrap em height — igual ao HTML)
-  // paper-back:  left=10, top=0, rotate=+10deg
-  // paper-front: left=0,  top=0, rotate=-7deg
+  // ── Cores dos papéis ──────────────────────────────────────────
+  // Modo escuro: escuros profundos diferenciados do card de canvas
+  // Modo claro: brancos quentes com 10% da cor primária misturada
 
-  Color get _primaryColor {
-    switch (editorType) {
-      case EditorType.docs:   return const Color(0xFF2B579A);
-      case EditorType.sheets: return const Color(0xFF1D6F42);
-      case EditorType.slides: return const Color(0xFFC43E00);
+  Color get _frontColor {
+    if (isDark) {
+      switch (editorType) {
+        case EditorType.docs:   return const Color(0xFF1C2433); // azul muito escuro
+        case EditorType.sheets: return const Color(0xFF172418); // verde muito escuro
+        case EditorType.slides: return const Color(0xFF2A1A12); // laranja muito escuro
+      }
+    } else {
+      // branco com 10% da cor primária correspondente
+      switch (editorType) {
+        case EditorType.docs:   return Color.lerp(Colors.white, const Color(0xFF2B579A), 0.10)!;
+        case EditorType.sheets: return Color.lerp(Colors.white, const Color(0xFF1D6F42), 0.10)!;
+        case EditorType.slides: return Color.lerp(Colors.white, const Color(0xFFC43E00), 0.10)!;
+      }
     }
   }
 
-  Color get _secondaryColor {
-    switch (editorType) {
-      case EditorType.docs:   return const Color(0xFF1A3F6F);
-      case EditorType.sheets: return const Color(0xFF145232);
-      case EditorType.slides: return const Color(0xFF8C2A00);
+  Color get _backColor {
+    if (isDark) {
+      switch (editorType) {
+        case EditorType.docs:   return const Color(0xFF141B26);
+        case EditorType.sheets: return const Color(0xFF101A11);
+        case EditorType.slides: return const Color(0xFF1E1108);
+      }
+    } else {
+      switch (editorType) {
+        case EditorType.docs:   return Color.lerp(Colors.white, const Color(0xFF2B579A), 0.18)!;
+        case EditorType.sheets: return Color.lerp(Colors.white, const Color(0xFF1D6F42), 0.18)!;
+        case EditorType.slides: return Color.lerp(Colors.white, const Color(0xFFC43E00), 0.18)!;
+      }
     }
   }
 
-  // Desenha um papel (rect arredondado) com origem, rotação e cor
+  Color get _borderColor {
+    if (isDark) {
+      return Colors.white.withOpacity(0.08);
+    } else {
+      return Colors.black.withOpacity(0.10);
+    }
+  }
+
+  Color get _strokeColor {
+    if (isDark) {
+      return Colors.white.withOpacity(0.55);
+    } else {
+      switch (editorType) {
+        case EditorType.docs:   return const Color(0xFF2B579A).withOpacity(0.75);
+        case EditorType.sheets: return const Color(0xFF1D6F42).withOpacity(0.75);
+        case EditorType.slides: return const Color(0xFFC43E00).withOpacity(0.75);
+      }
+    }
+  }
+
   void _drawPaper(Canvas canvas, double left, double top, double width,
-      double height, double angleDeg, Color color) {
+      double height, double angleDeg, Color fill) {
     final s = scale;
     final cx = (left + width / 2) * s;
     final cy = (top + height / 2) * s;
+
     final rect = RRect.fromRectAndRadius(
       Rect.fromLTWH(left * s, top * s, width * s, height * s),
       Radius.circular(5 * s),
     );
-    final paint = Paint()..color = color;
 
     canvas.save();
     canvas.translate(cx, cy);
     canvas.rotate(angleDeg * math.pi / 180);
     canvas.translate(-cx, -cy);
-    canvas.drawRRect(rect, paint);
-    // sombra
-    final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * s);
-    canvas.drawRRect(rect, shadowPaint);
+
+    // fill
+    canvas.drawRRect(rect, Paint()..color = fill);
+
+    // borda sólida subtil
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..color = _borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8 * s,
+    );
+
     canvas.restore();
   }
 
-  // Aplica a rotação do paper-front ao canvas e chama o callback de ícone
   void _withFrontTransform(Canvas canvas, void Function() draw) {
-    // paper-front: left=0, top=0, w=36, h=46, rotate=-7deg
-    // centro de rotação = centro do papel
     const left = 0.0;
     const top = 0.0;
     const w = 36.0;
@@ -160,13 +205,9 @@ class _CanvasIconPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1) Paper de trás: left=10, top=0, rotate=+10deg, cor secundária
-    _drawPaper(canvas, 10, 0, 36, 46, 10, _secondaryColor);
+    _drawPaper(canvas, 10, 0, 36, 46, 10, _backColor);
+    _drawPaper(canvas, 0, 0, 36, 46, -7, _frontColor);
 
-    // 2) Paper da frente: left=0, top=0, rotate=-7deg, cor primária
-    _drawPaper(canvas, 0, 0, 36, 46, -7, _primaryColor);
-
-    // 3) Ícone por cima do paper-front, com a mesma rotação -7deg
     _withFrontTransform(canvas, () {
       switch (editorType) {
         case EditorType.docs:
@@ -182,16 +223,12 @@ class _CanvasIconPainter extends CustomPainter {
     });
   }
 
-  // ── Doc: 4 linhas horizontais ──────────────────────────────────────────
-  // SVG viewBox 0 0 36 46, paths em coordenadas do viewBox
-  // M5 11.5 H31  |  M5 18.5 H25  |  M5 25.5 H31  |  M5 32.5 H21
+  // ── Doc: 4 linhas ────────────────────────────────────────────
   void _drawDocLines(Canvas canvas) {
     final s = scale;
-    // factor de escala do viewBox (36×46) para o papel real (36×46) → 1:1
-    // paper começa em left=0, top=0
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.8)
-      ..strokeWidth = 3 * s
+      ..color = _strokeColor
+      ..strokeWidth = 2.8 * s
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
@@ -204,99 +241,91 @@ class _CanvasIconPainter extends CustomPainter {
 
     for (int i = 0; i < lines.length; i++) {
       final (x1, y, x2) = lines[i];
-      double fraction = _lineFraction(i, delayStep: 0.3);
+      final fraction = _lineFraction(i, delayStep: 0.3);
       if (fraction <= 0) continue;
-
       final xEnd = x1 + (x2 - x1) * fraction;
-      canvas.drawLine(
-        Offset(x1 * s, y * s),
-        Offset(xEnd * s, y * s),
-        paint,
-      );
+      canvas.drawLine(Offset(x1 * s, y * s), Offset(xEnd * s, y * s), paint);
     }
   }
 
-  // ── Sheets: grelha ────────────────────────────────────────────────────
-  // rect x=4 y=8 w=28 h=28 (border fixo)
-  // linhas H: y=14,22,30   linhas V: x=14,24
+  // ── Sheets: grelha ───────────────────────────────────────────
   void _drawSheetsGrid(Canvas canvas) {
     final s = scale;
 
-    // borda externa (estática)
-    final borderPaint = Paint()
-      ..color = Colors.white.withOpacity(0.4)
-      ..strokeWidth = 1.2 * s
-      ..style = PaintingStyle.stroke;
+    // borda externa estática
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(4 * s, 8 * s, 28 * s, 28 * s),
-        Radius.circular(1 * s),
+        Radius.circular(1.5 * s),
       ),
-      borderPaint,
+      Paint()
+        ..color = _strokeColor.withOpacity(0.4)
+        ..strokeWidth = 1.0 * s
+        ..style = PaintingStyle.stroke,
     );
 
     final linePaint = Paint()
-      ..color = Colors.white.withOpacity(0.6)
-      ..strokeWidth = 1.2 * s
-      ..strokeCap = StrokeCap.butt
+      ..color = _strokeColor
+      ..strokeWidth = 1.0 * s
       ..style = PaintingStyle.stroke;
 
-    // 3 linhas H + 2 linhas V = 5 linhas animadas
-    final hLines = [(4.0, 14.0, 32.0, 14.0), (4.0, 22.0, 32.0, 22.0), (4.0, 30.0, 32.0, 30.0)];
-    final vLines = [(14.0, 8.0, 14.0, 36.0), (24.0, 8.0, 24.0, 36.0)];
+    final hLines = [
+      (4.0, 14.0, 32.0, 14.0),
+      (4.0, 22.0, 32.0, 22.0),
+      (4.0, 30.0, 32.0, 30.0),
+    ];
+    final vLines = [
+      (14.0, 8.0, 14.0, 36.0),
+      (24.0, 8.0, 24.0, 36.0),
+    ];
 
     for (int i = 0; i < hLines.length; i++) {
-      final (x1, y1, x2, y2) = hLines[i];
-      double fraction = _lineFraction(i, delayStep: 0.25);
+      final (x1, y1, x2, _) = hLines[i];
+      final fraction = _lineFraction(i, delayStep: 0.25);
       if (fraction <= 0) continue;
       final xEnd = x1 + (x2 - x1) * fraction;
-      canvas.drawLine(Offset(x1 * s, y1 * s), Offset(xEnd * s, y2 * s), linePaint);
+      canvas.drawLine(Offset(x1 * s, y1 * s), Offset(xEnd * s, y1 * s), linePaint);
     }
 
     for (int i = 0; i < vLines.length; i++) {
-      final (x1, y1, x2, y2) = vLines[i];
-      double fraction = _lineFraction(i + hLines.length, delayStep: 0.25);
+      final (x1, y1, _, y2) = vLines[i];
+      final fraction = _lineFraction(i + hLines.length, delayStep: 0.25);
       if (fraction <= 0) continue;
       final yEnd = y1 + (y2 - y1) * fraction;
-      canvas.drawLine(Offset(x1 * s, y1 * s), Offset(x2 * s, yEnd * s), linePaint);
+      canvas.drawLine(Offset(x1 * s, y1 * s), Offset(x1 * s, yEnd * s), linePaint);
     }
   }
 
-  // ── Slides: frame + 3 barras ──────────────────────────────────────────
-  // frame: x=4 y=9 w=28 h=18
-  // barras: (8,21,4,4) (14,17,4,8) (20,13,4,12)
+  // ── Slides: frame + barras ───────────────────────────────────
   void _drawSlidesElements(Canvas canvas) {
     final s = scale;
 
-    // frame
     final framePaint = Paint()
-      ..color = Colors.white.withOpacity(0.7)
-      ..strokeWidth = 1.2 * s
+      ..color = _strokeColor
+      ..strokeWidth = 1.0 * s
       ..style = PaintingStyle.stroke;
 
-    double frameFraction = animated ? _lineFraction(0, delayStep: 0, totalDuration: 2.8) : 1.0;
+    final frameFraction = animated ? _lineFraction(0, delayStep: 0, totalDuration: 2.8) : 1.0;
     if (frameFraction > 0) {
-      // desenha o frame progressivamente pelos 4 lados
       final path = _buildRectPath(4, 9, 28, 18, frameFraction, s);
       canvas.drawPath(path, framePaint);
     }
 
-    // barras
     final barPaint = Paint()
-      ..color = Colors.white.withOpacity(0.85)
+      ..color = _strokeColor
       ..style = PaintingStyle.fill;
 
+    // x, bottom_y, w, max_h
     final bars = [
-      (8.0, 25.0, 4.0, 4.0),   // x, bottom_y, w, max_h
+      (8.0, 25.0, 4.0, 4.0),
       (14.0, 25.0, 4.0, 8.0),
       (20.0, 25.0, 4.0, 12.0),
     ];
 
     for (int i = 0; i < bars.length; i++) {
       final (bx, by, bw, bh) = bars[i];
-      double fraction = animated ? _lineFraction(i, delayStep: 0.25) : 1.0;
+      final fraction = animated ? _lineFraction(i, delayStep: 0.25) : 1.0;
       if (fraction <= 0) continue;
-
       final currentH = bh * fraction;
       final currentY = by - currentH;
       canvas.drawRRect(
@@ -309,7 +338,6 @@ class _CanvasIconPainter extends CustomPainter {
     }
   }
 
-  // Constrói path do rect progressivamente (perimetralmente)
   Path _buildRectPath(
       double x, double y, double w, double h, double fraction, double s) {
     final perimeter = 2 * (w + h);
@@ -318,25 +346,21 @@ class _CanvasIconPainter extends CustomPainter {
     path.moveTo(x * s, y * s);
 
     double rem = drawn;
-    // top
     if (rem > 0) {
       final seg = math.min(rem, w);
       path.lineTo((x + seg) * s, y * s);
       rem -= seg;
     }
-    // right
     if (rem > 0) {
       final seg = math.min(rem, h);
       path.lineTo((x + w) * s, (y + seg) * s);
       rem -= seg;
     }
-    // bottom (reversed)
     if (rem > 0) {
       final seg = math.min(rem, w);
       path.lineTo((x + w - seg) * s, (y + h) * s);
       rem -= seg;
     }
-    // left (reversed)
     if (rem > 0) {
       final seg = math.min(rem, h);
       path.lineTo(x * s, (y + h - seg) * s);
@@ -344,29 +368,15 @@ class _CanvasIconPainter extends CustomPainter {
     return path;
   }
 
-  // Calcula a fração de desenho/apagamento para a linha i
-  // Espelha o CSS: draw-erase com delay escalonado
   double _lineFraction(int i,
       {required double delayStep, double totalDuration = 2.4}) {
     if (!animated) return 1.0;
-
-    // normaliza o delay em fração do ciclo
     final delayFraction = (i * delayStep) / totalDuration;
     final t = ((progress - delayFraction) % 1.0 + 1.0) % 1.0;
-
-    // 0–0.45 → desenha (0→1)
-    // 0.45–0.70 → mantém
-    // 0.70–0.95 → apaga (1→0)
-    // 0.95–1.0  → zero
-    if (t < 0.45) {
-      return t / 0.45;
-    } else if (t < 0.70) {
-      return 1.0;
-    } else if (t < 0.95) {
-      return 1.0 - (t - 0.70) / 0.25;
-    } else {
-      return 0.0;
-    }
+    if (t < 0.45) return t / 0.45;
+    if (t < 0.70) return 1.0;
+    if (t < 0.95) return 1.0 - (t - 0.70) / 0.25;
+    return 0.0;
   }
 
   @override
@@ -374,5 +384,6 @@ class _CanvasIconPainter extends CustomPainter {
       oldDelegate.editorType != editorType ||
       oldDelegate.progress != progress ||
       oldDelegate.animated != animated ||
-      oldDelegate.scale != scale;
+      oldDelegate.scale != scale ||
+      oldDelegate.isDark != isDark;
 }

@@ -317,11 +317,13 @@ class ProfileApiService {
     String token, {
     String? name,
     String? password,
+    String? currentPassword,
     Map<String, dynamic>? preferences,
   }) async {
     final body = <String, dynamic>{};
     if (name != null) body['name'] = name;
     if (password != null) body['password'] = password;
+    if (currentPassword != null) body['currentPassword'] = currentPassword;
     if (preferences != null) body['preferences'] = preferences;
 
     final res = await http.put(
