@@ -2233,7 +2233,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _onAttachFiles() async {
-    final result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
     if (result == null || result.files.isEmpty) return;
     final newFiles = <AttachedFile>[];
     for (final f in result.files) {

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'apps/app_types.dart';
+import '../apps/app_types.dart'; // caminho corrigido
 
 class AnimatedCanvasIcon extends StatefulWidget {
   final EditorType editorType;
@@ -87,17 +87,23 @@ class _CanvasIconPainter extends CustomPainter {
 
   Color get _primaryColor {
     switch (editorType) {
-      case EditorType.docs:   return const Color(0xFF2B579A);
-      case EditorType.sheets: return const Color(0xFF1D6F42);
-      case EditorType.slides: return const Color(0xFFC43E00);
+      case EditorType.docs:
+        return const Color(0xFF2B579A);
+      case EditorType.sheets:
+        return const Color(0xFF1D6F42);
+      case EditorType.slides:
+        return const Color(0xFFC43E00);
     }
   }
 
   Color get _secondaryColor {
     switch (editorType) {
-      case EditorType.docs:   return const Color(0xFF1A3F6F);
-      case EditorType.sheets: return const Color(0xFF145232);
-      case EditorType.slides: return const Color(0xFF8C2A00);
+      case EditorType.docs:
+        return const Color(0xFF1A3F6F);
+      case EditorType.sheets:
+        return const Color(0xFF145232);
+      case EditorType.slides:
+        return const Color(0xFF8C2A00);
     }
   }
 
@@ -105,15 +111,22 @@ class _CanvasIconPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     _drawPaper(canvas, size);
     switch (editorType) {
-      case EditorType.docs:   _drawDocLines(canvas, size); break;
-      case EditorType.sheets: _drawSheetsGrid(canvas, size); break;
-      case EditorType.slides: _drawSlidesElements(canvas, size); break;
+      case EditorType.docs:
+        _drawDocLines(canvas, size);
+        break;
+      case EditorType.sheets:
+        _drawSheetsGrid(canvas, size);
+        break;
+      case EditorType.slides:
+        _drawSlidesElements(canvas, size);
+        break;
     }
   }
 
   void _drawPaper(Canvas canvas, Size size) {
     final backRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(size.width * 0.25, size.height * 0.08, size.width * 0.6, size.height * 0.84),
+      Rect.fromLTWH(size.width * 0.25, size.height * 0.08,
+          size.width * 0.6, size.height * 0.84),
       Radius.circular(size.width * 0.08),
     );
     final backPaint = Paint()..color = _secondaryColor;
@@ -125,7 +138,8 @@ class _CanvasIconPainter extends CustomPainter {
     canvas.restore();
 
     final frontRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(size.width * 0.12, size.height * 0.08, size.width * 0.6, size.height * 0.84),
+      Rect.fromLTWH(size.width * 0.12, size.height * 0.08,
+          size.width * 0.6, size.height * 0.84),
       Radius.circular(size.width * 0.08),
     );
     final frontPaint = Paint()..color = _primaryColor;
@@ -140,7 +154,7 @@ class _CanvasIconPainter extends CustomPainter {
   void _drawDocLines(Canvas canvas, Size size) {
     final linePaint = Paint()
       ..color = Colors.white.withOpacity(0.8)
-      ..strokeWidth = size.width * 0.07
+      ..strokeWidth = size.width * 0.0833
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
@@ -152,7 +166,7 @@ class _CanvasIconPainter extends CustomPainter {
     for (int i = 0; i < 4; i++) {
       double lineProgress;
       if (animated) {
-        final delay = i * 0.15;
+        final delay = i * 0.3;
         lineProgress = ((progress - delay) % 1.0).clamp(0.0, 1.0);
       } else {
         lineProgress = 1.0;
@@ -179,8 +193,8 @@ class _CanvasIconPainter extends CustomPainter {
 
   void _drawSheetsGrid(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = Colors.white.withOpacity(0.5)
-      ..strokeWidth = size.width * 0.04
+      ..color = Colors.white.withOpacity(0.6)
+      ..strokeWidth = size.width * 0.0333
       ..style = PaintingStyle.stroke;
 
     final hGap = size.height * 0.18;
@@ -193,10 +207,10 @@ class _CanvasIconPainter extends CustomPainter {
     final topY = size.height * 0.18;
     final bottomY = size.height * 0.82;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
       double lineProgress;
       if (animated) {
-        final delay = i * 0.1;
+        final delay = i * 0.25;
         lineProgress = ((progress - delay) % 1.0).clamp(0.0, 1.0);
       } else {
         lineProgress = 1.0;
@@ -228,7 +242,7 @@ class _CanvasIconPainter extends CustomPainter {
   void _drawSlidesElements(Canvas canvas, Size size) {
     final framePaint = Paint()
       ..color = Colors.white.withOpacity(0.7)
-      ..strokeWidth = size.width * 0.04
+      ..strokeWidth = size.width * 0.0333
       ..style = PaintingStyle.stroke;
 
     final frameRect = RRect.fromRectAndRadius(
@@ -245,4 +259,65 @@ class _CanvasIconPainter extends CustomPainter {
       final drawProgress = ((progress - 0.0) % 1.0).clamp(0.0, 1.0);
       final drawFraction = drawProgress < 0.5 ? drawProgress / 0.5 : 1.0;
       final path = Path()
-        ..moveTo(frame
+        ..moveTo(frameRect.left, frameRect.top)
+        ..lineTo(
+            frameRect.left + (frameRect.right - frameRect.left) * drawFraction,
+            frameRect.top);
+      if (drawFraction >= 1.0) {
+        path
+          ..lineTo(frameRect.right, frameRect.top)
+          ..lineTo(frameRect.right, frameRect.bottom)
+          ..lineTo(frameRect.left, frameRect.bottom)
+          ..close();
+      }
+      canvas.drawPath(path, framePaint);
+    } else {
+      canvas.drawRRect(frameRect, framePaint);
+    }
+
+    final barPaint = Paint()..color = Colors.white.withOpacity(0.85);
+    final barWidth = size.width * 0.12;
+    final gap = size.width * 0.08;
+    final baseY = size.height * 0.62;
+    final maxBarHeight = size.height * 0.3;
+    final startX = size.width * 0.25;
+
+    for (int i = 0; i < 3; i++) {
+      double barProgress;
+      if (animated) {
+        final delay = i * 0.25;
+        barProgress = ((progress - delay) % 1.0).clamp(0.0, 1.0);
+      } else {
+        barProgress = 1.0;
+      }
+
+      double scaleY;
+      if (barProgress < 0.5) {
+        scaleY = barProgress / 0.5;
+      } else if (barProgress < 1.0) {
+        scaleY = 1 - (barProgress - 0.5) / 0.5;
+      } else {
+        scaleY = 1.0;
+      }
+
+      final barHeight = maxBarHeight * (0.3 + 0.3 * i);
+      final currentHeight = barHeight * scaleY;
+      final x = startX + i * (barWidth + gap);
+      final y = baseY - currentHeight;
+
+      if (currentHeight > 0) {
+        final barRect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, y, barWidth, currentHeight),
+          Radius.circular(size.width * 0.02),
+        );
+        canvas.drawRRect(barRect, barPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CanvasIconPainter oldDelegate) =>
+      oldDelegate.editorType != editorType ||
+      oldDelegate.progress != progress ||
+      oldDelegate.animated != animated;
+}
