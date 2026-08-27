@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'colors.dart';
 import 'widgets.dart';
+import 'widgets/animated_canvas_icon.dart';
 import 'richtext.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
@@ -28,6 +29,12 @@ String _iconForEditorType(EditorType type) {
     case EditorType.sheets:     return 'table';
     case EditorType.slides:     return 'stacks';
   }
+}
+
+EditorType _editorTypeFromProgressTitle(String title) {
+  if (title.contains('folha')) return EditorType.sheets;
+  if (title.contains('apresentação')) return EditorType.slides;
+  return EditorType.docs;
 }
 
 enum AiModel { deepseekFlash, deepseekPro, deepseekReasoning }
@@ -414,7 +421,11 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
       final opensUp = overflowsBottom;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 2 : null;
-      final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - widget.width - 12);
+      double left = off.dx;
+      if (left + widget.width > screenSize.width - 12) {
+        left = screenSize.width - widget.width - 12;
+      }
+      if (left < 12) left = 12;
 
       return Stack(children: [
         Positioned.fill(
@@ -427,7 +438,7 @@ class PopupMenuState<T> extends State<PopupMenu<T>>
         Positioned(
           top: top,
           bottom: bottom,
-          right: right,
+          left: left,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -642,7 +653,9 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
       final opensUp = desiredTop + estimatedHeight > screenSize.height - 24;
       final top = opensUp ? null : desiredTop;
       final bottom = opensUp ? screenSize.height - off.dy + 2 : null;
-      final right = (screenSize.width - (off.dx + sz.width)).clamp(12.0, screenSize.width - width - 12);
+      double left = off.dx + sz.width - width;
+      if (left < 12) left = 12;
+      if (left + width > screenSize.width - 12) left = screenSize.width - width - 12;
 
       return Stack(children: [
         Positioned.fill(
@@ -655,7 +668,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton>
         Positioned(
           top: top,
           bottom: bottom,
-          right: right,
+          left: left,
           child: AnimatedBuilder(
             animation: _ac,
             builder: (_, child) => Opacity(
@@ -823,7 +836,6 @@ class SimpleCanvasCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appKind = item.kind.editorType.appKind;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -836,11 +848,10 @@ class SimpleCanvasCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Image.asset(
-              appKind.iconAsset,
-              width: 44,
-              height: 44,
-              fit: BoxFit.contain,
+            AnimatedCanvasIcon(
+              editorType: item.kind.editorType,
+              size: 44,
+              animated: false,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1338,11 +1349,10 @@ class _CanvasProgressCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Image.asset(
-                    item!.kind.editorType.appKind.iconAsset,
-                    width: 44,
-                    height: 44,
-                    fit: BoxFit.contain,
+                  AnimatedCanvasIcon(
+                    editorType: item!.kind.editorType,
+                    size: 44,
+                    animated: false,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1394,7 +1404,11 @@ class _CanvasProgressCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                NexaLoaderLogo(size: 32, tintColor: s.primary),
+                AnimatedCanvasIcon(
+                  editorType: _editorTypeFromProgressTitle(title),
+                  size: 44,
+                  animated: true,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1529,15 +1543,11 @@ class _CanvasStreamingModalContent extends StatelessWidget {
             valueListenable: doneNotifier,
             builder: (_, done, __) => Row(
               children: [
-                if (!done)
-                  NexaLoaderLogo(size: 28, tintColor: s.primary)
-                else
-                  Image.asset(
-                    finalItem()?.kind.editorType.appKind.iconAsset ?? AppKind.docs.iconAsset,
-                    width: 32,
-                    height: 32,
-                    fit: BoxFit.contain,
-                  ),
+                AnimatedCanvasIcon(
+                  editorType: finalItem()?.kind.editorType ?? EditorType.docs,
+                  size: 32,
+                  animated: !done,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -2964,7 +2974,7 @@ class _AssistantBubble extends StatelessWidget {
       );
 }
 
-class _ThinkingHistoryCollapsible extends StatefulWidget {
+class _ThinkingHistoryCollapsible extends StatelessWidget {
   final AppColorScheme s;
   final String thinking;
   final bool widgetsEnabled;
@@ -2975,67 +2985,67 @@ class _ThinkingHistoryCollapsible extends StatefulWidget {
     required this.widgetsEnabled,
   });
 
-  @override
-  State<_ThinkingHistoryCollapsible> createState() => _ThinkingHistoryCollapsibleState();
-}
-
-class _ThinkingHistoryCollapsibleState extends State<_ThinkingHistoryCollapsible> {
-  bool _expanded = false;
+  void _openThinkingModal(BuildContext context) {
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.psychology, size: 22, color: s.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Text(
+                  'Pensamento',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+              child: SingleChildScrollView(
+                child: RichAiText(
+                  text: thinking,
+                  s: s,
+                  widgetsEnabled: widgetsEnabled,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                children: [
-                  const NexaLoaderLogo(size: 15, animated: false),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Pensamento',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
-                  ),
-                ],
+    return GestureDetector(
+      onTap: () => _openThinkingModal(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: s.pageBackground,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Pensamento',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
               ),
             ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
-            crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-              child: RichAiText(
-                text: widget.thinking,
-                s: s,
-                widgetsEnabled: widget.widgetsEnabled,
-              ),
-            ),
-          ),
-        ],
+            AppIcon('arrow_right', size: 14, color: s.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
@@ -3147,8 +3157,6 @@ class _StreamingBubble extends StatefulWidget {
 }
 
 class _StreamingBubbleState extends State<_StreamingBubble> {
-  bool _thinkingExpanded = false;
-
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -3159,8 +3167,6 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
       children.add(_ThinkingCollapsible(
         s: s,
         thinking: thinking,
-        expanded: _thinkingExpanded,
-        onToggle: () => setState(() => _thinkingExpanded = !_thinkingExpanded),
         widgetsEnabled: widget.widgetsEnabled,
       ));
     }
@@ -3239,71 +3245,75 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
 class _ThinkingCollapsible extends StatelessWidget {
   final AppColorScheme s;
   final String thinking;
-  final bool expanded;
-  final VoidCallback onToggle;
   final bool widgetsEnabled;
 
   const _ThinkingCollapsible({
     required this.s,
     required this.thinking,
-    required this.expanded,
-    required this.onToggle,
     required this.widgetsEnabled,
   });
 
+  void _openThinkingModal(BuildContext context) {
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.psychology, size: 22, color: s.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Text(
+                  'Pensamento',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+              child: SingleChildScrollView(
+                child: RichAiText(
+                  text: thinking,
+                  s: s,
+                  widgetsEnabled: widgetsEnabled,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: onToggle,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                children: [
-                  const NexaLoaderLogo(size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Pensando...',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
-                  ),
-                ],
+    return GestureDetector(
+      onTap: () => _openThinkingModal(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: s.pageBackground,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Pensando...',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
               ),
             ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
-            crossFadeState: expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-              child: RichAiText(
-                text: thinking,
-                s: s,
-                widgetsEnabled: widgetsEnabled,
-              ),
-            ),
-          ),
-        ],
+            AppIcon('arrow_right', size: 14, color: s.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
@@ -3419,10 +3429,11 @@ void showMessageActionsPopup(
 
   entry = OverlayEntry(builder: (ctx) {
     const menuHeight = 216.0;
+    const width = 224.0;
     final desiredTop = anchorOffset.dy - 2 - menuHeight;
     final opensUp = desiredTop >= 40;
     final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 2;
-    final right = (screenSize.width - (anchorOffset.dx + anchorSize.width)).clamp(12.0, screenSize.width - 244);
+    final left = (anchorOffset.dx + anchorSize.width - width).clamp(12.0, screenSize.width - width - 12);
 
     return Stack(children: [
       Positioned.fill(
@@ -3434,7 +3445,7 @@ void showMessageActionsPopup(
       ),
       Positioned(
         top: top,
-        right: right,
+        left: left,
         child: AnimatedBuilder(
           animation: controller,
           builder: (_, child) => Opacity(
@@ -3452,7 +3463,7 @@ void showMessageActionsPopup(
           child: Material(
             type: MaterialType.transparency,
             child: Container(
-              width: 224,
+              width: width,
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: s.floatingSurface,
@@ -4157,11 +4168,10 @@ class _CanvasCardState extends State<_CanvasCard> {
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(children: [
-          Image.asset(
-            _editorType.appKind.iconAsset,
-            width: 40,
-            height: 40,
-            fit: BoxFit.contain,
+          AnimatedCanvasIcon(
+            editorType: _editorType,
+            size: 40,
+            animated: false,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -4689,6 +4699,58 @@ class _CustomSwitch extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class ShimmerBrainIcon extends StatefulWidget {
+  final double size;
+  final Color color;
+  const ShimmerBrainIcon({super.key, this.size = 16, required this.color});
+
+  @override
+  State<ShimmerBrainIcon> createState() => _ShimmerBrainIconState();
+}
+
+class _ShimmerBrainIconState extends State<ShimmerBrainIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        final shimmerPosition = (_controller.value * 2 - 1) * widget.size;
+        return ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              widget.color.withOpacity(0.3),
+              widget.color,
+              widget.color.withOpacity(0.3),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ).createShader(bounds.shift(Offset(shimmerPosition, 0))),
+          child: Icon(Icons.psychology, size: widget.size, color: Colors.white),
+        );
+      },
     );
   }
 }

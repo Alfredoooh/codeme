@@ -301,7 +301,28 @@ class _AppDrawerState extends State<AppDrawer> {
             children: [
               const SizedBox(height: 56),
               Expanded(
-                child: _buildConvBody(context, s, pinned, others),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final slide = Tween<Offset>(
+                      begin: const Offset(0.04, 0),
+                      end: Offset.zero,
+                    ).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: slide,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey(_selectedSection),
+                    child: _buildConvBody(context, s, pinned, others),
+                  ),
+                ),
               ),
               const SizedBox(height: 120),
             ],
@@ -381,6 +402,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     assetName: 'new_chat',
                     size: 52,
                     iconSize: 22,
+                    filled: true,
                     onTap: widget.onNewChat != null ? _handleNewChat : null,
                   ),
                 ],
@@ -399,11 +421,8 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> others,
   ) {
     if (_selectedSection == 1) {
-      return CupertinoScrollbar(
-        thickness: 3,
-        thicknessWhileDragging: 5.5,
-        radius: const Radius.circular(3),
-        radiusWhileDragging: const Radius.circular(3),
+      return Scrollbar(
+        thumbVisibility: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
           children: [
@@ -457,9 +476,10 @@ class _AppDrawerState extends State<AppDrawer> {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
         child: SizedBox(
-          width: 20, height: 20,
+          width: 24, height: 24,
           child: CircularProgressIndicator(
-            strokeWidth: 2.2,
+            strokeWidth: 3,
+            strokeCap: StrokeCap.round,
             valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
           ),
         ),
@@ -491,7 +511,7 @@ class _AppDrawerState extends State<AppDrawer> {
     if (pinned.isNotEmpty) {
       sections.add(_ConversationGroupHeader(
         s: s,
-        label: 'Fixadas',
+        label: 'Conversas fixadas',
         expanded: _pinnedExpanded,
         onTap: () => setState(() => _pinnedExpanded = !_pinnedExpanded),
       ));
@@ -537,12 +557,11 @@ class _AppDrawerState extends State<AppDrawer> {
     return RefreshIndicator(
       color: s.primary,
       backgroundColor: s.cardBackground,
+      strokeWidth: 3,
+      edgeOffset: 16,
       onRefresh: () => conversationsController.load(),
-      child: CupertinoScrollbar(
-        thickness: 3,
-        thicknessWhileDragging: 5.5,
-        radius: const Radius.circular(3),
-        radiusWhileDragging: const Radius.circular(3),
+      child: Scrollbar(
+        thumbVisibility: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
           children: sections,
@@ -760,7 +779,7 @@ class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
             child: Container(
               decoration: BoxDecoration(
                 color: s.primary,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: s.cardShadow,
               ),
             ),
@@ -836,6 +855,8 @@ class _CircleIconButton extends StatefulWidget {
   final ValueChanged<Offset>? onTapDown;
   final double size;
   final double iconSize;
+  final bool filled;
+
   const _CircleIconButton({
     required this.s,
     required this.assetName,
@@ -843,6 +864,7 @@ class _CircleIconButton extends StatefulWidget {
     this.onTapDown,
     this.size = 40,
     this.iconSize = 20,
+    this.filled = false,
   });
   @override State<_CircleIconButton> createState() => _CircleIconButtonState();
 }
@@ -852,6 +874,11 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
+    final backgroundColor = widget.filled
+        ? s.primary
+        : _p ? s.pressed : s.cardBackground;
+    final iconColor = widget.filled ? s.onPrimary : s.onSurface;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (d) {
@@ -872,11 +899,11 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
           width: widget.size, height: widget.size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _p ? s.pressed : s.cardBackground,
+            color: backgroundColor,
             shape: BoxShape.circle,
-            boxShadow: s.cardShadow,
+            boxShadow: widget.filled ? null : s.cardShadow,
           ),
-          child: AppIcon(widget.assetName, color: s.onSurface, size: widget.iconSize),
+          child: AppIcon(widget.assetName, color: iconColor, size: widget.iconSize),
         ),
       ),
     );
@@ -931,6 +958,15 @@ class _ConvTileState extends State<_ConvTile> {
   Widget build(BuildContext context) {
     final s = widget.s;
 
+    final Color bg;
+    if (widget.active) {
+      bg = s.isDark ? s.hover : s.primaryContainer.withOpacity(0.2);
+    } else if (_h) {
+      bg = s.hover;
+    } else {
+      bg = Colors.transparent;
+    }
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _h = true),
@@ -939,20 +975,25 @@ class _ConvTileState extends State<_ConvTile> {
       onTap: _handleTap,
       onLongPressStart: _handleLongPressStart,
       child: Container(
-        color: widget.active
-            ? s.navIndicatorBg
-            : (_h ? s.hover : Colors.transparent),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         child: Row(children: [
           Expanded(
             child: SelectionContainer.disabled(
-              child: Text(widget.item.title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
-                    color: widget.active ? s.navLabelActive : s.onSurface,
-                  ),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                widget.item.title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                  color: widget.active ? s.navLabelActive : s.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
         ]),
