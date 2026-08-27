@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../colors.dart';
 import '../widgets.dart';
-import 'docs.dart' show ScreenBackButton;
 
 class SoundTrack {
   final String title;
@@ -166,6 +165,37 @@ class _TrackRow extends StatelessWidget {
             child: Icon(playing ? Icons.pause : Icons.play_arrow, color: s.onPrimary, size: 20),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+class ScreenBackButton extends StatefulWidget {
+  final AppColorScheme s;
+  const ScreenBackButton({super.key, required this.s});
+  @override State<ScreenBackButton> createState() => _ScreenBackButtonState();
+}
+
+class _ScreenBackButtonState extends State<ScreenBackButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap: () => Navigator.of(context).pop(),
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        child: Container(
+          width: 40, height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: widget.s.cardBackground, shape: BoxShape.circle),
+          child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
+        ),
       ),
     );
   }

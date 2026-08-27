@@ -823,9 +823,7 @@ class SimpleCanvasCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = this.s;
-    final item = this.item;
-
+    final appKind = item.kind.editorType.appKind;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -838,19 +836,11 @@ class SimpleCanvasCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: AppIcon(
-                _iconForEditorType(item.kind.editorType),
-                size: 20,
-                color: s.onSurface,
-              ),
+            Image.asset(
+              appKind.iconAsset,
+              width: 44,
+              height: 44,
+              fit: BoxFit.contain,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -878,7 +868,6 @@ class SimpleCanvasCard extends StatelessWidget {
                 ],
               ),
             ),
-            AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 16),
           ],
         ),
       ),
@@ -1287,7 +1276,7 @@ class _StreamingMarkdownCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            AiSmallDotsLoader(color: s.onSurfaceVariant),
+            NexaLoaderLogo(size: 28, tintColor: s.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -1331,7 +1320,60 @@ class _CanvasProgressCard extends StatelessWidget {
       valueListenable: doneNotifier,
       builder: (_, done, __) {
         if (done && item != null) {
-          return SimpleCanvasCard(s: s, item: item!, onTap: () => onOpenCanvas(item!));
+          return GestureDetector(
+            onTap: () => showCanvasPreviewModal(
+              context,
+              s,
+              title: item!.title,
+              content: item!.content,
+              onOpen: () => onOpenCanvas(item!),
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: s.cardBackground,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: s.cardShadow,
+              ),
+              child: Row(
+                children: [
+                  Image.asset(
+                    item!.kind.editorType.appKind.iconAsset,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item!.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: s.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item!.kind.shortLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: s.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
         return GestureDetector(
           onTap: () => showCanvasStreamingModal(
@@ -1352,16 +1394,7 @@ class _CanvasProgressCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const NexaLoaderLogo(size: 20),
-                ),
+                NexaLoaderLogo(size: 32, tintColor: s.primary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1378,7 +1411,6 @@ class _CanvasProgressCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 16),
               ],
             ),
           ),
@@ -1431,15 +1463,7 @@ class _WidgetProgressCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 40, height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const NexaLoaderLogo(size: 20),
-                ),
+                NexaLoaderLogo(size: 32, tintColor: s.primary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
@@ -1506,9 +1530,14 @@ class _CanvasStreamingModalContent extends StatelessWidget {
             builder: (_, done, __) => Row(
               children: [
                 if (!done)
-                  const NexaLoaderLogo(size: 22)
+                  NexaLoaderLogo(size: 28, tintColor: s.primary)
                 else
-                  AppIcon('doc', size: 22, color: s.onSurface),
+                  Image.asset(
+                    finalItem()?.kind.editorType.appKind.iconAsset ?? AppKind.docs.iconAsset,
+                    width: 32,
+                    height: 32,
+                    fit: BoxFit.contain,
+                  ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -1532,7 +1561,7 @@ class _CanvasStreamingModalContent extends StatelessWidget {
             child: SingleChildScrollView(
               child: ValueListenableBuilder<String>(
                 valueListenable: contentNotifier,
-                builder: (_, content, __) => Text(
+                builder: (_, content, __) => SelectableText(
                   content,
                   style: TextStyle(
                     fontFamily: 'monospace',
@@ -1582,6 +1611,90 @@ class _CanvasStreamingModalContent extends StatelessWidget {
   }
 }
 
+Future<void> showCanvasPreviewModal(
+  BuildContext context,
+  AppColorScheme s, {
+  required String title,
+  required String content,
+  required VoidCallback onOpen,
+}) {
+  return showCraftBottomSheet<void>(
+    context: context,
+    s: s,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.description,
+                size: 28,
+                color: s.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: s.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                content,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12.5,
+                  color: s.onSurfaceVariant,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              Navigator.pop(context);
+              onOpen();
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Abrir',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: s.onPrimary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Future<void> showWidgetStreamingModal(
   BuildContext context,
   AppColorScheme s, {
@@ -1600,7 +1713,7 @@ Future<void> showWidgetStreamingModal(
         children: [
           Row(
             children: [
-              const NexaLoaderLogo(size: 22),
+              NexaLoaderLogo(size: 28, tintColor: s.primary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(title,
@@ -1616,7 +1729,7 @@ Future<void> showWidgetStreamingModal(
             child: SingleChildScrollView(
               child: ValueListenableBuilder<String>(
                 valueListenable: contentNotifier,
-                builder: (_, content, __) => Text(
+                builder: (_, content, __) => SelectableText(
                   content,
                   style: TextStyle(fontFamily: 'monospace', fontSize: 12.5, color: s.onSurfaceVariant, height: 1.5),
                 ),
@@ -1682,8 +1795,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   final ValueNotifier<String> _openWidgetContentNotifier = ValueNotifier<String>('');
   final ValueNotifier<bool> _openWidgetDoneNotifier = ValueNotifier<bool>(false);
-
-  DateTime? _lastScrollTime;
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
@@ -1932,7 +2043,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             _streamingTextNotifier.value += text;
             _updateOpenCanvasNotifier();
             _updateOpenWidgetNotifier();
-            _throttledScrollToEnd();
+            // Sem rolagem automática durante streaming.
             break;
           case ChatThinkEvent(text: final text):
             _streamingThinkNotifier.value = (_streamingThinkNotifier.value ?? '') + text;
@@ -2103,19 +2214,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         } else {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
         }
-      }
-    });
-  }
-
-  void _throttledScrollToEnd() {
-    final now = DateTime.now();
-    if (_lastScrollTime != null && now.difference(_lastScrollTime!) < const Duration(milliseconds: 200)) {
-      return;
-    }
-    _lastScrollTime = now;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
   }
@@ -2740,7 +2838,7 @@ class _EmptyState extends StatelessWidget {
       );
 }
 
-class _Bubble extends StatefulWidget {
+class _Bubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
   final VoidCallback onEdit;
@@ -2755,73 +2853,42 @@ class _Bubble extends StatefulWidget {
     required this.onDelete,
     required this.onSelectText,
   });
-  @override
-  State<_Bubble> createState() => _BubbleState();
-}
-
-class _BubbleState extends State<_Bubble> with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-  late final Animation<double> _scale, _op;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
-    _scale = Tween(begin: 0.85, end: 1.0)
-        .animate(CurvedAnimation(parent: _c, curve: Curves.easeOutBack));
-    _op = Tween(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _c,
-            curve: const Interval(0, 0.45, curve: Curves.easeOut)));
-    _c.forward();
-  }
-
-  @override void dispose() { _c.dispose(); super.dispose(); }
-
-  void _onLongPress() {
-    final box = context.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz = box.size;
-    showMessageActionsPopup(
-      context,
-      widget.s,
-      anchorOffset: off,
-      anchorSize: sz,
-      onEdit: widget.onEdit,
-      onCopy: widget.onCopy,
-      onDelete: widget.onDelete,
-      onSelectText: widget.onSelectText,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final bubbleColor = widget.s.userBubbleBg;
     final textColor = widget.s.userBubbleText;
 
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, child) => Opacity(
-        opacity: _op.value.clamp(0.0, 1.0),
-        child: Transform.scale(
-            scale: _scale.value, alignment: Alignment.centerRight, child: child),
-      ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: GestureDetector(
-          onLongPress: _onLongPress,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: widget.s.cardShadow,
-            ),
-            child: Text(widget.text,
-                style: TextStyle(color: textColor, fontSize: 14)),
+    return Align(
+      alignment: Alignment.centerRight,
+      child: GestureDetector(
+        onLongPress: () {
+          final box = context.findRenderObject() as RenderBox;
+          final off = box.localToGlobal(Offset.zero);
+          final sz = box.size;
+          showMessageActionsPopup(
+            context,
+            widget.s,
+            anchorOffset: off,
+            anchorSize: sz,
+            onEdit: widget.onEdit,
+            onCopy: widget.onCopy,
+            onDelete: widget.onDelete,
+            onSelectText: widget.onSelectText,
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: widget.s.cardShadow,
           ),
+          child: Text(widget.text,
+              style: TextStyle(color: textColor, fontSize: 14)),
         ),
       ),
     );
@@ -3106,13 +3173,12 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
           if (cleaned.trim().isEmpty) continue;
           anyContent = true;
           children.add(
-            SelectableText(
-              cleaned,
-              style: TextStyle(
-                fontSize: 15.5,
-                height: 1.45,
-                color: s.onSurface,
-              ),
+            RichAiText(
+              text: cleaned,
+              s: s,
+              widgetsEnabled: widget.widgetsEnabled,
+              onEnableWidgets: widget.onEnableWidgets,
+              onSuggestionTap: widget.onSuggestionTap,
             ),
           );
         case _StreamCanvasBlock(:final label, :final item):
@@ -4091,15 +4157,11 @@ class _CanvasCardState extends State<_CanvasCard> {
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(children: [
-          Container(
-            width: 40, height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: s.primaryContainer.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: AppIcon(_iconForEditorType(_editorType),
-                size: 20, color: s.onSurface),
+          Image.asset(
+            _editorType.appKind.iconAsset,
+            width: 40,
+            height: 40,
+            fit: BoxFit.contain,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -4116,8 +4178,6 @@ class _CanvasCardState extends State<_CanvasCard> {
               ],
             ),
           ),
-          AppIcon('chevron_forward',
-              color: s.onSurfaceVariant, size: 14),
         ]),
       ),
     );

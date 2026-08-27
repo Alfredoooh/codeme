@@ -25,11 +25,41 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   final List<String> _redoStack = [];
   bool _restoringContent = false;
 
+  // Adia a montagem do WebView até a transição de entrada da rota
+  // terminar. Criar a PlatformView do WebView durante o slide do
+  // CupertinoPageRoute engasga o frame — por isso a navegação para
+  // cá "não é suave" comparada à Settings, que não tem WebView
+  // nenhum. Enquanto _readyForWebView é false, mostramos só um
+  // SizedBox no lugar; assim que a rota termina de deslizar,
+  // fazemos setState e o WebView entra depois do slide já parado.
+  bool _readyForWebView = false;
+
   @override
   void initState() {
     super.initState();
     editTabController.addListener(_onPendingLoad);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingLoad());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _armRouteListener());
+  }
+
+  void _armRouteListener() {
+    final route = ModalRoute.of(context);
+    final animation = route?.animation;
+    if (animation == null) {
+      if (mounted) setState(() => _readyForWebView = true);
+      return;
+    }
+    if (animation.isCompleted) {
+      setState(() => _readyForWebView = true);
+      return;
+    }
+    void listener(AnimationStatus status) {
+      if (status == AnimationStatus.completed) {
+        animation.removeStatusListener(listener);
+        if (mounted) setState(() => _readyForWebView = true);
+      }
+    }
+    animation.addStatusListener(listener);
   }
 
   @override
@@ -294,61 +324,63 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
             child: Stack(children: [
               Padding(
                 padding: const EdgeInsets.only(top: 58, bottom: 44),
-                child: kIsWeb ? const SizedBox.shrink() : InAppWebView(
-                  initialFile: _type.htmlAsset,
-                  initialSettings: InAppWebViewSettings(
-                    transparentBackground: true,
-                    javaScriptEnabled: true,
-                    allowFileAccessFromFileURLs: true,
-                    allowUniversalAccessFromFileURLs: true,
-                    useHybridComposition: true,
-                    verticalScrollBarEnabled: false,
-                    horizontalScrollBarEnabled: false,
-                    supportZoom: false,
-                  ),
-                  onWebViewCreated: (c) {
-                    _ctrl = c;
-                    c.addJavaScriptHandler(
-                      handlerName: 'openColorPicker',
-                      callback: (args) {
-                        final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
-                        _openColorPicker(context, s, cb);
-                      },
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'openImagePicker',
-                      callback: (_) => showImagePickerSheet(context, s),
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'openLinkSheet',
-                      callback: (_) => showLinkSheet(context, s, (url, text) {
-                        _runJs("editorApi.insertLink('$url','$text')");
-                      }),
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'openAiEditForSelection',
-                      callback: (args) {
-                        final selected = args.isNotEmpty ? args[0]?.toString() : null;
-                        _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
-                      },
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'saveDocument',
-                      callback: (args) {
-                        final content = args.isNotEmpty ? args[0]?.toString() : null;
-                        if (content != null) _onSaveDocument(content);
-                      },
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'onShapeSelected',
-                      callback: (args) {},
-                    );
-                  },
-                  onLoadStop: (c, _) {
-                    _onPendingLoad();
-                    c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
-                  },
-                ),
+                child: (kIsWeb || !_readyForWebView)
+                    ? const SizedBox.shrink()
+                    : InAppWebView(
+                        initialFile: _type.htmlAsset,
+                        initialSettings: InAppWebViewSettings(
+                          transparentBackground: true,
+                          javaScriptEnabled: true,
+                          allowFileAccessFromFileURLs: true,
+                          allowUniversalAccessFromFileURLs: true,
+                          useHybridComposition: true,
+                          verticalScrollBarEnabled: false,
+                          horizontalScrollBarEnabled: false,
+                          supportZoom: false,
+                        ),
+                        onWebViewCreated: (c) {
+                          _ctrl = c;
+                          c.addJavaScriptHandler(
+                            handlerName: 'openColorPicker',
+                            callback: (args) {
+                              final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
+                              _openColorPicker(context, s, cb);
+                            },
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'openImagePicker',
+                            callback: (_) => showImagePickerSheet(context, s),
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'openLinkSheet',
+                            callback: (_) => showLinkSheet(context, s, (url, text) {
+                              _runJs("editorApi.insertLink('$url','$text')");
+                            }),
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'openAiEditForSelection',
+                            callback: (args) {
+                              final selected = args.isNotEmpty ? args[0]?.toString() : null;
+                              _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
+                            },
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'saveDocument',
+                            callback: (args) {
+                              final content = args.isNotEmpty ? args[0]?.toString() : null;
+                              if (content != null) _onSaveDocument(content);
+                            },
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'onShapeSelected',
+                            callback: (args) {},
+                          );
+                        },
+                        onLoadStop: (c, _) {
+                          _onPendingLoad();
+                          c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
+                        },
+                      ),
               ),
               _ScreenHeader(
                 s: s,
@@ -420,22 +452,14 @@ class _ScreenHeader extends StatelessWidget {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface),
             ),
           ),
-          Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: s.cardBackground,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: s.cardShadow,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
-                Container(width: 1, height: 20, color: s.outline),
-                _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
-              ],
-            ),
-          ),
+          // Gap adicionado entre o título com reticências e o bloco
+          // de undo/redo — antes ficavam colados quando o título
+          // truncava perto do limite do Expanded.
+          const SizedBox(width: 12),
+          // Undo/redo sem pill: cada botão solto, sem Container de
+          // fundo/borda/sombra a envolvê-los.
+          _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
+          _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
           const SizedBox(width: 8),
           _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu),
         ]),
@@ -514,12 +538,21 @@ class _DocsBottomToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Toolbar flutuante: descolada das bordas por margin lateral e
+    // inferior, com bordas totalmente curvas (circular(28), não um
+    // canto reto colado na tela) e floatingShadow em vez de
+    // navBarShadow — a sombra pensada para elementos soltos, com
+    // blur/offset maiores que a sombra plana de barra colada.
     return Positioned(
-      left: 0, right: 0, bottom: 0,
+      left: 12, right: 12, bottom: 16,
       child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(color: s.cardBackground, boxShadow: s.navBarShadow),
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: s.floatingShadow,
+        ),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(

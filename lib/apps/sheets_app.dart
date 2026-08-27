@@ -8,7 +8,6 @@ import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
-import 'docs.dart' show ScreenBackButton;
 
 class SheetsScreen extends StatefulWidget {
   const SheetsScreen({super.key});
@@ -26,11 +25,37 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   final List<String> _redoStack = [];
   bool _restoringContent = false;
 
+  // Ver comentário equivalente em docs.dart: adia a montagem do
+  // WebView até o slide de entrada da rota terminar, para não
+  // engasgar a animação de navegação.
+  bool _readyForWebView = false;
+
   @override
   void initState() {
     super.initState();
     editTabController.addListener(_onPendingLoad);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingLoad());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _armRouteListener());
+  }
+
+  void _armRouteListener() {
+    final route = ModalRoute.of(context);
+    final animation = route?.animation;
+    if (animation == null) {
+      if (mounted) setState(() => _readyForWebView = true);
+      return;
+    }
+    if (animation.isCompleted) {
+      setState(() => _readyForWebView = true);
+      return;
+    }
+    void listener(AnimationStatus status) {
+      if (status == AnimationStatus.completed) {
+        animation.removeStatusListener(listener);
+        if (mounted) setState(() => _readyForWebView = true);
+      }
+    }
+    animation.addStatusListener(listener);
   }
 
   @override
@@ -250,45 +275,47 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
             child: Stack(children: [
               Padding(
                 padding: const EdgeInsets.only(top: 58, bottom: 44),
-                child: kIsWeb ? const SizedBox.shrink() : InAppWebView(
-                  initialFile: _type.htmlAsset,
-                  initialSettings: InAppWebViewSettings(
-                    transparentBackground: true,
-                    javaScriptEnabled: true,
-                    allowFileAccessFromFileURLs: true,
-                    allowUniversalAccessFromFileURLs: true,
-                    useHybridComposition: true,
-                    verticalScrollBarEnabled: false,
-                    horizontalScrollBarEnabled: false,
-                    supportZoom: false,
-                  ),
-                  onWebViewCreated: (c) {
-                    _ctrl = c;
-                    c.addJavaScriptHandler(
-                      handlerName: 'openColorPicker',
-                      callback: (args) {
-                        final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setCellColor';
-                        _openColorPicker(context, s, cb);
-                      },
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'saveDocument',
-                      callback: (args) {
-                        final content = args.isNotEmpty ? args[0]?.toString() : null;
-                        if (content != null) _onSaveDocument(content);
-                      },
-                    );
-                    c.addJavaScriptHandler(
-                      handlerName: 'onCellSelected',
-                      callback: (args) {},
-                    );
-                  },
-                  onLoadStop: (c, _) {
-                    _onPendingLoad();
-                    c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
-                    c.evaluateJavascript(source: "editorApi.setFontScale(${appPreferences.textScaleFactor})");
-                  },
-                ),
+                child: (kIsWeb || !_readyForWebView)
+                    ? const SizedBox.shrink()
+                    : InAppWebView(
+                        initialFile: _type.htmlAsset,
+                        initialSettings: InAppWebViewSettings(
+                          transparentBackground: true,
+                          javaScriptEnabled: true,
+                          allowFileAccessFromFileURLs: true,
+                          allowUniversalAccessFromFileURLs: true,
+                          useHybridComposition: true,
+                          verticalScrollBarEnabled: false,
+                          horizontalScrollBarEnabled: false,
+                          supportZoom: false,
+                        ),
+                        onWebViewCreated: (c) {
+                          _ctrl = c;
+                          c.addJavaScriptHandler(
+                            handlerName: 'openColorPicker',
+                            callback: (args) {
+                              final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setCellColor';
+                              _openColorPicker(context, s, cb);
+                            },
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'saveDocument',
+                            callback: (args) {
+                              final content = args.isNotEmpty ? args[0]?.toString() : null;
+                              if (content != null) _onSaveDocument(content);
+                            },
+                          );
+                          c.addJavaScriptHandler(
+                            handlerName: 'onCellSelected',
+                            callback: (args) {},
+                          );
+                        },
+                        onLoadStop: (c, _) {
+                          _onPendingLoad();
+                          c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
+                          c.evaluateJavascript(source: "editorApi.setFontScale(${appPreferences.textScaleFactor})");
+                        },
+                      ),
               ),
               _ScreenHeader(
                 s: s,
@@ -362,22 +389,9 @@ class _ScreenHeader extends StatelessWidget {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface),
             ),
           ),
-          Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: s.cardBackground,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: s.cardShadow,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
-                Container(width: 1, height: 20, color: s.outline),
-                _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
-              ],
-            ),
-          ),
+          const SizedBox(width: 12),
+          _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
+          _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
           const SizedBox(width: 8),
           _HeaderIconButton(s: s, assetName: 'add', onTap: onAddRow),
           const SizedBox(width: 8),
@@ -443,11 +457,15 @@ class _SheetBottomToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 0, right: 0, bottom: 0,
+      left: 12, right: 12, bottom: 16,
       child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(color: s.cardBackground, boxShadow: s.navBarShadow),
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: s.floatingShadow,
+        ),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
