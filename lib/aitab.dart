@@ -850,6 +850,7 @@ class SimpleCanvasCard extends StatelessWidget {
           children: [
             AnimatedCanvasIcon(
               editorType: item.kind.editorType,
+              s: s,
               size: 44,
               animated: false,
             ),
@@ -1351,6 +1352,7 @@ class _CanvasProgressCard extends StatelessWidget {
                 children: [
                   AnimatedCanvasIcon(
                     editorType: item!.kind.editorType,
+                    s: s,
                     size: 44,
                     animated: false,
                   ),
@@ -1406,6 +1408,7 @@ class _CanvasProgressCard extends StatelessWidget {
               children: [
                 AnimatedCanvasIcon(
                   editorType: _editorTypeFromProgressTitle(title),
+                  s: s,
                   size: 44,
                   animated: true,
                 ),
@@ -1545,6 +1548,7 @@ class _CanvasStreamingModalContent extends StatelessWidget {
               children: [
                 AnimatedCanvasIcon(
                   editorType: finalItem()?.kind.editorType ?? EditorType.docs,
+                  s: s,
                   size: 32,
                   animated: !done,
                 ),
@@ -4170,6 +4174,7 @@ class _CanvasCardState extends State<_CanvasCard> {
         child: Row(children: [
           AnimatedCanvasIcon(
             editorType: _editorType,
+            s: s,
             size: 40,
             animated: false,
           ),
