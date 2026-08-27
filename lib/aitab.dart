@@ -2856,8 +2856,8 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bubbleColor = widget.s.userBubbleBg;
-    final textColor = widget.s.userBubbleText;
+    final bubbleColor = s.userBubbleBg;
+    final textColor = s.userBubbleText;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -2868,13 +2868,13 @@ class _Bubble extends StatelessWidget {
           final sz = box.size;
           showMessageActionsPopup(
             context,
-            widget.s,
+            s,
             anchorOffset: off,
             anchorSize: sz,
-            onEdit: widget.onEdit,
-            onCopy: widget.onCopy,
-            onDelete: widget.onDelete,
-            onSelectText: widget.onSelectText,
+            onEdit: onEdit,
+            onCopy: onCopy,
+            onDelete: onDelete,
+            onSelectText: onSelectText,
           );
         },
         child: Container(
@@ -2885,9 +2885,9 @@ class _Bubble extends StatelessWidget {
           decoration: BoxDecoration(
             color: bubbleColor,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: widget.s.cardShadow,
+            boxShadow: s.cardShadow,
           ),
-          child: Text(widget.text,
+          child: Text(text,
               style: TextStyle(color: textColor, fontSize: 14)),
         ),
       ),

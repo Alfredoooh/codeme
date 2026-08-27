@@ -25,17 +25,12 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
   final List<String> _redoStack = [];
   bool _restoringContent = false;
 
-  // Ver comentário equivalente em docs.dart.
   bool _readyForWebView = false;
 
   @override
   void initState() {
     super.initState();
     editTabController.addListener(_onPendingLoad);
-    // ThemeReactive já ouve appTheme para o setState() geral (rebuild
-    // dos widgets Flutter). Este segundo listener é só para empurrar
-    // a cor para dentro do WebView, que não faz parte da árvore de
-    // widgets e por isso não é atualizado pelo rebuild do ThemeReactive.
     appTheme.addListener(_pushPrimaryColorToWebView);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingLoad());
     WidgetsBinding.instance.addPostFrameCallback((_) => _armRouteListener());
@@ -95,10 +90,6 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
 
   void _runJs(String script) => _ctrl?.evaluateJavascript(source: script);
 
-  // Manda a cor primária atual (já formatada como #RRGGBB por
-  // AppColorScheme.primaryColorHex) para dentro do editor. Chamado
-  // no onLoadStop (primeira carga) e sempre que appTheme notifica
-  // (o utilizador mudou a cor em Definições > Personalização).
   void _pushPrimaryColorToWebView() {
     final s = AppTheme.of(context);
     _runJs("editorApi.setPrimaryColor('${s.primaryColorHex}')");
@@ -574,4 +565,35 @@ Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {
       ),
     ),
   );
+}
+
+class ScreenBackButton extends StatefulWidget {
+  final AppColorScheme s;
+  const ScreenBackButton({super.key, required this.s});
+  @override State<ScreenBackButton> createState() => _ScreenBackButtonState();
+}
+
+class _ScreenBackButtonState extends State<ScreenBackButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTap: () => Navigator.of(context).pop(),
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        child: Container(
+          width: 40, height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: widget.s.cardBackground, shape: BoxShape.circle),
+          child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
+        ),
+      ),
+    );
+  }
 }
