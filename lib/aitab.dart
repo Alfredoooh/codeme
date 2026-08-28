@@ -22,6 +22,7 @@ import 'apps/docs.dart';
 import 'apps/sheets_app.dart';
 import 'apps/slides_app.dart';
 import 'apps/sound.dart';
+import 'apps/sound/sound_models.dart';
 
 String _iconForEditorType(EditorType type) {
   switch (type) {
