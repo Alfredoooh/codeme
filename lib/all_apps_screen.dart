@@ -8,38 +8,16 @@ import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle
 import 'colors.dart';
 import 'widgets.dart';
 import 'apps/app_types.dart';
-import 'apps/docs.dart';
-import 'apps/sheets_app.dart';
-import 'apps/slides_app.dart';
-import 'apps/sound.dart';
+import 'apps/app_detail_screen.dart';
 
 class AllAppsScreen extends StatelessWidget {
   const AllAppsScreen({super.key});
 
-  void _openApp(BuildContext context, AppKind app) {
+  void _openAppDetail(BuildContext context, AppKind app) {
     HapticFeedback.lightImpact();
-    switch (app) {
-      case AppKind.docs:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const DocsScreen()),
-        );
-        break;
-      case AppKind.sheets:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SheetsScreen()),
-        );
-        break;
-      case AppKind.slides:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SlidesScreen()),
-        );
-        break;
-      case AppKind.sound:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SoundScreen()),
-        );
-        break;
-    }
+    Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => AppDetailScreen(app: app)),
+    );
   }
 
   @override
@@ -101,7 +79,7 @@ class AllAppsScreen extends StatelessWidget {
                             s: s,
                             app: app,
                             index: i,
-                            onTap: () => _openApp(context, app),
+                            onTap: () => _openAppDetail(context, app),
                           ),
                         );
                       },
@@ -125,7 +103,7 @@ class AllAppsScreen extends StatelessWidget {
                         s: s,
                         app: app,
                         index: i,
-                        onTap: () => _openApp(context, app),
+                        onTap: () => _openAppDetail(context, app),
                       );
                     },
                   ),
@@ -395,19 +373,12 @@ class _AppListRowState extends State<_AppListRow>
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: s.primary,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Abrir',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: s.onPrimary,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 18,
+                    color: s.onSurfaceVariant,
                   ),
                 ),
               ],

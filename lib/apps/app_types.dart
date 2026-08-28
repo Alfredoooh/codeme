@@ -91,6 +91,42 @@ extension AppKindX on AppKind {
         AppKind.sound:  'Pesquisar e reproduzir música',
       }[this]!;
 
+  /// Texto mais longo, mostrado no ecrã de detalhes ("Para que serve").
+  String get longDescription => const {
+        AppKind.docs:
+            'O Documento é o teu espaço para escrever e organizar texto — desde notas rápidas a documentos mais longos — tudo dentro da app, com a ajuda da IA sempre que precisares.',
+        AppKind.sheets:
+            'A Folha de cálculo permite-te organizar dados, fazer contas e criar tabelas, com o apoio da IA para te ajudar a montar tudo mais rápido.',
+        AppKind.slides:
+            'A Apresentação ajuda-te a construir slides de forma simples, com a IA a apoiar na criação do conteúdo e da estrutura.',
+        AppKind.sound:
+            'O Sound é o teu espaço para pesquisar e ouvir música diretamente na app, com a ajuda da IA para encontrares o que procuras.',
+      }[this]!;
+
+  /// Lista de funcionalidades mostrada no ecrã de detalhes.
+  List<String> get features => const {
+        AppKind.docs: [
+          'Editor de texto completo, otimizado para telemóvel',
+          'Assistente de IA para ajudar a criar e editar o conteúdo',
+          'Suporta modo claro e escuro',
+        ],
+        AppKind.sheets: [
+          'Editor de folhas de cálculo completo, otimizado para telemóvel',
+          'Assistente de IA para ajudar a criar folhas de cálculo',
+          'Suporta modo claro e escuro',
+        ],
+        AppKind.slides: [
+          'Editor de apresentações completo, otimizado para telemóvel',
+          'Assistente de IA para ajudar a criar apresentações',
+          'Suporta modo claro e escuro',
+        ],
+        AppKind.sound: [
+          'Pesquisa de música integrada',
+          'Reprodução direta na app',
+          'Assistente de IA para ajudar a encontrar música',
+        ],
+      }[this]!;
+
   String get iconAsset => const {
         AppKind.docs:   'assets/icons/apps/docs.png',
         AppKind.sheets: 'assets/icons/apps/sheets.png',

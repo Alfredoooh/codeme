@@ -54,7 +54,7 @@ String _sanitizeText(String? raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PALETA DEDICADA
+// PALETA DEDICADA — APENAS DUAS CORES NO ESCURO, UMA NO CLARO
 // ══════════════════════════════════════════════════════════════
 class _WidgetPalette {
   final AppColorScheme s;
@@ -62,35 +62,38 @@ class _WidgetPalette {
 
   bool get isDark => s.isDark;
 
-  Color get cardBg => isDark ? const Color(0xFF121214) : s.cardBackground;
+  // Tema escuro: cardBg (fundo) e actionsBg (cartões)
+  // Tema claro: cardBg (fundo dos cartões, mesma cor do settings)
+  Color get cardBg => isDark ? const Color(0xFF1C1C1E) : s.cardBackground;
+  Color get actionsBg => isDark ? const Color(0xFF2C2C2E) : s.cardBackground;
 
+  // Para preview interno, usamos a mesma cor do actionsBg
   Color get previewBg => actionsBg;
 
-  Color get actionsBg => isDark ? const Color(0xFF1E1E21) : s.hover;
-  Color get navBtnBg => isDark ? const Color(0xFF232326) : s.hover;
-
+  Color get navBtnBg => isDark ? const Color(0xFF2C2C2E) : s.hover;
   Color get badgeBg => isDark
-      ? const Color(0xFF141416).withOpacity(0.92)
+      ? const Color(0xFF1C1C1E).withOpacity(0.92)
       : s.cardBackground.withOpacity(0.9);
 
-  Color get optionBg => isDark ? const Color(0xFF1E1E21) : s.hover;
-  Color get optionBgHover => isDark ? const Color(0xFF29292C) : s.hover;
+  Color get optionBg => actionsBg;
+  Color get optionBgHover => isDark ? const Color(0xFF3A3A3C) : s.hover;
 
-  Color get outline => isDark ? Colors.white.withOpacity(0.05) : s.outline.withOpacity(0.1);
+  Color get outline => isDark ? Colors.white.withOpacity(0.08) : s.outline.withOpacity(0.15);
 
   Color get onSurface => s.onSurface;
   Color get onSurfaceVariant => s.onSurfaceVariant;
   Color get primary => s.primary;
   Color get onPrimary => s.onPrimary;
 
-  Color get pageBg => isDark ? const Color(0xFF0B0B0C) : s.pageBackground;
+  Color get pageBg => isDark ? const Color(0xFF1C1C1E) : s.pageBackground;
 
-  // Nova cor para o popup: escuro puro, porém não tão profundo e sem cinza
-  Color get popupBg => isDark ? const Color(0xFF1A1A1D) : s.cardBackground;
+  // Popup background e borda (idênticos ao settings)
+  Color get popupBg => cardBg;
+  Color get popupBorder => outline;
 
   List<BoxShadow> get cardShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 5))]
-      : s.cardShadow;
+      ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]
+      : s.cardShadowSoft;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -148,7 +151,7 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// POPUP CUSTOM — CORRIGIDO (fundo opaco, cor ajustada)
+// POPUP NATIVO (com cores do settings)
 // ══════════════════════════════════════════════════════════════
 class AiPopupOption<T> {
   final T value;
@@ -171,7 +174,6 @@ Future<T?> showAiPopup<T>({
   final anchorTopLeft = renderBox.localToGlobal(Offset.zero, ancestor: overlayBox);
   final anchorSize = renderBox.size;
 
-  // Posição relativa ao overlay (como o showMenu espera)
   final RelativeRect position = RelativeRect.fromLTRB(
     anchorTopLeft.dx,
     anchorTopLeft.dy + anchorSize.height,
@@ -179,12 +181,14 @@ Future<T?> showAiPopup<T>({
     overlayBox.size.height - (anchorTopLeft.dy + anchorSize.height),
   );
 
-  // showMenu nativo (fade + scale padrão do Material)
   final result = await showMenu<T>(
     context: context,
     position: position,
-    color: p.popupBg, // fundo opaco
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    color: p.popupBg,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(22),
+      side: BorderSide(color: p.popupBorder, width: 1.0),
+    ),
     items: options.map((opt) {
       final active = opt.value == currentValue;
       return PopupMenuItem<T>(
@@ -281,7 +285,7 @@ class _AiBackButtonState extends State<_AiBackButton> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CAMPO DE BUSCA ESTILO CHAT SEARCH
+// CAMPO DE BUSCA (IDÊNTICO AO CHAT SEARCH)
 // ══════════════════════════════════════════════════════════════
 class _AiSearchBar extends StatefulWidget {
   final _WidgetPalette p;
@@ -289,16 +293,12 @@ class _AiSearchBar extends StatefulWidget {
   final String hint;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
-  final VoidCallback onClose;
-  final bool showCloseButton; // se false, não mostra o botão de fechar ao lado
   const _AiSearchBar({
     required this.p,
     required this.controller,
     required this.hint,
     required this.onChanged,
     required this.onClear,
-    required this.onClose,
-    this.showCloseButton = true,
   });
   @override
   State<_AiSearchBar> createState() => _AiSearchBarState();
@@ -310,67 +310,45 @@ class _AiSearchBarState extends State<_AiSearchBar> {
     final p = widget.p;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Row(children: [
-        Expanded(
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: p.actionsBg,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: p.cardShadow,
-            ),
-            child: Row(children: [
-              AppIcon('search', color: p.onSurfaceVariant, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  onChanged: widget.onChanged,
-                  style: TextStyle(fontSize: 15, color: p.onSurface),
-                  cursorColor: p.primary,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: widget.hint,
-                    hintStyle: TextStyle(fontSize: 15, color: p.onSurfaceVariant),
-                  ),
-                ),
-              ),
-              if (widget.controller.text.isNotEmpty)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onClear,
-                  child: AppIcon('close', color: p.onSurfaceVariant, size: 14),
-                ),
-            ]),
-          ),
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: p.actionsBg,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: p.cardShadow,
         ),
-        if (widget.showCloseButton) ...[
+        child: Row(children: [
+          AppIcon('search', color: p.onSurfaceVariant, size: 20),
           const SizedBox(width: 10),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onClose,
-            child: Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: p.actionsBg,
-                shape: BoxShape.circle,
-                boxShadow: p.cardShadow,
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              onChanged: widget.onChanged,
+              style: TextStyle(fontSize: 15, color: p.onSurface),
+              cursorColor: p.primary,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: widget.hint,
+                hintStyle: TextStyle(fontSize: 15, color: p.onSurfaceVariant),
               ),
-              child: AppIcon('close', color: p.onSurfaceVariant, size: 16),
             ),
           ),
-        ],
-      ]),
+          if (widget.controller.text.isNotEmpty)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onClear,
+              child: AppIcon('close_circular', color: p.onSurfaceVariant, size: 18),
+            ),
+        ]),
+      ),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CACHE PERSISTENTE DE PAÍSES/PROVÍNCIAS (shared_preferences)
+// CACHE PERSISTENTE DE PAÍSES/PROVÍNCIAS
 // ══════════════════════════════════════════════════════════════
 class _GeoCache {
   static const _kCountriesKey = 'aiwidgets_geo_countries_v1';
@@ -627,7 +605,7 @@ class MarketDataService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET WIDGET (card) — agora assíncrono / real-time
+// MARKET WIDGET (card) — assíncrono / real-time
 // ══════════════════════════════════════════════════════════════
 class AiMarketWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -1225,8 +1203,6 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
                   _remoteResults = [];
                 });
               },
-              onClose: () => Navigator.of(context).pop(),
-              showCloseButton: false, // já tem botão voltar
             ),
           ],
         ),
@@ -1930,7 +1906,12 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível abrir o Google Maps.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Não foi possível abrir o Google Maps.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -2081,9 +2062,7 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   List<String> _countries = [];
   String? _error;
 
-  // Mapa de letra -> índice do primeiro item na lista plana
   final Map<String, int> _letterIndexMap = {};
-  // Lista plana de widgets (cabeçalhos + itens)
   List<Widget> _flatItems = [];
 
   _WidgetPalette get _p => _WidgetPalette(widget.s);
@@ -2121,7 +2100,6 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
     _flatItems.clear();
     _letterIndexMap.clear();
 
-    // Agrupar por letra inicial (considerando apenas A-Z, ignora acentos para agrupar)
     final groups = <String, List<String>>{};
     for (final country in _countries) {
       final letter = country.substring(0, 1).toUpperCase();
@@ -2149,7 +2127,6 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   }
 
   String _normalizeLetter(String s) {
-    // Remove acentos básicos
     const accents = 'áàâãäéèêëíìîïóòôõöúùûüç';
     const without = 'aaaaaeeeeiiiiooooouuuuc';
     final lower = s.toLowerCase();
@@ -2163,7 +2140,6 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   void _scrollToLetter(String letter) {
     final index = _letterIndexMap[letter];
     if (index == null) return;
-    // Estimativa de altura por item (cabeçalho + linha)
     const itemHeight = 52.0;
     final targetOffset = index * itemHeight;
     _scrollController.animateTo(
@@ -2198,7 +2174,6 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Conteúdo principal
             Column(
               children: [
                 Expanded(
@@ -2244,12 +2219,9 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
                     _searchCtrl.clear();
                     _query = '';
                   }),
-                  onClose: () => Navigator.of(context).pop(),
-                  showCloseButton: true,
                 ),
               ],
             ),
-            // Índice alfabético lateral (visível apenas quando não está a pesquisar)
             if (!searching && !_loadingCountries && _error == null)
               Positioned(
                 right: 8,
@@ -2350,7 +2322,7 @@ class _AlphabetIndex extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — SELETOR DE PROVÍNCIAS (com busca idêntica)
+// TELA CHEIA — SELETOR DE PROVÍNCIAS
 // ══════════════════════════════════════════════════════════════
 class _StatePickerScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -2410,7 +2382,12 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
       }
     } catch (_) {}
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível localizar esta região.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Não foi possível localizar esta região.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -2456,8 +2433,6 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
                 _searchCtrl.clear();
                 _query = '';
               }),
-              onClose: () => Navigator.of(context).pop(),
-              showCloseButton: true,
             ),
           ],
         ),

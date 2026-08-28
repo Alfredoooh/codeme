@@ -344,28 +344,9 @@ extension ConversationActionX on ConversationAction {
       }[this]!;
 }
 
-class PopupMenu<T> extends StatefulWidget {
-  final AppColorScheme s;
-  final Widget anchor;
-  final List<PopupMenuEntry<T>> entries;
-  final ValueChanged<T> onSelect;
-  final double width;
-  final double estimatedHeight;
-
-  const PopupMenu({
-    super.key,
-    required this.s,
-    required this.anchor,
-    required this.entries,
-    required this.onSelect,
-    this.width = 240,
-    this.estimatedHeight = 200,
-  });
-
-  @override
-  State<PopupMenu<T>> createState() => PopupMenuState<T>();
-}
-
+// ══════════════════════════════════════════════════════════════
+// POPUP GENÉRICO (showMenu nativo)
+// ══════════════════════════════════════════════════════════════
 class PopupMenuEntry<T> {
   final T value;
   final String label;
@@ -385,221 +366,120 @@ class PopupMenuEntry<T> {
   });
 }
 
-class PopupMenuState<T> extends State<PopupMenu<T>>
-    with SingleTickerProviderStateMixin {
-  OverlayEntry? _ov;
-  late AnimationController _ac;
-  final GlobalKey _anchorBoxKey = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
-  }
-
-  @override
-  void dispose() {
-    _ac.dispose();
-    _ov?.remove();
-    super.dispose();
-  }
-
-  void toggle() => _ov == null ? open() : close();
-
-  void open() {
-    final box = _anchorBoxKey.currentContext!.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz  = box.size;
-    _ac.forward(from: 0);
-
-    _ov = OverlayEntry(builder: (ctx) {
-      final s = widget.s;
-      final screenSize = MediaQuery.of(ctx).size;
-      final desiredTop = off.dy + sz.height + 2;
-      final overflowsBottom = desiredTop + widget.estimatedHeight > screenSize.height - 24;
-      final opensUp = overflowsBottom;
-      final top = opensUp ? null : desiredTop;
-      final bottom = opensUp ? screenSize.height - off.dy + 2 : null;
-      double left = off.dx;
-      if (left + widget.width > screenSize.width - 12) {
-        left = screenSize.width - widget.width - 12;
-      }
-      if (left < 12) left = 12;
-
-      return Stack(children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: close,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.transparent),
-          ),
-        ),
-        Positioned(
-          top: top,
-          bottom: bottom,
-          left: left,
-          child: AnimatedBuilder(
-            animation: _ac,
-            builder: (_, child) => Opacity(
-              opacity: CurvedAnimation(
-                      parent: _ac,
-                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                  .value,
-              child: Transform.scale(
-                scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
-                    .value,
-                alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
-                child: child,
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Container(
-                width: widget.width,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: s.floatingShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: widget.entries
-                      .map((e) => _PopupRow<T>(
-                            s: s,
-                            entry: e,
-                            onTap: () {
-                              if (e.disabled) return;
-                              close();
-                              widget.onSelect(e.value);
-                            },
-                          ))
-                      .toList(),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ]);
-    });
-    Overlay.of(context).insert(_ov!);
-    setState(() {});
-  }
-
-  void close() {
-    _ac.reverse().then((_) {
-      _ov?.remove();
-      _ov = null;
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: _anchorBoxKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: toggle,
-        child: IgnorePointer(child: widget.anchor),
-      );
-}
-
-class _PopupRow<T> extends StatefulWidget {
+class PopupMenu<T> extends StatelessWidget {
   final AppColorScheme s;
-  final PopupMenuEntry<T> entry;
-  final VoidCallback onTap;
-  const _PopupRow({required this.s, required this.entry, required this.onTap});
-  @override
-  State<_PopupRow<T>> createState() => _PopupRowState<T>();
-}
+  final Widget anchor;
+  final List<PopupMenuEntry<T>> entries;
+  final ValueChanged<T> onSelect;
+  final double width;
+  final double estimatedHeight;
 
-class _PopupRowState<T> extends State<_PopupRow<T>> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final e = widget.entry;
-    final color = e.disabled
-        ? s.onSurfaceVariant.withOpacity(0.4)
-        : e.destructive
-            ? s.error
-            : e.selected
-                ? s.primary
-                : s.onSurface;
-
-    return Opacity(
-      opacity: e.disabled ? 0.55 : 1.0,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   e.disabled ? null : (_) => setState(() => _h = true),
-        onTapCancel: e.disabled ? null : ()  => setState(() => _h = false),
-        onTapUp:     e.disabled ? null : (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _h && !e.disabled
-                ? s.hover
-                : e.selected
-                    ? s.primaryContainer.withOpacity(0.4)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(children: [
-            AppIcon(e.assetName, size: 18, color: color),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(e.label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: e.selected ? FontWeight.w600 : FontWeight.w400,
-                        color: color,
-                      )),
-                  if (e.subtitle != null) ...[
-                    const SizedBox(height: 1),
-                    Text(e.subtitle!,
-                        style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
-                  ],
-                ],
-              ),
-            ),
-            if (e.selected)
-              AppIcon('check', size: 16, color: s.primary),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-class AiConversationMenuButton extends StatelessWidget {
-  final AppColorScheme s;
-  final ValueChanged<ConversationAction> onSelect;
-  final bool hasMessages;
-
-  const AiConversationMenuButton({
+  const PopupMenu({
     super.key,
     required this.s,
+    required this.anchor,
+    required this.entries,
     required this.onSelect,
-    required this.hasMessages,
+    this.width = 240,
+    this.estimatedHeight = 200,
   });
 
   @override
   Widget build(BuildContext context) {
-    return _HeaderMenuButton(
-      s: s,
-      hasMessages: hasMessages,
-      onSelect: onSelect,
+    final GlobalKey anchorKey = GlobalKey();
+    return GestureDetector(
+      key: anchorKey,
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+        if (box == null) return;
+        final overlayState = Overlay.of(context);
+        final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+        final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+        final anchorSize = box.size;
+
+        final RelativeRect position = RelativeRect.fromLTRB(
+          anchorTopLeft.dx,
+          anchorTopLeft.dy + anchorSize.height,
+          overlayBox.size.width - (anchorTopLeft.dx + anchorSize.width),
+          overlayBox.size.height - (anchorTopLeft.dy + anchorSize.height),
+        );
+
+        final result = await showMenu<T>(
+          context: context,
+          position: position,
+          color: s.floatingSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: s.outline.withOpacity(0.25)),
+          ),
+          items: entries.map((e) {
+            final color = e.disabled
+                ? s.onSurfaceVariant.withOpacity(0.4)
+                : e.destructive
+                    ? s.error
+                    : e.selected
+                        ? s.primary
+                        : s.onSurface;
+            return PopupMenuItem<T>(
+              value: e.value,
+              enabled: !e.disabled,
+              padding: EdgeInsets.zero,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: e.selected
+                      ? s.primaryContainer.withOpacity(0.4)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    AppIcon(e.assetName, size: 18, color: color),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            e.label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: e.selected ? FontWeight.w600 : FontWeight.w400,
+                              color: color,
+                            ),
+                          ),
+                          if (e.subtitle != null) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              e.subtitle!,
+                              style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (e.selected)
+                      AppIcon('check', size: 16, color: s.primary),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+
+        if (result != null) onSelect(result);
+      },
+      child: IgnorePointer(child: anchor),
     );
   }
 }
 
-class _HeaderMenuButton extends StatefulWidget {
+// ══════════════════════════════════════════════════════════════
+// CABEÇALHO DO CHAT (menu de ações)
+// ══════════════════════════════════════════════════════════════
+class _HeaderMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final bool hasMessages;
   final ValueChanged<ConversationAction> onSelect;
@@ -611,215 +491,279 @@ class _HeaderMenuButton extends StatefulWidget {
   });
 
   @override
-  State<_HeaderMenuButton> createState() => _HeaderMenuButtonState();
-}
-
-class _HeaderMenuButtonState extends State<_HeaderMenuButton>
-    with SingleTickerProviderStateMixin {
-  OverlayEntry? _ov;
-  late AnimationController _ac;
-  final GlobalKey _anchorKey = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    _ac = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
-  }
-
-  @override
-  void dispose() {
-    _ac.dispose();
-    _ov?.remove();
-    super.dispose();
-  }
-
-  void _toggle() => _ov == null ? _open() : _close();
-
-  void _open() {
-    final anchorContext = _anchorKey.currentContext;
-    if (anchorContext == null) return;
-    final box = anchorContext.findRenderObject() as RenderBox;
-    final off = box.localToGlobal(Offset.zero);
-    final sz = box.size;
-    _ac.forward(from: 0);
-
-    _ov = OverlayEntry(builder: (ctx) {
-      final s = widget.s;
-      const width = 260.0;
-      const estimatedHeight = 230.0;
-      final screenSize = MediaQuery.of(ctx).size;
-      final desiredTop = off.dy + sz.height + 2;
-      final opensUp = desiredTop + estimatedHeight > screenSize.height - 24;
-      final top = opensUp ? null : desiredTop;
-      final bottom = opensUp ? screenSize.height - off.dy + 2 : null;
-      double left = off.dx + sz.width - width;
-      if (left < 12) left = 12;
-      if (left + width > screenSize.width - 12) left = screenSize.width - width - 12;
-
-      return Stack(children: [
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: _close,
-            behavior: HitTestBehavior.opaque,
-            child: Container(color: Colors.transparent),
-          ),
-        ),
-        Positioned(
-          top: top,
-          bottom: bottom,
-          left: left,
-          child: AnimatedBuilder(
-            animation: _ac,
-            builder: (_, child) => Opacity(
-              opacity: CurvedAnimation(
-                      parent: _ac,
-                      curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                  .value,
-              child: Transform.scale(
-                scale: Tween(begin: 0.92, end: 1.0)
-                    .animate(CurvedAnimation(parent: _ac, curve: kCupertinoOut))
-                    .value,
-                alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
-                child: child,
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Container(
-                width: width,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: s.floatingShadow,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _MenuActionRow(
-                      s: s,
-                      assetName: ConversationAction.newChat.assetName,
-                      label: ConversationAction.newChat.label,
-                      onTap: () { _close(); widget.onSelect(ConversationAction.newChat); },
-                    ),
-                    _MenuActionRow(
-                      s: s,
-                      assetName: ConversationAction.incognito.assetName,
-                      label: ConversationAction.incognito.label,
-                      disabled: widget.hasMessages,
-                      onTap: () {
-                        if (widget.hasMessages) return;
-                        _close();
-                        widget.onSelect(ConversationAction.incognito);
-                      },
-                    ),
-                    _MenuActionRow(
-                      s: s,
-                      assetName: ConversationAction.rename.assetName,
-                      label: ConversationAction.rename.label,
-                      onTap: () { _close(); widget.onSelect(ConversationAction.rename); },
-                    ),
-                    _MenuActionRow(
-                      s: s,
-                      assetName: ConversationAction.delete.assetName,
-                      label: ConversationAction.delete.label,
-                      destructive: true,
-                      onTap: () { _close(); widget.onSelect(ConversationAction.delete); },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ]);
-    });
-    Overlay.of(context).insert(_ov!);
-    setState(() {});
-  }
-
-  void _close() {
-    _ac.reverse().then((_) {
-      _ov?.remove();
-      _ov = null;
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        key: _anchorKey,
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          child: AppIcon(
-            'more_vert',
-            color: widget.s.onSurface,
-            size: 20,
-          ),
-        ),
-      );
-}
-
-class _MenuActionRow extends StatefulWidget {
-  final AppColorScheme s;
-  final String assetName;
-  final String label;
-  final bool destructive;
-  final bool disabled;
-  final VoidCallback onTap;
-  const _MenuActionRow({
-    required this.s,
-    required this.assetName,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-    this.disabled = false,
-  });
-  @override
-  State<_MenuActionRow> createState() => _MenuActionRowState();
-}
-
-class _MenuActionRowState extends State<_MenuActionRow> {
-  bool _h = false;
-  @override
   Widget build(BuildContext context) {
-    final color = widget.disabled
-        ? widget.s.onSurfaceVariant.withOpacity(0.4)
-        : widget.destructive
-            ? widget.s.error
-            : widget.s.onSurface;
-    return Opacity(
-      opacity: widget.disabled ? 0.55 : 1.0,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown:   widget.disabled ? null : (_) => setState(() => _h = true),
-        onTapCancel: widget.disabled ? null : ()  => setState(() => _h = false),
-        onTapUp:     widget.disabled ? null : (_) => setState(() => _h = false),
-        onTap:       widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: _h && !widget.disabled ? widget.s.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
+    final GlobalKey anchorKey = GlobalKey();
+    return GestureDetector(
+      key: anchorKey,
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+        if (box == null) return;
+        final overlayState = Overlay.of(context);
+        final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+        final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+        final anchorSize = box.size;
+
+        final RelativeRect position = RelativeRect.fromLTRB(
+          anchorTopLeft.dx,
+          anchorTopLeft.dy + anchorSize.height,
+          overlayBox.size.width - (anchorTopLeft.dx + anchorSize.width),
+          overlayBox.size.height - (anchorTopLeft.dy + anchorSize.height),
+        );
+
+        final result = await showMenu<ConversationAction>(
+          context: context,
+          position: position,
+          color: s.floatingSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: s.outline.withOpacity(0.25)),
           ),
-          child: Row(children: [
-            AppIcon(widget.assetName, size: 18, color: color),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(widget.label,
-                  style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
+          items: [
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.newChat,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.newChat, false, false),
             ),
-          ]),
-        ),
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.incognito,
+              enabled: !hasMessages,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.incognito, false, hasMessages),
+            ),
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.rename,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.rename, false, false),
+            ),
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.delete,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.delete, true, false),
+            ),
+          ],
+        );
+
+        if (result != null) onSelect(result);
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        child: AppIcon('more_vert', color: s.onSurface, size: 20),
       ),
     );
   }
+
+  Widget _buildMenuItem(
+    AppColorScheme s,
+    ConversationAction action,
+    bool destructive,
+    bool disabled,
+  ) {
+    final color = disabled
+        ? s.onSurfaceVariant.withOpacity(0.4)
+        : destructive
+            ? s.error
+            : s.onSurface;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          AppIcon(action.assetName, size: 18, color: color),
+          const SizedBox(width: 10),
+          Text(
+            action.label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AÇÕES DA MENSAGEM (long press)
+// ══════════════════════════════════════════════════════════════
+void showMessageActionsPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required Offset anchorOffset,
+  required Size anchorSize,
+  required VoidCallback onEdit,
+  required VoidCallback onCopy,
+  required VoidCallback onDelete,
+  required VoidCallback onSelectText,
+}) async {
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final screenSize = overlayBox.size;
+
+  final RelativeRect position = RelativeRect.fromLTRB(
+    anchorOffset.dx,
+    anchorOffset.dy,
+    screenSize.width - (anchorOffset.dx + anchorSize.width),
+    screenSize.height - (anchorOffset.dy + anchorSize.height),
+  );
+
+  final result = await showMenu<int>(
+    context: context,
+    position: position,
+    color: s.floatingSurface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(22),
+      side: BorderSide(color: s.outline.withOpacity(0.25)),
+    ),
+    items: [
+      PopupMenuItem<int>(
+        value: 0,
+        padding: EdgeInsets.zero,
+        child: _buildMessageMenuItem(s, 'pencil', 'Editar'),
+      ),
+      PopupMenuItem<int>(
+        value: 1,
+        padding: EdgeInsets.zero,
+        child: _buildMessageMenuItem(s, 'copy', 'Copiar'),
+      ),
+      PopupMenuItem<int>(
+        value: 2,
+        padding: EdgeInsets.zero,
+        child: _buildMessageMenuItem(s, 'select_text', 'Selecionar texto'),
+      ),
+      PopupMenuItem<int>(
+        value: 3,
+        padding: EdgeInsets.zero,
+        child: _buildMessageMenuItem(s, 'trash', 'Eliminar', destructive: true),
+      ),
+    ],
+  );
+
+  switch (result) {
+    case 0: onEdit(); break;
+    case 1: onCopy(); break;
+    case 2: onSelectText(); break;
+    case 3: onDelete(); break;
+  }
+}
+
+Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {bool destructive = false}) {
+  final color = destructive ? s.error : s.onSurface;
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        AppIcon(assetName, size: 18, color: color),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: color),
+        ),
+      ],
+    ),
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// ANEXAR (popup)
+// ══════════════════════════════════════════════════════════════
+void showAttachPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required VoidCallback onFiles,
+  required VoidCallback onPhotos,
+  required VoidCallback onCamera,
+  required ValueChanged<EditorType> onSelectTool,
+}) async {
+  final anchorContext = anchorKey.currentContext;
+  if (anchorContext == null) return;
+  final box = anchorContext.findRenderObject() as RenderBox;
+  final anchorOffset = box.localToGlobal(Offset.zero);
+  final anchorSize = box.size;
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final screenSize = overlayBox.size;
+
+  final RelativeRect position = RelativeRect.fromLTRB(
+    anchorOffset.dx,
+    anchorOffset.dy,
+    screenSize.width - (anchorOffset.dx + anchorSize.width),
+    screenSize.height - (anchorOffset.dy + anchorSize.height),
+  );
+
+  final result = await showMenu<int>(
+    context: context,
+    position: position,
+    color: s.floatingSurface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(22),
+      side: BorderSide(color: s.outline.withOpacity(0.25)),
+    ),
+    items: [
+      PopupMenuItem<int>(
+        value: 0,
+        padding: EdgeInsets.zero,
+        child: _buildAttachMenuItem(s, 'folder', 'Arquivos', 'Enviar qualquer tipo de arquivo'),
+      ),
+      PopupMenuItem<int>(
+        value: 1,
+        padding: EdgeInsets.zero,
+        child: _buildAttachMenuItem(s, 'image', 'Fotos', 'Enviar fotos da galeria'),
+      ),
+      PopupMenuItem<int>(
+        value: 2,
+        padding: EdgeInsets.zero,
+        child: _buildAttachMenuItem(s, 'camera', 'Câmera', 'Tirar uma foto agora'),
+      ),
+    ],
+  );
+
+  switch (result) {
+    case 0: onFiles(); break;
+    case 1: onPhotos(); break;
+    case 2: onCamera(); break;
+  }
+}
+
+Widget _buildAttachMenuItem(AppColorScheme s, String assetName, String label, String subtitle) {
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        AppIcon(assetName, size: 18, color: s.onSurface),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurface)),
+              const SizedBox(height: 1),
+              Text(subtitle, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class SimpleCanvasCard extends StatelessWidget {
