@@ -5,11 +5,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui' as ui;
 import 'colors.dart';
 import 'widgets.dart';
@@ -18,107 +20,75 @@ import 'app_sheet.dart';
 import 'sheets.dart';
 
 // ══════════════════════════════════════════════════════════════
-// FUNÇÃO AUXILIAR _parseColor
+// FUNÇÕES AUXILIARES
 // ══════════════════════════════════════════════════════════════
 Color? _parseColor(dynamic raw) {
   if (raw == null) return null;
   if (raw is Color) return raw;
   if (raw is int) return Color(raw);
-
   if (raw is String) {
     var hex = raw.trim().replaceFirst('#', '');
-    if (hex.length == 6) {
-      hex = 'FF$hex';
-    }
+    if (hex.length == 6) hex = 'FF$hex';
     if (hex.length == 8) {
       final value = int.tryParse(hex, radix: 16);
       if (value != null) return Color(value);
     }
   }
-
   return null;
 }
 
-/// Remove caracteres estranhos de texto proveniente de JSON
 String _sanitizeText(String? raw) {
   if (raw == null) return '';
-  return raw
-      .replaceAll('\n', ' ')
-      .replaceAll('\r', '')
-      .replaceAll('\t', ' ')
-      .trim();
+  return raw.replaceAll('\n', ' ').replaceAll('\r', '').replaceAll('\t', ' ').trim();
 }
 
 // ══════════════════════════════════════════════════════════════
-// PALETA DEDICADA PARA MODO ESCURO
+// PALETA DEDICADA — CORRIGIDA: moldura externa mais escura que o
+// preview interno, para nunca mais colidirem visualmente no dark.
 // ══════════════════════════════════════════════════════════════
-// Os tons vindos de AppColorScheme (cardBackground/surface) ficam
-// claros demais em dark mode quando comparados ao HTML de referência
-// (#111 / #1c1c1e / #141414). Esta classe fornece tons mais profundos
-// especificamente para estes widgets, mantendo o AppColorScheme
-// intacto para o resto da app.
 class _WidgetPalette {
   final AppColorScheme s;
   const _WidgetPalette(this.s);
 
   bool get isDark => s.isDark;
 
-  // Fundo do card externo (moldura) — equivalente ao body #111 do HTML
-  Color get cardOuter => isDark ? const Color(0xFF141414) : s.cardBackground;
+  // Moldura externa (a "mãe") — agora mais escura que tudo lá dentro.
+  Color get cardBg => isDark ? const Color(0xFF121214) : s.cardBackground;
 
-  // Fundo do card interno (moldura .card) — equivalente a #1c1c1e
-  Color get cardBg => isDark ? const Color(0xFF1C1C1E) : s.cardBackground;
+  // Preview interno (mapa/gráfico/calendário) — um degrau acima da moldura.
+  Color get previewBg => isDark ? const Color(0xFF1A1A1D) : s.surface;
 
-  // Fundo da área de preview (mapa/gráfico) — equivalente a #141414
-  Color get previewBg => isDark ? const Color(0xFF101010) : s.surface;
+  // Pill de ações inferior — mesmo nível do preview, para não competir com a moldura.
+  Color get actionsBg => isDark ? const Color(0xFF1E1E21) : s.hover;
 
-  // Fundo de elementos "hover" / pill de ações — equivalente a #252525
-  Color get actionsBg => isDark ? const Color(0xFF232323) : s.hover;
+  Color get navBtnBg => isDark ? const Color(0xFF232326) : s.hover;
 
-  // Fundo de botões circulares secundários (nav, recentrar) — #1c1c1e
-  Color get navBtnBg => isDark ? const Color(0xFF1C1C1E) : s.hover;
-
-  // Fundo de badges flutuantes (localização) — rgba(20,20,20,0.85)
   Color get badgeBg => isDark
-      ? const Color(0xFF141414).withOpacity(0.88)
+      ? const Color(0xFF141416).withOpacity(0.92)
       : s.cardBackground.withOpacity(0.9);
 
-  // Fundo de opções de lista (seletor de camadas / par) — #252525
-  Color get optionBg => isDark ? const Color(0xFF232323) : s.hover;
+  Color get optionBg => isDark ? const Color(0xFF1E1E21) : s.hover;
+  Color get optionBgHover => isDark ? const Color(0xFF29292C) : s.hover;
 
-  Color get optionBgHover => isDark ? const Color(0xFF2E2E2E) : s.hover;
-
-  Color get outline => isDark ? Colors.white.withOpacity(0.06) : s.outline.withOpacity(0.1);
+  Color get outline => isDark ? Colors.white.withOpacity(0.05) : s.outline.withOpacity(0.1);
 
   Color get onSurface => s.onSurface;
   Color get onSurfaceVariant => s.onSurfaceVariant;
   Color get primary => s.primary;
   Color get onPrimary => s.onPrimary;
 
+  // Fundo de tela cheia (páginas de seleção)
+  Color get pageBg => isDark ? const Color(0xFF0B0B0C) : s.pageBackground;
+
   List<BoxShadow> get cardShadow => isDark
-      ? [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.45),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 5))]
       : s.cardShadow;
 }
 
 // ══════════════════════════════════════════════════════════════
-// IDS DE WIDGET SUPORTADOS (apenas market, calendar, map)
+// IDS DE WIDGET SUPORTADOS
 // ══════════════════════════════════════════════════════════════
-
-const Set<String> kAiWidgetIds = {
-  'widget_market',
-  'widget_calendar',
-  'widget_map',
-};
-
-// ══════════════════════════════════════════════════════════════
-// PARSER
-// ══════════════════════════════════════════════════════════════
+const Set<String> kAiWidgetIds = {'widget_market', 'widget_calendar', 'widget_map'};
 
 class AiWidgetBlock {
   final String id;
@@ -132,10 +102,7 @@ class AiWidgetParseResult {
   const AiWidgetParseResult({required this.textWithMarkers, required this.blocks});
 }
 
-final RegExp _kWidgetBlockRe = RegExp(
-  r'```(widget_[a-z]+)\s*\n([\s\S]*?)```',
-  multiLine: true,
-);
+final RegExp _kWidgetBlockRe = RegExp(r'```(widget_[a-z]+)\s*\n([\s\S]*?)```', multiLine: true);
 
 AiWidgetParseResult parseAiWidgetBlocks(String raw) {
   final blocks = <AiWidgetBlock>[];
@@ -157,16 +124,11 @@ AiWidgetParseResult parseAiWidgetBlocks(String raw) {
   return AiWidgetParseResult(textWithMarkers: replaced, blocks: blocks);
 }
 
-/// Deteta se `raw` contém um bloco ```widget_x``` aberto mas não fechado.
 bool hasOpenWidgetBlock(String raw) {
   final opens = RegExp(r'```widget_[a-z]+').allMatches(raw).length;
   final closesTotal = '```'.allMatches(raw).length;
   return opens > 0 && closesTotal % 2 == 1;
 }
-
-// ══════════════════════════════════════════════════════════════
-// DISPATCHER
-// ══════════════════════════════════════════════════════════════
 
 Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
   switch (block.id) {
@@ -178,23 +140,95 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET WIDGET — VERSÃO COMPLETA
+// CACHE PERSISTENTE DE PAÍSES/PROVÍNCIAS (shared_preferences)
 // ══════════════════════════════════════════════════════════════
+class _GeoCache {
+  static const _kCountriesKey = 'aiwidgets_geo_countries_v1';
+  static const _kStatesPrefix = 'aiwidgets_geo_states_v1_';
 
-class AiMarketWidget extends StatefulWidget {
-  final Map<String, dynamic> json;
-  final AppColorScheme s;
-  const AiMarketWidget({super.key, required this.json, required this.s});
-  @override State<AiMarketWidget> createState() => _AiMarketWidgetState();
+  static List<String>? _memCountries;
+  static final Map<String, List<String>> _memStates = {};
+
+  static Future<List<String>> getCountries() async {
+    if (_memCountries != null) return _memCountries!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getStringList(_kCountriesKey);
+      if (cached != null && cached.isNotEmpty) {
+        _memCountries = cached;
+        return cached;
+      }
+    } catch (_) {
+      // shared_preferences pode falhar em ambientes de teste; segue para rede.
+    }
+
+    final res = await http
+        .get(Uri.parse('https://countriesnow.space/api/v0.1/countries/positions'))
+        .timeout(const Duration(seconds: 10));
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = (decoded['data'] as List? ?? [])
+        .map((e) => _sanitizeText((e as Map)['name']?.toString()))
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    _memCountries = list;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_kCountriesKey, list);
+    } catch (_) {}
+    return list;
+  }
+
+  static Future<List<String>> getStates(String country) async {
+    if (_memStates.containsKey(country)) return _memStates[country]!;
+    final key = '$_kStatesPrefix${country.toLowerCase()}';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getStringList(key);
+      if (cached != null && cached.isNotEmpty) {
+        _memStates[country] = cached;
+        return cached;
+      }
+    } catch (_) {}
+
+    final res = await http
+        .post(
+          Uri.parse('https://countriesnow.space/api/v0.1/countries/states'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'country': country}),
+        )
+        .timeout(const Duration(seconds: 10));
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+    final data = decoded['data'] as Map<String, dynamic>?;
+    final states = (data?['states'] as List? ?? [])
+        .map((e) => _sanitizeText((e as Map)['name']?.toString()))
+        .where((n) => n.isNotEmpty)
+        .toList()
+      ..sort();
+
+    _memStates[country] = states;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(key, states);
+    } catch (_) {}
+    return states;
+  }
 }
 
+// ══════════════════════════════════════════════════════════════
+// MERCADO — DADOS DE PARES (partilhado entre widget e tela cheia)
+// ══════════════════════════════════════════════════════════════
 class _MarketPair {
   final String key;
   final String label;
   final String sub;
-  final String badge;
+  final String badge; // 'cripto' | 'forex' | 'metal'
   final double basePrice;
   final double volatility;
+  final String? coingeckoId; // usado para o ícone PNG oficial
+  final String? fiatCountryCode; // usado para bandeira (moedas fiat)
   const _MarketPair({
     required this.key,
     required this.label,
@@ -202,7 +236,62 @@ class _MarketPair {
     required this.badge,
     required this.basePrice,
     required this.volatility,
+    this.coingeckoId,
+    this.fiatCountryCode,
   });
+}
+
+const List<_MarketPair> _kMarketPairs = [
+  _MarketPair(key: 'BTCUSD', label: 'BTC/USD', sub: 'Bitcoin', basePrice: 64200, volatility: 0.018, badge: 'cripto', coingeckoId: 'bitcoin'),
+  _MarketPair(key: 'ETHUSD', label: 'ETH/USD', sub: 'Ethereum', basePrice: 3180, volatility: 0.022, badge: 'cripto', coingeckoId: 'ethereum'),
+  _MarketPair(key: 'SOLUSD', label: 'SOL/USD', sub: 'Solana', basePrice: 148, volatility: 0.028, badge: 'cripto', coingeckoId: 'solana'),
+  _MarketPair(key: 'BNBUSD', label: 'BNB/USD', sub: 'BNB', basePrice: 592, volatility: 0.02, badge: 'cripto', coingeckoId: 'binancecoin'),
+  _MarketPair(key: 'XRPUSD', label: 'XRP/USD', sub: 'XRP', basePrice: 0.62, volatility: 0.026, badge: 'cripto', coingeckoId: 'ripple'),
+  _MarketPair(key: 'ADAUSD', label: 'ADA/USD', sub: 'Cardano', basePrice: 0.44, volatility: 0.03, badge: 'cripto', coingeckoId: 'cardano'),
+  _MarketPair(key: 'DOGEUSD', label: 'DOGE/USD', sub: 'Dogecoin', basePrice: 0.14, volatility: 0.035, badge: 'cripto', coingeckoId: 'dogecoin'),
+  _MarketPair(key: 'EURUSD', label: 'EUR/USD', sub: 'Euro / Dólar', basePrice: 1.087, volatility: 0.004, badge: 'forex', fiatCountryCode: 'eu'),
+  _MarketPair(key: 'GBPUSD', label: 'GBP/USD', sub: 'Libra / Dólar', basePrice: 1.271, volatility: 0.005, badge: 'forex', fiatCountryCode: 'gb'),
+  _MarketPair(key: 'USDJPY', label: 'USD/JPY', sub: 'Dólar / Iene', basePrice: 156.4, volatility: 0.006, badge: 'forex', fiatCountryCode: 'jp'),
+  _MarketPair(key: 'USDBRL', label: 'USD/BRL', sub: 'Dólar / Real', basePrice: 5.42, volatility: 0.007, badge: 'forex', fiatCountryCode: 'br'),
+  _MarketPair(key: 'USDCHF', label: 'USD/CHF', sub: 'Dólar / Franco', basePrice: 0.88, volatility: 0.004, badge: 'forex', fiatCountryCode: 'ch'),
+  _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', basePrice: 2340, volatility: 0.009, badge: 'metal'),
+  _MarketPair(key: 'XAGUSD', label: 'XAG/USD', sub: 'Prata', basePrice: 29.4, volatility: 0.013, badge: 'metal'),
+];
+
+String? _pairIconUrl(_MarketPair p) {
+  if (p.coingeckoId != null) {
+    // Ícones oficiais servidos pela CoinGecko (usados amplamente como fonte
+    // pública de imagens de criptomoedas, sem necessidade de API key para o CDN de assets).
+    return 'https://assets.coingecko.com/coins/images/1/small/${p.coingeckoId}.png';
+  }
+  if (p.fiatCountryCode != null) {
+    // Bandeira como aproximação visual da moeda fiat — não é 1:1 perfeito
+    // (ex: EUR não tem "um" país), mas é a convenção visual mais reconhecível.
+    return 'https://flagcdn.com/w160/${p.fiatCountryCode}.png';
+  }
+  return null;
+}
+
+// Mapeamento correto de ids CoinGecko p/ URL de ícone (a rota /1/ acima é
+// só um placeholder de proporção; o id real do asset precisa de lookup).
+// Para evitar links quebrados, resolvemos via endpoint público de "coins/list"
+// com "include_platform=false" quando necessário — aqui usamos diretamente
+// o padrão de CDN estável da CoinGecko por symbol conhecido.
+const Map<String, String> _kCoingeckoIconOverride = {
+  'bitcoin': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+  'ethereum': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  'solana': 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+  'binancecoin': 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  'ripple': 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png',
+  'cardano': 'https://assets.coingecko.com/coins/images/975/small/cardano.png',
+  'dogecoin': 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
+};
+
+String? _resolvedIconUrl(_MarketPair p) {
+  if (p.coingeckoId != null && _kCoingeckoIconOverride.containsKey(p.coingeckoId)) {
+    return _kCoingeckoIconOverride[p.coingeckoId];
+  }
+  return _pairIconUrl(p);
 }
 
 class _MarketDataPoint {
@@ -211,24 +300,47 @@ class _MarketDataPoint {
   const _MarketDataPoint(this.t, this.v);
 }
 
-class _AiMarketWidgetState extends State<AiMarketWidget>
-    with SingleTickerProviderStateMixin {
+int _hashKey(String str) {
+  int h = 0;
+  for (final code in str.codeUnits) {
+    h = (h * 31 + code) & 0x7fffffff;
+  }
+  return h == 0 ? 1 : h;
+}
+
+List<_MarketDataPoint> _generateSeries(_MarketPair pair, String tfKey, int points) {
+  final rand = math.Random(_hashKey('${pair.key}_$tfKey'));
+  final list = <_MarketDataPoint>[];
+  double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final stepMs = tfKey == '1D' ? 60 * 60 * 1000 : tfKey == '1W' ? 24 * 60 * 60 * 1000 : tfKey == '1M' ? 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+  for (int i = points; i >= 0; i--) {
+    price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
+    list.add(_MarketDataPoint((now - i * stepMs).toDouble(), price));
+  }
+  return list;
+}
+
+String _formatPairPrice(double v, _MarketPair pair) {
+  if (pair.badge == 'forex') return v.toStringAsFixed(4);
+  if (v >= 1000) return '\$${v.round()}';
+  return '\$${v.toStringAsFixed(2)}';
+}
+
+// ══════════════════════════════════════════════════════════════
+// MARKET WIDGET (card)
+// ══════════════════════════════════════════════════════════════
+class AiMarketWidget extends StatefulWidget {
+  final Map<String, dynamic> json;
+  final AppColorScheme s;
+  const AiMarketWidget({super.key, required this.json, required this.s});
+  @override State<AiMarketWidget> createState() => _AiMarketWidgetState();
+}
+
+class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   double _progress = 0.0;
-
-  // Posição de arrasto no gráfico (0..1), null quando não há toque ativo
   double? _dragX;
-
-  static const List<_MarketPair> _pairs = [
-    _MarketPair(key: 'BTCUSD', label: 'BTC/USD', sub: 'Bitcoin', basePrice: 64200, volatility: 0.018, badge: 'cripto'),
-    _MarketPair(key: 'ETHUSD', label: 'ETH/USD', sub: 'Ethereum', basePrice: 3180, volatility: 0.022, badge: 'cripto'),
-    _MarketPair(key: 'SOLUSD', label: 'SOL/USD', sub: 'Solana', basePrice: 148, volatility: 0.028, badge: 'cripto'),
-    _MarketPair(key: 'EURUSD', label: 'EUR/USD', sub: 'Euro / Dólar', basePrice: 1.087, volatility: 0.004, badge: 'forex'),
-    _MarketPair(key: 'GBPUSD', label: 'GBP/USD', sub: 'Libra / Dólar', basePrice: 1.271, volatility: 0.005, badge: 'forex'),
-    _MarketPair(key: 'USDJPY', label: 'USD/JPY', sub: 'Dólar / Iene', basePrice: 156.4, volatility: 0.006, badge: 'forex'),
-    _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', basePrice: 2340, volatility: 0.009, badge: 'metal'),
-    _MarketPair(key: 'XAGUSD', label: 'XAG/USD', sub: 'Prata', basePrice: 29.4, volatility: 0.013, badge: 'metal'),
-  ];
 
   static const List<({String key, String label, int points})> _timeframes = [
     (key: '1D', label: '1D', points: 24),
@@ -241,22 +353,17 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
   late String _currentTf;
   final Map<String, List<_MarketDataPoint>> _seriesCache = {};
 
-  _MarketPair get _currentPair => _pairs.firstWhere((p) => p.key == _currentPairKey);
-
+  _MarketPair get _currentPair => _kMarketPairs.firstWhere((p) => p.key == _currentPairKey, orElse: () => _kMarketPairs.first);
   _WidgetPalette get _p => _WidgetPalette(widget.s);
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    )..addListener(() {
-        setState(() => _progress = Curves.easeOutCubic.transform(_animController.value));
-      });
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 420))
+      ..addListener(() => setState(() => _progress = Curves.easeOutCubic.transform(_animController.value)));
     _currentTf = '1D';
     _currentPairKey = _sanitizeText(widget.json['symbol']);
-    if (_currentPairKey.isEmpty || !_pairs.any((p) => p.key == _currentPairKey)) {
+    if (_currentPairKey.isEmpty || !_kMarketPairs.any((p) => p.key == _currentPairKey)) {
       _currentPairKey = 'BTCUSD';
     }
     _animController.forward(from: 0);
@@ -270,64 +377,21 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
 
   List<_MarketDataPoint> _getSeries(String pairKey, String tfKey) {
     final cacheKey = '${pairKey}_$tfKey';
-    if (_seriesCache.containsKey(cacheKey)) return _seriesCache[cacheKey]!;
-
-    final pair = _pairs.firstWhere((p) => p.key == pairKey);
-    final tf = _timeframes.firstWhere((t) => t.key == tfKey);
-    final rand = math.Random(_hashKey(cacheKey));
-
-    final points = <_MarketDataPoint>[];
-    double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final stepMs = tf.key == '1D' ? 60 * 60 * 1000 :
-                    tf.key == '1W' ? 24 * 60 * 60 * 1000 :
-                    tf.key == '1M' ? 24 * 60 * 60 * 1000 :
-                    30 * 24 * 60 * 60 * 1000;
-
-    for (int i = tf.points; i >= 0; i--) {
-      price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
-      points.add(_MarketDataPoint((now - i * stepMs).toDouble(), price));
-    }
-    _seriesCache[cacheKey] = points;
-    return points;
-  }
-
-  int _hashKey(String str) {
-    int h = 0;
-    for (final code in str.codeUnits) {
-      h = (h * 31 + code) & 0x7fffffff;
-    }
-    return h == 0 ? 1 : h;
-  }
-
-  String _formatPrice(double v, _MarketPair pair) {
-    if (pair.badge == 'forex') return v.toStringAsFixed(4);
-    if (pair.key == 'XAGUSD') return '\$${v.toStringAsFixed(2)}';
-    if (v >= 1000) {
-      final formatted = v.round().toString();
-      return '\$$formatted';
-    }
-    return '\$${v.toStringAsFixed(2)}';
+    return _seriesCache.putIfAbsent(cacheKey, () {
+      final pair = _kMarketPairs.firstWhere((p) => p.key == pairKey);
+      final tf = _timeframes.firstWhere((t) => t.key == tfKey);
+      return _generateSeries(pair, tfKey, tf.points);
+    });
   }
 
   String _formatTimeLabel(double tMs, String tf) {
     final dt = DateTime.fromMillisecondsSinceEpoch(tMs.toInt());
-    if (tf == '1D') {
-      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
+    if (tf == '1D') return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     if (tf == '1Y') {
       const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
       return months[dt.month - 1];
     }
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
-  }
-
-  void _changePair(String key) {
-    setState(() {
-      _currentPairKey = key;
-      _dragX = null;
-      _animController.forward(from: 0);
-    });
   }
 
   void _changeTimeframe(String tf) {
@@ -338,76 +402,18 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
     });
   }
 
-  Future<void> _openPairSelector() async {
-    final p = _p;
-    final selected = await showCraftBottomSheet<String>(
-      context: context,
-      s: widget.s,
-      child: Builder(builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Escolher par',
-              style: TextStyle(color: p.onSurface, fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 340),
-              child: ListView(
-                shrinkWrap: true,
-                children: _pairs.map((pair) {
-                  final active = pair.key == _currentPairKey;
-                  return GestureDetector(
-                    onTap: () => Navigator.pop(ctx, pair.key),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: active ? p.primary.withOpacity(0.16) : p.optionBg,
-                        border: Border.all(color: active ? p.primary : p.outline),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  color: p.optionBgHover,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  pair.badge,
-                                  style: TextStyle(
-                                    color: p.onSurfaceVariant,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              Text(pair.label, style: TextStyle(color: p.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                          Text(pair.sub, style: TextStyle(color: p.onSurfaceVariant, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-      )),
+  Future<void> _openMarketSelector() async {
+    final result = await Navigator.of(context).push<String>(
+      CupertinoPageRoute(
+        builder: (_) => _MarketSelectorScreen(s: widget.s, currentKey: _currentPairKey),
+      ),
     );
-    if (selected != null && selected != _currentPairKey) {
-      _changePair(selected);
+    if (result != null && result != _currentPairKey) {
+      setState(() {
+        _currentPairKey = result;
+        _dragX = null;
+        _animController.forward(from: 0);
+      });
     }
   }
 
@@ -426,16 +432,14 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
     final maxV = values.reduce(math.max);
     final minV = values.reduce(math.min);
 
-    // Valor sob o dedo, se estiver a arrastar
     _MarketDataPoint? hoverPoint;
     if (_dragX != null) {
       final idx = (_dragX! * (series.length - 1)).round().clamp(0, series.length - 1);
       hoverPoint = series[idx];
     }
     final displayValue = hoverPoint?.v ?? last;
-    final displayLabel = hoverPoint != null
-        ? _formatTimeLabel(hoverPoint.t, _currentTf)
-        : 'Agora';
+    final displayLabel = hoverPoint != null ? _formatTimeLabel(hoverPoint.t, _currentTf) : 'Agora';
+    final iconUrl = _resolvedIconUrl(pair);
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
@@ -451,15 +455,11 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            decoration: BoxDecoration(
-              color: p.previewBg,
-              borderRadius: BorderRadius.circular(24),
-            ),
+            decoration: BoxDecoration(color: p.previewBg, borderRadius: BorderRadius.circular(24)),
             clipBehavior: Clip.antiAlias,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ── Cabeçalho: par, badge, preço, variação, máx/mín ──
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
                   child: Column(
@@ -467,56 +467,34 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                     children: [
                       Row(
                         children: [
-                          Text(
-                            pair.label,
-                            style: TextStyle(
-                              color: p.onSurface,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
+                          if (iconUrl != null)
+                            ClipOval(
+                              child: Image.network(
+                                iconUrl,
+                                width: 20,
+                                height: 20,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 20, height: 20,
+                                  decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle),
+                                ),
+                              ),
                             ),
-                          ),
+                          if (iconUrl != null) const SizedBox(width: 8),
+                          Text(pair.label, style: TextStyle(color: p.onSurface, fontSize: 14, fontWeight: FontWeight.w700)),
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: p.optionBg,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              pair.badge,
-                              style: TextStyle(
-                                color: p.onSurfaceVariant,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(8)),
+                            child: Text(pair.badge, style: TextStyle(color: p.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600)),
                           ),
                           const Spacer(),
-                          Text(
-                            displayLabel,
-                            style: TextStyle(
-                              color: p.onSurfaceVariant,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                          Text(displayLabel, style: TextStyle(color: p.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w500)),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            _formatPrice(displayValue, pair),
-                            style: TextStyle(
-                              color: p.onSurface,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        _formatPairPrice(displayValue, pair),
+                        style: TextStyle(color: p.onSurface, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.3),
                       ),
                       const SizedBox(height: 2),
                       Row(
@@ -527,31 +505,17 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                             child: AppIcon('chevron_up', color: color, size: 14),
                           ),
                           const SizedBox(width: 2),
-                          Text(
-                            '${isUp ? '+' : ''}${change.toStringAsFixed(2)}% · $_currentTf',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          Text('${isUp ? '+' : ''}${change.toStringAsFixed(2)}% · $_currentTf',
+                              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
                           const Spacer(),
-                          Text(
-                            'Máx ${_formatPrice(maxV, pair)}',
-                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600),
-                          ),
+                          Text('Máx ${_formatPairPrice(maxV, pair)}', style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600)),
                           const SizedBox(width: 8),
-                          Text(
-                            'Mín ${_formatPrice(minV, pair)}',
-                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600),
-                          ),
+                          Text('Mín ${_formatPairPrice(minV, pair)}', style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ],
                   ),
                 ),
-
-                // ── Gráfico interativo com grid, tooltip e arrasto ──
                 AspectRatio(
                   aspectRatio: 16 / 9,
                   child: Padding(
@@ -560,17 +524,11 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                       builder: (ctx, constraints) {
                         return GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onHorizontalDragStart: (d) => setState(() {
-                            _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
-                          }),
-                          onHorizontalDragUpdate: (d) => setState(() {
-                            _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
-                          }),
+                          onHorizontalDragStart: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
+                          onHorizontalDragUpdate: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
                           onHorizontalDragEnd: (_) => setState(() => _dragX = null),
                           onHorizontalDragCancel: () => setState(() => _dragX = null),
-                          onTapDown: (d) => setState(() {
-                            _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
-                          }),
+                          onTapDown: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
                           onTapUp: (_) => setState(() => _dragX = null),
                           child: CustomPaint(
                             painter: _MarketChartPainter(
@@ -584,7 +542,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                               tooltipBorder: p.outline,
                               tooltipText: p.onSurface,
                               formatLabel: (t) => _formatTimeLabel(t, _currentTf),
-                              formatPrice: (v) => _formatPrice(v, pair),
+                              formatPrice: (v) => _formatPairPrice(v, pair),
                             ),
                             child: const SizedBox.expand(),
                           ),
@@ -593,8 +551,6 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                     ),
                   ),
                 ),
-
-                // ── Seletor de timeframe ──
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   child: Row(
@@ -606,19 +562,9 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 2),
                             padding: const EdgeInsets.symmetric(vertical: 6),
-                            decoration: BoxDecoration(
-                              color: active ? p.optionBg : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                            decoration: BoxDecoration(color: active ? p.optionBg : Colors.transparent, borderRadius: BorderRadius.circular(10)),
                             alignment: Alignment.center,
-                            child: Text(
-                              tf.label,
-                              style: TextStyle(
-                                color: active ? p.onSurface : p.onSurfaceVariant,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            child: Text(tf.label, style: TextStyle(color: active ? p.onSurface : p.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       );
@@ -628,38 +574,21 @@ class _AiMarketWidgetState extends State<AiMarketWidget>
               ],
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // ── Ação principal: alterar moeda ──
           Container(
             padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: p.actionsBg,
-              borderRadius: BorderRadius.circular(50),
-            ),
+            decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(50)),
             child: GestureDetector(
-              onTap: _openPairSelector,
+              onTap: _openMarketSelector,
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: p.primary,
-                  borderRadius: BorderRadius.circular(50),
-                ),
+                decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(50)),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     AppIcon('repaste', color: p.onPrimary, size: 16),
                     const SizedBox(width: 8),
-                    Text(
-                      'Alterar moeda',
-                      style: TextStyle(
-                        color: p.onPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
+                    Text('Alterar moeda', style: TextStyle(color: p.onPrimary, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1)),
                   ],
                 ),
               ),
@@ -685,23 +614,14 @@ class _MarketChartPainter extends CustomPainter {
   final String Function(double) formatPrice;
 
   _MarketChartPainter({
-    required this.series,
-    required this.progress,
-    required this.isUp,
-    required this.dragX,
-    required this.gridColor,
-    required this.axisTextColor,
-    required this.tooltipBg,
-    required this.tooltipBorder,
-    required this.tooltipText,
-    required this.formatLabel,
-    required this.formatPrice,
+    required this.series, required this.progress, required this.isUp, required this.dragX,
+    required this.gridColor, required this.axisTextColor, required this.tooltipBg,
+    required this.tooltipBorder, required this.tooltipText, required this.formatLabel, required this.formatPrice,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (series.length < 2) return;
-
     final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
     final values = series.map((p) => p.v).toList();
     final minV = values.reduce(math.min);
@@ -711,11 +631,7 @@ class _MarketChartPainter extends CustomPainter {
     final maxY = maxV + pad;
     final minY = minV - pad;
 
-    const leftGutter = 4.0;
-    const rightGutter = 4.0;
-    const topGutter = 6.0;
-    const bottomGutter = 22.0; // espaço para labels do eixo X
-
+    const leftGutter = 4.0, rightGutter = 4.0, topGutter = 6.0, bottomGutter = 22.0;
     final innerW = size.width - leftGutter - rightGutter;
     final innerH = size.height - topGutter - bottomGutter;
 
@@ -728,28 +644,21 @@ class _MarketChartPainter extends CustomPainter {
       return Offset(x, y);
     }
 
-    // ── 1. Grid horizontal (4 linhas) ──
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1;
+    final gridPaint = Paint()..color = gridColor..strokeWidth = 1;
     for (int i = 0; i <= 3; i++) {
       final y = topGutter + (innerH / 3) * i;
       canvas.drawLine(Offset(leftGutter, y), Offset(leftGutter + innerW, y), gridPaint);
     }
 
-    // ── 2. Linha de referência: preço médio do período ──
     final avgNorm = (avgV - minY) / (maxY - minY);
     final avgY = topGutter + innerH - avgNorm * innerH;
-    final dashPaint = Paint()
-      ..color = axisTextColor.withOpacity(0.5)
-      ..strokeWidth = 1;
+    final dashPaint = Paint()..color = axisTextColor.withOpacity(0.5)..strokeWidth = 1;
     double dashX = leftGutter;
     while (dashX < leftGutter + innerW) {
       canvas.drawLine(Offset(dashX, avgY), Offset(math.min(dashX + 4, leftGutter + innerW), avgY), dashPaint);
       dashX += 7;
     }
 
-    // ── 3. Área de preenchimento (gradiente) ──
     final fillPath = Path()..moveTo(leftGutter, topGutter + innerH);
     for (int i = 0; i < values.length; i++) {
       final p = ptAt(i);
@@ -757,131 +666,412 @@ class _MarketChartPainter extends CustomPainter {
     }
     fillPath.lineTo(leftGutter + innerW, topGutter + innerH);
     fillPath.close();
-
-    final gradient = ui.Gradient.linear(
-      Offset(0, topGutter),
-      Offset(0, topGutter + innerH),
-      [color.withOpacity(0.28), color.withOpacity(0.0)],
-    );
+    final gradient = ui.Gradient.linear(Offset(0, topGutter), Offset(0, topGutter + innerH), [color.withOpacity(0.28), color.withOpacity(0.0)]);
     canvas.drawPath(fillPath, Paint()..shader = gradient);
 
-    // ── 4. Linha principal ──
-    final linePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round;
-
+    final linePaint = Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.4..strokeJoin = StrokeJoin.round..strokeCap = StrokeCap.round;
     final linePath = Path();
     for (int i = 0; i < values.length; i++) {
       final p = ptAt(i);
-      if (i == 0) {
-        linePath.moveTo(p.dx, p.dy);
-      } else {
-        linePath.lineTo(p.dx, p.dy);
-      }
+      if (i == 0) linePath.moveTo(p.dx, p.dy); else linePath.lineTo(p.dx, p.dy);
     }
     canvas.drawPath(linePath, linePaint);
 
-    // ── 5. Labels do eixo X (início, meio, fim) ──
     void drawXLabel(int i, TextAlign align) {
       final tp = TextPainter(
-        text: TextSpan(
-          text: formatLabel(series[i].t),
-          style: TextStyle(color: axisTextColor, fontSize: 9, fontWeight: FontWeight.w600),
-        ),
+        text: TextSpan(text: formatLabel(series[i].t), style: TextStyle(color: axisTextColor, fontSize: 9, fontWeight: FontWeight.w600)),
         textDirection: TextDirection.ltr,
       )..layout();
       final x = ptAt(i).dx;
-      double dx;
-      if (align == TextAlign.left) {
-        dx = x;
-      } else if (align == TextAlign.right) {
-        dx = x - tp.width;
-      } else {
-        dx = x - tp.width / 2;
-      }
+      double dx = align == TextAlign.left ? x : align == TextAlign.right ? x - tp.width : x - tp.width / 2;
       dx = dx.clamp(0.0, size.width - tp.width);
       tp.paint(canvas, Offset(dx, size.height - bottomGutter + 8));
     }
-
     drawXLabel(0, TextAlign.left);
     drawXLabel(values.length ~/ 2, TextAlign.center);
     drawXLabel(values.length - 1, TextAlign.right);
 
-    // ── 6. Ponto final destacado (halo + core) ──
     final lastPt = ptAt(values.length - 1);
     canvas.drawCircle(lastPt, 7, Paint()..color = color.withOpacity(0.18));
     canvas.drawCircle(lastPt, 3.5, Paint()..color = color);
-    canvas.drawCircle(lastPt, 3.5, Paint()
-      ..color = Colors.white.withOpacity(0.9)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2);
+    canvas.drawCircle(lastPt, 3.5, Paint()..color = Colors.white.withOpacity(0.9)..style = PaintingStyle.stroke..strokeWidth = 1.2);
 
-    // ── 7. Interação: linha vertical + tooltip no ponto arrastado ──
     if (dragX != null) {
       final idx = (dragX! * (values.length - 1)).round().clamp(0, values.length - 1);
       final hp = ptAt(idx);
-
-      final vLinePaint = Paint()
-        ..color = axisTextColor.withOpacity(0.35)
-        ..strokeWidth = 1;
+      final vLinePaint = Paint()..color = axisTextColor.withOpacity(0.35)..strokeWidth = 1;
       canvas.drawLine(Offset(hp.dx, topGutter), Offset(hp.dx, topGutter + innerH), vLinePaint);
-
       canvas.drawCircle(hp, 5, Paint()..color = tooltipBg);
-      canvas.drawCircle(hp, 5, Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2);
+      canvas.drawCircle(hp, 5, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2);
       canvas.drawCircle(hp, 2.2, Paint()..color = color);
 
-      // Caixa de tooltip com o preço exato
       final priceText = formatPrice(values[idx]);
       final tp = TextPainter(
-        text: TextSpan(
-          text: priceText,
-          style: TextStyle(color: tooltipText, fontSize: 11, fontWeight: FontWeight.w700),
-        ),
+        text: TextSpan(text: priceText, style: TextStyle(color: tooltipText, fontSize: 11, fontWeight: FontWeight.w700)),
         textDirection: TextDirection.ltr,
       )..layout();
-
       final boxW = tp.width + 16;
       const boxH = 22.0;
-      double boxX = hp.dx - boxW / 2;
-      boxX = boxX.clamp(0.0, size.width - boxW);
+      double boxX = (hp.dx - boxW / 2).clamp(0.0, size.width - boxW);
       double boxY = hp.dy - boxH - 10;
       if (boxY < 0) boxY = hp.dy + 10;
-
-      final rrect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(boxX, boxY, boxW, boxH),
-        const Radius.circular(8),
-      );
+      final rrect = RRect.fromRectAndRadius(Rect.fromLTWH(boxX, boxY, boxW, boxH), const Radius.circular(8));
       canvas.drawRRect(rrect, Paint()..color = tooltipBg);
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..color = tooltipBorder
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
+      canvas.drawRRect(rrect, Paint()..color = tooltipBorder..style = PaintingStyle.stroke..strokeWidth = 1);
       tp.paint(canvas, Offset(boxX + 8, boxY + (boxH - tp.height) / 2));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _MarketChartPainter old) {
-    return old.series != series ||
-        old.progress != progress ||
-        old.isUp != isUp ||
-        old.dragX != dragX;
+  bool shouldRepaint(covariant _MarketChartPainter old) =>
+      old.series != series || old.progress != progress || old.isUp != isUp || old.dragX != dragX;
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA CHEIA — SELETOR DE MERCADO
+// ══════════════════════════════════════════════════════════════
+class _MarketSelectorScreen extends StatefulWidget {
+  final AppColorScheme s;
+  final String currentKey;
+  const _MarketSelectorScreen({required this.s, required this.currentKey});
+  @override State<_MarketSelectorScreen> createState() => _MarketSelectorScreenState();
+}
+
+class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+  bool _searchingRemote = false;
+  List<_MarketPair> _remoteResults = [];
+  Timer? _debounce;
+
+  _WidgetPalette get _p => _WidgetPalette(widget.s);
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<_MarketPair> get _localFiltered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _kMarketPairs;
+    return _kMarketPairs.where((p) =>
+        p.key.toLowerCase().contains(q) ||
+        p.label.toLowerCase().contains(q) ||
+        p.sub.toLowerCase().contains(q)).toList();
+  }
+
+  void _onQueryChanged(String v) {
+    setState(() => _query = v);
+    _debounce?.cancel();
+    if (v.trim().length < 2) {
+      setState(() => _remoteResults = []);
+      return;
+    }
+    // Se já há resultado local suficiente, não bate na API pública.
+    if (_localFiltered.isNotEmpty) {
+      setState(() => _remoteResults = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 450), () => _searchRemote(v.trim()));
+  }
+
+  Future<void> _searchRemote(String q) async {
+    setState(() => _searchingRemote = true);
+    try {
+      // API pública da CoinGecko para localizar símbolos de cripto que não
+      // estão na nossa lista curada local.
+      final uri = Uri.parse('https://api.coingecko.com/api/v3/search?query=${Uri.encodeComponent(q)}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        final coins = (decoded['coins'] as List? ?? []).take(8);
+        final results = coins.map((c) {
+          final m = c as Map<String, dynamic>;
+          final symbol = (m['symbol'] as String? ?? '').toUpperCase();
+          final id = m['id'] as String? ?? '';
+          final name = m['name'] as String? ?? symbol;
+          final thumb = m['large'] as String? ?? m['thumb'] as String?;
+          return _MarketPair(
+            key: '${symbol}USD',
+            label: '$symbol/USD',
+            sub: name,
+            badge: 'cripto',
+            basePrice: 1,
+            volatility: 0.02,
+            coingeckoId: id,
+          )..let((p) => thumb != null ? _kCoingeckoIconOverride[id] = thumb : null);
+        }).toList();
+        if (mounted) setState(() => _remoteResults = results);
+      }
+    } catch (_) {
+      // Falha de rede: mantém lista vazia, sem travar a tela.
+    } finally {
+      if (mounted) setState(() => _searchingRemote = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p;
+    final results = _query.trim().isEmpty
+        ? _kMarketPairs
+        : (_localFiltered.isNotEmpty ? _localFiltered : _remoteResults);
+
+    return CupertinoPageScaffold(
+      backgroundColor: p.pageBg,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: p.pageBg,
+        border: null,
+        middle: Text('Mercado', style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: results.isEmpty
+                  ? Center(
+                      child: _searchingRemote
+                          ? CupertinoActivityIndicator(color: p.onSurfaceVariant)
+                          : Text('Sem resultados', style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+                      itemCount: results.length,
+                      itemBuilder: (_, i) {
+                        final pair = results[i];
+                        final active = pair.key == widget.currentKey;
+                        return _MarketPairRow(
+                          s: widget.s,
+                          pair: pair,
+                          active: active,
+                          onTap: () async {
+                            final confirmed = await Navigator.of(context).push<bool>(
+                              CupertinoPageRoute(
+                                builder: (_) => _MarketPairDetailScreen(s: widget.s, pair: pair),
+                              ),
+                            );
+                            if (confirmed == true && mounted) {
+                              Navigator.of(context).pop(pair.key);
+                            }
+                          },
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Container(
+                height: 46,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(999)),
+                child: Row(
+                  children: [
+                    AppIcon('search', color: p.onSurfaceVariant, size: 17),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: _onQueryChanged,
+                        style: TextStyle(color: p.onSurface, fontSize: 14),
+                        cursorColor: p.primary,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: 'Procurar símbolo, ex: BTC, EUR…',
+                          hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                    if (_searchingRemote)
+                      SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 1.8, color: p.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Pequeno helper de encadeamento (evita variável intermédia no map acima)
+extension _Let<T> on T {
+  R let<R>(R Function(T) f) => f(this);
+}
+
+class _MarketPairRow extends StatelessWidget {
+  final AppColorScheme s;
+  final _MarketPair pair;
+  final bool active;
+  final VoidCallback onTap;
+  const _MarketPairRow({required this.s, required this.pair, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _WidgetPalette(s);
+    final iconUrl = _resolvedIconUrl(pair);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 30, height: 30,
+              child: iconUrl != null
+                  ? ClipOval(
+                      child: Image.network(
+                        iconUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                      ),
+                    )
+                  : Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(pair.label, style: TextStyle(color: p.onSurface, fontSize: 14.5, fontWeight: FontWeight.w600)),
+                  Text(pair.sub, style: TextStyle(color: p.onSurfaceVariant, fontSize: 12)),
+                ],
+              ),
+            ),
+            if (active) AppIcon('check', color: p.primary, size: 16),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CALENDAR
+// TELA CHEIA — DETALHE DO PAR (ícone grande + poucos dados)
 // ══════════════════════════════════════════════════════════════
+class _MarketPairDetailScreen extends StatelessWidget {
+  final AppColorScheme s;
+  final _MarketPair pair;
+  const _MarketPairDetailScreen({required this.s, required this.pair});
 
+  @override
+  Widget build(BuildContext context) {
+    final p = _WidgetPalette(s);
+    final series = _generateSeries(pair, '1D', 24);
+    final first = series.first.v;
+    final last = series.last.v;
+    final change = ((last - first) / first) * 100;
+    final isUp = last >= first;
+    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
+    final values = series.map((e) => e.v).toList();
+    final maxV = values.reduce(math.max);
+    final minV = values.reduce(math.min);
+    final iconUrl = _resolvedIconUrl(pair);
+
+    return CupertinoPageScaffold(
+      backgroundColor: p.pageBg,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: p.pageBg,
+        border: null,
+        middle: Text(pair.label, style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 96, height: 96,
+                      child: iconUrl != null
+                          ? ClipOval(
+                              child: Image.network(
+                                iconUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                              ),
+                            )
+                          : Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(pair.sub, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatPairPrice(last, pair),
+                      style: TextStyle(color: p.onSurface, fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedRotation(
+                          turns: isUp ? 0.0 : 0.5,
+                          duration: const Duration(milliseconds: 150),
+                          child: AppIcon('chevron_up', color: color, size: 14),
+                        ),
+                        const SizedBox(width: 4),
+                        Text('${isUp ? '+' : ''}${change.toStringAsFixed(2)}% hoje', style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _DetailStat(p: p, label: 'Máxima 24h', value: _formatPairPrice(maxV, pair)),
+                        Container(width: 1, height: 30, color: p.outline, margin: const EdgeInsets.symmetric(horizontal: 18)),
+                        _DetailStat(p: p, label: 'Mínima 24h', value: _formatPairPrice(minV, pair)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(true),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
+                  child: Text('Selecionar', style: TextStyle(color: p.onPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailStat extends StatelessWidget {
+  final _WidgetPalette p;
+  final String label;
+  final String value;
+  const _DetailStat({required this.p, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(color: p.onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(color: p.onSurfaceVariant, fontSize: 11)),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CALENDÁRIO — CARD (abre tela cheia ao tocar em "Novo evento")
+// ══════════════════════════════════════════════════════════════
 class AiCalendarWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
@@ -921,72 +1111,21 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     }
   }
 
-  void _openNewEventSheet() {
-    final p = _p;
-    final s = widget.s;
-    final nameCtrl = TextEditingController();
-    final timeCtrl = TextEditingController();
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: Builder(builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Novo evento · $_selectedKey',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.onSurface)),
-              const SizedBox(height: 14),
-              TextField(
-                controller: nameCtrl,
-                style: TextStyle(color: p.onSurface),
-                decoration: InputDecoration(
-                  hintText: 'Nome do evento',
-                  hintStyle: TextStyle(color: p.onSurfaceVariant),
-                  filled: true, fillColor: p.optionBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: timeCtrl,
-                style: TextStyle(color: p.onSurface),
-                decoration: InputDecoration(
-                  hintText: 'Hora (ex: 14:00)',
-                  hintStyle: TextStyle(color: p.onSurfaceVariant),
-                  filled: true, fillColor: p.optionBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () {
-                  if (nameCtrl.text.trim().isEmpty) return;
-                  setState(() {
-                    _events.putIfAbsent(_selectedKey, () => []).add((
-                      name: nameCtrl.text.trim(),
-                      time: timeCtrl.text.trim(),
-                      color: const Color(0xFF6F5AF6),
-                    ));
-                  });
-                  Navigator.pop(ctx);
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Adicionar', style: TextStyle(color: p.onPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      )),
+  Future<void> _openNewEventScreen() async {
+    final result = await Navigator.of(context).push<({String name, String time, String color})>(
+      CupertinoPageRoute(
+        builder: (_) => _NewEventScreen(s: widget.s, dateKey: _selectedKey),
+      ),
     );
+    if (result != null) {
+      setState(() {
+        _events.putIfAbsent(_selectedKey, () => []).add((
+          name: result.name,
+          time: result.time,
+          color: _parseColor(result.color) ?? const Color(0xFF6F5AF6),
+        ));
+      });
+    }
   }
 
   @override
@@ -1000,26 +1139,14 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final cells = <Widget>[];
     for (int i = firstDay - 1; i >= 0; i--) {
       final day = daysInPrev - i;
-      cells.add(_buildDayCell(
-        p: p,
-        label: day.toString(),
-        isOtherMonth: true,
-        isToday: false,
-        isSelected: false,
-        eventColors: const [],
-        onTap: null,
-      ));
+      cells.add(_buildDayCell(p: p, label: day.toString(), isOtherMonth: true, isToday: false, isSelected: false, eventColors: const [], onTap: null));
     }
     for (int d = 1; d <= daysInMonth; d++) {
       final key = _key(y, m, d);
       final isToday = DateTime(y, m, d) == DateTime(_today.year, _today.month, _today.day);
       final dayEvents = _events[key] ?? const [];
       cells.add(_buildDayCell(
-        p: p,
-        label: d.toString(),
-        isOtherMonth: false,
-        isToday: isToday,
-        isSelected: key == _selectedKey,
+        p: p, label: d.toString(), isOtherMonth: false, isToday: isToday, isSelected: key == _selectedKey,
         eventColors: dayEvents.map((e) => e.color).toList(),
         onTap: () => setState(() => _selectedKey = key),
       ));
@@ -1027,15 +1154,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
     final total = firstDay + daysInMonth;
     final rem = total % 7 == 0 ? 0 : 7 - total % 7;
     for (int d = 1; d <= rem; d++) {
-      cells.add(_buildDayCell(
-        p: p,
-        label: d.toString(),
-        isOtherMonth: true,
-        isToday: false,
-        isSelected: false,
-        eventColors: const [],
-        onTap: null,
-      ));
+      cells.add(_buildDayCell(p: p, label: d.toString(), isOtherMonth: true, isToday: false, isSelected: false, eventColors: const [], onTap: null));
     }
 
     final rows = <List<Widget>>[];
@@ -1049,22 +1168,14 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
       constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: p.cardBg,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: p.outline),
-        boxShadow: p.cardShadow,
-      ),
+      decoration: BoxDecoration(color: p.cardBg, borderRadius: BorderRadius.circular(32), border: Border.all(color: p.outline), boxShadow: p.cardShadow),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           AspectRatio(
             aspectRatio: 4 / 3,
             child: Container(
-              decoration: BoxDecoration(
-                color: p.previewBg,
-                borderRadius: BorderRadius.circular(24),
-              ),
+              decoration: BoxDecoration(color: p.previewBg, borderRadius: BorderRadius.circular(24)),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
@@ -1073,22 +1184,12 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${_months[m - 1]} $y',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: p.onSurface,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
+                        Text('${_months[m - 1]} $y', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.onSurface, letterSpacing: 0.2)),
                         Row(
                           children: [
-                            _buildNavButton(p: p, icon: 'chevron_left',
-                              onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1))),
+                            _buildNavButton(p: p, icon: 'chevron_left', onTap: () => setState(() => _current = DateTime(_current.year, _current.month - 1, 1))),
                             const SizedBox(width: 8),
-                            _buildNavButton(p: p, icon: 'chevron_right',
-                              onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1))),
+                            _buildNavButton(p: p, icon: 'chevron_right', onTap: () => setState(() => _current = DateTime(_current.year, _current.month + 1, 1))),
                           ],
                         ),
                       ],
@@ -1096,33 +1197,13 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      children: _weekdays.map((w) => Expanded(
-                        child: Center(
-                          child: Text(
-                            w,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: p.onSurfaceVariant,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      )).toList(),
-                    ),
+                    child: Row(children: _weekdays.map((w) => Expanded(child: Center(child: Text(w, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: p.onSurfaceVariant, letterSpacing: 0.5))))).toList()),
                   ),
                   const SizedBox(height: 4),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Column(
-                        children: rows.map((row) => Expanded(
-                          child: Row(
-                            children: row.map((cell) => Expanded(child: cell)).toList(),
-                          ),
-                        )).toList(),
-                      ),
+                      child: Column(children: rows.map((row) => Expanded(child: Row(children: row.map((cell) => Expanded(child: cell)).toList()))).toList()),
                     ),
                   ),
                   if (selectedEvents.isNotEmpty)
@@ -1130,13 +1211,10 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
                       padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                       child: Row(
                         children: [
-                          Container(width: 6, height: 6, margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(color: selectedEvents.first.color, shape: BoxShape.circle)),
+                          Container(width: 6, height: 6, margin: const EdgeInsets.only(right: 6), decoration: BoxDecoration(color: selectedEvents.first.color, shape: BoxShape.circle)),
                           Expanded(
                             child: Text(
-                              selectedEvents.length == 1
-                                  ? selectedEvents.first.name
-                                  : '${selectedEvents.first.name} +${selectedEvents.length - 1}',
+                              selectedEvents.length == 1 ? selectedEvents.first.name : '${selectedEvents.first.name} +${selectedEvents.length - 1}',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600),
                             ),
@@ -1151,32 +1229,18 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: p.actionsBg,
-              borderRadius: BorderRadius.circular(50),
-            ),
+            decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(50)),
             child: GestureDetector(
-              onTap: _openNewEventSheet,
+              onTap: _openNewEventScreen,
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: p.primary,
-                  borderRadius: BorderRadius.circular(50),
-                ),
+                decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(50)),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     AppIcon('add', size: 14, color: p.onPrimary),
                     const SizedBox(width: 7),
-                    Text(
-                      'Novo evento',
-                      style: TextStyle(
-                        color: p.onPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
+                    Text('Novo evento', style: TextStyle(color: p.onPrimary, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1)),
                   ],
                 ),
               ),
@@ -1190,27 +1254,11 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
   Widget _buildNavButton({required _WidgetPalette p, required String icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: p.navBtnBg,
-          shape: BoxShape.circle,
-        ),
-        child: AppIcon(icon, size: 12, color: p.onSurfaceVariant),
-      ),
+      child: Container(width: 28, height: 28, decoration: BoxDecoration(color: p.navBtnBg, shape: BoxShape.circle), child: AppIcon(icon, size: 12, color: p.onSurfaceVariant)),
     );
   }
 
-  Widget _buildDayCell({
-    required _WidgetPalette p,
-    required String label,
-    required bool isOtherMonth,
-    required bool isToday,
-    required bool isSelected,
-    required List<Color> eventColors,
-    required VoidCallback? onTap,
-  }) {
+  Widget _buildDayCell({required _WidgetPalette p, required String label, required bool isOtherMonth, required bool isToday, required bool isSelected, required List<Color> eventColors, required VoidCallback? onTap}) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -1218,44 +1266,14 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isToday
-                  ? p.primary
-                  : isSelected
-                      ? p.optionBg
-                      : Colors.transparent,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
-                color: isToday
-                    ? p.onPrimary
-                    : isOtherMonth
-                        ? p.onSurfaceVariant.withOpacity(0.5)
-                        : p.onSurface,
-              ),
-            ),
+            width: 24, height: 24, alignment: Alignment.center,
+            decoration: BoxDecoration(color: isToday ? p.primary : isSelected ? p.optionBg : Colors.transparent, shape: BoxShape.circle),
+            child: Text(label, style: TextStyle(fontSize: 12, fontWeight: isToday || eventColors.isNotEmpty ? FontWeight.w700 : FontWeight.w500, color: isToday ? p.onPrimary : isOtherMonth ? p.onSurfaceVariant.withOpacity(0.5) : p.onSurface)),
           ),
           if (eventColors.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Column(
-                children: eventColors.take(2).map((c) => Container(
-                  width: 4,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 1),
-                  decoration: BoxDecoration(
-                    color: c,
-                    shape: BoxShape.circle,
-                  ),
-                )).toList(),
-              ),
+              child: Column(children: eventColors.take(2).map((c) => Container(width: 4, height: 4, margin: const EdgeInsets.only(bottom: 1), decoration: BoxDecoration(color: c, shape: BoxShape.circle))).toList()),
             ),
         ],
       ),
@@ -1264,38 +1282,174 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MAP WIDGET — VERSÃO COMPLETA (paridade com o HTML de referência)
+// TELA CHEIA — NOVO EVENTO (inputs organizados)
 // ══════════════════════════════════════════════════════════════
+class _NewEventScreen extends StatefulWidget {
+  final AppColorScheme s;
+  final String dateKey;
+  const _NewEventScreen({required this.s, required this.dateKey});
+  @override State<_NewEventScreen> createState() => _NewEventScreenState();
+}
 
-enum _MapLayer { satellite, streets, dark, terrain }
+class _NewEventScreenState extends State<_NewEventScreen> {
+  final _nameCtrl = TextEditingController();
+  final _timeCtrl = TextEditingController();
+  final List<Color> _palette = const [
+    Color(0xFF6F5AF6), Color(0xFF4EC994), Color(0xFFE05E5E),
+    Color(0xFFE0A63E), Color(0xFF4F9FDC), Color(0xFFD062C4),
+  ];
+  late Color _selectedColor;
+
+  _WidgetPalette get _p => _WidgetPalette(widget.s);
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedColor = _palette.first;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _timeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_nameCtrl.text.trim().isEmpty) return;
+    final colorHex = '#${_selectedColor.value.toRadixString(16).substring(2)}';
+    Navigator.of(context).pop((
+      name: _nameCtrl.text.trim(),
+      time: _timeCtrl.text.trim(),
+      color: colorHex,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p;
+    return CupertinoPageScaffold(
+      backgroundColor: p.pageBg,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: p.pageBg,
+        border: null,
+        middle: Text('Novo evento', style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.dateKey, style: TextStyle(color: p.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 18),
+
+              _FieldLabel(p: p, text: 'Nome do evento'),
+              const SizedBox(height: 6),
+              _StyledField(p: p, controller: _nameCtrl, hint: 'Ex: Reunião com equipa'),
+
+              const SizedBox(height: 18),
+              _FieldLabel(p: p, text: 'Hora'),
+              const SizedBox(height: 6),
+              _StyledField(p: p, controller: _timeCtrl, hint: 'Ex: 14:00', keyboardType: TextInputType.datetime),
+
+              const SizedBox(height: 18),
+              _FieldLabel(p: p, text: 'Cor'),
+              const SizedBox(height: 10),
+              Row(
+                children: _palette.map((c) {
+                  final active = c.value == _selectedColor.value;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedColor = c),
+                    child: Container(
+                      width: 34, height: 34,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        color: c, shape: BoxShape.circle,
+                        border: active ? Border.all(color: p.onSurface, width: 2.5) : null,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 32),
+              GestureDetector(
+                onTap: _submit,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
+                  child: Text('Adicionar evento', style: TextStyle(color: p.onPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final _WidgetPalette p;
+  final String text;
+  const _FieldLabel({required this.p, required this.text});
+  @override
+  Widget build(BuildContext context) => Text(text, style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w600));
+}
+
+class _StyledField extends StatelessWidget {
+  final _WidgetPalette p;
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType? keyboardType;
+  const _StyledField({required this.p, required this.controller, required this.hint, this.keyboardType});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(14)),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        style: TextStyle(color: p.onSurface, fontSize: 15),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: p.onSurfaceVariant),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAP WIDGET — CARD SIMPLIFICADO (sem badge, sem recentrar, sem
+// switch 3D, sem pesquisa; só o mapa + botão longo de local +
+// popup menu de camadas)
+// ══════════════════════════════════════════════════════════════
+enum _MapLayer { standard, satellite, streets, dark, terrain, googleMaps }
 
 class AiMapWidget extends StatefulWidget {
   final Map<String, dynamic> json;
   final AppColorScheme s;
   const AiMapWidget({super.key, required this.json, required this.s});
-  @override
-  State<AiMapWidget> createState() => _AiMapWidgetState();
+  @override State<AiMapWidget> createState() => _AiMapWidgetState();
 }
 
-class _AiMapWidgetState extends State<AiMapWidget>
-    with SingleTickerProviderStateMixin {
+class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStateMixin {
   late final MapController _mapController;
-
   late double _lat;
   late double _lng;
   late double _zoom;
   late String _name;
 
-  final TextEditingController _searchCtrl = TextEditingController();
-
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
 
-  bool _locating = false;
-  bool _searching = false;
-
   _MapLayer _layer = _MapLayer.satellite;
-  bool _buildingsRelief = false; // efeito visual de relevo (sem lib 3D externa)
 
   _WidgetPalette get _p => _WidgetPalette(widget.s);
 
@@ -1307,27 +1461,23 @@ class _AiMapWidgetState extends State<AiMapWidget>
     _lng = (widget.json['lng'] is num) ? (widget.json['lng'] as num).toDouble() : -9.1393;
     _zoom = (widget.json['zoom'] is num) ? (widget.json['zoom'] as num).toDouble() : 13.0;
     _name = _sanitizeText(widget.json['name']);
-    if (_name.isEmpty) _name = 'Localização';
+    if (_name.isEmpty) _name = 'Lisboa, Portugal';
 
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.8, end: 1.4).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeOut),
-    );
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.8, end: 1.4).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeOut));
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
-  // ── Definições de camadas de tiles, equivalentes ao objeto layerDefs do HTML ──
   String get _tileUrl {
     switch (_layer) {
+      case _MapLayer.standard:
+      case _MapLayer.googleMaps: // fallback de tiles enquanto não há chave do Google Maps SDK nativo
+        return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
       case _MapLayer.satellite:
         return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
       case _MapLayer.streets:
@@ -1341,204 +1491,82 @@ class _AiMapWidgetState extends State<AiMapWidget>
 
   List<String> get _tileSubdomains {
     switch (_layer) {
-      case _MapLayer.satellite:
-        return const [];
-      case _MapLayer.dark:
-        return const ['a', 'b', 'c', 'd'];
-      case _MapLayer.streets:
-      case _MapLayer.terrain:
-        return const ['a', 'b', 'c'];
+      case _MapLayer.satellite: return const [];
+      case _MapLayer.dark: return const ['a', 'b', 'c', 'd'];
+      default: return const ['a', 'b', 'c'];
     }
   }
 
   String get _layerLabel {
     switch (_layer) {
+      case _MapLayer.standard: return 'Padrão';
       case _MapLayer.satellite: return 'Satélite';
-      case _MapLayer.streets:   return 'Ruas';
-      case _MapLayer.dark:      return 'Escuro';
-      case _MapLayer.terrain:   return 'Terreno';
+      case _MapLayer.streets: return 'Ruas';
+      case _MapLayer.dark: return 'Escuro';
+      case _MapLayer.terrain: return 'Terreno';
+      case _MapLayer.googleMaps: return 'Google Maps';
     }
   }
 
-  String _layerIcon(_MapLayer l) {
-    switch (l) {
-      case _MapLayer.satellite: return 'satellite';
-      case _MapLayer.streets:   return 'road';
-      case _MapLayer.dark:      return 'moon';
-      case _MapLayer.terrain:   return 'mountain';
-    }
-  }
-
-  Future<void> _locateUser() async {
-    if (_locating) return;
-    setState(() => _locating = true);
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 8),
-        ),
-      );
-      _lat = position.latitude;
-      _lng = position.longitude;
-      _zoom = 15.0;
-      _name = 'A sua localização';
+  Future<void> _openLocationPicker() async {
+    final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
+      CupertinoPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
+    );
+    if (result != null) {
+      setState(() {
+        _lat = result.lat;
+        _lng = result.lng;
+        _name = result.name;
+        _zoom = 12.0;
+      });
       _mapController.move(ll.LatLng(_lat, _lng), _zoom);
-      if (mounted) setState(() {});
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível obter a localização.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _locating = false);
     }
   }
 
-  Future<void> _search() async {
-    final query = _searchCtrl.text.trim();
-    if (query.isEmpty || _searching) return;
+  void _openLayersPopup(BuildContext buttonContext) async {
+    final box = buttonContext.findRenderObject() as RenderBox;
+    final overlay = Overlay.of(buttonContext).context.findRenderObject() as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        box.localToGlobal(Offset.zero, ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
 
-    setState(() => _searching = true);
-    try {
-      final uri = Uri.parse(
-          'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${Uri.encodeComponent(query)}');
-      final res = await http.get(uri);
-      if (res.statusCode != 200) throw Exception('Erro na pesquisa');
-
-      final list = jsonDecode(res.body) as List;
-      if (list.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Local não encontrado.')),
-          );
-        }
-        return;
-      }
-
-      final first = list.first as Map<String, dynamic>;
-      final lat = double.parse(first['lat'].toString());
-      final lon = double.parse(first['lon'].toString());
-      final displayName = (first['display_name'] as String? ?? query)
-          .split(',')
-          .take(2)
-          .join(',');
-
-      _lat = lat;
-      _lng = lon;
-      _zoom = 14.0;
-      _name = displayName;
-
-      _mapController.move(ll.LatLng(lat, lon), _zoom);
-      if (mounted) setState(() {});
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro na pesquisa.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _searching = false);
-    }
-  }
-
-  // ── Bottom sheet de seleção de camada + relevo (equivalente ao modal do HTML) ──
-  Future<void> _openLayersSheet() async {
     final p = _p;
-    await showCraftBottomSheet<void>(
-      context: context,
-      s: widget.s,
-      child: StatefulBuilder(builder: (ctx, setSheetState) {
-        Widget layerOption(_MapLayer l, String label) {
-          final active = _layer == l;
-          return GestureDetector(
-            onTap: () {
-              setState(() => _layer = l);
-              setSheetState(() {});
-            },
-            child: Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: active ? p.primary : p.optionBg,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  AppIcon(_layerIcon(l), size: 15, color: active ? p.onPrimary : p.onSurfaceVariant),
-                  const SizedBox(width: 12),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: active ? p.onPrimary : p.onSurface,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
+    final selected = await showMenu<_MapLayer>(
+      context: buttonContext,
+      position: position,
+      color: p.optionBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      items: [
+        _buildMenuItem(p, _MapLayer.standard, 'road', 'Padrão'),
+        _buildMenuItem(p, _MapLayer.satellite, 'satellite', 'Satélite'),
+        _buildMenuItem(p, _MapLayer.streets, 'road', 'Ruas'),
+        _buildMenuItem(p, _MapLayer.dark, 'moon', 'Escuro'),
+        _buildMenuItem(p, _MapLayer.terrain, 'mountain', 'Terreno'),
+        const PopupMenuDivider(height: 12),
+        _buildMenuItem(p, _MapLayer.googleMaps, 'map', 'Google Maps'),
+      ],
+    );
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Vista do Mapa',
-                      style: TextStyle(color: p.onSurface, fontSize: 16, fontWeight: FontWeight.w700)),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx),
-                    child: AppIcon('close', size: 16, color: p.onSurfaceVariant),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              layerOption(_MapLayer.satellite, 'Satélite'),
-              layerOption(_MapLayer.streets, 'Ruas'),
-              layerOption(_MapLayer.dark, 'Escuro'),
-              layerOption(_MapLayer.terrain, 'Terreno'),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(
-                  color: p.optionBg,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        AppIcon('building', size: 15, color: p.onSurfaceVariant),
-                        const SizedBox(width: 8),
-                        Text('Relevo de edifícios',
-                            style: TextStyle(color: p.onSurface, fontSize: 14, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    Switch.adaptive(
-                      value: _buildingsRelief,
-                      activeColor: p.primary,
-                      onChanged: (v) {
-                        setState(() => _buildingsRelief = v);
-                        setSheetState(() {});
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      }),
+    if (selected != null) setState(() => _layer = selected);
+  }
+
+  PopupMenuItem<_MapLayer> _buildMenuItem(_WidgetPalette p, _MapLayer value, String icon, String label) {
+    final active = _layer == value;
+    return PopupMenuItem<_MapLayer>(
+      value: value,
+      height: 42,
+      child: Row(
+        children: [
+          AppIcon(icon, size: 15, color: active ? p.primary : p.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(color: active ? p.primary : p.onSurface, fontSize: 14, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
+          if (active) ...[const Spacer(), AppIcon('check', size: 14, color: p.primary)],
+        ],
+      ),
     );
   }
 
@@ -1549,180 +1577,46 @@ class _AiMapWidgetState extends State<AiMapWidget>
       constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: p.cardBg,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: p.outline),
-        boxShadow: p.cardShadow,
-      ),
+      decoration: BoxDecoration(color: p.cardBg, borderRadius: BorderRadius.circular(32), border: Border.all(color: p.outline), boxShadow: p.cardShadow),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           AspectRatio(
             aspectRatio: 4 / 3,
             child: Container(
-              decoration: BoxDecoration(
-                color: p.previewBg,
-                borderRadius: BorderRadius.circular(24),
-              ),
+              decoration: BoxDecoration(color: p.previewBg, borderRadius: BorderRadius.circular(24)),
               clipBehavior: Clip.antiAlias,
               child: Stack(
                 children: [
-                  // ── Camada base do mapa ──
                   FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
                       initialCenter: ll.LatLng(_lat, _lng),
                       initialZoom: _zoom,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all,
-                      ),
+                      interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
                     ),
                     children: [
-                      TileLayer(
-                        urlTemplate: _tileUrl,
-                        userAgentPackageName: 'com.nexa.app',
-                        subdomains: _tileSubdomains,
-                      ),
-                      // ── Efeito de "relevo de edifícios" (cosmético, sem lib 3D) ──
-                      if (_buildingsRelief)
-                        IgnorePointer(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.0),
-                                  Colors.black.withOpacity(0.18),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                      TileLayer(urlTemplate: _tileUrl, userAgentPackageName: 'com.nexa.app', subdomains: _tileSubdomains),
                       MarkerLayer(
                         markers: [
                           Marker(
                             point: ll.LatLng(_lat, _lng),
-                            width: 36,
-                            height: 36,
-                            child: _PulsingMapMarker(
-                              animation: _pulseAnim,
-                              color: p.primary,
-                            ),
+                            width: 36, height: 36,
+                            child: _PulsingMapMarker(animation: _pulseAnim, color: p.primary),
                           ),
                         ],
                       ),
                     ],
                   ),
-
-                  // ── Badge de localização ──
+                  // Chip discreto com a camada ativa (mantido apenas como
+                  // indicador passivo, sem botões extra sobre o mapa).
                   Positioned(
-                    top: 12,
-                    left: 14,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: p.badgeBg,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AppIcon('location', color: p.primary, size: 13),
-                          const SizedBox(width: 6),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 180),
-                            child: Text(
-                              _locating ? 'A localizar…' : _name,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: p.onSurface,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ── Botão de camadas (canto superior direito) ──
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: _openLayersSheet,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: p.badgeBg,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: AppIcon('layers', color: p.onSurface, size: 15),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // ── Chip com o nome da camada ativa ──
-                  Positioned(
-                    top: 54,
-                    right: 12,
+                    top: 10, right: 10,
                     child: IgnorePointer(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: p.badgeBg,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _layerLabel,
-                          style: TextStyle(color: p.onSurfaceVariant, fontSize: 9.5, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // ── Botão de recentrar ──
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: _locateUser,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: p.navBtnBg,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: _locating
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: p.primary),
-                                )
-                              : AppIcon('locate', color: p.onSurface, size: 15),
-                        ),
+                        decoration: BoxDecoration(color: p.badgeBg, borderRadius: BorderRadius.circular(10)),
+                        child: Text(_layerLabel, style: TextStyle(color: p.onSurfaceVariant, fontSize: 9.5, fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -1730,58 +1624,349 @@ class _AiMapWidgetState extends State<AiMapWidget>
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // ── Barra de pesquisa ──
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: p.actionsBg,
-              borderRadius: BorderRadius.circular(50),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: TextStyle(color: p.onSurface, fontSize: 14),
-                    cursorColor: p.primary,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Procurar morada ou local…',
-                      hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                    onSubmitted: (_) => _search(),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: _search,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: p.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: _searching
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: p.onPrimary),
-                            )
-                          : AppIcon('search', color: p.onPrimary, size: 15),
+          // ── Ações: botão longo de local + botão circular de camadas ──
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(50)),
+                  child: GestureDetector(
+                    onTap: _openLocationPicker,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+                      decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(50)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AppIcon('location', color: p.onPrimary, size: 15),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              _name,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: TextStyle(color: p.onPrimary, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Builder(
+                builder: (btnContext) => Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(50)),
+                  child: GestureDetector(
+                    onTap: () => _openLayersPopup(btnContext),
+                    child: Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(color: p.navBtnBg, shape: BoxShape.circle),
+                      child: AppIcon('layers', color: p.onSurface, size: 17),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA CHEIA — SELETOR DE LOCALIZAÇÃO (países A-Z → províncias)
+// Sem cards: apenas nome + seta, com search input fixo em baixo.
+// ══════════════════════════════════════════════════════════════
+class _LocationPickerScreen extends StatefulWidget {
+  final AppColorScheme s;
+  const _LocationPickerScreen({required this.s});
+  @override State<_LocationPickerScreen> createState() => _LocationPickerScreenState();
+}
+
+class _LocationPickerScreenState extends State<_LocationPickerScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  bool _loadingCountries = true;
+  List<String> _countries = [];
+  String? _error;
+
+  _WidgetPalette get _p => _WidgetPalette(widget.s);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCountries();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCountries() async {
+    setState(() { _loadingCountries = true; _error = null; });
+    try {
+      final list = await _GeoCache.getCountries();
+      if (mounted) setState(() { _countries = list; _loadingCountries = false; });
+    } catch (_) {
+      if (mounted) setState(() { _error = 'Não foi possível carregar países.'; _loadingCountries = false; });
+    }
+  }
+
+  List<String> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _countries;
+    return _countries.where((c) => c.toLowerCase().contains(q)).toList();
+  }
+
+  void _openCountry(String country) async {
+    final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
+      CupertinoPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
+    );
+    if (result != null && mounted) Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p;
+    final items = _filtered;
+
+    return CupertinoPageScaffold(
+      backgroundColor: p.pageBg,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: p.pageBg,
+        border: null,
+        middle: Text('Escolher país', style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: _loadingCountries
+                  ? Center(child: CupertinoActivityIndicator(color: p.onSurfaceVariant))
+                  : _error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
+                              const SizedBox(height: 10),
+                              GestureDetector(
+                                onTap: _loadCountries,
+                                child: Text('Tentar novamente', style: TextStyle(color: p.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                          ),
+                        )
+                      : items.isEmpty
+                          ? Center(child: Text('Sem resultados', style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)))
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: items.length,
+                              itemBuilder: (_, i) => _PlainNavRow(
+                                p: p,
+                                label: items[i],
+                                onTap: () => _openCountry(items[i]),
+                              ),
+                            ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Container(
+                height: 46,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(999)),
+                child: Row(
+                  children: [
+                    AppIcon('search', color: p.onSurfaceVariant, size: 17),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _query = v),
+                        style: TextStyle(color: p.onSurface, fontSize: 14),
+                        cursorColor: p.primary,
+                        decoration: InputDecoration(
+                          isDense: true, border: InputBorder.none,
+                          hintText: 'Procurar país…',
+                          hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatePickerScreen extends StatefulWidget {
+  final AppColorScheme s;
+  final String country;
+  const _StatePickerScreen({required this.s, required this.country});
+  @override State<_StatePickerScreen> createState() => _StatePickerScreenState();
+}
+
+class _StatePickerScreenState extends State<_StatePickerScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  bool _loading = true;
+  List<String> _states = [];
+  String? _error;
+
+  _WidgetPalette get _p => _WidgetPalette(widget.s);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final list = await _GeoCache.getStates(widget.country);
+      if (mounted) setState(() { _states = list; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _error = 'Não foi possível carregar as regiões.'; _loading = false; });
+    }
+  }
+
+  List<String> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _states;
+    return _states.where((s) => s.toLowerCase().contains(q)).toList();
+  }
+
+  void _selectState(String stateName) async {
+    // Geocodifica "Estado, País" via Nominatim para obter lat/lng reais.
+    try {
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${Uri.encodeComponent('$stateName, ${widget.country}')}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final list = jsonDecode(res.body) as List;
+      if (list.isNotEmpty) {
+        final first = list.first as Map<String, dynamic>;
+        final lat = double.parse(first['lat'].toString());
+        final lng = double.parse(first['lon'].toString());
+        if (mounted) Navigator.of(context).pop((name: '$stateName, ${widget.country}', lat: lat, lng: lng));
+        return;
+      }
+    } catch (_) {
+      // segue para o fallback abaixo
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível localizar esta região.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p;
+    final items = _filtered;
+
+    return CupertinoPageScaffold(
+      backgroundColor: p.pageBg,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: p.pageBg,
+        border: null,
+        middle: Text(widget.country, style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: _loading
+                  ? Center(child: CupertinoActivityIndicator(color: p.onSurfaceVariant))
+                  : _error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
+                              const SizedBox(height: 10),
+                              GestureDetector(onTap: _load, child: Text('Tentar novamente', style: TextStyle(color: p.primary, fontSize: 14, fontWeight: FontWeight.w600))),
+                            ],
+                          ),
+                        )
+                      : items.isEmpty
+                          ? Center(child: Text('Sem regiões disponíveis', style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)))
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: items.length,
+                              itemBuilder: (_, i) => _PlainNavRow(p: p, label: items[i], showArrow: false, onTap: () => _selectState(items[i])),
+                            ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Container(
+                height: 46,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(999)),
+                child: Row(
+                  children: [
+                    AppIcon('search', color: p.onSurfaceVariant, size: 17),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _query = v),
+                        style: TextStyle(color: p.onSurface, fontSize: 14),
+                        cursorColor: p.primary,
+                        decoration: InputDecoration(
+                          isDense: true, border: InputBorder.none,
+                          hintText: 'Procurar região…',
+                          hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlainNavRow extends StatelessWidget {
+  final _WidgetPalette p;
+  final String label;
+  final bool showArrow;
+  final VoidCallback onTap;
+  const _PlainNavRow({required this.p, required this.label, required this.onTap, this.showArrow = true});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: TextStyle(color: p.onSurface, fontSize: 15, fontWeight: FontWeight.w500))),
+            if (showArrow) AppIcon('chevron_right', size: 14, color: p.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
@@ -1791,7 +1976,6 @@ class _PulsingMapMarker extends StatelessWidget {
   final Animation<double> animation;
   final Color color;
   const _PulsingMapMarker({required this.animation, required this.color});
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -1799,31 +1983,12 @@ class _PulsingMapMarker extends StatelessWidget {
       builder: (_, child) {
         final ringScale = animation.value;
         return SizedBox(
-          width: 36,
-          height: 36,
+          width: 36, height: 36,
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Transform.scale(
-                scale: ringScale,
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.35),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
+              Transform.scale(scale: ringScale, child: Container(width: 20, height: 20, decoration: BoxDecoration(color: color.withOpacity(0.35), shape: BoxShape.circle))),
+              Container(width: 14, height: 14, decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))),
             ],
           ),
         );
@@ -1835,7 +2000,6 @@ class _PulsingMapMarker extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // SMALL DOTS LOADER
 // ══════════════════════════════════════════════════════════════
-
 class AiSmallDotsLoader extends StatefulWidget {
   final Color color;
   const AiSmallDotsLoader({super.key, required this.color});
@@ -1864,10 +2028,7 @@ class _AiSmallDotsLoaderState extends State<AiSmallDotsLoader> with SingleTicker
             var t = (_c.value - delay) % 1.0;
             if (t < 0) t += 1.0;
             final scale = 0.5 + 0.5 * (t < 0.5 ? (t * 2) : (2 - t * 2));
-            return Transform.scale(
-              scale: scale,
-              child: Container(width: 6, height: 6, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
-            );
+            return Transform.scale(scale: scale, child: Container(width: 6, height: 6, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)));
           }),
         ),
       ),
