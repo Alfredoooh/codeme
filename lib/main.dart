@@ -206,7 +206,8 @@ class _RootShellState extends State<RootShell>
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final _drawerWidth = MediaQuery.of(context).size.width;
+    final _screenWidth = MediaQuery.of(context).size.width;
+    final _drawerWidth = _screenWidth * 0.75;
 
     final bodyContent = Stack(children: [
       Positioned.fill(
