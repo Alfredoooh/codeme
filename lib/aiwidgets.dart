@@ -5,9 +5,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:geolocator/geolocator.dart';
@@ -18,6 +18,16 @@ import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
 import 'app_sheet.dart';
 import 'sheets.dart';
+
+// ══════════════════════════════════════════════════════════════
+// NOTA — GOOGLE MAPS SEM API KEY
+// ══════════════════════════════════════════════════════════════
+// Sem key do Google Cloud configurada nativamente (AndroidManifest.xml /
+// Info.plist), não dá pra embutir o SDK real do Google Maps dentro da app.
+// A opção "Google Maps" no popup de camadas abre a app/site do Google Maps
+// via launchUrl — é o Google Maps a sério, só que como app externa, não
+// embutida no card. Quando/se decidires obter a key, o ponto a mudar é a
+// função _openInGoogleMaps() mais abaixo.
 
 // ══════════════════════════════════════════════════════════════
 // FUNÇÕES AUXILIARES
@@ -43,8 +53,7 @@ String _sanitizeText(String? raw) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PALETA DEDICADA — CORRIGIDA: moldura externa mais escura que o
-// preview interno, para nunca mais colidirem visualmente no dark.
+// PALETA DEDICADA
 // ══════════════════════════════════════════════════════════════
 class _WidgetPalette {
   final AppColorScheme s;
@@ -52,15 +61,14 @@ class _WidgetPalette {
 
   bool get isDark => s.isDark;
 
-  // Moldura externa (a "mãe") — agora mais escura que tudo lá dentro.
   Color get cardBg => isDark ? const Color(0xFF121214) : s.cardBackground;
 
-  // Preview interno (mapa/gráfico/calendário) — um degrau acima da moldura.
-  Color get previewBg => isDark ? const Color(0xFF1A1A1D) : s.surface;
+  // ALTERADO: preview interno (mapa/gráfico/calendário) agora usa o MESMO
+  // tom do actionsBg — pedido explícito ("quero fundo semelhante ao que
+  // está no container onde os botões ficam, esse atual é feio").
+  Color get previewBg => actionsBg;
 
-  // Pill de ações inferior — mesmo nível do preview, para não competir com a moldura.
   Color get actionsBg => isDark ? const Color(0xFF1E1E21) : s.hover;
-
   Color get navBtnBg => isDark ? const Color(0xFF232326) : s.hover;
 
   Color get badgeBg => isDark
@@ -77,7 +85,6 @@ class _WidgetPalette {
   Color get primary => s.primary;
   Color get onPrimary => s.onPrimary;
 
-  // Fundo de tela cheia (páginas de seleção)
   Color get pageBg => isDark ? const Color(0xFF0B0B0C) : s.pageBackground;
 
   List<BoxShadow> get cardShadow => isDark
@@ -140,6 +147,176 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// POPUP CUSTOM — substitui showMenu (que só renderizava a sombra)
+// ══════════════════════════════════════════════════════════════
+// Causa raiz do bug: Overlay.of(buttonContext).context.findRenderObject()
+// não devolve a render box correta em todas as árvores de widget, então
+// RelativeRect.fromRect calculava uma posição inválida e o Material do
+// menu desenhava só a elevation/sombra, sem o conteúdo por cima.
+// Solução: OverlayEntry manual, com Stack + Positioned calculado a partir
+// do RenderBox do próprio botão (sempre correto) e um GestureDetector de
+// fundo transparente para fechar ao tocar fora.
+class AiPopupOption<T> {
+  final T value;
+  final String icon;
+  final String label;
+  const AiPopupOption({required this.value, required this.icon, required this.label});
+}
+
+Future<T?> showAiPopup<T>({
+  required BuildContext context,
+  required GlobalKey anchorKey,
+  required List<AiPopupOption<T>> options,
+  required T currentValue,
+  required _WidgetPalette p,
+}) async {
+  final completer = Completer<T?>();
+  OverlayEntry? entry;
+
+  void close([T? value]) {
+    entry?.remove();
+    entry = null;
+    if (!completer.isCompleted) completer.complete(value);
+  }
+
+  final renderBox = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (renderBox == null) return null;
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final anchorTopLeft = renderBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+  final anchorSize = renderBox.size;
+
+  const menuWidth = 200.0;
+  double left = anchorTopLeft.dx + anchorSize.width - menuWidth;
+  left = left.clamp(8.0, overlayBox.size.width - menuWidth - 8.0);
+  double top = anchorTopLeft.dy + anchorSize.height + 8;
+
+  entry = OverlayEntry(
+    builder: (ctx) {
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => close(null),
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          Positioned(
+            left: left,
+            top: top,
+            width: menuWidth,
+            child: _AiPopupMenuCard<T>(
+              options: options,
+              currentValue: currentValue,
+              p: p,
+              onSelected: (v) => close(v),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+  overlayState.insert(entry!);
+  return completer.future;
+}
+
+class _AiPopupMenuCard<T> extends StatelessWidget {
+  final List<AiPopupOption<T>> options;
+  final T currentValue;
+  final _WidgetPalette p;
+  final ValueChanged<T> onSelected;
+  const _AiPopupMenuCard({required this.options, required this.currentValue, required this.p, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        // ── Bordas mais curvas, pedido explícito, mantendo o mesmo estilo
+        // de entrada (fade + scale) já usado no resto da app. ──
+        decoration: BoxDecoration(
+          color: p.optionBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: p.outline),
+          boxShadow: p.cardShadow,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          builder: (ctx, t, child) => Opacity(
+            opacity: t,
+            child: Transform.scale(scale: 0.94 + 0.06 * t, alignment: Alignment.topRight, child: child),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: options.map((opt) {
+                final active = opt.value == currentValue;
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelected(opt.value),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    margin: const EdgeInsets.symmetric(vertical: 1),
+                    decoration: BoxDecoration(
+                      color: active ? p.primary.withOpacity(0.12) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        AppIcon(opt.icon, size: 15, color: active ? p.primary : p.onSurfaceVariant),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(opt.label, style: TextStyle(color: active ? p.primary : p.onSurface, fontSize: 14, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
+                        ),
+                        if (active) AppIcon('check', size: 14, color: p.primary),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CABEÇALHO DE TELA CHEIA — genérico, título alinhado à esquerda,
+// sem Cupertino, sem fonte iOS. Usa AppIcon('back') do teu SVG em
+// assets/icons/outline/.
+// ══════════════════════════════════════════════════════════════
+PreferredSizeWidget aiScreenAppBar({
+  required _WidgetPalette p,
+  required String title,
+  required VoidCallback onBack,
+  List<Widget>? actions,
+}) {
+  return AppBar(
+    backgroundColor: p.pageBg,
+    surfaceTintColor: Colors.transparent,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    centerTitle: false,
+    titleSpacing: 4,
+    leadingWidth: 52,
+    leading: IconButton(
+      onPressed: onBack,
+      icon: AppIcon('back', size: 18, color: p.onSurface),
+    ),
+    title: Text(title, style: TextStyle(color: p.onSurface, fontSize: 17, fontWeight: FontWeight.w700)),
+    actions: actions,
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // CACHE PERSISTENTE DE PAÍSES/PROVÍNCIAS (shared_preferences)
 // ══════════════════════════════════════════════════════════════
 class _GeoCache {
@@ -158,9 +335,7 @@ class _GeoCache {
         _memCountries = cached;
         return cached;
       }
-    } catch (_) {
-      // shared_preferences pode falhar em ambientes de teste; segue para rede.
-    }
+    } catch (_) {}
 
     final res = await http
         .get(Uri.parse('https://countriesnow.space/api/v0.1/countries/positions'))
@@ -218,81 +393,94 @@ class _GeoCache {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MERCADO — DADOS DE PARES (partilhado entre widget e tela cheia)
+// CACHE PERSISTENTE DE ÍCONES DE CRIPTOMOEDAS (URL correta via API)
+// ══════════════════════════════════════════════════════════════
+// Bug anterior: a URL fallback usava sempre o id numérico "1" (fixo do
+// Bitcoin) para qualquer moeda, então nunca resolvia. Correção: buscar a
+// URL real de imagem via /api/v3/coins/{id} (campo image.small), uma vez
+// por moeda, com cache em shared_preferences.
+class _CryptoIconCache {
+  static const _kPrefix = 'aiwidgets_crypto_icon_v1_';
+  static final Map<String, String?> _mem = {};
+
+  static Future<String?> getIconUrl(String coingeckoId) async {
+    if (_mem.containsKey(coingeckoId)) return _mem[coingeckoId];
+    final key = '$_kPrefix$coingeckoId';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(key);
+      if (cached != null && cached.isNotEmpty) {
+        _mem[coingeckoId] = cached;
+        return cached;
+      }
+    } catch (_) {}
+
+    try {
+      final uri = Uri.parse('https://api.coingecko.com/api/v3/coins/$coingeckoId?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        final image = decoded['image'] as Map<String, dynamic>?;
+        final url = image?['small'] as String? ?? image?['thumb'] as String?;
+        if (url != null) {
+          _mem[coingeckoId] = url;
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(key, url);
+          } catch (_) {}
+          return url;
+        }
+      }
+    } catch (_) {}
+
+    _mem[coingeckoId] = null;
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MERCADO — DADOS DE PARES
 // ══════════════════════════════════════════════════════════════
 class _MarketPair {
   final String key;
   final String label;
   final String sub;
   final String badge; // 'cripto' | 'forex' | 'metal'
-  final double basePrice;
-  final double volatility;
-  final String? coingeckoId; // usado para o ícone PNG oficial
-  final String? fiatCountryCode; // usado para bandeira (moedas fiat)
+  final String? coingeckoId;
+  final String? fiatCountryCode;
+  final String? frankfurterCode; // código ISO para a API de câmbio real
   const _MarketPair({
     required this.key,
     required this.label,
     required this.sub,
     required this.badge,
-    required this.basePrice,
-    required this.volatility,
     this.coingeckoId,
     this.fiatCountryCode,
+    this.frankfurterCode,
   });
 }
 
 const List<_MarketPair> _kMarketPairs = [
-  _MarketPair(key: 'BTCUSD', label: 'BTC/USD', sub: 'Bitcoin', basePrice: 64200, volatility: 0.018, badge: 'cripto', coingeckoId: 'bitcoin'),
-  _MarketPair(key: 'ETHUSD', label: 'ETH/USD', sub: 'Ethereum', basePrice: 3180, volatility: 0.022, badge: 'cripto', coingeckoId: 'ethereum'),
-  _MarketPair(key: 'SOLUSD', label: 'SOL/USD', sub: 'Solana', basePrice: 148, volatility: 0.028, badge: 'cripto', coingeckoId: 'solana'),
-  _MarketPair(key: 'BNBUSD', label: 'BNB/USD', sub: 'BNB', basePrice: 592, volatility: 0.02, badge: 'cripto', coingeckoId: 'binancecoin'),
-  _MarketPair(key: 'XRPUSD', label: 'XRP/USD', sub: 'XRP', basePrice: 0.62, volatility: 0.026, badge: 'cripto', coingeckoId: 'ripple'),
-  _MarketPair(key: 'ADAUSD', label: 'ADA/USD', sub: 'Cardano', basePrice: 0.44, volatility: 0.03, badge: 'cripto', coingeckoId: 'cardano'),
-  _MarketPair(key: 'DOGEUSD', label: 'DOGE/USD', sub: 'Dogecoin', basePrice: 0.14, volatility: 0.035, badge: 'cripto', coingeckoId: 'dogecoin'),
-  _MarketPair(key: 'EURUSD', label: 'EUR/USD', sub: 'Euro / Dólar', basePrice: 1.087, volatility: 0.004, badge: 'forex', fiatCountryCode: 'eu'),
-  _MarketPair(key: 'GBPUSD', label: 'GBP/USD', sub: 'Libra / Dólar', basePrice: 1.271, volatility: 0.005, badge: 'forex', fiatCountryCode: 'gb'),
-  _MarketPair(key: 'USDJPY', label: 'USD/JPY', sub: 'Dólar / Iene', basePrice: 156.4, volatility: 0.006, badge: 'forex', fiatCountryCode: 'jp'),
-  _MarketPair(key: 'USDBRL', label: 'USD/BRL', sub: 'Dólar / Real', basePrice: 5.42, volatility: 0.007, badge: 'forex', fiatCountryCode: 'br'),
-  _MarketPair(key: 'USDCHF', label: 'USD/CHF', sub: 'Dólar / Franco', basePrice: 0.88, volatility: 0.004, badge: 'forex', fiatCountryCode: 'ch'),
-  _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', basePrice: 2340, volatility: 0.009, badge: 'metal'),
-  _MarketPair(key: 'XAGUSD', label: 'XAG/USD', sub: 'Prata', basePrice: 29.4, volatility: 0.013, badge: 'metal'),
+  _MarketPair(key: 'BTCUSD', label: 'BTC/USD', sub: 'Bitcoin', badge: 'cripto', coingeckoId: 'bitcoin'),
+  _MarketPair(key: 'ETHUSD', label: 'ETH/USD', sub: 'Ethereum', badge: 'cripto', coingeckoId: 'ethereum'),
+  _MarketPair(key: 'SOLUSD', label: 'SOL/USD', sub: 'Solana', badge: 'cripto', coingeckoId: 'solana'),
+  _MarketPair(key: 'BNBUSD', label: 'BNB/USD', sub: 'BNB', badge: 'cripto', coingeckoId: 'binancecoin'),
+  _MarketPair(key: 'XRPUSD', label: 'XRP/USD', sub: 'XRP', badge: 'cripto', coingeckoId: 'ripple'),
+  _MarketPair(key: 'ADAUSD', label: 'ADA/USD', sub: 'Cardano', badge: 'cripto', coingeckoId: 'cardano'),
+  _MarketPair(key: 'DOGEUSD', label: 'DOGE/USD', sub: 'Dogecoin', badge: 'cripto', coingeckoId: 'dogecoin'),
+  _MarketPair(key: 'EURUSD', label: 'EUR/USD', sub: 'Euro / Dólar', badge: 'forex', fiatCountryCode: 'eu', frankfurterCode: 'EUR'),
+  _MarketPair(key: 'GBPUSD', label: 'GBP/USD', sub: 'Libra / Dólar', badge: 'forex', fiatCountryCode: 'gb', frankfurterCode: 'GBP'),
+  _MarketPair(key: 'USDJPY', label: 'USD/JPY', sub: 'Dólar / Iene', badge: 'forex', fiatCountryCode: 'jp', frankfurterCode: 'JPY'),
+  _MarketPair(key: 'USDBRL', label: 'USD/BRL', sub: 'Dólar / Real', badge: 'forex', fiatCountryCode: 'br', frankfurterCode: 'BRL'),
+  _MarketPair(key: 'USDCHF', label: 'USD/CHF', sub: 'Dólar / Franco', badge: 'forex', fiatCountryCode: 'ch', frankfurterCode: 'CHF'),
+  _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', badge: 'metal', coingeckoId: 'tether-gold'),
+  _MarketPair(key: 'XAGUSD', label: 'XAG/USD', sub: 'Prata', badge: 'metal', coingeckoId: 'silver-token'),
 ];
-
-String? _pairIconUrl(_MarketPair p) {
-  if (p.coingeckoId != null) {
-    // Ícones oficiais servidos pela CoinGecko (usados amplamente como fonte
-    // pública de imagens de criptomoedas, sem necessidade de API key para o CDN de assets).
-    return 'https://assets.coingecko.com/coins/images/1/small/${p.coingeckoId}.png';
-  }
-  if (p.fiatCountryCode != null) {
-    // Bandeira como aproximação visual da moeda fiat — não é 1:1 perfeito
-    // (ex: EUR não tem "um" país), mas é a convenção visual mais reconhecível.
-    return 'https://flagcdn.com/w160/${p.fiatCountryCode}.png';
-  }
-  return null;
-}
-
-// Mapeamento correto de ids CoinGecko p/ URL de ícone (a rota /1/ acima é
-// só um placeholder de proporção; o id real do asset precisa de lookup).
-// Para evitar links quebrados, resolvemos via endpoint público de "coins/list"
-// com "include_platform=false" quando necessário — aqui usamos diretamente
-// o padrão de CDN estável da CoinGecko por symbol conhecido.
-const Map<String, String> _kCoingeckoIconOverride = {
-  'bitcoin': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
-  'ethereum': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
-  'solana': 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
-  'binancecoin': 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
-  'ripple': 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png',
-  'cardano': 'https://assets.coingecko.com/coins/images/975/small/cardano.png',
-  'dogecoin': 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
-};
-
-String? _resolvedIconUrl(_MarketPair p) {
-  if (p.coingeckoId != null && _kCoingeckoIconOverride.containsKey(p.coingeckoId)) {
-    return _kCoingeckoIconOverride[p.coingeckoId];
-  }
-  return _pairIconUrl(p);
-}
+// Nota metais: XAU/XAG não têm API pública fiável e gratuita de spot price
+// sem key. Usamos como proxy os tokens tokenizados 1:1 com o metal
+// (tether-gold / silver-token) via CoinGecko, que seguem o preço real do
+// metal em USD e têm histórico real — é dados reais, não simulados, ainda
+// que o instrumento de origem seja um token e não o spot direto da LBMA.
 
 class _MarketDataPoint {
   final double t;
@@ -300,35 +488,107 @@ class _MarketDataPoint {
   const _MarketDataPoint(this.t, this.v);
 }
 
-int _hashKey(String str) {
-  int h = 0;
-  for (final code in str.codeUnits) {
-    h = (h * 31 + code) & 0x7fffffff;
-  }
-  return h == 0 ? 1 : h;
-}
-
-List<_MarketDataPoint> _generateSeries(_MarketPair pair, String tfKey, int points) {
-  final rand = math.Random(_hashKey('${pair.key}_$tfKey'));
-  final list = <_MarketDataPoint>[];
-  double price = pair.basePrice * (0.92 + rand.nextDouble() * 0.1);
-  final now = DateTime.now().millisecondsSinceEpoch;
-  final stepMs = tfKey == '1D' ? 60 * 60 * 1000 : tfKey == '1W' ? 24 * 60 * 60 * 1000 : tfKey == '1M' ? 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
-  for (int i = points; i >= 0; i--) {
-    price *= (1 + (rand.nextDouble() - 0.48) * pair.volatility);
-    list.add(_MarketDataPoint((now - i * stepMs).toDouble(), price));
-  }
-  return list;
-}
-
 String _formatPairPrice(double v, _MarketPair pair) {
   if (pair.badge == 'forex') return v.toStringAsFixed(4);
-  if (v >= 1000) return '\$${v.round()}';
-  return '\$${v.toStringAsFixed(2)}';
+  if (v >= 1000) return '\$${v.toStringAsFixed(0)}';
+  if (v >= 1) return '\$${v.toStringAsFixed(2)}';
+  return '\$${v.toStringAsFixed(4)}';
 }
 
 // ══════════════════════════════════════════════════════════════
-// MARKET WIDGET (card)
+// SERVIÇO DE DADOS REAIS DE MERCADO (CoinGecko + Frankfurter)
+// ══════════════════════════════════════════════════════════════
+// Substitui por completo o antigo _generateSeries (math.Random fake).
+// Cache em memória por 60s para não estourar rate-limit da API gratuita
+// da CoinGecko ao trocar de timeframe repetidamente.
+class MarketDataService {
+  static final Map<String, ({DateTime fetchedAt, List<_MarketDataPoint> data})> _cache = {};
+  static const _cacheTtl = Duration(seconds: 60);
+
+  static int _daysForTf(String tf) {
+    switch (tf) {
+      case '1D': return 1;
+      case '1W': return 7;
+      case '1M': return 30;
+      case '1Y': return 365;
+      default: return 1;
+    }
+  }
+
+  static Future<List<_MarketDataPoint>> getSeries(_MarketPair pair, String tf) async {
+    final cacheKey = '${pair.key}_$tf';
+    final cached = _cache[cacheKey];
+    if (cached != null && DateTime.now().difference(cached.fetchedAt) < _cacheTtl) {
+      return cached.data;
+    }
+
+    List<_MarketDataPoint> result;
+    if (pair.coingeckoId != null) {
+      result = await _fetchCryptoSeries(pair.coingeckoId!, tf);
+    } else if (pair.frankfurterCode != null) {
+      result = await _fetchForexSeries(pair, tf);
+    } else {
+      throw Exception('Par sem fonte de dados configurada: ${pair.key}');
+    }
+
+    _cache[cacheKey] = (fetchedAt: DateTime.now(), data: result);
+    return result;
+  }
+
+  static Future<List<_MarketDataPoint>> _fetchCryptoSeries(String coingeckoId, String tf) async {
+    final days = _daysForTf(tf);
+    final uri = Uri.parse('https://api.coingecko.com/api/v3/coins/$coingeckoId/market_chart?vs_currency=usd&days=$days');
+    final res = await http.get(uri).timeout(const Duration(seconds: 12));
+    if (res.statusCode == 429) {
+      throw Exception('Limite de pedidos da CoinGecko atingido. Tenta novamente em instantes.');
+    }
+    if (res.statusCode != 200) {
+      throw Exception('Falha ao obter dados de mercado (${res.statusCode}).');
+    }
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+    final prices = (decoded['prices'] as List? ?? []);
+    if (prices.isEmpty) throw Exception('Sem dados disponíveis para este par.');
+    return prices.map((e) {
+      final pair = e as List;
+      return _MarketDataPoint((pair[0] as num).toDouble(), (pair[1] as num).toDouble());
+    }).toList();
+  }
+
+  static Future<List<_MarketDataPoint>> _fetchForexSeries(_MarketPair pair, String tf) async {
+    final days = _daysForTf(tf);
+    final end = DateTime.now();
+    final start = end.subtract(Duration(days: days));
+    String fmt(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    // USDBRL, USDJPY, USDCHF: base é USD, moeda alvo é a do par.
+    // EURUSD, GBPUSD: nestes o USD é que é a moeda alvo (base é a outra).
+    final baseIsUsd = pair.key.startsWith('USD');
+    final from = baseIsUsd ? 'USD' : pair.frankfurterCode!;
+    final to = baseIsUsd ? pair.frankfurterCode! : 'USD';
+
+    final uri = Uri.parse('https://api.frankfurter.app/${fmt(start)}..${fmt(end)}?from=$from&to=$to');
+    final res = await http.get(uri).timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) {
+      throw Exception('Falha ao obter câmbio (${res.statusCode}).');
+    }
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+    final rates = decoded['rates'] as Map<String, dynamic>? ?? {};
+    if (rates.isEmpty) throw Exception('Sem dados de câmbio disponíveis.');
+
+    final entries = rates.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return entries.map((e) {
+      final date = DateTime.parse(e.key);
+      final ratesForDay = e.value as Map<String, dynamic>;
+      final rate = (ratesForDay[to] as num).toDouble();
+      return _MarketDataPoint(date.millisecondsSinceEpoch.toDouble(), rate);
+    }).toList();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MARKET WIDGET (card) — agora assíncrono / real-time
 // ══════════════════════════════════════════════════════════════
 class AiMarketWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -342,16 +602,20 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
   double _progress = 0.0;
   double? _dragX;
 
-  static const List<({String key, String label, int points})> _timeframes = [
-    (key: '1D', label: '1D', points: 24),
-    (key: '1W', label: '1W', points: 7),
-    (key: '1M', label: '1M', points: 30),
-    (key: '1Y', label: '1Y', points: 12),
+  static const List<({String key, String label})> _timeframes = [
+    (key: '1D', label: '1D'),
+    (key: '1W', label: '1W'),
+    (key: '1M', label: '1M'),
+    (key: '1Y', label: '1Y'),
   ];
 
   late String _currentPairKey;
   late String _currentTf;
-  final Map<String, List<_MarketDataPoint>> _seriesCache = {};
+
+  bool _loading = true;
+  String? _error;
+  List<_MarketDataPoint> _series = [];
+  String? _iconUrl;
 
   _MarketPair get _currentPair => _kMarketPairs.firstWhere((p) => p.key == _currentPairKey, orElse: () => _kMarketPairs.first);
   _WidgetPalette get _p => _WidgetPalette(widget.s);
@@ -366,7 +630,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
     if (_currentPairKey.isEmpty || !_kMarketPairs.any((p) => p.key == _currentPairKey)) {
       _currentPairKey = 'BTCUSD';
     }
-    _animController.forward(from: 0);
+    _loadData();
   }
 
   @override
@@ -375,13 +639,35 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
     super.dispose();
   }
 
-  List<_MarketDataPoint> _getSeries(String pairKey, String tfKey) {
-    final cacheKey = '${pairKey}_$tfKey';
-    return _seriesCache.putIfAbsent(cacheKey, () {
-      final pair = _kMarketPairs.firstWhere((p) => p.key == pairKey);
-      final tf = _timeframes.firstWhere((t) => t.key == tfKey);
-      return _generateSeries(pair, tfKey, tf.points);
-    });
+  Future<void> _loadData() async {
+    setState(() { _loading = true; _error = null; });
+    final pair = _currentPair;
+
+    if (pair.coingeckoId != null) {
+      // não bloqueia a UI principal — carrega em paralelo
+      _CryptoIconCache.getIconUrl(pair.coingeckoId!).then((url) {
+        if (mounted) setState(() => _iconUrl = url);
+      });
+    } else {
+      _iconUrl = null;
+    }
+
+    try {
+      final data = await MarketDataService.getSeries(pair, _currentTf);
+      if (!mounted) return;
+      setState(() {
+        _series = data;
+        _loading = false;
+        _dragX = null;
+      });
+      _animController.forward(from: 0);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
   }
 
   String _formatTimeLabel(double tMs, String tf) {
@@ -395,25 +681,20 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
   }
 
   void _changeTimeframe(String tf) {
-    setState(() {
-      _currentTf = tf;
-      _dragX = null;
-      _animController.forward(from: 0);
-    });
+    if (tf == _currentTf) return;
+    setState(() => _currentTf = tf);
+    _loadData();
   }
 
   Future<void> _openMarketSelector() async {
     final result = await Navigator.of(context).push<String>(
-      CupertinoPageRoute(
+      MaterialPageRoute(
         builder: (_) => _MarketSelectorScreen(s: widget.s, currentKey: _currentPairKey),
       ),
     );
     if (result != null && result != _currentPairKey) {
-      setState(() {
-        _currentPairKey = result;
-        _dragX = null;
-        _animController.forward(from: 0);
-      });
+      setState(() => _currentPairKey = result);
+      _loadData();
     }
   }
 
@@ -421,25 +702,6 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
   Widget build(BuildContext context) {
     final p = _p;
     final pair = _currentPair;
-    final series = _getSeries(pair.key, _currentTf);
-    final first = series.first.v;
-    final last = series.last.v;
-    final change = ((last - first) / first) * 100;
-    final isUp = last >= first;
-    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
-
-    final values = series.map((e) => e.v).toList();
-    final maxV = values.reduce(math.max);
-    final minV = values.reduce(math.min);
-
-    _MarketDataPoint? hoverPoint;
-    if (_dragX != null) {
-      final idx = (_dragX! * (series.length - 1)).round().clamp(0, series.length - 1);
-      hoverPoint = series[idx];
-    }
-    final displayValue = hoverPoint?.v ?? last;
-    final displayLabel = hoverPoint != null ? _formatTimeLabel(hoverPoint.t, _currentTf) : 'Agora';
-    final iconUrl = _resolvedIconUrl(pair);
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
@@ -457,122 +719,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
           Container(
             decoration: BoxDecoration(color: p.previewBg, borderRadius: BorderRadius.circular(24)),
             clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (iconUrl != null)
-                            ClipOval(
-                              child: Image.network(
-                                iconUrl,
-                                width: 20,
-                                height: 20,
-                                errorBuilder: (_, __, ___) => Container(
-                                  width: 20, height: 20,
-                                  decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle),
-                                ),
-                              ),
-                            ),
-                          if (iconUrl != null) const SizedBox(width: 8),
-                          Text(pair.label, style: TextStyle(color: p.onSurface, fontSize: 14, fontWeight: FontWeight.w700)),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(8)),
-                            child: Text(pair.badge, style: TextStyle(color: p.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600)),
-                          ),
-                          const Spacer(),
-                          Text(displayLabel, style: TextStyle(color: p.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatPairPrice(displayValue, pair),
-                        style: TextStyle(color: p.onSurface, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.3),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          AnimatedRotation(
-                            turns: isUp ? 0.0 : 0.5,
-                            duration: const Duration(milliseconds: 150),
-                            child: AppIcon('chevron_up', color: color, size: 14),
-                          ),
-                          const SizedBox(width: 2),
-                          Text('${isUp ? '+' : ''}${change.toStringAsFixed(2)}% · $_currentTf',
-                              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          Text('Máx ${_formatPairPrice(maxV, pair)}', style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600)),
-                          const SizedBox(width: 8),
-                          Text('Mín ${_formatPairPrice(minV, pair)}', style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-                    child: LayoutBuilder(
-                      builder: (ctx, constraints) {
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onHorizontalDragStart: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
-                          onHorizontalDragUpdate: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
-                          onHorizontalDragEnd: (_) => setState(() => _dragX = null),
-                          onHorizontalDragCancel: () => setState(() => _dragX = null),
-                          onTapDown: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
-                          onTapUp: (_) => setState(() => _dragX = null),
-                          child: CustomPaint(
-                            painter: _MarketChartPainter(
-                              series: series,
-                              progress: _progress,
-                              isUp: isUp,
-                              dragX: _dragX,
-                              gridColor: p.onSurfaceVariant.withOpacity(0.08),
-                              axisTextColor: p.onSurfaceVariant.withOpacity(0.55),
-                              tooltipBg: p.cardBg,
-                              tooltipBorder: p.outline,
-                              tooltipText: p.onSurface,
-                              formatLabel: (t) => _formatTimeLabel(t, _currentTf),
-                              formatPrice: (v) => _formatPairPrice(v, pair),
-                            ),
-                            child: const SizedBox.expand(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                  child: Row(
-                    children: _timeframes.map((tf) {
-                      final active = tf.key == _currentTf;
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () => _changeTimeframe(tf.key),
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            decoration: BoxDecoration(color: active ? p.optionBg : Colors.transparent, borderRadius: BorderRadius.circular(10)),
-                            alignment: Alignment.center,
-                            child: Text(tf.label, style: TextStyle(color: active ? p.onSurface : p.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w700)),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
+            child: _buildPreviewContent(p, pair),
           ),
           const SizedBox(height: 10),
           Container(
@@ -597,6 +744,190 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
         ],
       ),
     );
+  }
+
+  Widget _buildPreviewContent(_WidgetPalette p, _MarketPair pair) {
+    if (_loading) {
+      return AspectRatio(
+        aspectRatio: 4 / 3,
+        child: Center(child: AiSmallDotsLoader(color: p.onSurfaceVariant)),
+      );
+    }
+    if (_error != null) {
+      return AspectRatio(
+        aspectRatio: 4 / 3,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon('warning', size: 22, color: p.onSurfaceVariant),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500)),
+              ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: _loadData,
+                child: Text('Tentar novamente', style: TextStyle(color: p.primary, fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final series = _series;
+    final first = series.first.v;
+    final last = series.last.v;
+    final change = first == 0 ? 0.0 : ((last - first) / first) * 100;
+    final isUp = last >= first;
+    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
+    final values = series.map((e) => e.v).toList();
+    final maxV = values.reduce(math.max);
+    final minV = values.reduce(math.min);
+
+    _MarketDataPoint? hoverPoint;
+    if (_dragX != null) {
+      final idx = (_dragX! * (series.length - 1)).round().clamp(0, series.length - 1);
+      hoverPoint = series[idx];
+    }
+    final displayValue = hoverPoint?.v ?? last;
+    final displayLabel = hoverPoint != null ? _formatTimeLabel(hoverPoint.t, _currentTf) : 'Agora';
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _buildPairIcon(p, pair, size: 20),
+                  const SizedBox(width: 8),
+                  Text(pair.label, style: TextStyle(color: p.onSurface, fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(8)),
+                    child: Text(pair.badge, style: TextStyle(color: p.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600)),
+                  ),
+                  const Spacer(),
+                  Text(displayLabel, style: TextStyle(color: p.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w500)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatPairPrice(displayValue, pair),
+                style: TextStyle(color: p.onSurface, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.3),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  AnimatedRotation(
+                    turns: isUp ? 0.0 : 0.5,
+                    duration: const Duration(milliseconds: 150),
+                    child: AppIcon('chevron_up', color: color, size: 14),
+                  ),
+                  const SizedBox(width: 2),
+                  Text('${isUp ? '+' : ''}${change.toStringAsFixed(2)}% · $_currentTf',
+                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Text('Máx ${_formatPairPrice(maxV, pair)}', style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  Text('Mín ${_formatPairPrice(minV, pair)}', style: TextStyle(color: p.onSurfaceVariant, fontSize: 10.5, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
+                  onHorizontalDragUpdate: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
+                  onHorizontalDragEnd: (_) => setState(() => _dragX = null),
+                  onHorizontalDragCancel: () => setState(() => _dragX = null),
+                  onTapDown: (d) => setState(() => _dragX = (d.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0)),
+                  onTapUp: (_) => setState(() => _dragX = null),
+                  child: CustomPaint(
+                    painter: _MarketChartPainter(
+                      series: series,
+                      progress: _progress,
+                      isUp: isUp,
+                      dragX: _dragX,
+                      gridColor: p.onSurfaceVariant.withOpacity(0.08),
+                      axisTextColor: p.onSurfaceVariant.withOpacity(0.55),
+                      tooltipBg: p.cardBg,
+                      tooltipBorder: p.outline,
+                      tooltipText: p.onSurface,
+                      formatLabel: (t) => _formatTimeLabel(t, _currentTf),
+                      formatPrice: (v) => _formatPairPrice(v, pair),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Row(
+            children: _timeframes.map((tf) {
+              final active = tf.key == _currentTf;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => _changeTimeframe(tf.key),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(color: active ? p.optionBg : Colors.transparent, borderRadius: BorderRadius.circular(10)),
+                    alignment: Alignment.center,
+                    child: Text(tf.label, style: TextStyle(color: active ? p.onSurface : p.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPairIcon(_WidgetPalette p, _MarketPair pair, {required double size}) {
+    if (pair.badge == 'forex' && pair.fiatCountryCode != null) {
+      // ── Bandeiras: ClipRRect + BoxFit.contain para não cortar cantos da
+      // bandeira retangular dentro de um círculo. ──
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(5),
+        child: SizedBox(
+          width: size, height: size * 0.72,
+          child: Image.network(
+            'https://flagcdn.com/w160/${pair.fiatCountryCode}.png',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(5))),
+          ),
+        ),
+      );
+    }
+    if (_iconUrl != null) {
+      return ClipOval(
+        child: Image.network(
+          _iconUrl!,
+          width: size, height: size,
+          errorBuilder: (_, __, ___) => Container(width: size, height: size, decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+        ),
+      );
+    }
+    return Container(width: size, height: size, decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle));
   }
 }
 
@@ -630,13 +961,14 @@ class _MarketChartPainter extends CustomPainter {
     final pad = (maxV - minV) * 0.15;
     final maxY = maxV + pad;
     final minY = minV - pad;
+    final safeRange = (maxY - minY).abs() < 0.0000001 ? 1.0 : (maxY - minY);
 
     const leftGutter = 4.0, rightGutter = 4.0, topGutter = 6.0, bottomGutter = 22.0;
     final innerW = size.width - leftGutter - rightGutter;
     final innerH = size.height - topGutter - bottomGutter;
 
     Offset ptAt(int i) {
-      final norm = (values[i] - minY) / (maxY - minY);
+      final norm = (values[i] - minY) / safeRange;
       final x = leftGutter + (innerW * i) / (values.length - 1);
       final yFull = topGutter + innerH - norm * innerH;
       final yBase = topGutter + innerH;
@@ -650,7 +982,7 @@ class _MarketChartPainter extends CustomPainter {
       canvas.drawLine(Offset(leftGutter, y), Offset(leftGutter + innerW, y), gridPaint);
     }
 
-    final avgNorm = (avgV - minY) / (maxY - minY);
+    final avgNorm = (avgV - minY) / safeRange;
     final avgY = topGutter + innerH - avgNorm * innerH;
     final dashPaint = Paint()..color = axisTextColor.withOpacity(0.5)..strokeWidth = 1;
     double dashX = leftGutter;
@@ -769,7 +1101,6 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
       setState(() => _remoteResults = []);
       return;
     }
-    // Se já há resultado local suficiente, não bate na API pública.
     if (_localFiltered.isNotEmpty) {
       setState(() => _remoteResults = []);
       return;
@@ -780,29 +1111,20 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
   Future<void> _searchRemote(String q) async {
     setState(() => _searchingRemote = true);
     try {
-      // API pública da CoinGecko para localizar símbolos de cripto que não
-      // estão na nossa lista curada local.
       final uri = Uri.parse('https://api.coingecko.com/api/v3/search?query=${Uri.encodeComponent(q)}');
       final res = await http.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body) as Map<String, dynamic>;
         final coins = (decoded['coins'] as List? ?? []).take(8);
-        final results = coins.map((c) {
+        final results = <_MarketPair>[];
+        for (final c in coins) {
           final m = c as Map<String, dynamic>;
           final symbol = (m['symbol'] as String? ?? '').toUpperCase();
           final id = m['id'] as String? ?? '';
           final name = m['name'] as String? ?? symbol;
-          final thumb = m['large'] as String? ?? m['thumb'] as String?;
-          return _MarketPair(
-            key: '${symbol}USD',
-            label: '$symbol/USD',
-            sub: name,
-            badge: 'cripto',
-            basePrice: 1,
-            volatility: 0.02,
-            coingeckoId: id,
-          )..let((p) => thumb != null ? _kCoingeckoIconOverride[id] = thumb : null);
-        }).toList();
+          if (id.isEmpty || symbol.isEmpty) continue;
+          results.add(_MarketPair(key: '${symbol}USD', label: '$symbol/USD', sub: name, badge: 'cripto', coingeckoId: id));
+        }
         if (mounted) setState(() => _remoteResults = results);
       }
     } catch (_) {
@@ -819,21 +1141,17 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
         ? _kMarketPairs
         : (_localFiltered.isNotEmpty ? _localFiltered : _remoteResults);
 
-    return CupertinoPageScaffold(
+    return Scaffold(
       backgroundColor: p.pageBg,
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: p.pageBg,
-        border: null,
-        middle: Text('Mercado', style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
-      ),
-      child: SafeArea(
+      appBar: aiScreenAppBar(p: p, title: 'Mercado', onBack: () => Navigator.of(context).pop()),
+      body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: results.isEmpty
                   ? Center(
                       child: _searchingRemote
-                          ? CupertinoActivityIndicator(color: p.onSurfaceVariant)
+                          ? CircularProgressIndicator(strokeWidth: 2, color: p.onSurfaceVariant)
                           : Text('Sem resultados', style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
                     )
                   : ListView.builder(
@@ -848,7 +1166,7 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
                           active: active,
                           onTap: () async {
                             final confirmed = await Navigator.of(context).push<bool>(
-                              CupertinoPageRoute(
+                              MaterialPageRoute(
                                 builder: (_) => _MarketPairDetailScreen(s: widget.s, pair: pair),
                               ),
                             );
@@ -897,40 +1215,59 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
   }
 }
 
-// Pequeno helper de encadeamento (evita variável intermédia no map acima)
-extension _Let<T> on T {
-  R let<R>(R Function(T) f) => f(this);
-}
-
-class _MarketPairRow extends StatelessWidget {
+class _MarketPairRow extends StatefulWidget {
   final AppColorScheme s;
   final _MarketPair pair;
   final bool active;
   final VoidCallback onTap;
   const _MarketPairRow({required this.s, required this.pair, required this.active, required this.onTap});
+  @override State<_MarketPairRow> createState() => _MarketPairRowState();
+}
+
+class _MarketPairRowState extends State<_MarketPairRow> {
+  String? _iconUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pair.coingeckoId != null) {
+      _CryptoIconCache.getIconUrl(widget.pair.coingeckoId!).then((url) {
+        if (mounted) setState(() => _iconUrl = url);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = _WidgetPalette(s);
-    final iconUrl = _resolvedIconUrl(pair);
+    final p = _WidgetPalette(widget.s);
+    final pair = widget.pair;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             SizedBox(
               width: 30, height: 30,
-              child: iconUrl != null
-                  ? ClipOval(
+              child: pair.badge == 'forex' && pair.fiatCountryCode != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
                       child: Image.network(
-                        iconUrl,
+                        'https://flagcdn.com/w160/${pair.fiatCountryCode}.png',
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                        errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(6))),
                       ),
                     )
-                  : Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                  : _iconUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            _iconUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                          ),
+                        )
+                      : Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -942,7 +1279,7 @@ class _MarketPairRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (active) AppIcon('check', color: p.primary, size: 16),
+            if (widget.active) AppIcon('check', color: p.primary, size: 16),
           ],
         ),
       ),
@@ -951,87 +1288,56 @@ class _MarketPairRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — DETALHE DO PAR (ícone grande + poucos dados)
+// TELA CHEIA — DETALHE DO PAR
 // ══════════════════════════════════════════════════════════════
-class _MarketPairDetailScreen extends StatelessWidget {
+class _MarketPairDetailScreen extends StatefulWidget {
   final AppColorScheme s;
   final _MarketPair pair;
   const _MarketPairDetailScreen({required this.s, required this.pair});
+  @override State<_MarketPairDetailScreen> createState() => _MarketPairDetailScreenState();
+}
+
+class _MarketPairDetailScreenState extends State<_MarketPairDetailScreen> {
+  bool _loading = true;
+  String? _error;
+  List<_MarketDataPoint> _series = [];
+  String? _iconUrl;
+
+  _WidgetPalette get _p => _WidgetPalette(widget.s);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pair.coingeckoId != null) {
+      _CryptoIconCache.getIconUrl(widget.pair.coingeckoId!).then((url) {
+        if (mounted) setState(() => _iconUrl = url);
+      });
+    }
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await MarketDataService.getSeries(widget.pair, '1D');
+      if (mounted) setState(() { _series = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString().replaceFirst('Exception: ', ''); _loading = false; });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = _WidgetPalette(s);
-    final series = _generateSeries(pair, '1D', 24);
-    final first = series.first.v;
-    final last = series.last.v;
-    final change = ((last - first) / first) * 100;
-    final isUp = last >= first;
-    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
-    final values = series.map((e) => e.v).toList();
-    final maxV = values.reduce(math.max);
-    final minV = values.reduce(math.min);
-    final iconUrl = _resolvedIconUrl(pair);
+    final p = _p;
+    final pair = widget.pair;
 
-    return CupertinoPageScaffold(
+    return Scaffold(
       backgroundColor: p.pageBg,
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: p.pageBg,
-        border: null,
-        middle: Text(pair.label, style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
-      ),
-      child: SafeArea(
+      appBar: aiScreenAppBar(p: p, title: pair.label, onBack: () => Navigator.of(context).pop()),
+      body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 96, height: 96,
-                      child: iconUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                iconUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
-                              ),
-                            )
-                          : Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(pair.sub, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatPairPrice(last, pair),
-                      style: TextStyle(color: p.onSurface, fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.5),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedRotation(
-                          turns: isUp ? 0.0 : 0.5,
-                          duration: const Duration(milliseconds: 150),
-                          child: AppIcon('chevron_up', color: color, size: 14),
-                        ),
-                        const SizedBox(width: 4),
-                        Text('${isUp ? '+' : ''}${change.toStringAsFixed(2)}% hoje', style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _DetailStat(p: p, label: 'Máxima 24h', value: _formatPairPrice(maxV, pair)),
-                        Container(width: 1, height: 30, color: p.outline, margin: const EdgeInsets.symmetric(horizontal: 18)),
-                        _DetailStat(p: p, label: 'Mínima 24h', value: _formatPairPrice(minV, pair)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            Expanded(child: Center(child: _buildBody(p, pair))),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
               child: GestureDetector(
@@ -1048,6 +1354,86 @@ class _MarketPairDetailScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBody(_WidgetPalette p, _MarketPair pair) {
+    if (_loading) return AiSmallDotsLoader(color: p.onSurfaceVariant);
+    if (_error != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_error!, textAlign: TextAlign.center, style: TextStyle(color: p.onSurfaceVariant, fontSize: 13)),
+          const SizedBox(height: 10),
+          GestureDetector(onTap: _load, child: Text('Tentar novamente', style: TextStyle(color: p.primary, fontSize: 13, fontWeight: FontWeight.w700))),
+        ],
+      );
+    }
+
+    final series = _series;
+    final first = series.first.v;
+    final last = series.last.v;
+    final change = first == 0 ? 0.0 : ((last - first) / first) * 100;
+    final isUp = last >= first;
+    final color = isUp ? const Color(0xFF4EC994) : const Color(0xFFE05E5E);
+    final values = series.map((e) => e.v).toList();
+    final maxV = values.reduce(math.max);
+    final minV = values.reduce(math.min);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 96, height: 96,
+          child: pair.badge == 'forex' && pair.fiatCountryCode != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.network(
+                    'https://flagcdn.com/w320/${pair.fiatCountryCode}.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, borderRadius: BorderRadius.circular(18))),
+                  ),
+                )
+              : _iconUrl != null
+                  ? ClipOval(
+                      child: Image.network(
+                        _iconUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+                      ),
+                    )
+                  : Container(decoration: BoxDecoration(color: p.optionBg, shape: BoxShape.circle)),
+        ),
+        const SizedBox(height: 18),
+        Text(pair.sub, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        Text(
+          _formatPairPrice(last, pair),
+          style: TextStyle(color: p.onSurface, fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedRotation(
+              turns: isUp ? 0.0 : 0.5,
+              duration: const Duration(milliseconds: 150),
+              child: AppIcon('chevron_up', color: color, size: 14),
+            ),
+            const SizedBox(width: 4),
+            Text('${isUp ? '+' : ''}${change.toStringAsFixed(2)}% hoje', style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 28),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _DetailStat(p: p, label: 'Máxima 24h', value: _formatPairPrice(maxV, pair)),
+            Container(width: 1, height: 30, color: p.outline, margin: const EdgeInsets.symmetric(horizontal: 18)),
+            _DetailStat(p: p, label: 'Mínima 24h', value: _formatPairPrice(minV, pair)),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1070,7 +1456,7 @@ class _DetailStat extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CALENDÁRIO — CARD (abre tela cheia ao tocar em "Novo evento")
+// CALENDÁRIO — CARD
 // ══════════════════════════════════════════════════════════════
 class AiCalendarWidget extends StatefulWidget {
   final Map<String, dynamic> json;
@@ -1113,7 +1499,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 
   Future<void> _openNewEventScreen() async {
     final result = await Navigator.of(context).push<({String name, String time, String color})>(
-      CupertinoPageRoute(
+      MaterialPageRoute(
         builder: (_) => _NewEventScreen(s: widget.s, dateKey: _selectedKey),
       ),
     );
@@ -1282,7 +1668,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — NOVO EVENTO (inputs organizados)
+// TELA CHEIA — NOVO EVENTO
 // ══════════════════════════════════════════════════════════════
 class _NewEventScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -1328,14 +1714,10 @@ class _NewEventScreenState extends State<_NewEventScreen> {
   @override
   Widget build(BuildContext context) {
     final p = _p;
-    return CupertinoPageScaffold(
+    return Scaffold(
       backgroundColor: p.pageBg,
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: p.pageBg,
-        border: null,
-        middle: Text('Novo evento', style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
-      ),
-      child: SafeArea(
+      appBar: aiScreenAppBar(p: p, title: 'Novo evento', onBack: () => Navigator.of(context).pop()),
+      body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
           child: Column(
@@ -1426,9 +1808,7 @@ class _StyledField extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MAP WIDGET — CARD SIMPLIFICADO (sem badge, sem recentrar, sem
-// switch 3D, sem pesquisa; só o mapa + botão longo de local +
-// popup menu de camadas)
+// MAP WIDGET — CARD
 // ══════════════════════════════════════════════════════════════
 enum _MapLayer { standard, satellite, streets, dark, terrain, googleMaps }
 
@@ -1449,6 +1829,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
 
+  final GlobalKey _layersBtnKey = GlobalKey();
   _MapLayer _layer = _MapLayer.satellite;
 
   _WidgetPalette get _p => _WidgetPalette(widget.s);
@@ -1476,7 +1857,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
   String get _tileUrl {
     switch (_layer) {
       case _MapLayer.standard:
-      case _MapLayer.googleMaps: // fallback de tiles enquanto não há chave do Google Maps SDK nativo
+      case _MapLayer.googleMaps:
         return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
       case _MapLayer.satellite:
         return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
@@ -1510,7 +1891,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
 
   Future<void> _openLocationPicker() async {
     final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
-      CupertinoPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
+      MaterialPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
     );
     if (result != null) {
       setState(() {
@@ -1523,51 +1904,44 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
     }
   }
 
-  void _openLayersPopup(BuildContext buttonContext) async {
-    final box = buttonContext.findRenderObject() as RenderBox;
-    final overlay = Overlay.of(buttonContext).context.findRenderObject() as RenderBox;
-    final position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        box.localToGlobal(Offset.zero, ancestor: overlay),
-        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
-      ),
-      Offset.zero & overlay.size,
-    );
+  // ── Sem key nativa, "Google Maps" abre a app/site oficial do Google
+  // Maps com a localização atual — dados e navegação 100% reais do Google,
+  // só que fora do card, não embutidos. ──
+  Future<void> _openInGoogleMaps() async {
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$_lat,$_lng');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível abrir o Google Maps.')));
+      }
+    }
+  }
 
-    final p = _p;
-    final selected = await showMenu<_MapLayer>(
-      context: buttonContext,
-      position: position,
-      color: p.optionBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      items: [
-        _buildMenuItem(p, _MapLayer.standard, 'road', 'Padrão'),
-        _buildMenuItem(p, _MapLayer.satellite, 'satellite', 'Satélite'),
-        _buildMenuItem(p, _MapLayer.streets, 'road', 'Ruas'),
-        _buildMenuItem(p, _MapLayer.dark, 'moon', 'Escuro'),
-        _buildMenuItem(p, _MapLayer.terrain, 'mountain', 'Terreno'),
-        const PopupMenuDivider(height: 12),
-        _buildMenuItem(p, _MapLayer.googleMaps, 'map', 'Google Maps'),
+  Future<void> _openLayersPopup() async {
+    final selected = await showAiPopup<_MapLayer>(
+      context: context,
+      anchorKey: _layersBtnKey,
+      currentValue: _layer,
+      p: _p,
+      options: const [
+        AiPopupOption(value: _MapLayer.standard, icon: 'road', label: 'Padrão'),
+        AiPopupOption(value: _MapLayer.satellite, icon: 'satellite', label: 'Satélite'),
+        AiPopupOption(value: _MapLayer.streets, icon: 'road', label: 'Ruas'),
+        AiPopupOption(value: _MapLayer.dark, icon: 'moon', label: 'Escuro'),
+        AiPopupOption(value: _MapLayer.terrain, icon: 'mountain', label: 'Terreno'),
+        AiPopupOption(value: _MapLayer.googleMaps, icon: 'map', label: 'Abrir no Google Maps'),
       ],
     );
 
-    if (selected != null) setState(() => _layer = selected);
-  }
-
-  PopupMenuItem<_MapLayer> _buildMenuItem(_WidgetPalette p, _MapLayer value, String icon, String label) {
-    final active = _layer == value;
-    return PopupMenuItem<_MapLayer>(
-      value: value,
-      height: 42,
-      child: Row(
-        children: [
-          AppIcon(icon, size: 15, color: active ? p.primary : p.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(color: active ? p.primary : p.onSurface, fontSize: 14, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
-          if (active) ...[const Spacer(), AppIcon('check', size: 14, color: p.primary)],
-        ],
-      ),
-    );
+    if (selected == null) return;
+    if (selected == _MapLayer.googleMaps) {
+      // Esta opção é uma ação (abrir app externa), não uma camada de tiles
+      // — não altera o mapa embutido, só dispara a navegação externa.
+      _openInGoogleMaps();
+      return;
+    }
+    setState(() => _layer = selected);
   }
 
   @override
@@ -1608,8 +1982,6 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
                       ),
                     ],
                   ),
-                  // Chip discreto com a camada ativa (mantido apenas como
-                  // indicador passivo, sem botões extra sobre o mapa).
                   Positioned(
                     top: 10, right: 10,
                     child: IgnorePointer(
@@ -1625,7 +1997,6 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
             ),
           ),
           const SizedBox(height: 10),
-          // ── Ações: botão longo de local + botão circular de camadas ──
           Row(
             children: [
               Expanded(
@@ -1657,17 +2028,18 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
                 ),
               ),
               const SizedBox(width: 8),
-              Builder(
-                builder: (btnContext) => Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(50)),
-                  child: GestureDetector(
-                    onTap: () => _openLayersPopup(btnContext),
-                    child: Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(color: p.navBtnBg, shape: BoxShape.circle),
-                      child: AppIcon('layers', color: p.onSurface, size: 17),
-                    ),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(50)),
+                child: GestureDetector(
+                  key: _layersBtnKey,
+                  onTap: _openLayersPopup,
+                  child: Container(
+                    width: 44, height: 44,
+                    // ── Botão de abrir o popup agora com cor primária,
+                    // pedido explícito. ──
+                    decoration: BoxDecoration(color: p.primary, shape: BoxShape.circle),
+                    child: AppIcon('layers', color: p.onPrimary, size: 17),
                   ),
                 ),
               ),
@@ -1681,7 +2053,6 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
 
 // ══════════════════════════════════════════════════════════════
 // TELA CHEIA — SELETOR DE LOCALIZAÇÃO (países A-Z → províncias)
-// Sem cards: apenas nome + seta, com search input fixo em baixo.
 // ══════════════════════════════════════════════════════════════
 class _LocationPickerScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -1728,7 +2099,7 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
 
   void _openCountry(String country) async {
     final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
-      CupertinoPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
+      MaterialPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
     );
     if (result != null && mounted) Navigator.of(context).pop(result);
   }
@@ -1738,19 +2109,15 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
     final p = _p;
     final items = _filtered;
 
-    return CupertinoPageScaffold(
+    return Scaffold(
       backgroundColor: p.pageBg,
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: p.pageBg,
-        border: null,
-        middle: Text('Escolher país', style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
-      ),
-      child: SafeArea(
+      appBar: aiScreenAppBar(p: p, title: 'Escolher país', onBack: () => Navigator.of(context).pop()),
+      body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: _loadingCountries
-                  ? Center(child: CupertinoActivityIndicator(color: p.onSurfaceVariant))
+                  ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: p.onSurfaceVariant))
                   : _error != null
                       ? Center(
                           child: Column(
@@ -1856,7 +2223,6 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
   }
 
   void _selectState(String stateName) async {
-    // Geocodifica "Estado, País" via Nominatim para obter lat/lng reais.
     try {
       final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${Uri.encodeComponent('$stateName, ${widget.country}')}');
       final res = await http.get(uri).timeout(const Duration(seconds: 8));
@@ -1868,9 +2234,7 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
         if (mounted) Navigator.of(context).pop((name: '$stateName, ${widget.country}', lat: lat, lng: lng));
         return;
       }
-    } catch (_) {
-      // segue para o fallback abaixo
-    }
+    } catch (_) {}
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível localizar esta região.')));
     }
@@ -1881,19 +2245,15 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
     final p = _p;
     final items = _filtered;
 
-    return CupertinoPageScaffold(
+    return Scaffold(
       backgroundColor: p.pageBg,
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: p.pageBg,
-        border: null,
-        middle: Text(widget.country, style: TextStyle(color: p.onSurface, fontWeight: FontWeight.w700)),
-      ),
-      child: SafeArea(
+      appBar: aiScreenAppBar(p: p, title: widget.country, onBack: () => Navigator.of(context).pop()),
+      body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: _loading
-                  ? Center(child: CupertinoActivityIndicator(color: p.onSurfaceVariant))
+                  ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: p.onSurfaceVariant))
                   : _error != null
                       ? Center(
                           child: Column(
