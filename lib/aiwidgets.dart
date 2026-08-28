@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -63,9 +64,6 @@ class _WidgetPalette {
 
   Color get cardBg => isDark ? const Color(0xFF121214) : s.cardBackground;
 
-  // ALTERADO: preview interno (mapa/gráfico/calendário) agora usa o MESMO
-  // tom do actionsBg — pedido explícito ("quero fundo semelhante ao que
-  // está no container onde os botões ficam, esse atual é feio").
   Color get previewBg => actionsBg;
 
   Color get actionsBg => isDark ? const Color(0xFF1E1E21) : s.hover;
@@ -86,6 +84,9 @@ class _WidgetPalette {
   Color get onPrimary => s.onPrimary;
 
   Color get pageBg => isDark ? const Color(0xFF0B0B0C) : s.pageBackground;
+
+  // Nova cor para o popup: escuro puro, porém não tão profundo e sem cinza
+  Color get popupBg => isDark ? const Color(0xFF1A1A1D) : s.cardBackground;
 
   List<BoxShadow> get cardShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 5))]
@@ -147,15 +148,8 @@ Widget buildAiWidget(AiWidgetBlock block, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// POPUP CUSTOM — substitui showMenu (que só renderizava a sombra)
+// POPUP CUSTOM — CORRIGIDO (fundo opaco, cor ajustada)
 // ══════════════════════════════════════════════════════════════
-// Causa raiz do bug: Overlay.of(buttonContext).context.findRenderObject()
-// não devolve a render box correta em todas as árvores de widget, então
-// RelativeRect.fromRect calculava uma posição inválida e o Material do
-// menu desenhava só a elevation/sombra, sem o conteúdo por cima.
-// Solução: OverlayEntry manual, com Stack + Positioned calculado a partir
-// do RenderBox do próprio botão (sempre correto) e um GestureDetector de
-// fundo transparente para fechar ao tocar fora.
 class AiPopupOption<T> {
   final T value;
   final String icon;
@@ -170,15 +164,6 @@ Future<T?> showAiPopup<T>({
   required T currentValue,
   required _WidgetPalette p,
 }) async {
-  final completer = Completer<T?>();
-  OverlayEntry? entry;
-
-  void close([T? value]) {
-    entry?.remove();
-    entry = null;
-    if (!completer.isCompleted) completer.complete(value);
-  }
-
   final renderBox = anchorKey.currentContext?.findRenderObject() as RenderBox?;
   if (renderBox == null) return null;
   final overlayState = Overlay.of(context);
@@ -186,112 +171,59 @@ Future<T?> showAiPopup<T>({
   final anchorTopLeft = renderBox.localToGlobal(Offset.zero, ancestor: overlayBox);
   final anchorSize = renderBox.size;
 
-  const menuWidth = 200.0;
-  double left = anchorTopLeft.dx + anchorSize.width - menuWidth;
-  left = left.clamp(8.0, overlayBox.size.width - menuWidth - 8.0);
-  double top = anchorTopLeft.dy + anchorSize.height + 8;
-
-  entry = OverlayEntry(
-    builder: (ctx) {
-      return Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => close(null),
-              child: Container(color: Colors.transparent),
-            ),
-          ),
-          Positioned(
-            left: left,
-            top: top,
-            width: menuWidth,
-            child: _AiPopupMenuCard<T>(
-              options: options,
-              currentValue: currentValue,
-              p: p,
-              onSelected: (v) => close(v),
-            ),
-          ),
-        ],
-      );
-    },
+  // Posição relativa ao overlay (como o showMenu espera)
+  final RelativeRect position = RelativeRect.fromLTRB(
+    anchorTopLeft.dx,
+    anchorTopLeft.dy + anchorSize.height,
+    overlayBox.size.width - (anchorTopLeft.dx + anchorSize.width),
+    overlayBox.size.height - (anchorTopLeft.dy + anchorSize.height),
   );
 
-  overlayState.insert(entry!);
-  return completer.future;
-}
-
-class _AiPopupMenuCard<T> extends StatelessWidget {
-  final List<AiPopupOption<T>> options;
-  final T currentValue;
-  final _WidgetPalette p;
-  final ValueChanged<T> onSelected;
-  const _AiPopupMenuCard({required this.options, required this.currentValue, required this.p, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        // ── Bordas mais curvas, pedido explícito, mantendo o mesmo estilo
-        // de entrada (fade + scale) já usado no resto da app. ──
-        decoration: BoxDecoration(
-          color: p.optionBg,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: p.outline),
-          boxShadow: p.cardShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          builder: (ctx, t, child) => Opacity(
-            opacity: t,
-            child: Transform.scale(scale: 0.94 + 0.06 * t, alignment: Alignment.topRight, child: child),
+  // showMenu nativo (fade + scale padrão do Material)
+  final result = await showMenu<T>(
+    context: context,
+    position: position,
+    color: p.popupBg, // fundo opaco
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    items: options.map((opt) {
+      final active = opt.value == currentValue;
+      return PopupMenuItem<T>(
+        value: opt.value,
+        padding: EdgeInsets.zero,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? p.primary.withOpacity(0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: options.map((opt) {
-                final active = opt.value == currentValue;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onSelected(opt.value),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    margin: const EdgeInsets.symmetric(vertical: 1),
-                    decoration: BoxDecoration(
-                      color: active ? p.primary.withOpacity(0.12) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        AppIcon(opt.icon, size: 15, color: active ? p.primary : p.onSurfaceVariant),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(opt.label, style: TextStyle(color: active ? p.primary : p.onSurface, fontSize: 14, fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
-                        ),
-                        if (active) AppIcon('check', size: 14, color: p.primary),
-                      ],
-                    ),
+          child: Row(
+            children: [
+              AppIcon(opt.icon, size: 15, color: active ? p.primary : p.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  opt.label,
+                  style: TextStyle(
+                    color: active ? p.primary : p.onSurface,
+                    fontSize: 14,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              ),
+              if (active) AppIcon('check', size: 14, color: p.primary),
+            ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    }).toList(),
+  );
+
+  return result;
 }
 
 // ══════════════════════════════════════════════════════════════
-// CABEÇALHO DE TELA CHEIA — genérico, título alinhado à esquerda,
-// sem Cupertino, sem fonte iOS. Usa AppIcon('back') do teu SVG em
-// assets/icons/outline/.
+// CABEÇALHO DE TELA CHEIA — COM BOTÃO VOLTAR EM CONTAINER
 // ══════════════════════════════════════════════════════════════
 PreferredSizeWidget aiScreenAppBar({
   required _WidgetPalette p,
@@ -307,13 +239,134 @@ PreferredSizeWidget aiScreenAppBar({
     centerTitle: false,
     titleSpacing: 4,
     leadingWidth: 52,
-    leading: IconButton(
-      onPressed: onBack,
-      icon: AppIcon('back', size: 18, color: p.onSurface),
-    ),
+    leading: _AiBackButton(p: p, onTap: onBack),
     title: Text(title, style: TextStyle(color: p.onSurface, fontSize: 17, fontWeight: FontWeight.w700)),
     actions: actions,
   );
+}
+
+class _AiBackButton extends StatefulWidget {
+  final _WidgetPalette p;
+  final VoidCallback onTap;
+  const _AiBackButton({required this.p, required this.onTap});
+  @override
+  State<_AiBackButton> createState() => _AiBackButtonState();
+}
+
+class _AiBackButtonState extends State<_AiBackButton> {
+  bool _pressed = false;
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.p;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _pressed ? p.optionBgHover : p.optionBg,
+          shape: BoxShape.circle,
+          boxShadow: p.cardShadow,
+        ),
+        child: AppIcon('back', size: 18, color: p.onSurface),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CAMPO DE BUSCA ESTILO CHAT SEARCH
+// ══════════════════════════════════════════════════════════════
+class _AiSearchBar extends StatefulWidget {
+  final _WidgetPalette p;
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+  final VoidCallback onClose;
+  final bool showCloseButton; // se false, não mostra o botão de fechar ao lado
+  const _AiSearchBar({
+    required this.p,
+    required this.controller,
+    required this.hint,
+    required this.onChanged,
+    required this.onClear,
+    required this.onClose,
+    this.showCloseButton = true,
+  });
+  @override
+  State<_AiSearchBar> createState() => _AiSearchBarState();
+}
+
+class _AiSearchBarState extends State<_AiSearchBar> {
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.p;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(children: [
+        Expanded(
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: p.actionsBg,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: p.cardShadow,
+            ),
+            child: Row(children: [
+              AppIcon('search', color: p.onSurfaceVariant, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  onChanged: widget.onChanged,
+                  style: TextStyle(fontSize: 15, color: p.onSurface),
+                  cursorColor: p.primary,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: widget.hint,
+                    hintStyle: TextStyle(fontSize: 15, color: p.onSurfaceVariant),
+                  ),
+                ),
+              ),
+              if (widget.controller.text.isNotEmpty)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onClear,
+                  child: AppIcon('close', color: p.onSurfaceVariant, size: 14),
+                ),
+            ]),
+          ),
+        ),
+        if (widget.showCloseButton) ...[
+          const SizedBox(width: 10),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onClose,
+            child: Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: p.actionsBg,
+                shape: BoxShape.circle,
+                boxShadow: p.cardShadow,
+              ),
+              child: AppIcon('close', color: p.onSurfaceVariant, size: 16),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -393,12 +446,8 @@ class _GeoCache {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CACHE PERSISTENTE DE ÍCONES DE CRIPTOMOEDAS (URL correta via API)
+// CACHE PERSISTENTE DE ÍCONES DE CRIPTOMOEDAS
 // ══════════════════════════════════════════════════════════════
-// Bug anterior: a URL fallback usava sempre o id numérico "1" (fixo do
-// Bitcoin) para qualquer moeda, então nunca resolvia. Correção: buscar a
-// URL real de imagem via /api/v3/coins/{id} (campo image.small), uma vez
-// por moeda, com cache em shared_preferences.
 class _CryptoIconCache {
   static const _kPrefix = 'aiwidgets_crypto_icon_v1_';
   static final Map<String, String?> _mem = {};
@@ -445,10 +494,10 @@ class _MarketPair {
   final String key;
   final String label;
   final String sub;
-  final String badge; // 'cripto' | 'forex' | 'metal'
+  final String badge;
   final String? coingeckoId;
   final String? fiatCountryCode;
-  final String? frankfurterCode; // código ISO para a API de câmbio real
+  final String? frankfurterCode;
   const _MarketPair({
     required this.key,
     required this.label,
@@ -476,11 +525,6 @@ const List<_MarketPair> _kMarketPairs = [
   _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', badge: 'metal', coingeckoId: 'tether-gold'),
   _MarketPair(key: 'XAGUSD', label: 'XAG/USD', sub: 'Prata', badge: 'metal', coingeckoId: 'silver-token'),
 ];
-// Nota metais: XAU/XAG não têm API pública fiável e gratuita de spot price
-// sem key. Usamos como proxy os tokens tokenizados 1:1 com o metal
-// (tether-gold / silver-token) via CoinGecko, que seguem o preço real do
-// metal em USD e têm histórico real — é dados reais, não simulados, ainda
-// que o instrumento de origem seja um token e não o spot direto da LBMA.
 
 class _MarketDataPoint {
   final double t;
@@ -496,11 +540,8 @@ String _formatPairPrice(double v, _MarketPair pair) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SERVIÇO DE DADOS REAIS DE MERCADO (CoinGecko + Frankfurter)
+// SERVIÇO DE DADOS REAIS DE MERCADO
 // ══════════════════════════════════════════════════════════════
-// Substitui por completo o antigo _generateSeries (math.Random fake).
-// Cache em memória por 60s para não estourar rate-limit da API gratuita
-// da CoinGecko ao trocar de timeframe repetidamente.
 class MarketDataService {
   static final Map<String, ({DateTime fetchedAt, List<_MarketDataPoint> data})> _cache = {};
   static const _cacheTtl = Duration(seconds: 60);
@@ -560,8 +601,6 @@ class MarketDataService {
     final start = end.subtract(Duration(days: days));
     String fmt(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-    // USDBRL, USDJPY, USDCHF: base é USD, moeda alvo é a do par.
-    // EURUSD, GBPUSD: nestes o USD é que é a moeda alvo (base é a outra).
     final baseIsUsd = pair.key.startsWith('USD');
     final from = baseIsUsd ? 'USD' : pair.frankfurterCode!;
     final to = baseIsUsd ? pair.frankfurterCode! : 'USD';
@@ -644,7 +683,6 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
     final pair = _currentPair;
 
     if (pair.coingeckoId != null) {
-      // não bloqueia a UI principal — carrega em paralelo
       _CryptoIconCache.getIconUrl(pair.coingeckoId!).then((url) {
         if (mounted) setState(() => _iconUrl = url);
       });
@@ -688,7 +726,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
 
   Future<void> _openMarketSelector() async {
     final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
+      CupertinoPageRoute(
         builder: (_) => _MarketSelectorScreen(s: widget.s, currentKey: _currentPairKey),
       ),
     );
@@ -904,8 +942,6 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
 
   Widget _buildPairIcon(_WidgetPalette p, _MarketPair pair, {required double size}) {
     if (pair.badge == 'forex' && pair.fiatCountryCode != null) {
-      // ── Bandeiras: ClipRRect + BoxFit.contain para não cortar cantos da
-      // bandeira retangular dentro de um círculo. ──
       return ClipRRect(
         borderRadius: BorderRadius.circular(5),
         child: SizedBox(
@@ -1128,7 +1164,6 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
         if (mounted) setState(() => _remoteResults = results);
       }
     } catch (_) {
-      // Falha de rede: mantém lista vazia, sem travar a tela.
     } finally {
       if (mounted) setState(() => _searchingRemote = false);
     }
@@ -1166,7 +1201,7 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
                           active: active,
                           onTap: () async {
                             final confirmed = await Navigator.of(context).push<bool>(
-                              MaterialPageRoute(
+                              CupertinoPageRoute(
                                 builder: (_) => _MarketPairDetailScreen(s: widget.s, pair: pair),
                               ),
                             );
@@ -1178,35 +1213,20 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
                       },
                     ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Container(
-                height: 46,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(999)),
-                child: Row(
-                  children: [
-                    AppIcon('search', color: p.onSurfaceVariant, size: 17),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: _onQueryChanged,
-                        style: TextStyle(color: p.onSurface, fontSize: 14),
-                        cursorColor: p.primary,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          border: InputBorder.none,
-                          hintText: 'Procurar símbolo, ex: BTC, EUR…',
-                          hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
-                        ),
-                      ),
-                    ),
-                    if (_searchingRemote)
-                      SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 1.8, color: p.onSurfaceVariant)),
-                  ],
-                ),
-              ),
+            _AiSearchBar(
+              p: p,
+              controller: _searchCtrl,
+              hint: 'Procurar símbolo, ex: BTC, EUR…',
+              onChanged: _onQueryChanged,
+              onClear: () {
+                setState(() {
+                  _searchCtrl.clear();
+                  _query = '';
+                  _remoteResults = [];
+                });
+              },
+              onClose: () => Navigator.of(context).pop(),
+              showCloseButton: false, // já tem botão voltar
             ),
           ],
         ),
@@ -1499,7 +1519,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 
   Future<void> _openNewEventScreen() async {
     final result = await Navigator.of(context).push<({String name, String time, String color})>(
-      MaterialPageRoute(
+      CupertinoPageRoute(
         builder: (_) => _NewEventScreen(s: widget.s, dateKey: _selectedKey),
       ),
     );
@@ -1891,7 +1911,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
 
   Future<void> _openLocationPicker() async {
     final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
-      MaterialPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
+      CupertinoPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
     );
     if (result != null) {
       setState(() {
@@ -1904,9 +1924,6 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
     }
   }
 
-  // ── Sem key nativa, "Google Maps" abre a app/site oficial do Google
-  // Maps com a localização atual — dados e navegação 100% reais do Google,
-  // só que fora do card, não embutidos. ──
   Future<void> _openInGoogleMaps() async {
     final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$_lat,$_lng');
     try {
@@ -1936,8 +1953,6 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
 
     if (selected == null) return;
     if (selected == _MapLayer.googleMaps) {
-      // Esta opção é uma ação (abrir app externa), não uma camada de tiles
-      // — não altera o mapa embutido, só dispara a navegação externa.
       _openInGoogleMaps();
       return;
     }
@@ -2036,8 +2051,6 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
                   onTap: _openLayersPopup,
                   child: Container(
                     width: 44, height: 44,
-                    // ── Botão de abrir o popup agora com cor primária,
-                    // pedido explícito. ──
                     decoration: BoxDecoration(color: p.primary, shape: BoxShape.circle),
                     child: AppIcon('layers', color: p.onPrimary, size: 17),
                   ),
@@ -2052,7 +2065,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — SELETOR DE LOCALIZAÇÃO (países A-Z → províncias)
+// TELA CHEIA — SELETOR DE LOCALIZAÇÃO (com índice alfabético)
 // ══════════════════════════════════════════════════════════════
 class _LocationPickerScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -2062,10 +2075,16 @@ class _LocationPickerScreen extends StatefulWidget {
 
 class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   final _searchCtrl = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _query = '';
   bool _loadingCountries = true;
   List<String> _countries = [];
   String? _error;
+
+  // Mapa de letra -> índice do primeiro item na lista plana
+  final Map<String, int> _letterIndexMap = {};
+  // Lista plana de widgets (cabeçalhos + itens)
+  List<Widget> _flatItems = [];
 
   _WidgetPalette get _p => _WidgetPalette(widget.s);
 
@@ -2078,6 +2097,7 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -2085,92 +2105,162 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
     setState(() { _loadingCountries = true; _error = null; });
     try {
       final list = await _GeoCache.getCountries();
-      if (mounted) setState(() { _countries = list; _loadingCountries = false; });
+      if (mounted) {
+        setState(() {
+          _countries = list;
+          _loadingCountries = false;
+          _buildFlatItems();
+        });
+      }
     } catch (_) {
       if (mounted) setState(() { _error = 'Não foi possível carregar países.'; _loadingCountries = false; });
     }
   }
 
-  List<String> get _filtered {
+  void _buildFlatItems() {
+    _flatItems.clear();
+    _letterIndexMap.clear();
+
+    // Agrupar por letra inicial (considerando apenas A-Z, ignora acentos para agrupar)
+    final groups = <String, List<String>>{};
+    for (final country in _countries) {
+      final letter = country.substring(0, 1).toUpperCase();
+      final normalized = _normalizeLetter(letter);
+      if (!groups.containsKey(normalized)) groups[normalized] = [];
+      groups[normalized]!.add(country);
+    }
+
+    final sortedLetters = groups.keys.toList()..sort();
+
+    int currentIndex = 0;
+    for (final letter in sortedLetters) {
+      _letterIndexMap[letter] = currentIndex;
+      _flatItems.add(_LetterHeader(letter: letter, p: _p));
+      currentIndex++;
+      for (final country in groups[letter]!) {
+        _flatItems.add(_CountryRow(
+          p: _p,
+          country: country,
+          onTap: () => _openCountry(country),
+        ));
+        currentIndex++;
+      }
+    }
+  }
+
+  String _normalizeLetter(String s) {
+    // Remove acentos básicos
+    const accents = 'áàâãäéèêëíìîïóòôõöúùûüç';
+    const without = 'aaaaaeeeeiiiiooooouuuuc';
+    final lower = s.toLowerCase();
+    final index = accents.indexOf(lower);
+    if (index != -1) {
+      return without[index].toUpperCase();
+    }
+    return s.toUpperCase();
+  }
+
+  void _scrollToLetter(String letter) {
+    final index = _letterIndexMap[letter];
+    if (index == null) return;
+    // Estimativa de altura por item (cabeçalho + linha)
+    const itemHeight = 52.0;
+    final targetOffset = index * itemHeight;
+    _scrollController.animateTo(
+      targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _openCountry(String country) async {
+    final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
+      CupertinoPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
+    );
+    if (result != null && mounted) Navigator.of(context).pop(result);
+  }
+
+  List<String> get _filteredCountries {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return _countries;
     return _countries.where((c) => c.toLowerCase().contains(q)).toList();
   }
 
-  void _openCountry(String country) async {
-    final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
-      MaterialPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
-    );
-    if (result != null && mounted) Navigator.of(context).pop(result);
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = _p;
-    final items = _filtered;
+    final searching = _query.trim().isNotEmpty;
+    final filtered = _filteredCountries;
 
     return Scaffold(
       backgroundColor: p.pageBg,
       appBar: aiScreenAppBar(p: p, title: 'Escolher país', onBack: () => Navigator.of(context).pop()),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            Expanded(
-              child: _loadingCountries
-                  ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: p.onSurfaceVariant))
-                  : _error != null
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_error!, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
-                              const SizedBox(height: 10),
-                              GestureDetector(
-                                onTap: _loadCountries,
-                                child: Text('Tentar novamente', style: TextStyle(color: p.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+            // Conteúdo principal
+            Column(
+              children: [
+                Expanded(
+                  child: _loadingCountries
+                      ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: p.onSurfaceVariant))
+                      : _error != null
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_error!, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
+                                  const SizedBox(height: 10),
+                                  GestureDetector(
+                                    onTap: _loadCountries,
+                                    child: Text('Tentar novamente', style: TextStyle(color: p.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        )
-                      : items.isEmpty
-                          ? Center(child: Text('Sem resultados', style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)))
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              itemCount: items.length,
-                              itemBuilder: (_, i) => _PlainNavRow(
-                                p: p,
-                                label: items[i],
-                                onTap: () => _openCountry(items[i]),
-                              ),
-                            ),
+                            )
+                          : searching
+                              ? ListView.builder(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  itemCount: filtered.length,
+                                  itemBuilder: (_, i) => _CountryRow(
+                                    p: p,
+                                    country: filtered[i],
+                                    onTap: () => _openCountry(filtered[i]),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  controller: _scrollController,
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  itemCount: _flatItems.length,
+                                  itemBuilder: (_, i) => _flatItems[i],
+                                ),
+                ),
+                _AiSearchBar(
+                  p: p,
+                  controller: _searchCtrl,
+                  hint: 'Procurar país…',
+                  onChanged: (v) => setState(() => _query = v),
+                  onClear: () => setState(() {
+                    _searchCtrl.clear();
+                    _query = '';
+                  }),
+                  onClose: () => Navigator.of(context).pop(),
+                  showCloseButton: true,
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Container(
-                height: 46,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(999)),
-                child: Row(
-                  children: [
-                    AppIcon('search', color: p.onSurfaceVariant, size: 17),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (v) => setState(() => _query = v),
-                        style: TextStyle(color: p.onSurface, fontSize: 14),
-                        cursorColor: p.primary,
-                        decoration: InputDecoration(
-                          isDense: true, border: InputBorder.none,
-                          hintText: 'Procurar país…',
-                          hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ],
+            // Índice alfabético lateral (visível apenas quando não está a pesquisar)
+            if (!searching && !_loadingCountries && _error == null)
+              Positioned(
+                right: 8,
+                top: 20,
+                bottom: 80,
+                child: _AlphabetIndex(
+                  letters: _letterIndexMap.keys.toList()..sort(),
+                  onTap: _scrollToLetter,
+                  p: p,
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -2178,6 +2268,90 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
   }
 }
 
+class _LetterHeader extends StatelessWidget {
+  final String letter;
+  final _WidgetPalette p;
+  const _LetterHeader({required this.letter, required this.p});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
+      child: Text(
+        letter,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: p.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _CountryRow extends StatelessWidget {
+  final _WidgetPalette p;
+  final String country;
+  final VoidCallback onTap;
+  const _CountryRow({required this.p, required this.country, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                country,
+                style: TextStyle(color: p.onSurface, fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+            ),
+            AppIcon('chevron_right', size: 14, color: p.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AlphabetIndex extends StatelessWidget {
+  final List<String> letters;
+  final ValueChanged<String> onTap;
+  final _WidgetPalette p;
+  const _AlphabetIndex({required this.letters, required this.onTap, required this.p});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: letters.map((letter) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onTap(letter),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 6),
+            child: Text(
+              letter,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: p.onSurfaceVariant,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA CHEIA — SELETOR DE PROVÍNCIAS (com busca idêntica)
+// ══════════════════════════════════════════════════════════════
 class _StatePickerScreen extends StatefulWidget {
   final AppColorScheme s;
   final String country;
@@ -2273,32 +2447,17 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
                               itemBuilder: (_, i) => _PlainNavRow(p: p, label: items[i], showArrow: false, onTap: () => _selectState(items[i])),
                             ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Container(
-                height: 46,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(color: p.actionsBg, borderRadius: BorderRadius.circular(999)),
-                child: Row(
-                  children: [
-                    AppIcon('search', color: p.onSurfaceVariant, size: 17),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: (v) => setState(() => _query = v),
-                        style: TextStyle(color: p.onSurface, fontSize: 14),
-                        cursorColor: p.primary,
-                        decoration: InputDecoration(
-                          isDense: true, border: InputBorder.none,
-                          hintText: 'Procurar região…',
-                          hintStyle: TextStyle(color: p.onSurfaceVariant, fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _AiSearchBar(
+              p: p,
+              controller: _searchCtrl,
+              hint: 'Procurar região…',
+              onChanged: (v) => setState(() => _query = v),
+              onClear: () => setState(() {
+                _searchCtrl.clear();
+                _query = '';
+              }),
+              onClose: () => Navigator.of(context).pop(),
+              showCloseButton: true,
             ),
           ],
         ),

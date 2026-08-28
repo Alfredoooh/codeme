@@ -455,7 +455,7 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
         _MenuOptionTile(
           s: s,
-          assetName: 'clock',
+          assetName: 'schedule',
           label: 'Tarefas agendadas',
           onTap: () => _openScheduledTasks(context),
         ),
