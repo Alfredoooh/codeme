@@ -6,8 +6,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
-  flutter: '>=3.10.0'
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.24.0'
 
 dependencies:
   flutter:
@@ -41,6 +41,7 @@ flutter:
   assets:
     - assets/icons/outline/
     - assets/fonts/
+    - assets/fonts/inter/
     - assets/icons/png/
     - assets/icons/apps/
     - assets/editor/docs.html
@@ -53,3 +54,7 @@ flutter:
     - family: IndispensableSerif
       fonts:
         - asset: assets/fonts/IndispensableSerif.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/inter/Inter_24pt-SemiBold.ttf
+          weight: 600

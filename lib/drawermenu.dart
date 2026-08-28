@@ -322,11 +322,11 @@ class _AppDrawerState extends State<AppDrawer> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 56),
+                const SizedBox(height: 48),
                 Expanded(
                   child: _buildConversationsPage(context, s, pinned, others),
                 ),
-                const SizedBox(height: 120),
+                const SizedBox(height: 112),
               ],
             ),
 
@@ -350,11 +350,11 @@ class _AppDrawerState extends State<AppDrawer> {
                       child: SelectionContainer.disabled(
                         child: Text(
                           'Nexa',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: s.onSurface,
-                          ),
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                          ).copyWith(color: s.onSurface),
                         ),
                       ),
                     ),
@@ -388,8 +388,8 @@ class _AppDrawerState extends State<AppDrawer> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(child: _NewChatPill(s: s, onTap: widget.onNewChat != null ? _handleNewChat : null)),
-                    const SizedBox(width: 10),
+                    _NewChatPill(s: s, onTap: widget.onNewChat != null ? _handleNewChat : null),
+                    const Spacer(),
                     _AvatarCircleButton(
                       s: s,
                       onTap: widget.onSettings,
@@ -415,6 +415,7 @@ class _AppDrawerState extends State<AppDrawer> {
         child: SizedBox(
           width: 24, height: 24,
           child: CircularProgressIndicator(
+            year2023: false,
             strokeWidth: 3,
             strokeCap: StrokeCap.round,
             valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
@@ -437,13 +438,6 @@ class _AppDrawerState extends State<AppDrawer> {
 
     final sections = <Widget>[];
 
-    sections.add(_ConversationGroupHeader(
-      s: s,
-      label: 'Menu',
-      expanded: true,
-      onTap: () {},
-      interactive: false,
-    ));
     sections.add(_LooseRows(
       s: s,
       children: [
@@ -532,11 +526,12 @@ class _AppDrawerState extends State<AppDrawer> {
       color: s.primary,
       backgroundColor: s.cardBackground,
       strokeWidth: 3,
-      edgeOffset: 16,
+      edgeOffset: 8,
       onRefresh: () => conversationsController.load(),
       child: Scrollbar(
         thumbVisibility: false,
         child: ListView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
           children: sections,
         ),
@@ -663,7 +658,7 @@ class _ConversationGroupHeader extends StatelessWidget {
   }
 }
 
-// ── Avatar circular ───────────────────────────────────────────
+// ── Avatar circular com anel ────────────────────────────────
 
 class _AvatarCircleButton extends StatefulWidget {
   final AppColorScheme s;
@@ -676,8 +671,8 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
 
   static const double _buttonSize = 52;
-  static const double _imageSize = 52;
-  static const double _fontSize = 18;
+  static const double _ringWidth = 3;
+  static const double _fontSize = 17;
 
   Uint8List? _decodeAvatar(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -704,7 +699,13 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
     final fallback = Text(initial,
         style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: fontSize));
 
-    if (avatar == null || avatar.isEmpty) return fallback;
+    if (avatar == null || avatar.isEmpty) {
+      return Container(
+        color: s.primary,
+        alignment: Alignment.center,
+        child: fallback,
+      );
+    }
 
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
       return Image.network(
@@ -712,19 +713,35 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
         width: size, height: size,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => fallback,
-        loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
+        errorBuilder: (_, __, ___) => Container(
+          color: s.primary,
+          alignment: Alignment.center,
+          child: fallback,
+        ),
+        loadingBuilder: (_, child, progress) => progress == null
+            ? child
+            : Container(color: s.primary, alignment: Alignment.center, child: fallback),
       );
     }
 
     final bytes = _decodeAvatar(avatar);
-    if (bytes == null) return fallback;
+    if (bytes == null) {
+      return Container(
+        color: s.primary,
+        alignment: Alignment.center,
+        child: fallback,
+      );
+    }
     return Image.memory(
       bytes,
       width: size, height: size,
       fit: BoxFit.cover,
       gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => fallback,
+      errorBuilder: (_, __, ___) => Container(
+        color: s.primary,
+        alignment: Alignment.center,
+        child: fallback,
+      ),
     );
   }
 
@@ -735,6 +752,8 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
     final name = user?.name ?? 'Utilizador';
     final avatar = user?.avatar;
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    final innerSize = _buttonSize - (_ringWidth * 2) - 2;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -752,13 +771,21 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
         child: Container(
           width: _buttonSize, height: _buttonSize,
           alignment: Alignment.center,
-          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: _p ? s.hover : s.cardBackground,
             shape: BoxShape.circle,
+            border: Border.all(
+              color: _p ? s.hover : s.outline,
+              width: _ringWidth,
+            ),
             boxShadow: s.cardShadow,
           ),
-          child: _buildAvatarContent(s, avatar, initial, size: _imageSize, fontSize: _fontSize),
+          child: ClipOval(
+            child: SizedBox(
+              width: innerSize,
+              height: innerSize,
+              child: _buildAvatarContent(s, avatar, initial, size: innerSize, fontSize: _fontSize),
+            ),
+          ),
         ),
       ),
     );
@@ -1287,7 +1314,7 @@ Future<void> showRenameSheet(
   );
 }
 
-// ── NEW CHAT PILL ─────────────────────────────────────────────
+// ── NEW CHAT PILL (compacto, cor primária, texto branco) ──────
 
 class _NewChatPill extends StatefulWidget {
   final AppColorScheme s;
@@ -1315,25 +1342,30 @@ class _NewChatPillState extends State<_NewChatPill> {
         scale: _p ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: kCupertinoOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: 52,
-          decoration: BoxDecoration(
-            color: _p ? s.hover : s.cardBackground,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: s.cardShadow,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(children: [
-            AppIcon('new_chat', color: s.onSurface, size: 18),
-            const SizedBox(width: 10),
-            SelectionContainer.disabled(
-              child: Text(
-                'Conversar',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-              ),
+        child: IntrinsicWidth(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            height: 52,
+            decoration: BoxDecoration(
+              color: s.primary,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: s.cardShadow,
             ),
-          ]),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const AppIcon('new_chat', color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                const SelectionContainer.disabled(
+                  child: Text(
+                    'Conversar',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

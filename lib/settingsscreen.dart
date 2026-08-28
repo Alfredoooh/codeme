@@ -25,6 +25,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen>
     with ThemeReactive<SettingsScreen> {
   bool _refreshing = false;
+  double _headerShrinkProgress = 0;
+
+  static const double _headerMaxExtent = 180;
+  static const double _headerMinExtent = 60;
 
   @override
   void initState() {
@@ -244,6 +248,20 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  bool _handleScrollNotification(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    if (metrics.axisDirection != AxisDirection.down &&
+        metrics.axisDirection != AxisDirection.up) {
+      return false;
+    }
+    final offset = metrics.pixels.clamp(0.0, _headerMaxExtent - _headerMinExtent);
+    final progress = (offset / (_headerMaxExtent - _headerMinExtent)).clamp(0.0, 1.0);
+    if ((progress - _headerShrinkProgress).abs() > 0.01) {
+      setState(() => _headerShrinkProgress = progress);
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -267,201 +285,232 @@ class _SettingsScreenState extends State<SettingsScreen>
           color: s.pageBackground,
           child: SafeArea(
             child: Stack(children: [
-              RefreshIndicator(
-                color: s.primary,
-                backgroundColor: s.cardBackground,
-                onRefresh: _refreshMe,
-                child: CustomScrollView(
-                  slivers: [
-                    SliverPersistentHeader(
-                      pinned: true,
-                      delegate: _ProfileHeaderDelegate(
-                        s: s,
-                        user: user,
-                        loading: _refreshing,
-                        onAvatarTap: () =>
-                            _openAvatarViewer(context, s),
-                        onEditTap: _pickAvatarDirectly,
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 0),
-                            _SectionLabel(s: s, label: 'Geral'),
-                            const SizedBox(height: 10),
-                            _SettingsGroup(s: s, rows: [
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'paintbrush',
-                                label: 'Aparência',
-                                onTap: () => _openAppearance(context, s),
-                                trailing: AppIcon('chevron_forward',
-                                    size: 16,
-                                    color: s.onSurfaceVariant),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'sliders',
-                                label: 'Personalização',
-                                onTap: () =>
-                                    _openPersonalization(context),
-                                trailing: AppIcon('chevron_forward',
-                                    size: 16,
-                                    color: s.onSurfaceVariant),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'database',
-                                label: 'Memória',
-                                onTap: () => _openMemory(context, s),
-                                trailing: AppIcon('chevron_forward',
-                                    size: 16,
-                                    color: s.onSurfaceVariant),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'briefcase',
-                                label: 'Área de trabalho',
-                                onTap: () => _openWorkspace(context),
-                                trailing: AppIcon('chevron_forward',
-                                    size: 16,
-                                    color: s.onSurfaceVariant),
-                              ),
-                            ]),
-                            const SizedBox(height: 28),
-                            _SectionLabel(s: s, label: 'Conta'),
-                            const SizedBox(height: 10),
-                            _SettingsGroup(s: s, rows: [
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'person',
-                                label: 'Nome',
-                                onTap: () => _editName(context, s),
-                                trailing: Text('Alterar',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: s.primary,
-                                        fontWeight: FontWeight.w500)),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'mail',
-                                label: 'Email',
-                                onTap: () {},
-                                trailing: Text(
-                                  user?.email ?? '—',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.onSurfaceVariant),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'lock',
-                                label: 'Palavra-passe',
-                                onTap: () =>
-                                    _editPassword(context, s),
-                                trailing: Text('Alterar',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: s.primary,
-                                        fontWeight: FontWeight.w500)),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'credit',
-                                label: 'Créditos',
-                                onTap: () {},
-                                trailing: Text(
-                                  '${user?.credits ?? 0}',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.onSurfaceVariant),
-                                ),
-                              ),
-                            ]),
-                            const SizedBox(height: 28),
-                            _SectionLabel(s: s, label: 'Sobre'),
-                            const SizedBox(height: 10),
-                            _SettingsGroup(s: s, rows: [
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'info',
-                                label: 'Versão',
-                                onTap: () {},
-                                trailing: Text('1.0.0',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: s.onSurfaceVariant)),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'license',
-                                label: 'Termos de serviço',
-                                onTap: () {},
-                                trailing: const SizedBox.shrink(),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'shield',
-                                label: 'Política de privacidade',
-                                onTap: () {},
-                                trailing: const SizedBox.shrink(),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'comment',
-                                label: 'Enviar feedback',
-                                onTap: () {},
-                                trailing: const SizedBox.shrink(),
-                              ),
-                              _SettingsRow(
-                                s: s,
-                                iconAsset: 'question',
-                                label: 'Ajuda e suporte',
-                                onTap: () {},
-                                trailing: const SizedBox.shrink(),
-                              ),
-                            ]),
-                            const SizedBox(height: 90),
-                          ],
+              NotificationListener<ScrollNotification>(
+                onNotification: _handleScrollNotification,
+                child: RefreshIndicator(
+                  color: s.primary,
+                  backgroundColor: s.cardBackground,
+                  onRefresh: _refreshMe,
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    slivers: [
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _ProfileHeaderDelegate(
+                          s: s,
+                          user: user,
+                          loading: _refreshing,
+                          onAvatarTap: () =>
+                              _openAvatarViewer(context, s),
+                          onEditTap: _pickAvatarDirectly,
                         ),
                       ),
-                    ),
-                  ],
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 0),
+                              _SectionLabel(s: s, label: 'Geral'),
+                              const SizedBox(height: 10),
+                              _SettingsGroup(s: s, rows: [
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'paintbrush',
+                                  label: 'Aparência',
+                                  onTap: () => _openAppearance(context, s),
+                                  trailing: AppIcon('chevron_forward',
+                                      size: 16,
+                                      color: s.onSurfaceVariant),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'sliders',
+                                  label: 'Personalização',
+                                  onTap: () =>
+                                      _openPersonalization(context),
+                                  trailing: AppIcon('chevron_forward',
+                                      size: 16,
+                                      color: s.onSurfaceVariant),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'database',
+                                  label: 'Memória',
+                                  onTap: () => _openMemory(context, s),
+                                  trailing: AppIcon('chevron_forward',
+                                      size: 16,
+                                      color: s.onSurfaceVariant),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'briefcase',
+                                  label: 'Área de trabalho',
+                                  onTap: () => _openWorkspace(context),
+                                  trailing: AppIcon('chevron_forward',
+                                      size: 16,
+                                      color: s.onSurfaceVariant),
+                                ),
+                              ]),
+                              const SizedBox(height: 28),
+                              _SectionLabel(s: s, label: 'Conta'),
+                              const SizedBox(height: 10),
+                              _SettingsGroup(s: s, rows: [
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'person',
+                                  label: 'Nome',
+                                  onTap: () => _editName(context, s),
+                                  trailing: Text('Alterar',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: s.primary,
+                                          fontWeight: FontWeight.w500)),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'mail',
+                                  label: 'Email',
+                                  onTap: () {},
+                                  trailing: Text(
+                                    user?.email ?? '—',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: s.onSurfaceVariant),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'lock',
+                                  label: 'Palavra-passe',
+                                  onTap: () =>
+                                      _editPassword(context, s),
+                                  trailing: Text('Alterar',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: s.primary,
+                                          fontWeight: FontWeight.w500)),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'credit',
+                                  label: 'Créditos',
+                                  onTap: () {},
+                                  trailing: Text(
+                                    '${user?.credits ?? 0}',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: s.onSurfaceVariant),
+                                  ),
+                                ),
+                              ]),
+                              const SizedBox(height: 28),
+                              _SectionLabel(s: s, label: 'Sobre'),
+                              const SizedBox(height: 10),
+                              _SettingsGroup(s: s, rows: [
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'info',
+                                  label: 'Versão',
+                                  onTap: () {},
+                                  trailing: Text('1.0.0',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: s.onSurfaceVariant)),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'license',
+                                  label: 'Termos de serviço',
+                                  onTap: () {},
+                                  trailing: const SizedBox.shrink(),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'shield',
+                                  label: 'Política de privacidade',
+                                  onTap: () {},
+                                  trailing: const SizedBox.shrink(),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'comment',
+                                  label: 'Enviar feedback',
+                                  onTap: () {},
+                                  trailing: const SizedBox.shrink(),
+                                ),
+                                _SettingsRow(
+                                  s: s,
+                                  iconAsset: 'question',
+                                  label: 'Ajuda e suporte',
+                                  onTap: () {},
+                                  trailing: const SizedBox.shrink(),
+                                ),
+                              ]),
+                              const SizedBox(height: 90),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
-              // Appbar vazio (apenas botão voltar)
+              // Appbar transparente progressiva (com avatar colapsado)
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16),
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        s.pageBackground,
-                        s.pageBackground.withOpacity(0.0),
-                      ],
+                child: IgnorePointer(
+                  ignoring: false,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          s.pageBackground,
+                          s.pageBackground.withOpacity(0.0),
+                        ],
+                      ),
                     ),
+                    child: Row(children: [
+                      _CircularBackButton(
+                        s: s,
+                        onTap: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 12),
+                      Opacity(
+                        opacity: _headerShrinkProgress,
+                        child: _CollapsedAvatar(
+                          s: s,
+                          user: user,
+                          size: 36,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (_headerShrinkProgress > 0.5)
+                        Expanded(
+                          child: Opacity(
+                            opacity: ((_headerShrinkProgress - 0.5) * 2).clamp(0.0, 1.0),
+                            child: Text(
+                              user?.name ?? 'Utilizador',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: s.onSurface,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    ]),
                   ),
-                  child: Row(children: [
-                    _CircularBackButton(
-                      s: s,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ]),
                 ),
               ),
 
@@ -497,7 +546,67 @@ class _SettingsScreenState extends State<SettingsScreen>
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROFILE HEADER DELEGATE (com shrink) — CORRIGIDO
+// AVATAR COLAPSADO (vive na appbar, não no sliver)
+// ══════════════════════════════════════════════════════════════
+
+class _CollapsedAvatar extends StatelessWidget {
+  final AppColorScheme s;
+  final AppUser? user;
+  final double size;
+  const _CollapsedAvatar({required this.s, required this.user, required this.size});
+
+  Uint8List? _decodeAvatar(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final commaIdx = raw.indexOf(',');
+      final b64 = raw.startsWith('data:') && commaIdx != -1
+          ? raw.substring(commaIdx + 1)
+          : raw;
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = user?.name ?? 'Utilizador';
+    final avatarBytes = _decodeAvatar(user?.avatar);
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: s.primary,
+        border: Border.all(color: s.outline, width: 2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: avatarBytes != null
+          ? Image.memory(
+              avatarBytes,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Text(initial,
+                  style: TextStyle(
+                      color: s.onPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: size * 0.4)),
+            )
+          : Text(initial,
+              style: TextStyle(
+                  color: s.onPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: size * 0.4)),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PROFILE HEADER DELEGATE (apenas estado expandido, com anel)
 // ══════════════════════════════════════════════════════════════
 
 class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
@@ -517,6 +626,7 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   static const double _maxExtent = 180;
   static const double _minExtent = 60;
+  static const double _ringWidth = 3;
 
   @override
   double get minExtent => _minExtent;
@@ -541,15 +651,11 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
     final progress =
         (shrinkOffset / (_maxExtent - _minExtent)).clamp(0.0, 1.0);
 
-    final avatarSize = 88.0 - (48.0 * progress);
-    final nameFontSize = 18.0 - (4.0 * progress);
-
-    final collapsedAvatarLeft = 56.0; // espaço para o botão voltar
-    final avatarTop = (_maxExtent - avatarSize) / 2 -
-        (20.0 * progress);
-    final nameLeft = collapsedAvatarLeft + avatarSize + 8.0;
-    final nameTop = (_maxExtent - 20) / 2 -
-        (8.0 * progress);
+    // O avatar grande desvanece por completo antes do colapso terminar;
+    // o avatar pequeno equivalente vive na appbar (fora deste delegate).
+    final avatarOpacity = (1.0 - (progress / 0.6)).clamp(0.0, 1.0);
+    final avatarSize = 88.0;
+    final avatarTop = (_maxExtent - avatarSize) / 2 - (30.0 * progress);
 
     final name = user?.name ?? 'Utilizador';
     final avatarRaw = user?.avatar;
@@ -558,62 +664,73 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
         : null;
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
+    final innerSize = avatarSize - (_ringWidth * 2) - 2;
+
     return Container(
       color: s.pageBackground,
       child: Stack(
         children: [
-          // Avatar
           Positioned(
-            left: Tween<double>(
-              begin: (MediaQuery.of(context).size.width - 88.0) / 2,
-              end: collapsedAvatarLeft,
-            ).transform(progress),
+            left: (MediaQuery.of(context).size.width - avatarSize) / 2,
             top: avatarTop,
-            child: GestureDetector(
-              onTap: onAvatarTap,
-              child: Hero(
-                tag: 'avatar',
-                child: Container(
-                  width: avatarSize,
-                  height: avatarSize,
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                      color: s.primary,
-                      shape: BoxShape.circle),
-                  child: avatarBytes != null
-                      ? Image.memory(
-                          avatarBytes,
-                          width: avatarSize,
-                          height: avatarSize,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Text(initial,
-                              style: TextStyle(
-                                  color: s.onPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: avatarSize * 0.35)),
-                        )
-                      : Text(initial,
-                          style: TextStyle(
-                              color: s.onPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: avatarSize * 0.35)),
+            child: Opacity(
+              opacity: avatarOpacity,
+              child: GestureDetector(
+                onTap: onAvatarTap,
+                child: Hero(
+                  tag: 'avatar',
+                  child: Container(
+                    width: avatarSize,
+                    height: avatarSize,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: s.outline, width: _ringWidth),
+                    ),
+                    child: ClipOval(
+                      child: SizedBox(
+                        width: innerSize,
+                        height: innerSize,
+                        child: avatarBytes != null
+                            ? Image.memory(
+                                avatarBytes,
+                                width: innerSize,
+                                height: innerSize,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: s.primary,
+                                  alignment: Alignment.center,
+                                  child: Text(initial,
+                                      style: TextStyle(
+                                          color: s.onPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: avatarSize * 0.35)),
+                                ),
+                              )
+                            : Container(
+                                color: s.primary,
+                                alignment: Alignment.center,
+                                child: Text(initial,
+                                    style: TextStyle(
+                                        color: s.onPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: avatarSize * 0.35)),
+                              ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
 
           // Botão de editar (lápis) sobre o avatar
-          if (progress < 0.9)
+          if (avatarOpacity > 0.05)
             Builder(builder: (context) {
-              final avatarLeft = Tween<double>(
-                begin: (MediaQuery.of(context).size.width - 88.0) / 2,
-                end: collapsedAvatarLeft,
-              ).transform(progress);
+              final avatarLeft = (MediaQuery.of(context).size.width - avatarSize) / 2;
               final avatarCenterX = avatarLeft + avatarSize / 2;
               final avatarCenterY = avatarTop + avatarSize / 2;
 
-              const angle = 0.785398;
               final radius = avatarSize / 2;
               final badgeSize = 30.0;
 
@@ -624,7 +741,7 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
                 left: badgeCenterX - badgeSize / 2,
                 top: badgeCenterY - badgeSize / 2,
                 child: Opacity(
-                  opacity: (1.0 - (progress / 0.9)).clamp(0.0, 1.0),
+                  opacity: avatarOpacity,
                   child: GestureDetector(
                     onTap: onEditTap,
                     child: Container(
@@ -646,35 +763,23 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
               );
             }),
 
-          // Nome
+          // Nome (segue o mesmo fade do avatar grande)
           Positioned(
-            left: Tween<double>(
-              begin: 0.0,
-              end: nameLeft,
-            ).transform(progress),
-            right: progress < 1.0
-                ? Tween<double>(
-                    begin: 0.0,
-                    end: MediaQuery.of(context).size.width -
-                        nameLeft -
-                        150,
-                  ).transform(progress)
-                : null,
-            top: Tween<double>(
-              begin: avatarTop + 88.0 + 8,
-              end: nameTop,
-            ).transform(progress),
-            child: Align(
-              alignment: Alignment.lerp(
-                  Alignment.center, Alignment.centerLeft, progress)!,
-              child: Text(
-                name,
-                style: TextStyle(
-                  fontSize: nameFontSize,
-                  fontWeight: FontWeight.w700,
-                  color: s.onSurface,
+            left: 0,
+            right: 0,
+            top: avatarTop + avatarSize + 8,
+            child: Opacity(
+              opacity: avatarOpacity,
+              child: Center(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ),
@@ -686,6 +791,7 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
+                    year2023: false,
                     strokeWidth: 2.2,
                     valueColor: const AlwaysStoppedAnimation(Colors.white),
                   ),
@@ -850,6 +956,7 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
+                              year2023: false,
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation(
                                   s.isDark ? Colors.black : s.onPrimary),
@@ -1067,6 +1174,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
+                                year2023: false,
                                 strokeWidth: 2.2,
                                 valueColor:
                                     AlwaysStoppedAnimation(s.onPrimary),
@@ -1621,6 +1729,7 @@ class _EditFieldSheetState extends State<_EditFieldSheet> {
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
+                              year2023: false,
                               strokeWidth: 2.2,
                               valueColor: AlwaysStoppedAnimation(
                                   s.onPrimary),
@@ -1663,49 +1772,48 @@ class _AppearanceScreenState extends State<_AppearanceScreen>
       child: ColoredBox(
         color: s.pageBackground,
         child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Row(children: [
-                  _CircularBackButton(
-                      s: s, onTap: () => Navigator.pop(context)),
-                  const SizedBox(width: 12),
-                  Text('Aparência',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: s.onSurface)),
-                ]),
+          child: Stack(children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.only(top: 62),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20),
+                    child: _ThemeSegmentedControl(s: s),
+                  ),
+                  const SizedBox(height: 28),
+                  Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: Text('Tamanho do texto',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: s.onSurfaceVariant)),
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20),
+                    child: _FontSizeCard(
+                      s: s,
+                      value: appPreferences.fontScale,
+                      onChanged: appPreferences.setFontScale,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                ],
               ),
-              const SizedBox(height: 20),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20),
-                child: _ThemeSegmentedControl(s: s),
-              ),
-              const SizedBox(height: 28),
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text('Tamanho do texto',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurfaceVariant)),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20),
-                child: _FontSizeCard(
-                  s: s,
-                  value: appPreferences.fontScale,
-                  onChanged: appPreferences.setFontScale,
-                ),
-              ),
-            ],
-          ),
+            ),
+            _TransparentFadeAppBar(
+              s: s,
+              title: 'Aparência',
+              onBack: () => Navigator.pop(context),
+            ),
+          ]),
         ),
       ),
     );
@@ -2021,26 +2129,11 @@ class _PersonalizationScreenState extends State<_PersonalizationScreen>
       child: ColoredBox(
         color: s.pageBackground,
         child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Row(children: [
-                  _CircularBackButton(
-                      s: s,
-                      onTap: () => Navigator.pop(context)),
-                  const SizedBox(width: 12),
-                  Text('Personalização',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: s.onSurface)),
-                ]),
-              ),
-              const SizedBox(height: 20),
-              Padding(
+          child: Stack(children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.only(top: 62),
+              child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20),
                 child: _SettingsGroup(s: s, rows: [
@@ -2097,8 +2190,13 @@ class _PersonalizationScreenState extends State<_PersonalizationScreen>
                   ),
                 ]),
               ),
-            ],
-          ),
+            ),
+            _TransparentFadeAppBar(
+              s: s,
+              title: 'Personalização',
+              onBack: () => Navigator.pop(context),
+            ),
+          ]),
         ),
       ),
     );
@@ -2217,6 +2315,7 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
+                              year2023: false,
                               strokeWidth: 2.2,
                               valueColor: AlwaysStoppedAnimation(
                                   s.onPrimary),
@@ -2407,53 +2506,49 @@ class _MemoryScreen extends StatelessWidget {
       child: ColoredBox(
         color: s.pageBackground,
         child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Row(children: [
-                  _CircularBackButton(
-                      s: s,
-                      onTap: () => Navigator.pop(context)),
-                  const SizedBox(width: 12),
-                  Text('Memória',
+          child: Stack(children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.only(top: 62),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Gere os dados de conversas guardados na tua conta.',
                       style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: s.onSurface)),
-                ]),
-              ),
-              const SizedBox(height: 20),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Gere os dados de conversas guardados na tua conta.',
-                  style: TextStyle(
-                      fontSize: 13.5,
-                      color: s.onSurfaceVariant,
-                      height: 1.4),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20),
-                child: _SettingsGroup(s: s, rows: [
-                  _SettingsRow(
-                    s: s,
-                    iconAsset: 'trash',
-                    label: 'Eliminar todas as conversas',
-                    labelColor: s.error,
-                    onTap: onDeleteAllConversations,
-                    trailing: const SizedBox.shrink(),
+                          fontSize: 13.5,
+                          color: s.onSurfaceVariant,
+                          height: 1.4),
+                    ),
                   ),
-                ]),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20),
+                    child: _SettingsGroup(s: s, rows: [
+                      _SettingsRow(
+                        s: s,
+                        iconAsset: 'trash',
+                        label: 'Eliminar todas as conversas',
+                        labelColor: s.error,
+                        onTap: onDeleteAllConversations,
+                        trailing: const SizedBox.shrink(),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 40),
+                ],
               ),
-            ],
-          ),
+            ),
+            _TransparentFadeAppBar(
+              s: s,
+              title: 'Memória',
+              onBack: () => Navigator.pop(context),
+            ),
+          ]),
         ),
       ),
     );
@@ -2476,26 +2571,11 @@ class _WorkspaceScreen extends StatelessWidget {
       child: ColoredBox(
         color: s.pageBackground,
         child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Row(children: [
-                  _CircularBackButton(
-                      s: s,
-                      onTap: () => Navigator.pop(context)),
-                  const SizedBox(width: 12),
-                  Text('Área de trabalho',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: s.onSurface)),
-                ]),
-              ),
-              const SizedBox(height: 20),
-              Padding(
+          child: Stack(children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.only(top: 62),
+              child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20),
                 child: _SettingsGroup(s: s, rows: [
@@ -2509,9 +2589,60 @@ class _WorkspaceScreen extends StatelessWidget {
                   ),
                 ]),
               ),
+            ),
+            _TransparentFadeAppBar(
+              s: s,
+              title: 'Área de trabalho',
+              onBack: () => Navigator.pop(context),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// APPBAR TRANSPARENTE PROGRESSIVA (reutilizável)
+// ══════════════════════════════════════════════════════════════
+
+class _TransparentFadeAppBar extends StatelessWidget {
+  final AppColorScheme s;
+  final String title;
+  final VoidCallback onBack;
+  const _TransparentFadeAppBar({
+    required this.s,
+    required this.title,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              s.pageBackground,
+              s.pageBackground.withOpacity(0.0),
             ],
           ),
         ),
+        child: Row(children: [
+          _CircularBackButton(s: s, onTap: onBack),
+          const SizedBox(width: 12),
+          Text(title,
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+        ]),
       ),
     );
   }
