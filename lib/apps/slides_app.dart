@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/apps/slides_app.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -8,10 +11,15 @@ import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
+import 'registry/app_registry.dart';
 
 class SlidesScreen extends StatefulWidget {
   const SlidesScreen({super.key});
   @override State<SlidesScreen> createState() => _SlidesScreenState();
+
+  static void bootstrap() {
+    AppRegistry.register('slides', (_) => const SlidesScreen());
+  }
 }
 
 class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesScreen> {

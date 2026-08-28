@@ -1,0 +1,15 @@
+{
+  "label": "Folha de cálculo",
+  "description": "Criar e editar folhas de cálculo",
+  "longDescription": "A Folha de cálculo permite-te organizar dados, fazer contas e criar tabelas, com o apoio da IA para te ajudar a montar tudo mais rápido.",
+  "features": [
+    "Editor de folhas de cálculo completo, otimizado para telemóvel",
+    "Assistente de IA para ajudar a criar folhas de cálculo",
+    "Suporta modo claro e escuro"
+  ],
+  "iconAsset": "assets/icons/apps/sheets.png",
+  "isCircularIcon": false,
+  "aiName": "Folhas de cálculo",
+  "aiToggleDescription": "A IA pode criar folhas de cálculo",
+  "version": "1.0.0"
+}

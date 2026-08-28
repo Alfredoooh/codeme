@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/apps/docs.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -8,10 +11,15 @@ import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
+import 'registry/app_registry.dart';
 
 class DocsScreen extends StatefulWidget {
   const DocsScreen({super.key});
   @override State<DocsScreen> createState() => _DocsScreenState();
+
+  static void bootstrap() {
+    AppRegistry.register('docs', (_) => const DocsScreen());
+  }
 }
 
 class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> {
@@ -25,13 +33,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   final List<String> _redoStack = [];
   bool _restoringContent = false;
 
-  // Adia a montagem do WebView até a transição de entrada da rota
-  // terminar. Criar a PlatformView do WebView durante o slide do
-  // CupertinoPageRoute engasga o frame — por isso a navegação para
-  // cá "não é suave" comparada à Settings, que não tem WebView
-  // nenhum. Enquanto _readyForWebView é false, mostramos só um
-  // SizedBox no lugar; assim que a rota termina de deslizar,
-  // fazemos setState e o WebView entra depois do slide já parado.
   bool _readyForWebView = false;
 
   @override
@@ -452,12 +453,7 @@ class _ScreenHeader extends StatelessWidget {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface),
             ),
           ),
-          // Gap adicionado entre o título com reticências e o bloco
-          // de undo/redo — antes ficavam colados quando o título
-          // truncava perto do limite do Expanded.
           const SizedBox(width: 12),
-          // Undo/redo sem pill: cada botão solto, sem Container de
-          // fundo/borda/sombra a envolvê-los.
           _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
           _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
           const SizedBox(width: 8),
@@ -538,11 +534,6 @@ class _DocsBottomToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Toolbar flutuante: descolada das bordas por margin lateral e
-    // inferior, com bordas totalmente curvas (circular(28), não um
-    // canto reto colado na tela) e floatingShadow em vez de
-    // navBarShadow — a sombra pensada para elementos soltos, com
-    // blur/offset maiores que a sombra plana de barra colada.
     return Positioned(
       left: 12, right: 12, bottom: 16,
       child: Container(

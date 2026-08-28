@@ -1,0 +1,15 @@
+{
+  "label": "Documento",
+  "description": "Criar e editar documentos de texto",
+  "longDescription": "O Documento é o teu espaço para escrever e organizar texto — desde notas rápidas a documentos mais longos — tudo dentro da app, com a ajuda da IA sempre que precisares.",
+  "features": [
+    "Editor de texto completo, otimizado para telemóvel",
+    "Assistente de IA para ajudar a criar e editar o conteúdo",
+    "Suporta modo claro e escuro"
+  ],
+  "iconAsset": "assets/icons/apps/docs.png",
+  "isCircularIcon": false,
+  "aiName": "Documentos",
+  "aiToggleDescription": "A IA pode criar e editar documentos",
+  "version": "1.0.0"
+}

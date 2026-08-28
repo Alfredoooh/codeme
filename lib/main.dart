@@ -19,9 +19,11 @@ import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
 import 'apps/app_types.dart';
+import 'apps/registry/app_registry.dart';
 import 'apps/docs.dart';
 import 'apps/sheets_app.dart';
 import 'apps/slides_app.dart';
+import 'apps/sound.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +41,17 @@ void main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await appTheme.load();
   await appPreferences.load(); // ← garante persistência do fontScale
+
+  // Cada app regista-se a si próprio (builder + triggers de IA, se
+  // tiver). Esta é a ÚNICA lista que cresce quando um app novo é
+  // adicionado — main.dart nunca sabe o que cada app faz por dentro.
+  DocsScreen.bootstrap();
+  SheetsScreen.bootstrap();
+  SlidesScreen.bootstrap();
+  SoundScreen.bootstrap();
+
+  await AppRegistry.loadManifests();
+
   runApp(const CraftLabApp());
 }
 

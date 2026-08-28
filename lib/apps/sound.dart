@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../all_apps_screen.dart';
+import 'registry/app_registry.dart';
 import 'sound/sound_models.dart';
 import 'sound/sound_widgets.dart';
 import 'sound/sound_player_full.dart';
@@ -16,6 +17,25 @@ class SoundScreen extends StatefulWidget {
   const SoundScreen({super.key});
   @override
   State<SoundScreen> createState() => _SoundScreenState();
+
+  static void bootstrap() {
+    AppRegistry.register(
+      'sound',
+      (_) => const SoundScreen(),
+      triggers: [
+        AppAiTrigger(
+          pattern: RegExp(r'\[\[sound_search:(.*?)\]\]'),
+          onMatch: (context, query) {
+            if (query.isEmpty) return;
+            soundTabController.requestSearch(query);
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SoundScreen()),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }
 
 class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScreen> {
@@ -41,9 +61,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     soundTabController.addListener(_onPendingSearch);
     _fetchFeed();
 
-    // Escuta o estado real do AudioPlayer — é isto que faltava para
-    // o player refletir corretamente se está a tocar, em buffer,
-    // pausado, ou parado por erro.
     _playerStateSub = _player.playerStateStream.listen((state) {
       if (!mounted) return;
       final processing = state.processingState;
@@ -152,8 +169,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     return palette[idx];
   }
 
-  /// Toca [track] imediatamente. Erros ficam visíveis via
-  /// PlaybackStatus.error — nunca ficam apenas num debugPrint silencioso.
   Future<void> _playTrack(SoundTrack track) async {
     setState(() {
       _currentTrack = track;
@@ -201,7 +216,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   void _onGlobalTogglePlay() {
     if (_currentTrack == null) return;
     if (_status == PlaybackStatus.error) {
-      // Tenta tocar de novo em vez de ficar preso no estado de erro.
       _playTrack(_currentTrack!);
       return;
     }
@@ -248,7 +262,6 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
 
   void _onCategoryTap(SoundCategory category) {
     setState(() => _activeCategoryId = category.id);
-    // Rola até à secção correspondente, se já estiver carregada.
     final index = kSoundCategories.indexWhere((c) => c.id == category.id);
     if (index >= 0 && index < _sections.length && _sections[index].tracks.isNotEmpty) {
       _sectionKeys[index].currentContext?.let((ctx) {

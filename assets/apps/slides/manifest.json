@@ -1,0 +1,15 @@
+{
+  "label": "Apresentação",
+  "description": "Criar e editar apresentações",
+  "longDescription": "A Apresentação ajuda-te a construir slides de forma simples, com a IA a apoiar na criação do conteúdo e da estrutura.",
+  "features": [
+    "Editor de apresentações completo, otimizado para telemóvel",
+    "Assistente de IA para ajudar a criar apresentações",
+    "Suporta modo claro e escuro"
+  ],
+  "iconAsset": "assets/icons/apps/slides.png",
+  "isCircularIcon": false,
+  "aiName": "Apresentações",
+  "aiToggleDescription": "A IA pode criar apresentações",
+  "version": "1.0.0"
+}

@@ -45,6 +45,14 @@ flutter:
     - assets/fonts/inter/
     - assets/icons/png/
     - assets/icons/apps/
+    - assets/apps/docs/manifest.json
+    - assets/apps/docs/docs.mcp.json
+    - assets/apps/sheets/manifest.json
+    - assets/apps/sheets/sheets.mcp.json
+    - assets/apps/slides/manifest.json
+    - assets/apps/slides/slides.mcp.json
+    - assets/apps/sound/manifest.json
+    - assets/apps/sound/sound.mcp.json
     - assets/editor/docs.html
     - assets/editor/sheets.html
     - assets/editor/slides.html

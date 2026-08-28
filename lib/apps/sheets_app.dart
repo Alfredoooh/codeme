@@ -8,10 +8,15 @@ import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
+import 'registry/app_registry.dart';
 
 class SheetsScreen extends StatefulWidget {
   const SheetsScreen({super.key});
   @override State<SheetsScreen> createState() => _SheetsScreenState();
+
+  static void bootstrap() {
+    AppRegistry.register('sheets', (_) => const SheetsScreen());
+  }
 }
 
 class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsScreen> {

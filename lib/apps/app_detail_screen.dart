@@ -7,40 +7,18 @@ import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle
 import '../colors.dart';
 import '../widgets.dart';
 import 'app_types.dart';
-import 'docs.dart';
-import 'sheets_app.dart';
-import 'slides_app.dart';
-import 'sound.dart';
+import 'registry/app_registry.dart';
 
 class AppDetailScreen extends StatelessWidget {
-  final AppKind app;
+  final AppEntry app;
   const AppDetailScreen({super.key, required this.app});
 
   /// Navega para o ecrã real do app (chamado pelo botão "Abrir aplicativo").
-  static void openApp(BuildContext context, AppKind app) {
+  static void openApp(BuildContext context, AppEntry app) {
     HapticFeedback.lightImpact();
-    switch (app) {
-      case AppKind.docs:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const DocsScreen()),
-        );
-        break;
-      case AppKind.sheets:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SheetsScreen()),
-        );
-        break;
-      case AppKind.slides:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SlidesScreen()),
-        );
-        break;
-      case AppKind.sound:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SoundScreen()),
-        );
-        break;
-    }
+    Navigator.of(context).push(
+      CupertinoPageRoute(builder: app.builder),
+    );
   }
 
   void _showFeedbackSheet(BuildContext context) {
@@ -64,51 +42,67 @@ class AppDetailScreen extends StatelessWidget {
         child: ColoredBox(
           color: s.pageBackground,
           child: SafeArea(
-            child: Column(
+            child: Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                  child: Row(
-                    children: [
-                      _DetailBackButton(s: s, onTap: () => Navigator.pop(context)),
-                      const Spacer(),
-                      _FeedbackButton(s: s, onTap: () => _showFeedbackSheet(context)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                    children: [
-                      _AppHeader(s: s, app: app),
-                      const SizedBox(height: 28),
-                      _SectionTitle(s: s, text: 'Para que serve'),
-                      const SizedBox(height: 10),
-                      Text(
-                        app.longDescription,
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          height: 1.5,
-                          color: s.onSurfaceVariant,
-                        ),
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                      child: Row(
+                        children: [
+                          _DetailBackButton(s: s, onTap: () => Navigator.pop(context)),
+                          const Spacer(),
+                          _FeedbackButton(s: s, onTap: () => _showFeedbackSheet(context)),
+                        ],
                       ),
-                      const SizedBox(height: 26),
-                      _SectionTitle(s: s, text: 'Funcionalidades'),
-                      const SizedBox(height: 10),
-                      ...app.features.map(
-                        (f) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _FeatureRow(s: s, text: f),
-                        ),
+                    ),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
+                        children: [
+                          _AppHeader(s: s, app: app),
+                          const SizedBox(height: 28),
+                          _SectionTitle(s: s, text: 'Para que serve'),
+                          const SizedBox(height: 10),
+                          Text(
+                            app.manifest.longDescription,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              height: 1.5,
+                              color: s.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 26),
+                          _SectionTitle(s: s, text: 'Funcionalidades'),
+                          const SizedBox(height: 10),
+                          ...app.manifest.features.map(
+                            (f) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _FeatureRow(s: s, text: f),
+                            ),
+                          ),
+                          const SizedBox(height: 26),
+                          _SectionTitle(s: s, text: 'Assistente de IA'),
+                          const SizedBox(height: 10),
+                          _AiConnectSwitchRow(s: s, app: app),
+                          const SizedBox(height: 20),
+                          _FeedbackRow(s: s, onTap: () => _showFeedbackSheet(context)),
+                        ],
                       ),
-                      const SizedBox(height: 20),
-                      _FeedbackRow(s: s, onTap: () => _showFeedbackSheet(context)),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                _OpenAppBar(
-                  s: s,
-                  onTap: () => AppDetailScreen.openApp(context, app),
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 20,
+                  child: SafeArea(
+                    top: false,
+                    child: _OpenAppFloatingButton(
+                      s: s,
+                      onTap: () => AppDetailScreen.openApp(context, app),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -121,7 +115,7 @@ class AppDetailScreen extends StatelessWidget {
 
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
-  final AppKind app;
+  final AppEntry app;
   const _AppHeader({required this.s, required this.app});
 
   @override
@@ -129,16 +123,14 @@ class _AppHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
-          width: 76,
-          height: 76,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: s.hover,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: s.cardShadowSoft,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(app.manifest.isCircularIcon ? 38 : 20),
+          child: Container(
+            width: 76,
+            height: 76,
+            color: app.manifest.isCircularIcon ? Colors.white : Colors.transparent,
+            child: Image.asset(app.manifest.iconAsset, fit: BoxFit.cover),
           ),
-          child: Image.asset(app.iconAsset, fit: BoxFit.contain),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -146,7 +138,7 @@ class _AppHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                app.label,
+                app.manifest.label,
                 style: TextStyle(
                   fontSize: 21,
                   fontWeight: FontWeight.w800,
@@ -155,7 +147,7 @@ class _AppHeader extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                app.description,
+                app.manifest.description,
                 style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant),
               ),
             ],
@@ -217,6 +209,77 @@ class _FeatureRow extends StatelessWidget {
   }
 }
 
+class _AiConnectSwitchRow extends StatefulWidget {
+  final AppColorScheme s;
+  final AppEntry app;
+  const _AiConnectSwitchRow({required this.s, required this.app});
+
+  @override
+  State<_AiConnectSwitchRow> createState() => _AiConnectSwitchRowState();
+}
+
+class _AiConnectSwitchRowState extends State<_AiConnectSwitchRow> {
+  @override
+  void initState() {
+    super.initState();
+    enabledAppsController.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    enabledAppsController.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final slug = widget.app.manifest.slug;
+    final value = enabledAppsController.isEnabled(slug);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: s.cardShadowSoft,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ligar ao Nexa AI',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.app.manifest.aiToggleDescription,
+                  style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: (v) => enabledAppsController.setEnabled(slug, v),
+            activeColor: s.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FeedbackRow extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
@@ -268,60 +331,52 @@ class _FeedbackRowState extends State<_FeedbackRow> {
   }
 }
 
-class _OpenAppBar extends StatefulWidget {
+class _OpenAppFloatingButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
-  const _OpenAppBar({required this.s, required this.onTap});
+  const _OpenAppFloatingButton({required this.s, required this.onTap});
 
   @override
-  State<_OpenAppBar> createState() => _OpenAppBarState();
+  State<_OpenAppFloatingButton> createState() => _OpenAppFloatingButtonState();
 }
 
-class _OpenAppBarState extends State<_OpenAppBar> {
+class _OpenAppFloatingButtonState extends State<_OpenAppFloatingButton> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.primary,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: s.primary.withOpacity(0.35),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTap: widget.onTap,
-          child: AnimatedScale(
-            scale: _pressed ? 0.97 : 1.0,
-            duration: const Duration(milliseconds: 120),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.primary,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Text(
-                'Abrir aplicativo',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: s.onPrimary,
-                ),
-              ),
+          child: Text(
+            'Abrir aplicativo',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: s.onPrimary,
             ),
           ),
         ),
@@ -332,7 +387,7 @@ class _OpenAppBarState extends State<_OpenAppBar> {
 
 class _FeedbackSheet extends StatefulWidget {
   final AppColorScheme s;
-  final AppKind app;
+  final AppEntry app;
   const _FeedbackSheet({required this.s, required this.app});
 
   @override
@@ -350,7 +405,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
 
   void _submit() {
     final text = _controller.text.trim();
-    // TODO: enviar `text` + `widget.app.name` para o backend (Cloudflare Worker)
+    // TODO: enviar `text` + `widget.app.manifest.slug` para o backend (Cloudflare Worker)
     Navigator.of(context).pop();
     if (text.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -395,7 +450,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Sobre ${widget.app.label}',
+              'Sobre ${widget.app.manifest.label}',
               style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant),
             ),
             const SizedBox(height: 16),

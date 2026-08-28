@@ -21,8 +21,7 @@ import 'apps/app_types.dart';
 import 'apps/docs.dart';
 import 'apps/sheets_app.dart';
 import 'apps/slides_app.dart';
-import 'apps/sound.dart';
-import 'apps/sound/sound_models.dart';
+import 'apps/registry/app_registry.dart';
 
 String _iconForEditorType(EditorType type) {
   switch (type) {
@@ -96,89 +95,6 @@ x_{ij}, letras gregas com \\alpha, \\beta, \\pi, \\Delta, etc., e operadores
 como \\leq, \\geq, \\neq, \\times, \\cdot, \\sum, \\int, \\infty, \\rightarrow.
 A aplicação converte tudo automaticamente para uma apresentação visual
 correta — nunca precisas de explicar a notação, apenas escrevê-la.
-''';
-
-const String kAiDocInstructions = '''
-Quando o utilizador pedir para criares, escreveres ou editares um documento
-de texto, gera o conteúdo e embrulha-o EXATAMENTE neste formato, no fim da
-tua resposta:
-
-[[canvas:doc:Título do documento||<p>conteúdo em html aqui</p>]]
-
-O HTML dentro de um documento "doc" pode conter qualquer elemento que uma
-página web normal suporta, não só texto: podes incluir imagens reais através
-de <img src="https://url-real-da-imagem.jpg" /> sempre que isso ajudar o
-documento (fotografias, diagramas, capas), tabelas HTML, listas, títulos,
-citações, e qualquer formatação inline. Usa sempre URLs de imagem reais e
-publicamente acessíveis quando incluíres uma imagem — nunca inventes um URL
-que não sabes se existe.
-
-Podes aplicar cor ao texto e destaque (highlight/marcador) diretamente no
-HTML gerado, usando estilos inline no próprio texto, exatamente como o
-editor os interpreta:
-- Cor de texto: <span style="color:#HEXCOR">texto colorido</span>
-- Destaque/marcador: <span style="background-color:#HEXCOR">texto realçado</span>
-Podes combinar ambos no mesmo span quando fizer sentido. Usa cor com intenção —
-por exemplo vermelho para avisos, verde para conclusões positivas, amarelo para
-destacar pontos importantes — e nunca abuses, só onde realmente ajudar a leitura.
-
-Podes também inserir gráficos dentro do documento, no mesmo bloco html,
-usando um elemento especial que a aplicação transforma automaticamente
-num gráfico real (Chart.js). Nunca escrevas um <canvas> à mão — usa em vez
-disso um marcador neste formato exato dentro do html:
-
-<div data-ai-chart='{"type":"bar","data":{"labels":["A","B"],"datasets":[{"label":"Serie","data":[1,2]}]}}'></div>
-
-O JSON dentro de data-ai-chart segue o formato de configuração nativo do
-Chart.js (type, data, options). A aplicação substitui este marcador por um
-gráfico interativo real no documento.
-''';
-
-const String kAiSheetInstructions = '''
-Quando o utilizador pedir para criares uma FOLHA DE CÁLCULO, gera o
-conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
-
-[[canvas:sheet:Título da folha||<json>]]
-
-O <json> segue este formato exato — um objeto "cells" em que cada chave é
-a referência da célula (ex: "A1", "B3") e o valor é um objeto com o
-conteúdo e formatação dessa célula:
-
-{"cells":{"A1":{"value":"Produto","bold":true},"B1":{"value":"Preço","bold":true},"A2":{"value":"Café"},"B2":{"value":"3.50"},"A3":{"value":"Chá"},"B3":{"value":"2.80"}}}
-
-Campos aceites em cada célula: "value" (texto ou número, obrigatório),
-"bold", "italic", "underline" (booleanos, opcionais), "align" ("left",
-"center" ou "right", opcional), "color" (cor do texto em hex, opcional),
-"fill" (cor de fundo da célula em hex, opcional). Usa referências de
-célula normais (colunas A-Z, linhas numeradas a partir de 1). Gera sempre
-JSON válido, sem comentários, sem vírgulas a mais.
-''';
-
-const String kAiSlideInstructions = '''
-Quando o utilizador pedir para criares uma APRESENTAÇÃO ou SLIDES, gera o
-conteúdo e embrulha-o EXATAMENTE neste formato, no fim da tua resposta:
-
-[[canvas:slide:Título da apresentação||<json>]]
-
-O <json> segue este formato exato — uma lista de slides, cada um com uma
-lista de elementos posicionados (coordenadas em pixels num slide de
-960x540):
-
-{"slides":[{"id":0,"elements":[{"id":0,"type":"text","x":80,"y":60,"w":800,"h":100,"fontSize":36,"color":"#1a1a1a","html":"Título da apresentação"},{"id":1,"type":"text","x":80,"y":180,"w":800,"h":300,"fontSize":20,"color":"#444444","html":"Texto de conteúdo do primeiro slide"}]},{"id":1,"elements":[{"id":2,"type":"image","x":100,"y":100,"w":400,"h":260,"src":"https://url-real-da-imagem.jpg"}]}],"currentSlideIndex":0}
-
-Cada elemento tem "type": "text" (com "html", "fontSize", "color"),
-"image" (com "src", que deve ser um URL real e publicamente acessível), ou
-"shape" (com "shapeKind": "rect" ou "circle", e "color"). Todos os
-elementos precisam de "id" (número único crescente dentro da
-apresentação), "x", "y", "w", "h" em pixels. Gera sempre JSON válido.
-''';
-
-const String kAiSoundInstructions = '''
-Tens acesso ao app Sound para pesquisar música. Quando o pedido for
-sobre encontrar/tocar música, usa o formato:
-[[sound_search:termo de pesquisa]]
-Não geres letras, faixas ou metadados inventados — só a query de
-pesquisa. A app trata do resto.
 ''';
 
 const String kAiWidgetsInstructions = '''
@@ -1754,10 +1670,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _sending      = false;
   bool     _widgetsEnabled = true;
   bool     _webSearchEnabled = false;
-  bool     _docsEnabled   = true;
-  bool     _sheetsEnabled = true;
-  bool     _slidesEnabled = true;
-  bool     _soundEnabled  = false;
   bool     _showScrollToBottom = false;
   String?  _conversationId;
   AiModel  _model        = AiModel.deepseekFlash;
@@ -1782,10 +1694,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   int get canvasCount => _canvases.length;
   bool get widgetsEnabled => _widgetsEnabled;
   bool get webSearchEnabled => _webSearchEnabled;
-  bool get docsEnabled => _docsEnabled;
-  bool get sheetsEnabled => _sheetsEnabled;
-  bool get slidesEnabled => _slidesEnabled;
-  bool get soundEnabled => _soundEnabled;
   String? get conversationId => _conversationId;
 
   bool get _hasMessages => _msgs.isNotEmpty;
@@ -1801,10 +1709,20 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   @override
   void initState() {
     super.initState();
+    // Defaults dos apps
+    enabledAppsController.setDefaultIfAbsent('docs', true);
+    enabledAppsController.setDefaultIfAbsent('sheets', true);
+    enabledAppsController.setDefaultIfAbsent('slides', true);
+    enabledAppsController.setDefaultIfAbsent('sound', false);
+    enabledAppsController.addListener(_onEnabledAppsChanged);
     _scroll.addListener(_onScroll);
     if (widget.initialConversationId != null) {
       _loadConversation(widget.initialConversationId!);
     }
+  }
+
+  void _onEnabledAppsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -1841,11 +1759,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     setState(() => _webSearchEnabled = v);
     _notifyHeader();
   }
-
-  void setDocsEnabled(bool v)   { setState(() => _docsEnabled = v); }
-  void setSheetsEnabled(bool v) { setState(() => _sheetsEnabled = v); }
-  void setSlidesEnabled(bool v) { setState(() => _slidesEnabled = v); }
-  void setSoundEnabled(bool v)  { setState(() => _soundEnabled = v); }
 
   void openCanvasPopupExternally() => _openCanvasPopup();
 
@@ -1909,10 +1822,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
     if (_widgetsEnabled) prompt += kAiWidgetsInstructions;
     if (_webSearchEnabled) prompt += kAiWebSearchInstructions;
-    if (_docsEnabled) prompt += kAiDocInstructions;
-    if (_sheetsEnabled) prompt += kAiSheetInstructions;
-    if (_slidesEnabled) prompt += kAiSlideInstructions;
-    if (_soundEnabled) prompt += kAiSoundInstructions;
+    final enabledSlugs = enabledAppsController.all.entries
+        .where((e) => e.value == true)
+        .map((e) => e.key)
+        .toSet();
+    prompt += AppRegistry.instructionsForEnabled(enabledSlugs);
     return prompt;
   }
 
@@ -2057,7 +1971,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             }
             _notifyHeader();
             _scrollToEnd();
-            _checkSoundSearch(combined);
+            final enabledSlugs = enabledAppsController.all.entries
+                .where((e) => e.value == true)
+                .map((e) => e.key)
+                .toSet();
+            AppRegistry.checkAiTriggers(context, combined, enabledSlugs);
             if (isFirst && _conversationId == null && !_incognito) {
               _createConversationWithGeneratedTitle(t);
             } else {
@@ -2101,15 +2019,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _scrollToEnd();
       },
     );
-  }
-
-  void _checkSoundSearch(String text) {
-    final match = _kSoundSearchRe.firstMatch(text);
-    if (match == null) return;
-    final query = match.group(1)?.trim() ?? '';
-    if (query.isEmpty) return;
-    soundTabController.requestSearch(query);
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SoundScreen()));
   }
 
   void _pauseGeneration() {
@@ -2330,14 +2239,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     showAppsConnectSheet(
       context,
       AppTheme.of(context),
-      docsEnabled: _docsEnabled,
-      sheetsEnabled: _sheetsEnabled,
-      slidesEnabled: _slidesEnabled,
-      soundEnabled: _soundEnabled,
-      onDocsChanged: setDocsEnabled,
-      onSheetsChanged: setSheetsEnabled,
-      onSlidesChanged: setSlidesEnabled,
-      onSoundChanged: setSoundEnabled,
     );
   }
 
@@ -2485,6 +2386,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   @override
   void dispose() {
+    enabledAppsController.removeListener(_onEnabledAppsChanged);
     _scroll.removeListener(_onScroll);
     _ctrl.dispose();
     _scroll.dispose();
@@ -2968,7 +2870,7 @@ class _ThinkingHistoryCollapsible extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.psychology, size: 22, color: s.onSurfaceVariant),
+                AppIcon('brain', size: 22, color: s.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Text(
                   'Pensamento',
@@ -3006,7 +2908,7 @@ class _ThinkingHistoryCollapsible extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant),
+            AppIcon('brain', size: 16, color: s.onSurfaceVariant),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -3236,7 +3138,7 @@ class _ThinkingCollapsible extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.psychology, size: 22, color: s.onSurfaceVariant),
+                AppIcon('brain', size: 22, color: s.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Text(
                   'Pensamento',
@@ -3274,7 +3176,7 @@ class _ThinkingCollapsible extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant),
+            ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant, active: true),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -4135,70 +4037,67 @@ Future<void> showAiOptionsSheet(
 
 Future<void> showAppsConnectSheet(
   BuildContext context,
-  AppColorScheme s, {
-  required bool docsEnabled,
-  required bool sheetsEnabled,
-  required bool slidesEnabled,
-  required bool soundEnabled,
-  required ValueChanged<bool> onDocsChanged,
-  required ValueChanged<bool> onSheetsChanged,
-  required ValueChanged<bool> onSlidesChanged,
-  required ValueChanged<bool> onSoundChanged,
-}) {
+  AppColorScheme s,
+) {
   return showCraftBottomSheet<void>(
     context: context,
     s: s,
     title: 'Apps',
-    child: Builder(builder: (ctx) {
-      var localDocs = docsEnabled;
-      var localSheets = sheetsEnabled;
-      var localSlides = slidesEnabled;
-      var localSound = soundEnabled;
-
-      return StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _AppSwitchRow(
-                s: s,
-                app: AppKind.docs,
-                value: localDocs,
-                onChanged: (v) { setModalState(() => localDocs = v); onDocsChanged(v); },
-              ),
-              const SizedBox(height: 8),
-              _AppSwitchRow(
-                s: s,
-                app: AppKind.sheets,
-                value: localSheets,
-                onChanged: (v) { setModalState(() => localSheets = v); onSheetsChanged(v); },
-              ),
-              const SizedBox(height: 8),
-              _AppSwitchRow(
-                s: s,
-                app: AppKind.slides,
-                value: localSlides,
-                onChanged: (v) { setModalState(() => localSlides = v); onSlidesChanged(v); },
-              ),
-              const SizedBox(height: 8),
-              _AppSwitchRow(
-                s: s,
-                app: AppKind.sound,
-                value: localSound,
-                onChanged: (v) { setModalState(() => localSound = v); onSoundChanged(v); },
-              ),
-            ],
-          ),
-        ),
-      );
-    }),
+    child: _AppsConnectSheetContent(s: s),
   );
+}
+
+class _AppsConnectSheetContent extends StatefulWidget {
+  final AppColorScheme s;
+  const _AppsConnectSheetContent({required this.s});
+
+  @override
+  State<_AppsConnectSheetContent> createState() => _AppsConnectSheetContentState();
+}
+
+class _AppsConnectSheetContentState extends State<_AppsConnectSheetContent> {
+  @override
+  void initState() {
+    super.initState();
+    enabledAppsController.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    enabledAppsController.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final entry in AppRegistry.all) ...[
+            if (entry != AppRegistry.all.first) const SizedBox(height: 8),
+            _AppSwitchRow(
+              s: s,
+              app: entry,
+              value: enabledAppsController.isEnabled(entry.manifest.slug),
+              onChanged: (v) => enabledAppsController.setEnabled(entry.manifest.slug, v),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _AppSwitchRow extends StatelessWidget {
   final AppColorScheme s;
-  final AppKind app;
+  final AppEntry app;
   final bool value;
   final ValueChanged<bool> onChanged;
   const _AppSwitchRow({
@@ -4218,9 +4117,9 @@ class _AppSwitchRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Image.asset(app.iconAsset, width: 18, height: 18),
+          Image.asset(app.manifest.iconAsset, width: 18, height: 18),
           const SizedBox(width: 10),
-          Text(app.label, style: TextStyle(fontSize: 14, color: s.onSurface)),
+          Text(app.manifest.label, style: TextStyle(fontSize: 14, color: s.onSurface)),
           const Spacer(),
           _CustomSwitch(value: value, onChanged: onChanged, s: s),
         ],
@@ -4402,7 +4301,8 @@ class _CustomSwitch extends StatelessWidget {
 class ShimmerBrainIcon extends StatefulWidget {
   final double size;
   final Color color;
-  const ShimmerBrainIcon({super.key, this.size = 16, required this.color});
+  final bool active;
+  const ShimmerBrainIcon({super.key, this.size = 16, required this.color, this.active = true});
 
   @override
   State<ShimmerBrainIcon> createState() => _ShimmerBrainIconState();
@@ -4418,7 +4318,23 @@ class _ShimmerBrainIconState extends State<ShimmerBrainIcon>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    );
+    if (widget.active) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ShimmerBrainIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active != oldWidget.active) {
+      if (widget.active) {
+        _controller.repeat();
+      } else {
+        _controller.stop();
+        _controller.value = 0;
+      }
+    }
   }
 
   @override
@@ -4429,6 +4345,9 @@ class _ShimmerBrainIconState extends State<ShimmerBrainIcon>
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.active) {
+      return AppIcon('brain', size: widget.size, color: widget.color);
+    }
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, __) {
@@ -4444,7 +4363,7 @@ class _ShimmerBrainIconState extends State<ShimmerBrainIcon>
             ],
             stops: const [0.0, 0.5, 1.0],
           ).createShader(bounds.shift(Offset(shimmerPosition, 0))),
-          child: Icon(Icons.psychology, size: widget.size, color: Colors.white),
+          child: AppIcon('brain', size: widget.size, color: Colors.white),
         );
       },
     );

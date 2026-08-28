@@ -1,0 +1,3 @@
+{
+  "aiInstructions": "Tens acesso ao app Sound para pesquisar música. Quando o pedido for\nsobre encontrar/tocar música, usa o formato:\n[[sound_search:termo de pesquisa]]\nNão geres letras, faixas ou metadados inventados — só a query de\npesquisa. A app trata do resto.\n"
+}

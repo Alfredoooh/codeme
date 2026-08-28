@@ -1,0 +1,15 @@
+{
+  "label": "Sound",
+  "description": "Pesquisar e reproduzir música",
+  "longDescription": "O Sound é o teu espaço para pesquisar e ouvir música diretamente na app, com a ajuda da IA para encontrares o que procuras.",
+  "features": [
+    "Pesquisa de música integrada",
+    "Reprodução direta na app",
+    "Assistente de IA para ajudar a encontrar música"
+  ],
+  "iconAsset": "assets/icons/apps/sound.png",
+  "isCircularIcon": false,
+  "aiName": "Sound",
+  "aiToggleDescription": "A IA pode pesquisar música",
+  "version": "1.0.0"
+}
