@@ -166,7 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     ));
   }
 
-  // Novo: abrir diretamente o picker/cropper para atualizar avatar
+  // Abrir diretamente o picker/cropper para atualizar avatar
   Future<void> _pickAvatarDirectly() async {
     final picker = ImagePicker();
     final picked =
@@ -267,14 +267,12 @@ class _SettingsScreenState extends State<SettingsScreen>
           color: s.pageBackground,
           child: SafeArea(
             child: Stack(children: [
-              // Conteúdo rolável com CustomScrollView para efeito de shrink
               RefreshIndicator(
                 color: s.primary,
                 backgroundColor: s.cardBackground,
                 onRefresh: _refreshMe,
                 child: CustomScrollView(
                   slivers: [
-                    // Header que encolhe
                     SliverPersistentHeader(
                       pinned: true,
                       delegate: _ProfileHeaderDelegate(
@@ -286,7 +284,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                         onEditTap: _pickAvatarDirectly,
                       ),
                     ),
-                    // Demais itens
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
@@ -440,7 +437,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
 
-              // Appbar vazio
+              // Appbar vazio (apenas botão voltar)
               Positioned(
                 top: 0,
                 left: 0,
@@ -500,7 +497,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROFILE HEADER DELEGATE (com shrink)
+// PROFILE HEADER DELEGATE (com shrink) — CORRIGIDO
 // ══════════════════════════════════════════════════════════════
 
 class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
@@ -544,19 +541,16 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
     final progress =
         (shrinkOffset / (_maxExtent - _minExtent)).clamp(0.0, 1.0);
 
-    // Interpolação de tamanhos
-    final avatarSize = 88.0 - (48.0 * progress); // de 88 para 40
-    final nameFontSize = 18.0 - (4.0 * progress); // de 18 para 14
+    final avatarSize = 88.0 - (48.0 * progress);
+    final nameFontSize = 18.0 - (4.0 * progress);
 
-    // Interpolação de posições
-    final collapsedLeft = 16.0;
+    final collapsedAvatarLeft = 56.0; // espaço para o botão voltar
     final avatarTop = (_maxExtent - avatarSize) / 2 -
-        (20.0 * progress); // move para cima ao colapsar
-    final nameLeft = collapsedLeft + avatarSize + 8.0;
+        (20.0 * progress);
+    final nameLeft = collapsedAvatarLeft + avatarSize + 8.0;
     final nameTop = (_maxExtent - 20) / 2 -
-        (8.0 * progress); // centralizado verticalmente
+        (8.0 * progress);
 
-    // Decodificar avatar
     final name = user?.name ?? 'Utilizador';
     final avatarRaw = user?.avatar;
     final avatarBytes = (avatarRaw != null && avatarRaw.isNotEmpty)
@@ -572,7 +566,7 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
           Positioned(
             left: Tween<double>(
               begin: (MediaQuery.of(context).size.width - 88.0) / 2,
-              end: collapsedLeft,
+              end: collapsedAvatarLeft,
             ).transform(progress),
             top: avatarTop,
             child: GestureDetector(
@@ -614,12 +608,12 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
             Builder(builder: (context) {
               final avatarLeft = Tween<double>(
                 begin: (MediaQuery.of(context).size.width - 88.0) / 2,
-                end: collapsedLeft,
+                end: collapsedAvatarLeft,
               ).transform(progress);
               final avatarCenterX = avatarLeft + avatarSize / 2;
               final avatarCenterY = avatarTop + avatarSize / 2;
 
-              const angle = 0.785398; // 45° em radianos
+              const angle = 0.785398;
               final radius = avatarSize / 2;
               final badgeSize = 30.0;
 
@@ -685,7 +679,6 @@ class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
 
-          // Loading overlay
           if (loading)
             Positioned.fill(
               child: Center(
@@ -791,7 +784,6 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
     final initial =
         (user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'U';
 
-    // Largura do quadrado: quase toda a largura da tela (menos 32 de margem)
     final squareSize = MediaQuery.of(context).size.width - 32;
 
     return GestureDetector(
@@ -800,11 +792,10 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
         color: Colors.transparent,
         child: Center(
           child: GestureDetector(
-            onTap: () {}, // absorve tap para não fechar ao clicar na imagem
+            onTap: () {},
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Quadrado com bordas retas
                 Hero(
                   tag: 'avatar',
                   child: Container(
@@ -847,7 +838,7 @@ class _AvatarViewerScreenState extends State<_AvatarViewerScreen> {
                 GestureDetector(
                   onTap: _uploading ? null : _pickAndEdit,
                   child: Container(
-                    width: squareSize, // mesmo comprimento da imagem
+                    width: squareSize,
                     height: 56,
                     decoration: BoxDecoration(
                       color: s.isDark ? Colors.white : s.primary,

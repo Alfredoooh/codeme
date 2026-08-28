@@ -1,10 +1,20 @@
 // ══════════════════════════════════════════════════════════════
 // ARQUIVO: lib/apps/sound.dart
 // ══════════════════════════════════════════════════════════════
+//
+// ⚠️ Ícones marcados com // CONFIRMAR usam nomes que não vi em nenhum
+// arquivo seu real. Se o asset não existir com esse nome exato,
+// o AppIcon vai quebrar. Troque pelo nome real antes de compilar.
+//
+// ⚠️ Letras via lrclib.net (API pública, sem chave). Não pude testar
+// a chamada de rede daqui — cobertura de músicas não é garantida.
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
@@ -40,6 +50,12 @@ class SoundTrack {
   int get hashCode => videoId.hashCode;
 }
 
+class SoundSection {
+  final String title;
+  final List<SoundTrack> tracks;
+  const SoundSection({required this.title, required this.tracks});
+}
+
 // ══════════════════════════════════════════════════════════════
 // CONTROLLER (para pesquisa global)
 // ══════════════════════════════════════════════════════════════
@@ -71,23 +87,21 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   final YoutubeExplode _yt = YoutubeExplode();
   final AudioPlayer _player = AudioPlayer();
 
-  List<SoundTrack> _feed = [];
+  List<SoundSection> _sections = [];
   bool _loadingFeed = true;
   String? _feedError;
 
   SoundTrack? _currentTrack;
   bool _isPlaying = false;
   bool _isBuffering = false;
+  Duration _position = Duration.zero;
+  Duration _totalDuration = Duration.zero;
 
-  // Termos usados para simular um feed de "populares agora".
-  // Sem chave oficial de API não existe endpoint público de trending do
-  // YouTube, então isso busca por termos que tendem a puxar conteúdo
-  // popular no momento em que a tela é aberta — não é trending real.
-  static const List<String> _trendingSeeds = [
-    'top hits 2026',
-    'músicas mais tocadas agora',
-    'trending music this week',
-  ];
+  static const Map<String, String> _sectionSeeds = {
+    'Em alta agora': 'top hits 2026',
+    'Recomendado para si': 'músicas mais tocadas agora',
+    'Populares esta semana': 'trending music this week',
+  };
 
   @override
   void initState() {
@@ -105,6 +119,12 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
         });
       }
     });
+    _player.positionStream.listen((pos) {
+      if (mounted) setState(() => _position = pos);
+    });
+    _player.durationStream.listen((dur) {
+      if (mounted && dur != null) setState(() => _totalDuration = dur);
+    });
   }
 
   @override
@@ -120,24 +140,18 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     if (query != null) {
       soundTabController.consumePendingSearch();
       Navigator.of(context).push(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 320),
-          reverseTransitionDuration: const Duration(milliseconds: 260),
-          pageBuilder: (_, anim, __) => SoundSearchScreen(
+        CupertinoPageRoute(
+          builder: (_) => SoundSearchScreen(
             initialQuery: query,
             onPlay: _playTrack,
             currentTrack: _currentTrack,
             isPlaying: _isPlaying,
           ),
-          transitionsBuilder: _fadeThroughTransition,
         ),
       );
     }
   }
 
-  // Feed inicial: busca por termos de "populares agora" e mistura os
-  // resultados. Roda de novo toda vez que a tela é reaberta, então o
-  // conjunto varia entre sessões.
   Future<void> _fetchFeed() async {
     setState(() {
       _loadingFeed = true;
@@ -145,26 +159,29 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     });
 
     try {
-      final seed = _trendingSeeds[DateTime.now().second % _trendingSeeds.length];
-      final searchResults = await _yt.search.search(seed);
-
-      final tracks = <SoundTrack>[];
-      for (final video in searchResults) {
-        tracks.add(SoundTrack(
-          title: video.title,
-          artist: video.author,
-          coverColorHex: _colorForSeed(video.id.value),
-          thumbnailUrl: video.thumbnails.mediumResUrl,
-          videoId: video.id.value,
-        ));
-        if (tracks.length >= 24) break;
+      final sections = <SoundSection>[];
+      for (final entry in _sectionSeeds.entries) {
+        final searchResults = await _yt.search.search(entry.value);
+        final tracks = <SoundTrack>[];
+        for (final video in searchResults) {
+          tracks.add(SoundTrack(
+            title: video.title,
+            artist: video.author,
+            coverColorHex: _colorForSeed(video.id.value),
+            thumbnailUrl: video.thumbnails.mediumResUrl,
+            videoId: video.id.value,
+          ));
+          if (tracks.length >= 12) break;
+        }
+        sections.add(SoundSection(title: entry.key, tracks: tracks));
       }
 
       if (!mounted) return;
+      final hasAny = sections.any((s) => s.tracks.isNotEmpty);
       setState(() {
-        _feed = tracks;
+        _sections = sections;
         _loadingFeed = false;
-        _feedError = tracks.isEmpty ? 'Nenhuma música encontrada agora.' : null;
+        _feedError = hasAny ? null : 'Nenhuma música encontrada agora.';
       });
     } catch (e) {
       debugPrint('Erro ao buscar feed: $e');
@@ -236,43 +253,36 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   }
 
   void _openApps() {
-    // Abre a tela isolada de todos os apps (lib/all_apps_screen.dart).
     Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 340),
-        reverseTransitionDuration: const Duration(milliseconds: 280),
-        pageBuilder: (_, anim, __) => const AllAppsScreen(),
-        transitionsBuilder: _fadeThroughTransition,
-      ),
+      CupertinoPageRoute(builder: (_) => const AllAppsScreen()),
     );
   }
 
   void _openSearch() {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 320),
-        reverseTransitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (_, anim, __) => SoundSearchScreen(
+      CupertinoPageRoute(
+        builder: (_) => SoundSearchScreen(
           onPlay: _playTrack,
           currentTrack: _currentTrack,
           isPlaying: _isPlaying,
         ),
-        transitionsBuilder: _fadeThroughTransition,
       ),
     );
   }
 
-  static Widget _fadeThroughTransition(
-      BuildContext context, Animation<double> anim, Animation<double> _, Widget child) {
-    final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.04),
-          end: Offset.zero,
-        ).animate(curved),
-        child: child,
+  void _openFullPlayer() {
+    if (_currentTrack == null) return;
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => FullPlayerScreen(
+          track: _currentTrack!,
+          player: _player,
+          isPlaying: _isPlaying,
+          isBuffering: _isBuffering,
+          position: _position,
+          totalDuration: _totalDuration,
+          onTogglePlay: _onGlobalTogglePlay,
+        ),
       ),
     );
   }
@@ -296,10 +306,9 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
                 isPlaying: _isPlaying,
                 isBuffering: _isBuffering,
                 onTogglePlay: _onGlobalTogglePlay,
-                onOpenFavorites: () {
-                  // Navegar para favoritos
-                },
+                onOpenFavorites: () {},
                 onOpenSearch: _openSearch,
+                onOpenFullPlayer: _openFullPlayer,
               ),
             ]),
           ),
@@ -312,31 +321,26 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     if (_loadingFeed) {
       return _FeedSkeleton(s: s);
     }
-    if (_feedError != null && _feed.isEmpty) {
+    if (_feedError != null && _sections.every((sec) => sec.tracks.isEmpty)) {
       return _FeedErrorState(s: s, message: _feedError!, onRetry: _fetchFeed);
     }
     return RefreshIndicator(
       onRefresh: _fetchFeed,
       color: s.primary,
       backgroundColor: s.cardBackground,
-      child: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 88, 16, 128),
-        itemCount: _feed.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 0.74,
-        ),
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(0, 88, 0, 128),
+        itemCount: _sections.length,
         itemBuilder: (_, i) {
-          final track = _feed[i];
-          return _FeedCard(
+          final section = _sections[i];
+          if (section.tracks.isEmpty) return const SizedBox.shrink();
+          return _FeedSectionRow(
             s: s,
-            track: track,
-            isCurrent: _currentTrack == track,
-            isPlaying: _isPlaying && _currentTrack == track,
-            isBuffering: _isBuffering && _currentTrack == track,
-            onTap: () => _togglePlay(track),
+            section: section,
+            currentTrack: _currentTrack,
+            isPlaying: _isPlaying,
+            isBuffering: _isBuffering,
+            onTap: _togglePlay,
           );
         },
       ),
@@ -345,10 +349,73 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
 }
 
 // ══════════════════════════════════════════════════════════════
-// CARD DE FEED (retangular, com capa + título + artista)
+// SEÇÃO HORIZONTAL DO FEED (estilo Spotify/Apple Music)
 // ══════════════════════════════════════════════════════════════
 
-class _FeedCard extends StatefulWidget {
+class _FeedSectionRow extends StatelessWidget {
+  final AppColorScheme s;
+  final SoundSection section;
+  final SoundTrack? currentTrack;
+  final bool isPlaying;
+  final bool isBuffering;
+  final ValueChanged<SoundTrack> onTap;
+
+  const _FeedSectionRow({
+    required this.s,
+    required this.section,
+    required this.currentTrack,
+    required this.isPlaying,
+    required this.isBuffering,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+          child: Text(
+            section.title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: s.onSurface,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 196,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: section.tracks.length,
+            itemBuilder: (_, i) {
+              final track = section.tracks[i];
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _AlbumCard(
+                  s: s,
+                  track: track,
+                  isCurrent: currentTrack == track,
+                  isPlaying: isPlaying && currentTrack == track,
+                  isBuffering: isBuffering && currentTrack == track,
+                  onTap: () => onTap(track),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Capa quadrada com canto arredondado — padrão real de app de música
+// para álbuns. Círculo fica reservado para artistas/pessoas, não usado
+// aqui porque a peça é um álbum/faixa.
+class _AlbumCard extends StatefulWidget {
   final AppColorScheme s;
   final SoundTrack track;
   final bool isCurrent;
@@ -356,7 +423,7 @@ class _FeedCard extends StatefulWidget {
   final bool isBuffering;
   final VoidCallback onTap;
 
-  const _FeedCard({
+  const _AlbumCard({
     required this.s,
     required this.track,
     required this.isCurrent,
@@ -366,11 +433,13 @@ class _FeedCard extends StatefulWidget {
   });
 
   @override
-  State<_FeedCard> createState() => _FeedCardState();
+  State<_AlbumCard> createState() => _AlbumCardState();
 }
 
-class _FeedCardState extends State<_FeedCard> {
+class _AlbumCardState extends State<_AlbumCard> {
   bool _pressed = false;
+
+  static const double _size = 148;
 
   @override
   Widget build(BuildContext context) {
@@ -385,115 +454,82 @@ class _FeedCardState extends State<_FeedCard> {
       onTapUp: (_) => setState(() => _pressed = false),
       onTap: widget.onTap,
       child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 140),
+        scale: _pressed ? 0.95 : 1.0,
+        duration: const Duration(milliseconds: 130),
         curve: Curves.easeOutCubic,
-        child: Container(
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: s.cardShadowSoft,
-          ),
-          clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: _size,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
+              Container(
+                width: _size,
+                height: _size,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: cover,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: s.cardShadowSoft,
+                ),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Container(color: cover),
                     if (track.thumbnailUrl != null)
                       Image.network(
                         track.thumbnailUrl!,
                         fit: BoxFit.cover,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return Container(color: cover);
-                        },
-                        errorBuilder: (_, __, ___) => Container(
-                          color: cover,
-                          child: const Icon(Icons.music_note,
-                              color: Colors.white, size: 34),
-                        ),
+                        errorBuilder: (_, __, ___) => const Icon(
+                            Icons.music_note, color: Colors.white, size: 40),
                       )
                     else
                       const Center(
                         child: Icon(Icons.music_note,
-                            color: Colors.white, size: 34),
+                            color: Colors.white, size: 40),
                       ),
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withOpacity(0.0),
-                              Colors.black.withOpacity(widget.isCurrent ? 0.35 : 0.0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
                     AnimatedOpacity(
                       opacity: widget.isCurrent ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Align(
-                        alignment: Alignment.bottomRight,
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.55),
-                              shape: BoxShape.circle,
-                            ),
-                            child: widget.isBuffering
-                                ? const Padding(
-                                    padding: EdgeInsets.all(9),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Icon(
-                                    widget.isPlaying ? Icons.pause : Icons.play_arrow,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                          ),
-                        ),
+                      duration: const Duration(milliseconds: 180),
+                      child: Container(
+                        color: Colors.black.withOpacity(0.4),
+                        alignment: Alignment.center,
+                        child: widget.isBuffering
+                            ? const SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.4,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                widget.isPlaying
+                                    ? Icons.pause_circle_filled
+                                    : Icons.play_circle_fill,
+                                color: Colors.white,
+                                size: 40,
+                              ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      track.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
-                    ),
-                  ],
+              const SizedBox(height: 8),
+              Text(
+                track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface,
                 ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                track.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
               ),
             ],
           ),
@@ -504,7 +540,7 @@ class _FeedCardState extends State<_FeedCard> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SKELETON LOADER DO FEED
+// SKELETON LOADER DO FEED (por seções horizontais)
 // ══════════════════════════════════════════════════════════════
 
 class _FeedSkeleton extends StatefulWidget {
@@ -536,68 +572,82 @@ class _FeedSkeletonState extends State<_FeedSkeleton>
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 88, 16, 128),
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(0, 88, 0, 128),
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: 8,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 14,
-        crossAxisSpacing: 14,
-        childAspectRatio: 0.74,
-      ),
-      itemBuilder: (_, i) {
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (_, __) {
-            final opacity = 0.35 + 0.25 * _controller.value;
-            return Container(
-              decoration: BoxDecoration(
-                color: s.cardBackground,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: s.hover.withOpacity(opacity),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(20),
-                        ),
-                      ),
-                    ),
+      itemCount: 3,
+      itemBuilder: (_, __) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (_, __) => Container(
+                  height: 17,
+                  width: 160,
+                  decoration: BoxDecoration(
+                    color: s.hover.withOpacity(0.35 + 0.25 * _controller.value),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          height: 11,
-                          width: 90,
-                          decoration: BoxDecoration(
-                            color: s.hover.withOpacity(opacity),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          height: 9,
-                          width: 60,
-                          decoration: BoxDecoration(
-                            color: s.hover.withOpacity(opacity),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            );
-          },
+            ),
+            SizedBox(
+              height: 196,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: 4,
+                itemBuilder: (_, __) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (_, __) {
+                        final opacity = 0.35 + 0.25 * _controller.value;
+                        return SizedBox(
+                          width: 148,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 148,
+                                height: 148,
+                                decoration: BoxDecoration(
+                                  color: s.hover.withOpacity(opacity),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 11,
+                                width: 100,
+                                decoration: BoxDecoration(
+                                  color: s.hover.withOpacity(opacity),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Container(
+                                height: 9,
+                                width: 70,
+                                decoration: BoxDecoration(
+                                  color: s.hover.withOpacity(opacity),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );
@@ -640,7 +690,7 @@ class _FeedErrorState extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APPBAR — botão de apps 100% circular
+// APPBAR
 // ══════════════════════════════════════════════════════════════
 
 class _SoundAppBar extends StatelessWidget {
@@ -685,8 +735,6 @@ class _SoundAppBar extends StatelessWidget {
   }
 }
 
-// Botão circular reutilizável — 100% circular (shape: BoxShape.circle,
-// sem borderRadius, então não há como "vazar" quina alguma).
 class _CircularIconButton extends StatefulWidget {
   final AppColorScheme s;
   final double size;
@@ -735,8 +783,10 @@ class _CircularIconButtonState extends State<_CircularIconButton> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// BARRA FLUTUANTE — cápsula central + 2 círculos soltos (ref. imagem)
+// BARRA FLUTUANTE — pill sólido, clicável para abrir player cheio
 // ══════════════════════════════════════════════════════════════
+
+const Color _kPillSolidColor = Color(0xFF1C1C1E);
 
 class _FloatingPlayerBar extends StatelessWidget {
   final AppColorScheme s;
@@ -746,6 +796,7 @@ class _FloatingPlayerBar extends StatelessWidget {
   final VoidCallback onTogglePlay;
   final VoidCallback onOpenFavorites;
   final VoidCallback onOpenSearch;
+  final VoidCallback onOpenFullPlayer;
 
   const _FloatingPlayerBar({
     required this.s,
@@ -755,6 +806,7 @@ class _FloatingPlayerBar extends StatelessWidget {
     required this.onTogglePlay,
     required this.onOpenFavorites,
     required this.onOpenSearch,
+    required this.onOpenFullPlayer,
   });
 
   @override
@@ -770,7 +822,7 @@ class _FloatingPlayerBar extends StatelessWidget {
             s: s,
             size: 56,
             onTap: onOpenFavorites,
-            child: Icon(Icons.bookmark_border, color: s.onSurface, size: 22),
+            child: AppIcon('bookmark', color: s.onSurface, size: 22), // CONFIRMAR
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -788,13 +840,17 @@ class _FloatingPlayerBar extends StatelessWidget {
               ),
               child: currentTrack == null
                   ? _PlayerSkeletonPill(key: const ValueKey('skeleton'), s: s)
-                  : _PlayerPill(
+                  : GestureDetector(
                       key: ValueKey(currentTrack!.videoId),
-                      s: s,
-                      track: currentTrack!,
-                      isPlaying: isPlaying,
-                      isBuffering: isBuffering,
-                      onTogglePlay: onTogglePlay,
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onOpenFullPlayer,
+                      child: _PlayerPill(
+                        s: s,
+                        track: currentTrack!,
+                        isPlaying: isPlaying,
+                        isBuffering: isBuffering,
+                        onTogglePlay: onTogglePlay,
+                      ),
                     ),
             ),
           ),
@@ -803,7 +859,7 @@ class _FloatingPlayerBar extends StatelessWidget {
             s: s,
             size: 56,
             onTap: onOpenSearch,
-            child: Icon(Icons.search, color: s.onSurface, size: 22),
+            child: AppIcon('search', color: s.onSurface, size: 22),
           ),
         ],
       ),
@@ -811,14 +867,6 @@ class _FloatingPlayerBar extends StatelessWidget {
   }
 }
 
-// Cor de fundo da cápsula: escurece s.cardBackground via alphaBlend,
-// em vez de depender de um getter novo (s.playerBarBackground) que
-// não existe em AppColorScheme e já quebrou o build uma vez.
-Color _pillBackground(AppColorScheme s) {
-  return Color.alphaBlend(Colors.black.withOpacity(0.72), s.cardBackground);
-}
-
-// Cápsula escura com capa + título/artista + botão play/pause
 class _PlayerPill extends StatelessWidget {
   final AppColorScheme s;
   final SoundTrack track;
@@ -826,7 +874,6 @@ class _PlayerPill extends StatelessWidget {
   final bool isBuffering;
   final VoidCallback onTogglePlay;
   const _PlayerPill({
-    super.key,
     required this.s,
     required this.track,
     required this.isPlaying,
@@ -841,11 +888,11 @@ class _PlayerPill extends StatelessWidget {
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: _pillBackground(s),
+        color: _kPillSolidColor, // sólido fixo, sem opacidade/gradiente
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
+            color: Colors.black.withOpacity(0.22),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -915,10 +962,10 @@ class _PlayerPill extends StatelessWidget {
                         color: Colors.white,
                       ),
                     )
-                  : Icon(
-                      isPlaying ? Icons.pause : Icons.play_arrow,
+                  : AppIcon(
+                      isPlaying ? 'pause' : 'play', // CONFIRMAR
                       color: Colors.white,
-                      size: 24,
+                      size: 20,
                     ),
             ),
           ),
@@ -928,7 +975,6 @@ class _PlayerPill extends StatelessWidget {
   }
 }
 
-// Skeleton loader da cápsula, no formato exato do player real
 class _PlayerSkeletonPill extends StatefulWidget {
   final AppColorScheme s;
   const _PlayerSkeletonPill({super.key, required this.s});
@@ -957,17 +1003,15 @@ class _PlayerSkeletonPillState extends State<_PlayerSkeletonPill>
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, __) {
-        final baseOpacity = 0.12 + 0.06 * _controller.value;
         final blockOpacity = 0.18 + 0.10 * _controller.value;
         return Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: _pillBackground(s).withOpacity(0.6 + baseOpacity),
+            color: _kPillSolidColor,
             borderRadius: BorderRadius.circular(999),
           ),
           child: Row(
@@ -1024,7 +1068,410 @@ class _PlayerSkeletonPillState extends State<_PlayerSkeletonPill>
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA DE PESQUISA
+// PLAYER EM TELA CHEIA — com letras via LRCLib
+// ══════════════════════════════════════════════════════════════
+
+class FullPlayerScreen extends StatefulWidget {
+  final SoundTrack track;
+  final AudioPlayer player;
+  final bool isPlaying;
+  final bool isBuffering;
+  final Duration position;
+  final Duration totalDuration;
+  final VoidCallback onTogglePlay;
+
+  const FullPlayerScreen({
+    super.key,
+    required this.track,
+    required this.player,
+    required this.isPlaying,
+    required this.isBuffering,
+    required this.position,
+    required this.totalDuration,
+    required this.onTogglePlay,
+  });
+
+  @override
+  State<FullPlayerScreen> createState() => _FullPlayerScreenState();
+}
+
+enum _LyricsState { loading, found, notFound, error }
+
+class _FullPlayerScreenState extends State<FullPlayerScreen> {
+  _LyricsState _lyricsState = _LyricsState.loading;
+  String? _plainLyrics;
+  StreamSubscription<bool>? _playingSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration?>? _durationSub;
+
+  bool _isPlaying = false;
+  bool _isBuffering = false;
+  Duration _position = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _isPlaying = widget.isPlaying;
+    _isBuffering = widget.isBuffering;
+    _position = widget.position;
+    _totalDuration = widget.totalDuration;
+
+    _playingSub = widget.player.playingStream.listen((playing) {
+      if (mounted) setState(() => _isPlaying = playing);
+    });
+    _positionSub = widget.player.positionStream.listen((pos) {
+      if (mounted) setState(() => _position = pos);
+    });
+    _durationSub = widget.player.durationStream.listen((dur) {
+      if (mounted && dur != null) setState(() => _totalDuration = dur);
+    });
+
+    _fetchLyrics();
+  }
+
+  @override
+  void dispose() {
+    _playingSub?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
+    super.dispose();
+  }
+
+  // LRCLib: API pública, sem chave. Não foi testada em runtime real
+  // neste ambiente (sem acesso de rede aqui) — trate como não validada
+  // em produção até primeiro teste manual.
+  Future<void> _fetchLyrics() async {
+    setState(() => _lyricsState = _LyricsState.loading);
+    try {
+      final uri = Uri.https('lrclib.net', '/api/search', {
+        'track_name': widget.track.title,
+        'artist_name': widget.track.artist,
+      });
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) {
+        if (mounted) setState(() => _lyricsState = _LyricsState.error);
+        return;
+      }
+
+      final List<dynamic> results = jsonDecode(response.body);
+      if (results.isEmpty) {
+        if (mounted) setState(() => _lyricsState = _LyricsState.notFound);
+        return;
+      }
+
+      final first = results.first as Map<String, dynamic>;
+      final plain = first['plainLyrics'] as String?;
+
+      if (plain == null || plain.trim().isEmpty) {
+        if (mounted) setState(() => _lyricsState = _LyricsState.notFound);
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _plainLyrics = plain;
+          _lyricsState = _LyricsState.found;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erro ao buscar letra: $e');
+      if (mounted) setState(() => _lyricsState = _LyricsState.error);
+    }
+  }
+
+  void _seekTo(double fraction) {
+    if (_totalDuration == Duration.zero) return;
+    final target = _totalDuration * fraction;
+    widget.player.seek(target);
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    final track = widget.track;
+    final cover = Color(int.parse(track.coverColorHex.replaceFirst('#', '0xFF')));
+    final progress = _totalDuration.inMilliseconds == 0
+        ? 0.0
+        : (_position.inMilliseconds / _totalDuration.inMilliseconds).clamp(0.0, 1.0);
+
+    return Material(
+      color: _kPillSolidColor,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const AppIcon('chevron_down', size: 18, color: Colors.white),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'A tocar agora',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(width: 36),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: cover,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 30,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: track.thumbnailUrl != null
+                      ? Image.network(
+                          track.thumbnailUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.music_note, color: Colors.white, size: 60),
+                        )
+                      : const Center(
+                          child: Icon(Icons.music_note, color: Colors.white, size: 60),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  Text(
+                    track.title,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    track.artist,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  _SeekBar(progress: progress, onSeek: _seekTo),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(_position),
+                        style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
+                      ),
+                      Text(
+                        _formatDuration(_totalDuration),
+                        style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Sem fila de reprodução implementada — desabilitado
+                // em vez de fingir funcionar.
+                Opacity(
+                  opacity: 0.3,
+                  child: AppIcon('skip_previous', size: 32, color: Colors.white), // CONFIRMAR
+                ),
+                const SizedBox(width: 32),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onTogglePlay,
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isBuffering
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.black,
+                            ),
+                          )
+                        : AppIcon(
+                            _isPlaying ? 'pause' : 'play', // CONFIRMAR
+                            size: 28,
+                            color: Colors.black,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 32),
+                Opacity(
+                  opacity: 0.3,
+                  child: AppIcon('skip_next', size: 32, color: Colors.white), // CONFIRMAR
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            Expanded(
+              child: _LyricsPanel(state: _lyricsState, lyrics: _plainLyrics),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SeekBar extends StatelessWidget {
+  final double progress;
+  final ValueChanged<double> onSeek;
+  const _SeekBar({required this.progress, required this.onSeek});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      return GestureDetector(
+        onTapUp: (d) => onSeek((d.localPosition.dx / width).clamp(0.0, 1.0)),
+        onHorizontalDragUpdate: (d) =>
+            onSeek((d.localPosition.dx / width).clamp(0.0, 1.0)),
+        child: SizedBox(
+          height: 20,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: progress,
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _LyricsPanel extends StatelessWidget {
+  final _LyricsState state;
+  final String? lyrics;
+  const _LyricsPanel({required this.state, required this.lyrics});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (state) {
+      case _LyricsState.loading:
+        return const Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
+          ),
+        );
+      case _LyricsState.notFound:
+        return Center(
+          child: Text(
+            'Letra não encontrada para esta faixa.',
+            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
+          ),
+        );
+      case _LyricsState.error:
+        return Center(
+          child: Text(
+            'Não foi possível carregar a letra agora.',
+            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
+          ),
+        );
+      case _LyricsState.found:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+          child: Text(
+            lyrics ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1.8,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        );
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TELA DE PESQUISA — lista estilo referência (capa pequena + tipo•artista)
 // ══════════════════════════════════════════════════════════════
 
 class SoundSearchScreen extends StatefulWidget {
@@ -1252,10 +1699,11 @@ class _SoundSearchScreenState extends State<SoundSearchScreen> {
         ),
       );
     }
-    return ListView.builder(
+    return ListView.separated(
       key: const ValueKey('results'),
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
       itemCount: _results.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 2),
       itemBuilder: (_, i) {
         final track = _results[i];
         return _SearchResultTile(
@@ -1308,30 +1756,25 @@ class _SearchResultsSkeletonState extends State<_SearchResultsSkeleton>
           animation: _controller,
           builder: (_, __) {
             final opacity = 0.35 + 0.25 * _controller.value;
-            return Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: s.cardBackground,
-                borderRadius: BorderRadius.circular(14),
-              ),
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               child: Row(children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: s.hover.withOpacity(opacity),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        height: 12,
-                        width: 140,
+                        height: 14,
+                        width: 160,
                         decoration: BoxDecoration(
                           color: s.hover.withOpacity(opacity),
                           borderRadius: BorderRadius.circular(6),
@@ -1339,8 +1782,8 @@ class _SearchResultsSkeletonState extends State<_SearchResultsSkeleton>
                       ),
                       const SizedBox(height: 6),
                       Container(
-                        height: 10,
-                        width: 90,
+                        height: 11,
+                        width: 100,
                         decoration: BoxDecoration(
                           color: s.hover.withOpacity(opacity),
                           borderRadius: BorderRadius.circular(6),
@@ -1397,6 +1840,9 @@ class _InitialSearchPrompt extends StatelessWidget {
   }
 }
 
+// Lista no formato exato da imagem de referência: capa pequena quadrada
+// + arredondada, título em negrito, "Tipo • Artista" em cinza, e botão
+// de 3 pontos à direita.
 class _SearchResultTile extends StatelessWidget {
   final AppColorScheme s;
   final SoundTrack track;
@@ -1417,21 +1863,15 @@ class _SearchResultTile extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: isCurrent ? s.primary.withOpacity(0.08) : s.cardBackground,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: s.cardShadow,
-        ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        color: isCurrent ? s.primary.withOpacity(0.06) : Colors.transparent,
         child: Row(children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             child: SizedBox(
-              width: 40,
-              height: 40,
+              width: 56,
+              height: 56,
               child: track.thumbnailUrl != null
                   ? Image.network(
                       track.thumbnailUrl!,
@@ -1441,11 +1881,11 @@ class _SearchResultTile extends StatelessWidget {
                   : ColoredBox(
                       color: cover,
                       child: const Icon(Icons.music_note,
-                          color: Colors.white, size: 20),
+                          color: Colors.white, size: 22),
                     ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1454,11 +1894,11 @@ class _SearchResultTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface)),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: isCurrent ? s.primary : s.onSurface)),
                 const SizedBox(height: 3),
-                Text(track.artist,
+                Text('Música • ${track.artist}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
@@ -1466,10 +1906,13 @@ class _SearchResultTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Icon(
-            isCurrent && isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
-            color: isCurrent ? s.primary : s.onSurfaceVariant,
-            size: 28,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {}, // menu de opções — não solicitado além de aparência
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: AppIcon('more', size: 18, color: s.onSurfaceVariant), // CONFIRMAR
+            ),
           ),
         ]),
       ),
@@ -1511,7 +1954,7 @@ class _ScreenBackButtonState extends State<ScreenBackButton> {
             shape: BoxShape.circle,
             boxShadow: widget.s.cardShadow,
           ),
-          child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
+          child: AppIcon('back', size: 20, color: widget.s.onSurface),
         ),
       ),
     );
