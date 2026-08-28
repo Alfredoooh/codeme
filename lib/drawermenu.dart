@@ -12,6 +12,9 @@ import 'api_service.dart';
 import 'chat_search.dart';
 import 'app_sheet.dart';
 import 'sheets.dart';
+import 'library_screen.dart';
+import 'scheduled_tasks_screen.dart';
+import 'all_apps_screen.dart';
 import 'apps/app_types.dart';
 import 'apps/docs.dart';
 import 'apps/sheets_app.dart';
@@ -181,16 +184,12 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
-  // 0 = Conversas, 1 = Apps
-  int _selectedSection = 0;
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
-  late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: _selectedSection);
     conversationsController.addListener(_onConvsChanged);
     authController.addListener(_onAuthChanged);
     _syncConversations();
@@ -198,7 +197,6 @@ class _AppDrawerState extends State<AppDrawer> {
 
   @override
   void dispose() {
-    _pageController.dispose();
     conversationsController.removeListener(_onConvsChanged);
     authController.removeListener(_onAuthChanged);
     super.dispose();
@@ -225,11 +223,6 @@ class _AppDrawerState extends State<AppDrawer> {
   void _handleNewChat() {
     HapticFeedback.lightImpact();
     widget.onNewChat?.call();
-    _closeDrawer();
-  }
-
-  void _handleCloseButton() {
-    HapticFeedback.lightImpact();
     _closeDrawer();
   }
 
@@ -289,126 +282,124 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
+  void _openLibrary(BuildContext context) {
+    HapticFeedback.lightImpact();
+    _closeDrawer();
+    Navigator.of(context).push(_FadePageRoute(
+      builder: (_) => const LibraryScreen(),
+    ));
+  }
+
+  void _openScheduledTasks(BuildContext context) {
+    HapticFeedback.lightImpact();
+    _closeDrawer();
+    Navigator.of(context).push(_FadePageRoute(
+      builder: (_) => const ScheduledTasksScreen(),
+    ));
+  }
+
+  void _openAllApps(BuildContext context) {
+    HapticFeedback.lightImpact();
+    _closeDrawer();
+    Navigator.of(context).push(CupertinoPageRoute(
+      builder: (_) => const AllAppsScreen(),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
+    final screenWidth = MediaQuery.of(context).size.width;
 
-    return Material(
-      color: s.pageBackground,
-      child: SafeArea(
-        child: Stack(children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 56),
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    if (index != _selectedSection) {
-                      setState(() => _selectedSection = index);
-                    }
-                  },
-                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                  children: [
-                    _buildConversationsPage(context, s, pinned, others),
-                    _buildAppsPage(context, s),
-                  ],
+    return SizedBox(
+      width: screenWidth * 0.75,
+      child: Material(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Stack(children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 56),
+                Expanded(
+                  child: _buildConversationsPage(context, s, pinned, others),
                 ),
-              ),
-              const SizedBox(height: 120),
-            ],
-          ),
+                const SizedBox(height: 120),
+              ],
+            ),
 
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    s.pageBackground,
-                    s.pageBackground.withOpacity(0.0),
-                  ],
-                ),
-              ),
-              child: Row(
-                children: [
-                  _AvatarCircleButton(
-                    s: s,
-                    onTap: widget.onSettings,
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      s.pageBackground,
+                      s.pageBackground.withOpacity(0.0),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 240),
-                        child: _DrawerSegmentedControl(
-                          s: s,
-                          selectedIndex: _selectedSection,
-                          onChanged: (i) {
-                            if (i == _selectedSection) return;
-                            HapticFeedback.selectionClick();
-                            setState(() => _selectedSection = i);
-                            _pageController.animateToPage(
-                              i,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOutCubic,
-                            );
-                          },
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectionContainer.disabled(
+                        child: Text(
+                          'Nexa',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: s.onSurface,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  _CircleIconButton(
-                    s: s,
-                    assetName: 'double_arrow_right',
-                    size: 40,
-                    iconSize: 20,
-                    onTap: _handleCloseButton,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          Positioned(
-            left: 0, right: 0, bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    s.pageBackground,
-                    s.pageBackground.withOpacity(0.0),
+                    const SizedBox(width: 12),
+                    _CircleIconButton(
+                      s: s,
+                      assetName: 'search',
+                      size: 40,
+                      iconSize: 18,
+                      onTap: () => _openSearch(context),
+                    ),
                   ],
                 ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _SearchPill(s: s, onTap: () => _openSearch(context))),
-                  const SizedBox(width: 10),
-                  _CircleIconButton(
-                    s: s,
-                    assetName: 'new_chat',
-                    size: 52,
-                    iconSize: 22,
-                    filled: true,
-                    onTap: widget.onNewChat != null ? _handleNewChat : null,
+            ),
+
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      s.pageBackground,
+                      s.pageBackground.withOpacity(0.0),
+                    ],
                   ),
-                ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: _NewChatPill(s: s, onTap: widget.onNewChat != null ? _handleNewChat : null)),
+                    const SizedBox(width: 10),
+                    _AvatarCircleButton(
+                      s: s,
+                      onTap: widget.onSettings,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
@@ -443,16 +434,51 @@ class _AppDrawerState extends State<AppDrawer> {
         ),
       );
     }
-    if (conversationsController.items.isEmpty) {
-      return Center(
-        child: Text(
-          'Sem conversas ainda',
-          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-        ),
-      );
-    }
 
     final sections = <Widget>[];
+
+    sections.add(_ConversationGroupHeader(
+      s: s,
+      label: 'Menu',
+      expanded: true,
+      onTap: () {},
+      interactive: false,
+    ));
+    sections.add(_LooseRows(
+      s: s,
+      children: [
+        _MenuOptionTile(
+          s: s,
+          assetName: 'plugins',
+          label: 'Apps e plugins',
+          onTap: () => _openAllApps(context),
+        ),
+        _MenuOptionTile(
+          s: s,
+          assetName: 'library',
+          label: 'Biblioteca',
+          onTap: () => _openLibrary(context),
+        ),
+        _MenuOptionTile(
+          s: s,
+          assetName: 'clock',
+          label: 'Tarefas agendadas',
+          onTap: () => _openScheduledTasks(context),
+        ),
+      ],
+    ));
+
+    if (conversationsController.items.isEmpty && !conversationsController.loading) {
+      sections.add(Padding(
+        padding: const EdgeInsets.only(top: 24),
+        child: Center(
+          child: Text(
+            'Sem conversas ainda',
+            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+          ),
+        ),
+      ));
+    }
 
     if (pinned.isNotEmpty) {
       sections.add(_ConversationGroupHeader(
@@ -478,26 +504,28 @@ class _AppDrawerState extends State<AppDrawer> {
       }
     }
 
-    sections.add(_ConversationGroupHeader(
-      s: s,
-      label: 'Todas as conversas',
-      expanded: _allExpanded,
-      onTap: () => setState(() => _allExpanded = !_allExpanded),
-    ));
-    if (_allExpanded) {
-      sections.add(_LooseRows(
+    if (others.isNotEmpty) {
+      sections.add(_ConversationGroupHeader(
         s: s,
-        children: [
-          for (final item in others)
-            _ConvTile(
-              s: s,
-              item: item,
-              active: item.id == widget.activeConversationId,
-              onTap: () => _openConversation(item),
-              onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
-            ),
-        ],
+        label: 'Todas as conversas',
+        expanded: _allExpanded,
+        onTap: () => setState(() => _allExpanded = !_allExpanded),
       ));
+      if (_allExpanded) {
+        sections.add(_LooseRows(
+          s: s,
+          children: [
+            for (final item in others)
+              _ConvTile(
+                s: s,
+                item: item,
+                active: item.id == widget.activeConversationId,
+                onTap: () => _openConversation(item),
+                onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+              ),
+          ],
+        ));
+      }
     }
 
     return RefreshIndicator(
@@ -515,56 +543,64 @@ class _AppDrawerState extends State<AppDrawer> {
       ),
     );
   }
+}
 
-  Widget _buildAppsPage(BuildContext context, AppColorScheme s) {
-    return Scrollbar(
-      thumbVisibility: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-        children: [
-          _ConversationGroupHeader(
-            s: s,
-            label: 'Apps',
-            expanded: true,
-            onTap: () {},
-            interactive: false,
-          ),
-          _LooseRows(
-            s: s,
-            children: [
-              for (final app in AppKind.values)
-                _AppMenuTile(
-                  s: s,
-                  app: app,
-                  onTap: () {
-                    _closeDrawer();
-                    switch (app) {
-                      case AppKind.docs:
-                        Navigator.of(context).push(CupertinoPageRoute(
-                          builder: (_) => const DocsScreen(),
-                        ));
-                        break;
-                      case AppKind.sheets:
-                        Navigator.of(context).push(CupertinoPageRoute(
-                          builder: (_) => const SheetsScreen(),
-                        ));
-                        break;
-                      case AppKind.slides:
-                        Navigator.of(context).push(CupertinoPageRoute(
-                          builder: (_) => const SlidesScreen(),
-                        ));
-                        break;
-                      case AppKind.sound:
-                        Navigator.of(context).push(CupertinoPageRoute(
-                          builder: (_) => const SoundScreen(),
-                        ));
-                        break;
-                    }
-                  },
+// ── Opção de menu (Apps e plugins / Biblioteca / Tarefas agendadas) ──
+
+class _MenuOptionTile extends StatefulWidget {
+  final AppColorScheme s;
+  final String assetName;
+  final String label;
+  final VoidCallback onTap;
+  const _MenuOptionTile({
+    required this.s,
+    required this.assetName,
+    required this.label,
+    required this.onTap,
+  });
+  @override State<_MenuOptionTile> createState() => _MenuOptionTileState();
+}
+
+class _MenuOptionTileState extends State<_MenuOptionTile> {
+  bool _h = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: _h ? s.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        child: Row(children: [
+          AppIcon(widget.assetName, size: 20, color: s.onSurface),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SelectionContainer.disabled(
+              child: Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: s.onSurface,
                 ),
-            ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
-        ],
+        ]),
       ),
     );
   }
@@ -639,9 +675,9 @@ class _AvatarCircleButton extends StatefulWidget {
 class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
   bool _p = false;
 
-  static const double _buttonSize = 40;
-  static const double _imageSize = 40;
-  static const double _fontSize = 16;
+  static const double _buttonSize = 52;
+  static const double _imageSize = 52;
+  static const double _fontSize = 18;
 
   Uint8List? _decodeAvatar(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -725,103 +761,6 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
           child: _buildAvatarContent(s, avatar, initial, size: _imageSize, fontSize: _fontSize),
         ),
       ),
-    );
-  }
-}
-
-// ── Segmented control do drawer ───────────────────────────────
-
-class _DrawerSegmentedControl extends StatefulWidget {
-  final AppColorScheme s;
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
-  const _DrawerSegmentedControl({
-    required this.s,
-    required this.selectedIndex,
-    required this.onChanged,
-  });
-
-  @override
-  State<_DrawerSegmentedControl> createState() => _DrawerSegmentedControlState();
-}
-
-class _DrawerSegmentedControlState extends State<_DrawerSegmentedControl> {
-  static const _options = ['Conversas', 'Apps'];
-
-  static const double _containerHeight = 40;
-  static const double _pillHeight = 32;
-  static const double _outerPadding = 2;
-
-  int? _pressedIndex;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return Container(
-      height: _containerHeight,
-      padding: const EdgeInsets.all(_outerPadding),
-      decoration: BoxDecoration(
-        color: s.hover,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: LayoutBuilder(builder: (context, constraints) {
-        final segmentWidth = constraints.maxWidth / _options.length;
-        final pillTop = (constraints.maxHeight - _pillHeight) / 2;
-        return Stack(children: [
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            left: segmentWidth * widget.selectedIndex.clamp(0, _options.length - 1) + 2,
-            top: pillTop,
-            width: segmentWidth - 4,
-            height: _pillHeight,
-            child: Container(
-              decoration: BoxDecoration(
-                color: s.primary,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: s.cardShadow,
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              for (var i = 0; i < _options.length; i++)
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown:   (_) => setState(() => _pressedIndex = i),
-                    onTapCancel: ()  => setState(() => _pressedIndex = null),
-                    onTapUp:     (_) => setState(() => _pressedIndex = null),
-                    onTap: () => widget.onChanged(i),
-                    child: AnimatedScale(
-                      scale: _pressedIndex == i ? 0.94 : 1.0,
-                      duration: const Duration(milliseconds: 120),
-                      curve: kCupertinoOut,
-                      child: Center(
-                        child: SelectionContainer.disabled(
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOut,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: widget.selectedIndex == i
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: widget.selectedIndex == i
-                                  ? s.onPrimary
-                                  : s.onSurfaceVariant,
-                            ),
-                            child: Text(_options[i]),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ]);
-      }),
     );
   }
 }
@@ -1028,7 +967,7 @@ void showConversationOptionsPopupAt(
 
   final screenSize = MediaQuery.of(context).size;
   const width = 232.0;
-  const estimatedHeight = 190.0; // reduzido
+  const estimatedHeight = 190.0;
 
   final openLeft = position.dx + width > screenSize.width - 12;
   final openUp = position.dy + estimatedHeight > screenSize.height - 12;
@@ -1348,16 +1287,16 @@ Future<void> showRenameSheet(
   );
 }
 
-// ── SEARCH PILL ───────────────────────────────────────────────
+// ── NEW CHAT PILL ─────────────────────────────────────────────
 
-class _SearchPill extends StatefulWidget {
+class _NewChatPill extends StatefulWidget {
   final AppColorScheme s;
-  final VoidCallback onTap;
-  const _SearchPill({required this.s, required this.onTap});
-  @override State<_SearchPill> createState() => _SearchPillState();
+  final VoidCallback? onTap;
+  const _NewChatPill({required this.s, required this.onTap});
+  @override State<_NewChatPill> createState() => _NewChatPillState();
 }
 
-class _SearchPillState extends State<_SearchPill> {
+class _NewChatPillState extends State<_NewChatPill> {
   bool _p = false;
 
   @override
@@ -1370,7 +1309,7 @@ class _SearchPillState extends State<_SearchPill> {
       onTapUp:     (_) => setState(() => _p = false),
       onTap:       () {
         HapticFeedback.lightImpact();
-        widget.onTap();
+        widget.onTap?.call();
       },
       child: AnimatedScale(
         scale: _p ? 0.98 : 1.0,
@@ -1386,15 +1325,12 @@ class _SearchPillState extends State<_SearchPill> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
-            AppIcon('search', color: s.onSurfaceVariant, size: 18),
+            AppIcon('new_chat', color: s.onSurface, size: 18),
             const SizedBox(width: 10),
-            Expanded(
-              child: SelectionContainer.disabled(
-                child: Text(
-                  'Escreve aqui para pesquisar...',
-                  style: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
-                  overflow: TextOverflow.ellipsis,
-                ),
+            SelectionContainer.disabled(
+              child: Text(
+                'Conversar',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
               ),
             ),
           ]),
@@ -1558,87 +1494,6 @@ class _AccountPopupRowState extends State<_AccountPopupRow> {
                 style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
           ),
         ]),
-      ),
-    );
-  }
-}
-
-// ── Menu de apps ─────────────────────────────────────────────
-
-class _AppMenuTile extends StatefulWidget {
-  final AppColorScheme s;
-  final AppKind app;
-  final VoidCallback onTap;
-  const _AppMenuTile({required this.s, required this.app, required this.onTap});
-
-  @override
-  State<_AppMenuTile> createState() => _AppMenuTileState();
-}
-
-class _AppMenuTileState extends State<_AppMenuTile> {
-  bool _h = false;
-
-  static const double _iconSize = 44;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap: () {
-        HapticFeedback.lightImpact();
-        widget.onTap();
-      },
-      child: Container(
-        color: _h ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Image.asset(
-              widget.app.iconAsset,
-              width: _iconSize,
-              height: _iconSize,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SelectionContainer.disabled(
-                    child: Text(
-                      widget.app.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  SelectionContainer.disabled(
-                    child: Text(
-                      widget.app.description,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: s.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
