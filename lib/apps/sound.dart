@@ -1,81 +1,16 @@
-// ══════════════════════════════════════════════════════════════
-// ARQUIVO: lib/apps/sound.dart
-// ══════════════════════════════════════════════════════════════
-//
-// ⚠️ Ícones marcados com // CONFIRMAR usam nomes que não vi em nenhum
-// arquivo seu real. Se o asset não existir com esse nome exato,
-// o AppIcon vai quebrar. Troque pelo nome real antes de compilar.
-//
-// ⚠️ Letras via lrclib.net (API pública, sem chave). Não pude testar
-// a chamada de rede daqui — cobertura de músicas não é garantida.
-
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../all_apps_screen.dart';
-
-// ══════════════════════════════════════════════════════════════
-// MODELOS
-// ══════════════════════════════════════════════════════════════
-
-class SoundTrack {
-  final String title;
-  final String artist;
-  final String coverColorHex;
-  final String? thumbnailUrl;
-  final String videoId;
-  const SoundTrack({
-    required this.title,
-    required this.artist,
-    required this.coverColorHex,
-    required this.videoId,
-    this.thumbnailUrl,
-  });
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SoundTrack &&
-          runtimeType == other.runtimeType &&
-          videoId == other.videoId;
-
-  @override
-  int get hashCode => videoId.hashCode;
-}
-
-class SoundSection {
-  final String title;
-  final List<SoundTrack> tracks;
-  const SoundSection({required this.title, required this.tracks});
-}
-
-// ══════════════════════════════════════════════════════════════
-// CONTROLLER (para pesquisa global)
-// ══════════════════════════════════════════════════════════════
-
-class SoundTabController extends ChangeNotifier {
-  String? _pendingSearch;
-  String? get pendingSearch => _pendingSearch;
-  void requestSearch(String query) {
-    _pendingSearch = query;
-    notifyListeners();
-  }
-
-  void consumePendingSearch() => _pendingSearch = null;
-}
-
-final SoundTabController soundTabController = SoundTabController();
-
-// ══════════════════════════════════════════════════════════════
-// TELA PRINCIPAL
-// ══════════════════════════════════════════════════════════════
+import 'sound_models.dart';
+import 'sound_widgets.dart';
+import 'sound_player_full.dart';
+import 'sound_search_screen.dart';
 
 class SoundScreen extends StatefulWidget {
   const SoundScreen({super.key});
@@ -90,39 +25,47 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   List<SoundSection> _sections = [];
   bool _loadingFeed = true;
   String? _feedError;
+  String _activeCategoryId = kSoundCategories.first.id;
 
   SoundTrack? _currentTrack;
-  bool _isPlaying = false;
-  bool _isBuffering = false;
+  PlaybackStatus _status = PlaybackStatus.idle;
   Duration _position = Duration.zero;
   Duration _totalDuration = Duration.zero;
-
-  static const Map<String, String> _sectionSeeds = {
-    'Em alta agora': 'top hits 2026',
-    'Recomendado para si': 'músicas mais tocadas agora',
-    'Populares esta semana': 'trending music this week',
-  };
+  StreamSubscription<PlayerState>? _playerStateSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration?>? _durationSub;
 
   @override
   void initState() {
     super.initState();
     soundTabController.addListener(_onPendingSearch);
     _fetchFeed();
-    _player.playerStateStream.listen((state) {
+
+    // Escuta o estado real do AudioPlayer — é isto que faltava para
+    // o player refletir corretamente se está a tocar, em buffer,
+    // pausado, ou parado por erro.
+    _playerStateSub = _player.playerStateStream.listen((state) {
       if (!mounted) return;
-      final buffering = state.processingState == ProcessingState.buffering ||
-          state.processingState == ProcessingState.loading;
-      if (state.playing != _isPlaying || buffering != _isBuffering) {
-        setState(() {
-          _isPlaying = state.playing;
-          _isBuffering = buffering;
-        });
+      final processing = state.processingState;
+      PlaybackStatus next;
+      if (processing == ProcessingState.loading ||
+          processing == ProcessingState.buffering) {
+        next = PlaybackStatus.buffering;
+      } else if (processing == ProcessingState.completed) {
+        next = PlaybackStatus.paused;
+      } else if (state.playing) {
+        next = PlaybackStatus.playing;
+      } else {
+        next = _status == PlaybackStatus.error ? PlaybackStatus.error : PlaybackStatus.paused;
+      }
+      if (next != _status) {
+        setState(() => _status = next);
       }
     });
-    _player.positionStream.listen((pos) {
+    _positionSub = _player.positionStream.listen((pos) {
       if (mounted) setState(() => _position = pos);
     });
-    _player.durationStream.listen((dur) {
+    _durationSub = _player.durationStream.listen((dur) {
       if (mounted && dur != null) setState(() => _totalDuration = dur);
     });
   }
@@ -130,6 +73,9 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   @override
   void dispose() {
     soundTabController.removeListener(_onPendingSearch);
+    _playerStateSub?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
     _player.dispose();
     _yt.close();
     super.dispose();
@@ -145,7 +91,7 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
             initialQuery: query,
             onPlay: _playTrack,
             currentTrack: _currentTrack,
-            isPlaying: _isPlaying,
+            status: _status,
           ),
         ),
       );
@@ -160,8 +106,8 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
 
     try {
       final sections = <SoundSection>[];
-      for (final entry in _sectionSeeds.entries) {
-        final searchResults = await _yt.search.search(entry.value);
+      for (final category in kSoundCategories) {
+        final searchResults = await _yt.search.search(category.seedQuery);
         final tracks = <SoundTrack>[];
         for (final video in searchResults) {
           tracks.add(SoundTrack(
@@ -173,7 +119,7 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
           ));
           if (tracks.length >= 12) break;
         }
-        sections.add(SoundSection(title: entry.key, tracks: tracks));
+        sections.add(SoundSection(title: category.label, tracks: tracks));
       }
 
       if (!mounted) return;
@@ -188,7 +134,7 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
       if (!mounted) return;
       setState(() {
         _loadingFeed = false;
-        _feedError = 'Não foi possível carregar o feed. Toque para tentar de novo.';
+        _feedError = 'Não foi possível carregar o feed.';
       });
     }
   }
@@ -206,38 +152,47 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
     return palette[idx];
   }
 
+  /// Toca [track] imediatamente. Erros ficam visíveis via
+  /// PlaybackStatus.error — nunca ficam apenas num debugPrint silencioso.
   Future<void> _playTrack(SoundTrack track) async {
+    setState(() {
+      _currentTrack = track;
+      _status = PlaybackStatus.buffering;
+      _position = Duration.zero;
+      _totalDuration = Duration.zero;
+    });
+
     try {
-      setState(() {
-        _currentTrack = track;
-        _isBuffering = true;
-      });
+      final manifest = await _yt.videos.streamsClient
+          .getManifest(track.videoId)
+          .timeout(const Duration(seconds: 15));
 
-      final manifest = await _yt.videos.streamsClient.getManifest(track.videoId);
-      final streamInfo = manifest.audioOnly.withHighestBitrate();
+      final audioStreams = manifest.audioOnly;
+      if (audioStreams.isEmpty) {
+        throw Exception('Sem stream de áudio disponível para esta faixa');
+      }
+      final streamInfo = audioStreams.withHighestBitrate();
 
-      await _player.setUrl(streamInfo.url.toString());
+      await _player.setAudioSource(
+        AudioSource.uri(Uri.parse(streamInfo.url.toString())),
+      );
       await _player.play();
 
       if (!mounted) return;
-      setState(() => _isPlaying = true);
+      setState(() => _status = PlaybackStatus.playing);
     } catch (e) {
-      debugPrint('Erro ao tocar: $e');
+      debugPrint('Erro ao tocar "${track.title}": $e');
       if (!mounted) return;
-      setState(() {
-        _isBuffering = false;
-        _isPlaying = false;
-      });
+      setState(() => _status = PlaybackStatus.error);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível tocar "${track.title}".')),
+      );
     }
   }
 
   void _togglePlay(SoundTrack track) {
     if (_currentTrack == track) {
-      if (_player.playing) {
-        _player.pause();
-      } else {
-        _player.play();
-      }
+      _onGlobalTogglePlay();
     } else {
       _playTrack(track);
     }
@@ -245,6 +200,11 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
 
   void _onGlobalTogglePlay() {
     if (_currentTrack == null) return;
+    if (_status == PlaybackStatus.error) {
+      // Tenta tocar de novo em vez de ficar preso no estado de erro.
+      _playTrack(_currentTrack!);
+      return;
+    }
     if (_player.playing) {
       _player.pause();
     } else {
@@ -264,7 +224,7 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
         builder: (_) => SoundSearchScreen(
           onPlay: _playTrack,
           currentTrack: _currentTrack,
-          isPlaying: _isPlaying,
+          status: _status,
         ),
       ),
     );
@@ -277,8 +237,7 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
         builder: (_) => FullPlayerScreen(
           track: _currentTrack!,
           player: _player,
-          isPlaying: _isPlaying,
-          isBuffering: _isBuffering,
+          status: _status,
           position: _position,
           totalDuration: _totalDuration,
           onTogglePlay: _onGlobalTogglePlay,
@@ -286,6 +245,24 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
       ),
     );
   }
+
+  void _onCategoryTap(SoundCategory category) {
+    setState(() => _activeCategoryId = category.id);
+    // Rola até à secção correspondente, se já estiver carregada.
+    final index = kSoundCategories.indexWhere((c) => c.id == category.id);
+    if (index >= 0 && index < _sections.length && _sections[index].tracks.isNotEmpty) {
+      _sectionKeys[index].currentContext?.let((ctx) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+  }
+
+  final List<GlobalKey> _sectionKeys =
+      List.generate(kSoundCategories.length, (_) => GlobalKey());
 
   @override
   Widget build(BuildContext context) {
@@ -300,11 +277,10 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
             child: Stack(children: [
               _buildFeed(s),
               _SoundAppBar(s: s, onOpenApps: _openApps),
-              _FloatingPlayerBar(
+              FloatingPlayerBar(
                 s: s,
                 currentTrack: _currentTrack,
-                isPlaying: _isPlaying,
-                isBuffering: _isBuffering,
+                status: _status,
                 onTogglePlay: _onGlobalTogglePlay,
                 onOpenFavorites: () {},
                 onOpenSearch: _openSearch,
@@ -328,19 +304,87 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
       onRefresh: _fetchFeed,
       color: s.primary,
       backgroundColor: s.cardBackground,
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _CategoryChips(
+              s: s,
+              activeId: _activeCategoryId,
+              onTap: _onCategoryTap,
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: 128),
+            sliver: SliverList.builder(
+              itemCount: _sections.length,
+              itemBuilder: (_, i) {
+                final section = _sections[i];
+                if (section.tracks.isEmpty) return const SizedBox.shrink();
+                return _FeedSectionRow(
+                  key: _sectionKeys[i],
+                  s: s,
+                  section: section,
+                  currentTrack: _currentTrack,
+                  status: _status,
+                  onTap: _togglePlay,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+extension _Let<T> on T {
+  R let<R>(R Function(T) block) => block(this);
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHIPS DE CATEGORIA
+// ─────────────────────────────────────────────────────────────
+
+class _CategoryChips extends StatelessWidget {
+  final AppColorScheme s;
+  final String activeId;
+  final ValueChanged<SoundCategory> onTap;
+  const _CategoryChips({required this.s, required this.activeId, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 88, 0, 128),
-        itemCount: _sections.length,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 88, 16, 6),
+        itemCount: kSoundCategories.length,
         itemBuilder: (_, i) {
-          final section = _sections[i];
-          if (section.tracks.isEmpty) return const SizedBox.shrink();
-          return _FeedSectionRow(
-            s: s,
-            section: section,
-            currentTrack: _currentTrack,
-            isPlaying: _isPlaying,
-            isBuffering: _isBuffering,
-            onTap: _togglePlay,
+          final category = kSoundCategories[i];
+          final active = category.id == activeId;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onTap(category),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: active ? s.primary : s.cardBackground,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: active ? null : s.cardShadowSoft,
+                ),
+                child: Text(
+                  category.label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: active ? s.onPrimary : s.onSurface,
+                  ),
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -348,24 +392,23 @@ class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScree
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SEÇÃO HORIZONTAL DO FEED (estilo Spotify/Apple Music)
-// ══════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// SEÇÃO HORIZONTAL DO FEED
+// ─────────────────────────────────────────────────────────────
 
 class _FeedSectionRow extends StatelessWidget {
   final AppColorScheme s;
   final SoundSection section;
   final SoundTrack? currentTrack;
-  final bool isPlaying;
-  final bool isBuffering;
+  final PlaybackStatus status;
   final ValueChanged<SoundTrack> onTap;
 
   const _FeedSectionRow({
+    super.key,
     required this.s,
     required this.section,
     required this.currentTrack,
-    required this.isPlaying,
-    required this.isBuffering,
+    required this.status,
     required this.onTap,
   });
 
@@ -393,14 +436,14 @@ class _FeedSectionRow extends StatelessWidget {
             itemCount: section.tracks.length,
             itemBuilder: (_, i) {
               final track = section.tracks[i];
+              final isCurrent = currentTrack == track;
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: _AlbumCard(
                   s: s,
                   track: track,
-                  isCurrent: currentTrack == track,
-                  isPlaying: isPlaying && currentTrack == track,
-                  isBuffering: isBuffering && currentTrack == track,
+                  isCurrent: isCurrent,
+                  status: isCurrent ? status : PlaybackStatus.idle,
                   onTap: () => onTap(track),
                 ),
               );
@@ -412,23 +455,18 @@ class _FeedSectionRow extends StatelessWidget {
   }
 }
 
-// Capa quadrada com canto arredondado — padrão real de app de música
-// para álbuns. Círculo fica reservado para artistas/pessoas, não usado
-// aqui porque a peça é um álbum/faixa.
 class _AlbumCard extends StatefulWidget {
   final AppColorScheme s;
   final SoundTrack track;
   final bool isCurrent;
-  final bool isPlaying;
-  final bool isBuffering;
+  final PlaybackStatus status;
   final VoidCallback onTap;
 
   const _AlbumCard({
     required this.s,
     required this.track,
     required this.isCurrent,
-    required this.isPlaying,
-    required this.isBuffering,
+    required this.status,
     required this.onTap,
   });
 
@@ -446,6 +484,8 @@ class _AlbumCardState extends State<_AlbumCard> {
     final s = widget.s;
     final track = widget.track;
     final cover = Color(int.parse(track.coverColorHex.replaceFirst('#', '0xFF')));
+    final isBuffering = widget.status == PlaybackStatus.buffering;
+    final isPlaying = widget.status == PlaybackStatus.playing;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -478,13 +518,12 @@ class _AlbumCardState extends State<_AlbumCard> {
                       Image.network(
                         track.thumbnailUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                            Icons.music_note, color: Colors.white, size: 40),
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.music_note, color: Colors.white, size: 40),
                       )
                     else
                       const Center(
-                        child: Icon(Icons.music_note,
-                            color: Colors.white, size: 40),
+                        child: Icon(Icons.music_note, color: Colors.white, size: 40),
                       ),
                     AnimatedOpacity(
                       opacity: widget.isCurrent ? 1.0 : 0.0,
@@ -492,7 +531,7 @@ class _AlbumCardState extends State<_AlbumCard> {
                       child: Container(
                         color: Colors.black.withOpacity(0.4),
                         alignment: Alignment.center,
-                        child: widget.isBuffering
+                        child: isBuffering
                             ? const SizedBox(
                                 width: 26,
                                 height: 26,
@@ -502,9 +541,7 @@ class _AlbumCardState extends State<_AlbumCard> {
                                 ),
                               )
                             : Icon(
-                                widget.isPlaying
-                                    ? Icons.pause_circle_filled
-                                    : Icons.play_circle_fill,
+                                isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
                                 color: Colors.white,
                                 size: 40,
                               ),
@@ -539,9 +576,9 @@ class _AlbumCardState extends State<_AlbumCard> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SKELETON LOADER DO FEED (por seções horizontais)
-// ══════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// SKELETON LOADER DO FEED
+// ─────────────────────────────────────────────────────────────
 
 class _FeedSkeleton extends StatefulWidget {
   final AppColorScheme s;
@@ -654,9 +691,9 @@ class _FeedSkeletonState extends State<_FeedSkeleton>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// ESTADO DE ERRO DO FEED
-// ══════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+// ESTADO DE ERRO DO FEED — botão "Recarregar" em texto, explícito
+// ─────────────────────────────────────────────────────────────
 
 class _FeedErrorState extends StatelessWidget {
   final AppColorScheme s;
@@ -667,31 +704,48 @@ class _FeedErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: GestureDetector(
-        onTap: onRetry,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.refresh, color: s.onSurfaceVariant, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded, color: s.onSurfaceVariant, size: 40),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant),
+            ),
+            const SizedBox(height: 18),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onRetry,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                decoration: BoxDecoration(
+                  color: s.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Recarregar',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: s.onPrimary,
+                  ),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 // APPBAR
-// ══════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 
 class _SoundAppBar extends StatelessWidget {
   final AppColorScheme s;
@@ -705,7 +759,7 @@ class _SoundAppBar extends StatelessWidget {
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 6, 16, 10),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -714,10 +768,17 @@ class _SoundAppBar extends StatelessWidget {
           ),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            ScreenBackButton(s: s),
-            const Spacer(),
-            _CircularIconButton(
+            Text(
+              'Sound',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: s.onSurface,
+              ),
+            ),
+            CircularIconButton(
               s: s,
               size: 40,
               onTap: onOpenApps,
@@ -729,1232 +790,6 @@ class _SoundAppBar extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CircularIconButton extends StatefulWidget {
-  final AppColorScheme s;
-  final double size;
-  final VoidCallback onTap;
-  final Widget child;
-  const _CircularIconButton({
-    required this.s,
-    required this.size,
-    required this.onTap,
-    required this.child,
-  });
-
-  @override
-  State<_CircularIconButton> createState() => _CircularIconButtonState();
-}
-
-class _CircularIconButtonState extends State<_CircularIconButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.9 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOutCubic,
-        child: Container(
-          width: widget.size,
-          height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.s.cardBackground,
-            shape: BoxShape.circle,
-            boxShadow: widget.s.cardShadow,
-          ),
-          child: widget.child,
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// BARRA FLUTUANTE — pill sólido, clicável para abrir player cheio
-// ══════════════════════════════════════════════════════════════
-
-const Color _kPillSolidColor = Color(0xFF1C1C1E);
-
-class _FloatingPlayerBar extends StatelessWidget {
-  final AppColorScheme s;
-  final SoundTrack? currentTrack;
-  final bool isPlaying;
-  final bool isBuffering;
-  final VoidCallback onTogglePlay;
-  final VoidCallback onOpenFavorites;
-  final VoidCallback onOpenSearch;
-  final VoidCallback onOpenFullPlayer;
-
-  const _FloatingPlayerBar({
-    required this.s,
-    required this.currentTrack,
-    required this.isPlaying,
-    required this.isBuffering,
-    required this.onTogglePlay,
-    required this.onOpenFavorites,
-    required this.onOpenSearch,
-    required this.onOpenFullPlayer,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: 16,
-      right: 16,
-      bottom: 16,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _CircularIconButton(
-            s: s,
-            size: 56,
-            onTap: onOpenFavorites,
-            child: AppIcon('bookmark', color: s.onSurface, size: 22), // CONFIRMAR
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: SizeTransition(
-                  sizeFactor: anim,
-                  axis: Axis.horizontal,
-                  child: child,
-                ),
-              ),
-              child: currentTrack == null
-                  ? _PlayerSkeletonPill(key: const ValueKey('skeleton'), s: s)
-                  : GestureDetector(
-                      key: ValueKey(currentTrack!.videoId),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onOpenFullPlayer,
-                      child: _PlayerPill(
-                        s: s,
-                        track: currentTrack!,
-                        isPlaying: isPlaying,
-                        isBuffering: isBuffering,
-                        onTogglePlay: onTogglePlay,
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          _CircularIconButton(
-            s: s,
-            size: 56,
-            onTap: onOpenSearch,
-            child: AppIcon('search', color: s.onSurface, size: 22),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayerPill extends StatelessWidget {
-  final AppColorScheme s;
-  final SoundTrack track;
-  final bool isPlaying;
-  final bool isBuffering;
-  final VoidCallback onTogglePlay;
-  const _PlayerPill({
-    required this.s,
-    required this.track,
-    required this.isPlaying,
-    required this.isBuffering,
-    required this.onTogglePlay,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cover = Color(int.parse(track.coverColorHex.replaceFirst('#', '0xFF')));
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: _kPillSolidColor, // sólido fixo, sem opacidade/gradiente
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.22),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 40,
-              height: 40,
-              child: track.thumbnailUrl != null
-                  ? Image.network(
-                      track.thumbnailUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => ColoredBox(color: cover),
-                    )
-                  : ColoredBox(
-                      color: cover,
-                      child: const Icon(Icons.music_note,
-                          color: Colors.white, size: 18),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  track.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withOpacity(0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTogglePlay,
-            child: SizedBox(
-              width: 36,
-              height: 36,
-              child: isBuffering
-                  ? const Padding(
-                      padding: EdgeInsets.all(9),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : AppIcon(
-                      isPlaying ? 'pause' : 'play', // CONFIRMAR
-                      color: Colors.white,
-                      size: 20,
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayerSkeletonPill extends StatefulWidget {
-  final AppColorScheme s;
-  const _PlayerSkeletonPill({super.key, required this.s});
-  @override
-  State<_PlayerSkeletonPill> createState() => _PlayerSkeletonPillState();
-}
-
-class _PlayerSkeletonPillState extends State<_PlayerSkeletonPill>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1300),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) {
-        final blockOpacity = 0.18 + 0.10 * _controller.value;
-        return Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: _kPillSolidColor,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(blockOpacity),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      height: 11,
-                      width: 96,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(blockOpacity),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      height: 9,
-                      width: 64,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(blockOpacity),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(blockOpacity),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// PLAYER EM TELA CHEIA — com letras via LRCLib
-// ══════════════════════════════════════════════════════════════
-
-class FullPlayerScreen extends StatefulWidget {
-  final SoundTrack track;
-  final AudioPlayer player;
-  final bool isPlaying;
-  final bool isBuffering;
-  final Duration position;
-  final Duration totalDuration;
-  final VoidCallback onTogglePlay;
-
-  const FullPlayerScreen({
-    super.key,
-    required this.track,
-    required this.player,
-    required this.isPlaying,
-    required this.isBuffering,
-    required this.position,
-    required this.totalDuration,
-    required this.onTogglePlay,
-  });
-
-  @override
-  State<FullPlayerScreen> createState() => _FullPlayerScreenState();
-}
-
-enum _LyricsState { loading, found, notFound, error }
-
-class _FullPlayerScreenState extends State<FullPlayerScreen> {
-  _LyricsState _lyricsState = _LyricsState.loading;
-  String? _plainLyrics;
-  StreamSubscription<bool>? _playingSub;
-  StreamSubscription<Duration>? _positionSub;
-  StreamSubscription<Duration?>? _durationSub;
-
-  bool _isPlaying = false;
-  bool _isBuffering = false;
-  Duration _position = Duration.zero;
-  Duration _totalDuration = Duration.zero;
-
-  @override
-  void initState() {
-    super.initState();
-    _isPlaying = widget.isPlaying;
-    _isBuffering = widget.isBuffering;
-    _position = widget.position;
-    _totalDuration = widget.totalDuration;
-
-    _playingSub = widget.player.playingStream.listen((playing) {
-      if (mounted) setState(() => _isPlaying = playing);
-    });
-    _positionSub = widget.player.positionStream.listen((pos) {
-      if (mounted) setState(() => _position = pos);
-    });
-    _durationSub = widget.player.durationStream.listen((dur) {
-      if (mounted && dur != null) setState(() => _totalDuration = dur);
-    });
-
-    _fetchLyrics();
-  }
-
-  @override
-  void dispose() {
-    _playingSub?.cancel();
-    _positionSub?.cancel();
-    _durationSub?.cancel();
-    super.dispose();
-  }
-
-  // LRCLib: API pública, sem chave. Não foi testada em runtime real
-  // neste ambiente (sem acesso de rede aqui) — trate como não validada
-  // em produção até primeiro teste manual.
-  Future<void> _fetchLyrics() async {
-    setState(() => _lyricsState = _LyricsState.loading);
-    try {
-      final uri = Uri.https('lrclib.net', '/api/search', {
-        'track_name': widget.track.title,
-        'artist_name': widget.track.artist,
-      });
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
-
-      if (response.statusCode != 200) {
-        if (mounted) setState(() => _lyricsState = _LyricsState.error);
-        return;
-      }
-
-      final List<dynamic> results = jsonDecode(response.body);
-      if (results.isEmpty) {
-        if (mounted) setState(() => _lyricsState = _LyricsState.notFound);
-        return;
-      }
-
-      final first = results.first as Map<String, dynamic>;
-      final plain = first['plainLyrics'] as String?;
-
-      if (plain == null || plain.trim().isEmpty) {
-        if (mounted) setState(() => _lyricsState = _LyricsState.notFound);
-        return;
-      }
-
-      if (mounted) {
-        setState(() {
-          _plainLyrics = plain;
-          _lyricsState = _LyricsState.found;
-        });
-      }
-    } catch (e) {
-      debugPrint('Erro ao buscar letra: $e');
-      if (mounted) setState(() => _lyricsState = _LyricsState.error);
-    }
-  }
-
-  void _seekTo(double fraction) {
-    if (_totalDuration == Duration.zero) return;
-    final target = _totalDuration * fraction;
-    widget.player.seek(target);
-  }
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    final track = widget.track;
-    final cover = Color(int.parse(track.coverColorHex.replaceFirst('#', '0xFF')));
-    final progress = _totalDuration.inMilliseconds == 0
-        ? 0.0
-        : (_position.inMilliseconds / _totalDuration.inMilliseconds).clamp(0.0, 1.0);
-
-    return Material(
-      color: _kPillSolidColor,
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const AppIcon('chevron_down', size: 18, color: Colors.white),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'A tocar agora',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.6),
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 36),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: cover,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
-                        blurRadius: 30,
-                        offset: const Offset(0, 14),
-                      ),
-                    ],
-                  ),
-                  child: track.thumbnailUrl != null
-                      ? Image.network(
-                          track.thumbnailUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                              Icons.music_note, color: Colors.white, size: 60),
-                        )
-                      : const Center(
-                          child: Icon(Icons.music_note, color: Colors.white, size: 60),
-                        ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Text(
-                    track.title,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    track.artist,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  _SeekBar(progress: progress, onSeek: _seekTo),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _formatDuration(_position),
-                        style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
-                      ),
-                      Text(
-                        _formatDuration(_totalDuration),
-                        style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Sem fila de reprodução implementada — desabilitado
-                // em vez de fingir funcionar.
-                Opacity(
-                  opacity: 0.3,
-                  child: AppIcon('skip_previous', size: 32, color: Colors.white), // CONFIRMAR
-                ),
-                const SizedBox(width: 32),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onTogglePlay,
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: _isBuffering
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.4,
-                              color: Colors.black,
-                            ),
-                          )
-                        : AppIcon(
-                            _isPlaying ? 'pause' : 'play', // CONFIRMAR
-                            size: 28,
-                            color: Colors.black,
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 32),
-                Opacity(
-                  opacity: 0.3,
-                  child: AppIcon('skip_next', size: 32, color: Colors.white), // CONFIRMAR
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            Expanded(
-              child: _LyricsPanel(state: _lyricsState, lyrics: _plainLyrics),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SeekBar extends StatelessWidget {
-  final double progress;
-  final ValueChanged<double> onSeek;
-  const _SeekBar({required this.progress, required this.onSeek});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      return GestureDetector(
-        onTapUp: (d) => onSeek((d.localPosition.dx / width).clamp(0.0, 1.0)),
-        onHorizontalDragUpdate: (d) =>
-            onSeek((d.localPosition.dx / width).clamp(0.0, 1.0)),
-        child: SizedBox(
-          height: 20,
-          child: Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              Container(
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              FractionallySizedBox(
-                widthFactor: progress,
-                child: Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-class _LyricsPanel extends StatelessWidget {
-  final _LyricsState state;
-  final String? lyrics;
-  const _LyricsPanel({required this.state, required this.lyrics});
-
-  @override
-  Widget build(BuildContext context) {
-    switch (state) {
-      case _LyricsState.loading:
-        return const Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
-          ),
-        );
-      case _LyricsState.notFound:
-        return Center(
-          child: Text(
-            'Letra não encontrada para esta faixa.',
-            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
-          ),
-        );
-      case _LyricsState.error:
-        return Center(
-          child: Text(
-            'Não foi possível carregar a letra agora.',
-            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
-          ),
-        );
-      case _LyricsState.found:
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-          child: Text(
-            lyrics ?? '',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 1.8,
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        );
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// TELA DE PESQUISA — lista estilo referência (capa pequena + tipo•artista)
-// ══════════════════════════════════════════════════════════════
-
-class SoundSearchScreen extends StatefulWidget {
-  final String? initialQuery;
-  final Future<void> Function(SoundTrack) onPlay;
-  final SoundTrack? currentTrack;
-  final bool isPlaying;
-
-  const SoundSearchScreen({
-    super.key,
-    this.initialQuery,
-    required this.onPlay,
-    required this.currentTrack,
-    required this.isPlaying,
-  });
-
-  @override
-  State<SoundSearchScreen> createState() => _SoundSearchScreenState();
-}
-
-class _SoundSearchScreenState extends State<SoundSearchScreen> {
-  final TextEditingController _ctrl = TextEditingController();
-  final FocusNode _focus = FocusNode();
-  final YoutubeExplode _yt = YoutubeExplode();
-
-  String _query = '';
-  List<SoundTrack> _results = [];
-  bool _loading = false;
-  String? _error;
-  Timer? _debounce;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
-    if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
-      _ctrl.text = widget.initialQuery!;
-      _query = widget.initialQuery!;
-      _performSearch(widget.initialQuery!);
-    }
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _ctrl.dispose();
-    _focus.dispose();
-    _yt.close();
-    super.dispose();
-  }
-
-  void _onChanged(String value) {
-    setState(() => _query = value);
-    _debounce?.cancel();
-    if (value.trim().isEmpty) {
-      setState(() {
-        _results = [];
-        _error = null;
-        _loading = false;
-      });
-      return;
-    }
-    _debounce = Timer(const Duration(milliseconds: 420), () {
-      _performSearch(value);
-    });
-  }
-
-  Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() => _results = []);
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final searchResults = await _yt.search.search(query);
-      final tracks = <SoundTrack>[];
-      for (final video in searchResults) {
-        tracks.add(SoundTrack(
-          title: video.title,
-          artist: video.author,
-          coverColorHex: '#2e8bc9',
-          thumbnailUrl: video.thumbnails.mediumResUrl,
-          videoId: video.id.value,
-        ));
-        if (tracks.length >= 25) break;
-      }
-      if (!mounted) return;
-      setState(() {
-        _results = tracks;
-        _loading = false;
-        _error = tracks.isEmpty ? 'Sem resultados para "$query"' : null;
-      });
-    } catch (e) {
-      debugPrint('Erro na pesquisa: $e');
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = 'Não foi possível pesquisar agora. Tente de novo.';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return Material(
-      color: s.pageBackground,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: _buildBody(s),
-              ),
-            ),
-            AnimatedPadding(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(
-                bottom: keyboardInset > 0
-                    ? keyboardInset + 8
-                    : MediaQuery.of(context).padding.bottom + 12,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Row(children: [
-                  Expanded(
-                    child: Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: s.cardBackground,
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: s.cardShadow,
-                      ),
-                      child: Row(children: [
-                        AppIcon('search', color: s.onSurfaceVariant, size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            controller: _ctrl,
-                            focusNode: _focus,
-                            onChanged: _onChanged,
-                            onSubmitted: _performSearch,
-                            style: TextStyle(fontSize: 15, color: s.onSurface),
-                            cursorColor: s.primary,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: 'Pesquisar músicas...',
-                              hintStyle: TextStyle(
-                                  fontSize: 15, color: s.onSurfaceVariant),
-                            ),
-                          ),
-                        ),
-                        if (_query.isNotEmpty)
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              setState(() {
-                                _ctrl.clear();
-                                _query = '';
-                                _results = [];
-                                _error = null;
-                              });
-                            },
-                            child: AppIcon('close',
-                                color: s.onSurfaceVariant, size: 14),
-                          ),
-                      ]),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: s.cardBackground,
-                        shape: BoxShape.circle,
-                        boxShadow: s.cardShadow,
-                      ),
-                      child: AppIcon('close', color: s.onSurfaceVariant, size: 16),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody(AppColorScheme s) {
-    if (_query.isEmpty) {
-      return _InitialSearchPrompt(key: const ValueKey('initial'), s: s);
-    }
-    if (_loading) {
-      return _SearchResultsSkeleton(key: const ValueKey('loading'), s: s);
-    }
-    if (_error != null && _results.isEmpty) {
-      return Center(
-        key: const ValueKey('error'),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-          ),
-        ),
-      );
-    }
-    return ListView.separated(
-      key: const ValueKey('results'),
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
-      itemCount: _results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 2),
-      itemBuilder: (_, i) {
-        final track = _results[i];
-        return _SearchResultTile(
-          s: s,
-          track: track,
-          isCurrent: widget.currentTrack == track,
-          isPlaying: widget.isPlaying && widget.currentTrack == track,
-          onTap: () => widget.onPlay(track),
-        );
-      },
-    );
-  }
-}
-
-class _SearchResultsSkeleton extends StatefulWidget {
-  final AppColorScheme s;
-  const _SearchResultsSkeleton({super.key, required this.s});
-  @override
-  State<_SearchResultsSkeleton> createState() => _SearchResultsSkeletonState();
-}
-
-class _SearchResultsSkeletonState extends State<_SearchResultsSkeleton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1300),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: 8,
-      itemBuilder: (_, i) {
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (_, __) {
-            final opacity = 0.35 + 0.25 * _controller.value;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Row(children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: s.hover.withOpacity(opacity),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 14,
-                        width: 160,
-                        decoration: BoxDecoration(
-                          color: s.hover.withOpacity(opacity),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        height: 11,
-                        width: 100,
-                        decoration: BoxDecoration(
-                          color: s.hover.withOpacity(opacity),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ]),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _InitialSearchPrompt extends StatelessWidget {
-  final AppColorScheme s;
-  const _InitialSearchPrompt({super.key, required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Opacity(
-              opacity: 0.65,
-              child: AppIcon('search', color: s.onSurfaceVariant, size: 52),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Pesquise músicas',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Digite para encontrar faixas e artistas.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Lista no formato exato da imagem de referência: capa pequena quadrada
-// + arredondada, título em negrito, "Tipo • Artista" em cinza, e botão
-// de 3 pontos à direita.
-class _SearchResultTile extends StatelessWidget {
-  final AppColorScheme s;
-  final SoundTrack track;
-  final bool isCurrent;
-  final bool isPlaying;
-  final VoidCallback onTap;
-  const _SearchResultTile({
-    required this.s,
-    required this.track,
-    required this.isCurrent,
-    required this.isPlaying,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cover = Color(int.parse(track.coverColorHex.replaceFirst('#', '0xFF')));
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        color: isCurrent ? s.primary.withOpacity(0.06) : Colors.transparent,
-        child: Row(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: track.thumbnailUrl != null
-                  ? Image.network(
-                      track.thumbnailUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => ColoredBox(color: cover),
-                    )
-                  : ColoredBox(
-                      color: cover,
-                      child: const Icon(Icons.music_note,
-                          color: Colors.white, size: 22),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(track.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: isCurrent ? s.primary : s.onSurface)),
-                const SizedBox(height: 3),
-                Text('Música • ${track.artist}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {}, // menu de opções — não solicitado além de aparência
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: AppIcon('more', size: 18, color: s.onSurfaceVariant), // CONFIRMAR
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// BOTÃO VOLTAR REUTILIZÁVEL
-// ══════════════════════════════════════════════════════════════
-
-class ScreenBackButton extends StatefulWidget {
-  final AppColorScheme s;
-  const ScreenBackButton({super.key, required this.s});
-  @override
-  State<ScreenBackButton> createState() => _ScreenBackButtonState();
-}
-
-class _ScreenBackButtonState extends State<ScreenBackButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: () => Navigator.of(context).pop(),
-      child: AnimatedScale(
-        scale: _pressed ? 0.9 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.s.cardBackground,
-            shape: BoxShape.circle,
-            boxShadow: widget.s.cardShadow,
-          ),
-          child: AppIcon('back', size: 20, color: widget.s.onSurface),
         ),
       ),
     );

@@ -479,6 +479,28 @@ class PopupMenu<T> extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // CABEÇALHO DO CHAT (menu de ações)
 // ══════════════════════════════════════════════════════════════
+class AiConversationMenuButton extends StatelessWidget {
+  final AppColorScheme s;
+  final ValueChanged<ConversationAction> onSelect;
+  final bool hasMessages;
+
+  const AiConversationMenuButton({
+    super.key,
+    required this.s,
+    required this.onSelect,
+    required this.hasMessages,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeaderMenuButton(
+      s: s,
+      hasMessages: hasMessages,
+      onSelect: onSelect,
+    );
+  }
+}
+
 class _HeaderMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final bool hasMessages;
@@ -3351,160 +3373,6 @@ class _BlinkingGridLoaderState extends State<BlinkingGridLoader>
   }
 }
 
-void showMessageActionsPopup(
-  BuildContext context,
-  AppColorScheme s, {
-  required Offset anchorOffset,
-  required Size anchorSize,
-  required VoidCallback onEdit,
-  required VoidCallback onCopy,
-  required VoidCallback onDelete,
-  required VoidCallback onSelectText,
-}) {
-  final screenSize = MediaQuery.of(context).size;
-  late OverlayEntry entry;
-  final controller = AnimationController(
-    vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 180),
-  );
-
-  void close() {
-    controller.reverse().then((_) {
-      entry.remove();
-      controller.dispose();
-    });
-  }
-
-  entry = OverlayEntry(builder: (ctx) {
-    const menuHeight = 216.0;
-    const width = 224.0;
-    final desiredTop = anchorOffset.dy - 2 - menuHeight;
-    final opensUp = desiredTop >= 40;
-    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 2;
-    final left = (anchorOffset.dx + anchorSize.width - width).clamp(12.0, screenSize.width - width - 12);
-
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      Positioned(
-        top: top,
-        left: left,
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.6, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: opensUp ? Alignment.bottomRight : Alignment.topRight,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _MessageActionRow(
-                    s: s,
-                    assetName: 'pencil',
-                    label: 'Editar',
-                    onTap: () { close(); onEdit(); },
-                  ),
-                  _MessageActionRow(
-                    s: s,
-                    assetName: 'copy',
-                    label: 'Copiar',
-                    onTap: () { close(); onCopy(); },
-                  ),
-                  _MessageActionRow(
-                    s: s,
-                    assetName: 'select_text',
-                    label: 'Selecionar texto',
-                    onTap: () { close(); onSelectText(); },
-                  ),
-                  _MessageActionRow(
-                    s: s,
-                    assetName: 'trash',
-                    label: 'Eliminar',
-                    destructive: true,
-                    onTap: () { close(); onDelete(); },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  });
-
-  Overlay.of(context).insert(entry);
-  controller.forward();
-}
-
-class _MessageActionRow extends StatefulWidget {
-  final AppColorScheme s;
-  final String assetName;
-  final String label;
-  final bool destructive;
-  final VoidCallback onTap;
-  const _MessageActionRow({
-    required this.s,
-    required this.assetName,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-  @override
-  State<_MessageActionRow> createState() => _MessageActionRowState();
-}
-
-class _MessageActionRowState extends State<_MessageActionRow> {
-  bool _h = false;
-  @override
-  Widget build(BuildContext context) {
-    final color = widget.destructive ? widget.s.error : widget.s.onSurface;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _h ? widget.s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(children: [
-          AppIcon(widget.assetName, size: 18, color: color),
-          const SizedBox(width: 10),
-          Text(widget.label,
-              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500)),
-        ]),
-      ),
-    );
-  }
-}
-
 Future<void> showSelectTextSheet(
   BuildContext context,
   AppColorScheme s, {
@@ -3902,128 +3770,6 @@ class _AttachedFilesPill extends StatelessWidget {
       ),
     );
   }
-}
-
-enum _AttachAction { files, photos, camera }
-
-void showAttachPopup(
-  BuildContext context,
-  AppColorScheme s, {
-  required GlobalKey anchorKey,
-  required VoidCallback onFiles,
-  required VoidCallback onPhotos,
-  required VoidCallback onCamera,
-  required ValueChanged<EditorType> onSelectTool,
-}) {
-  final anchorContext = anchorKey.currentContext;
-  if (anchorContext == null) return;
-  final box = anchorContext.findRenderObject() as RenderBox;
-  final anchorOffset = box.localToGlobal(Offset.zero);
-  final anchorSize = box.size;
-
-  late OverlayEntry entry;
-  final controller = AnimationController(
-    vsync: Navigator.of(context),
-    duration: const Duration(milliseconds: 200),
-  );
-
-  void close() {
-    controller.reverse().then((_) {
-      entry.remove();
-      controller.dispose();
-    });
-  }
-
-  entry = OverlayEntry(builder: (ctx) {
-    const width = 240.0;
-    const estimatedHeight = 200.0;
-    final screenSize = MediaQuery.of(ctx).size;
-
-    final desiredTop = anchorOffset.dy - 2 - estimatedHeight;
-    final opensUp = desiredTop >= 40;
-    final top = opensUp ? desiredTop : anchorOffset.dy + anchorSize.height + 2;
-    final left = anchorOffset.dx.clamp(8.0, screenSize.width - width - 8);
-
-    final entries = <PopupMenuEntry<_AttachAction>>[
-      const PopupMenuEntry(
-          value: _AttachAction.files,
-          label: 'Arquivos',
-          subtitle: 'Enviar qualquer tipo de arquivo',
-          assetName: 'folder'),
-      const PopupMenuEntry(
-          value: _AttachAction.photos,
-          label: 'Fotos',
-          subtitle: 'Enviar fotos da galeria',
-          assetName: 'image'),
-      const PopupMenuEntry(
-          value: _AttachAction.camera,
-          label: 'Câmera',
-          subtitle: 'Tirar uma foto agora',
-          assetName: 'camera'),
-    ];
-
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(
-          onTap: close,
-          behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-      Positioned(
-        left: left,
-        top: top,
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (_, child) => Opacity(
-            opacity: CurvedAnimation(
-                    parent: controller, curve: const Interval(0, 0.5, curve: Curves.easeOut))
-                .value,
-            child: Transform.scale(
-              scale: Tween(begin: 0.92, end: 1.0)
-                  .animate(CurvedAnimation(parent: controller, curve: kCupertinoOut))
-                  .value,
-              alignment: opensUp ? Alignment.bottomLeft : Alignment.topLeft,
-              child: child,
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Container(
-              width: width,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: s.floatingSurface,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: s.floatingShadow,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final e in entries)
-                    _PopupRow<_AttachAction>(
-                      s: s,
-                      entry: e,
-                      onTap: () {
-                        close();
-                        switch (e.value) {
-                          case _AttachAction.files: onFiles(); break;
-                          case _AttachAction.photos: onPhotos(); break;
-                          case _AttachAction.camera: onCamera(); break;
-                        }
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  });
-
-  Overlay.of(context).insert(entry);
-  controller.forward();
 }
 
 Future<void> showCanvasSheet(
