@@ -23,7 +23,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
 namespace "com.codeme.app"
-compileSdkVersion 35
+compileSdkVersion 36 // ← ALTERADO DE 35 PARA 36
 ndkVersion flutter.ndkVersion
 
 compileOptions {
