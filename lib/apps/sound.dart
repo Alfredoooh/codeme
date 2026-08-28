@@ -7,10 +7,10 @@ import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../all_apps_screen.dart';
-import 'sound_models.dart';
-import 'sound_widgets.dart';
-import 'sound_player_full.dart';
-import 'sound_search_screen.dart';
+import 'sound/sound_models.dart';
+import 'sound/sound_widgets.dart';
+import 'sound/sound_player_full.dart';
+import 'sound/sound_search_screen.dart';
 
 class SoundScreen extends StatefulWidget {
   const SoundScreen({super.key});
