@@ -97,45 +97,82 @@ class AppRegistry {
 
   static bool _manifestsLoaded = false;
 
+  // ══════════════════════════════════════════════════════════
+  // DIAGNÓSTICO TEMPORÁRIO — remover depois de resolvido.
+  // Guarda o que aconteceu durante loadManifests() para ser lido
+  // e mostrado no próprio ecrã, sem precisar de terminal.
+  // ══════════════════════════════════════════════════════════
+  static String debugReport = 'loadManifests() ainda não correu.';
+
   static Future<void> loadManifests() async {
     if (_manifestsLoaded) return;
 
+    final report = StringBuffer();
+
     try {
+      report.writeln('A tentar ler "AssetManifest.json"...');
       final manifestJsonRaw = await rootBundle.loadString('AssetManifest.json');
+      report.writeln('OK — ${manifestJsonRaw.length} caracteres lidos.');
+
       final manifestJson = json.decode(manifestJsonRaw) as Map<String, dynamic>;
       final allAssetPaths = manifestJson.keys.toList();
+      report.writeln('Total de chaves no AssetManifest: ${allAssetPaths.length}');
+
+      final appsRelated = allAssetPaths.where((p) => p.contains('apps/')).toList();
+      report.writeln('Chaves contendo "apps/": ${appsRelated.length}');
+      if (appsRelated.isNotEmpty) {
+        report.writeln('Exemplos encontrados:');
+        for (final p in appsRelated.take(10)) {
+          report.writeln('  - $p');
+        }
+      } else {
+        report.writeln('NENHUMA chave contém "apps/". Primeiras 5 chaves do manifest para referência:');
+        for (final p in allAssetPaths.take(5)) {
+          report.writeln('  - $p');
+        }
+      }
 
       final manifestPaths = allAssetPaths.where(
         (p) => p.startsWith('assets/apps/') && p.endsWith('/manifest.json'),
       );
+      report.writeln('Chaves que batem com "assets/apps/*/manifest.json": ${manifestPaths.length}');
 
       for (final path in manifestPaths) {
         final parts = path.split('/');
-        if (parts.length < 4) continue;
+        if (parts.length < 4) {
+          report.writeln('  IGNORADO (poucas partes no caminho): $path');
+          continue;
+        }
         final slug = parts[2];
+        report.writeln('  Processando slug="$slug" de $path');
 
         try {
           final manifestRaw = await rootBundle.loadString(path);
           final manifestData = json.decode(manifestRaw) as Map<String, dynamic>;
           final manifest = AppManifest.fromJson(slug, manifestData);
           _manifests[slug] = manifest;
+          report.writeln('    manifest OK (label="${manifest.label}")');
 
           final mcpPath = 'assets/apps/$slug/$slug.mcp.json';
           if (allAssetPaths.contains(mcpPath)) {
             final mcpRaw = await rootBundle.loadString(mcpPath);
             final mcpData = json.decode(mcpRaw) as Map<String, dynamic>;
             _mcpConfigs[slug] = AppMcpConfig.fromJson(mcpData);
+            report.writeln('    mcp OK ($mcpPath)');
           } else {
             _mcpConfigs[slug] = const AppMcpConfig(aiInstructions: '');
+            report.writeln('    mcp NÃO encontrado em $mcpPath (aiInstructions ficou vazio)');
           }
         } catch (e) {
-          debugPrint('AppRegistry: falha ao carregar manifest de "$slug": $e');
+          report.writeln('    ERRO ao processar "$slug": $e');
         }
       }
-    } catch (e) {
-      debugPrint('AppRegistry: falha ao ler AssetManifest.json: $e');
+    } catch (e, st) {
+      report.writeln('ERRO GERAL ao ler AssetManifest.json: $e');
+      report.writeln('Stack: $st');
     } finally {
       _manifestsLoaded = true;
+      debugReport = report.toString();
     }
   }
 
