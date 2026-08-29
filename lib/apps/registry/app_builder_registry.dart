@@ -28,8 +28,9 @@ class AppBuilderRegistry {
     }
   }
 
+  static int get buildersCount => 4; // Atualize ao adicionar novos apps
+
   /// Triggers de IA para apps que precisem deles.
-  /// Opcional, apenas se o app tiver um comando especial (ex.: sound_search).
   static Map<String, List<AppAiTrigger>> get triggers {
     return {
       'sound': [

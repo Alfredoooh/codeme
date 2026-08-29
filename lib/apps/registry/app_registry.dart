@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'app_builder_registry.dart';
 
 class AppManifest {
   final String slug;
@@ -39,8 +40,7 @@ class AppManifest {
       features: (json['features'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())
           .toList(),
-      iconAsset: json['iconAsset'] as String? ??
-          'assets/apps/$slug/icon.png',
+      iconAsset: json['iconAsset'] as String? ?? 'assets/apps/$slug/icon.png',
       isCircularIcon: json['isCircularIcon'] as bool? ?? false,
       aiName: json['aiName'] as String? ?? json['label'] as String? ?? slug,
       aiToggleDescription: json['aiToggleDescription'] as String? ?? '',
@@ -62,9 +62,7 @@ class AppAiTrigger {
 class AppMcpConfig {
   final String aiInstructions;
 
-  const AppMcpConfig({
-    required this.aiInstructions,
-  });
+  const AppMcpConfig({required this.aiInstructions});
 
   factory AppMcpConfig.fromJson(Map<String, dynamic> json) {
     return AppMcpConfig(
@@ -92,110 +90,85 @@ class AppRegistry {
 
   static final Map<String, AppManifest> _manifests = {};
   static final Map<String, AppMcpConfig> _mcpConfigs = {};
-  static final Map<String, WidgetBuilder> _builders = {};
-  static final Map<String, List<AppAiTrigger>> _triggers = {};
 
   static bool _manifestsLoaded = false;
+  static String _lastDebugReport = 'Ainda não foi executado loadManifests().';
 
-  // ══════════════════════════════════════════════════════════
-  // DIAGNÓSTICO TEMPORÁRIO — remover depois de resolvido.
-  // Guarda o que aconteceu durante loadManifests() para ser lido
-  // e mostrado no próprio ecrã, sem precisar de terminal.
-  // ══════════════════════════════════════════════════════════
-  static String debugReport = 'loadManifests() ainda não correu.';
+  /// Getters para o relatório de diagnóstico
+  static String get debugReport => _lastDebugReport;
+  static int get manifestsCount => _manifests.length;
+  static int get buildersCount => AppBuilderRegistry.buildersCount;
 
   static Future<void> loadManifests() async {
     if (_manifestsLoaded) return;
 
     final report = StringBuffer();
-
     try {
-      report.writeln('A tentar ler "AssetManifest.json"...');
-      final manifestJsonRaw = await rootBundle.loadString('AssetManifest.json');
-      report.writeln('OK — ${manifestJsonRaw.length} caracteres lidos.');
+      final appsJsonRaw = await rootBundle.loadString('assets/apps/apps.json');
+      report.writeln('apps.json lido com sucesso.');
+      final appsJson = json.decode(appsJsonRaw) as Map<String, dynamic>;
+      final slugs = (appsJson['apps'] as List<dynamic>)
+          .map((e) => e.toString())
+          .toList();
+      report.writeln('Slugs encontrados: ${slugs.join(", ")}');
 
-      final manifestJson = json.decode(manifestJsonRaw) as Map<String, dynamic>;
-      final allAssetPaths = manifestJson.keys.toList();
-      report.writeln('Total de chaves no AssetManifest: ${allAssetPaths.length}');
-
-      final appsRelated = allAssetPaths.where((p) => p.contains('apps/')).toList();
-      report.writeln('Chaves contendo "apps/": ${appsRelated.length}');
-      if (appsRelated.isNotEmpty) {
-        report.writeln('Exemplos encontrados:');
-        for (final p in appsRelated.take(10)) {
-          report.writeln('  - $p');
-        }
-      } else {
-        report.writeln('NENHUMA chave contém "apps/". Primeiras 5 chaves do manifest para referência:');
-        for (final p in allAssetPaths.take(5)) {
-          report.writeln('  - $p');
-        }
-      }
-
-      final manifestPaths = allAssetPaths.where(
-        (p) => p.startsWith('assets/apps/') && p.endsWith('/manifest.json'),
-      );
-      report.writeln('Chaves que batem com "assets/apps/*/manifest.json": ${manifestPaths.length}');
-
-      for (final path in manifestPaths) {
-        final parts = path.split('/');
-        if (parts.length < 4) {
-          report.writeln('  IGNORADO (poucas partes no caminho): $path');
-          continue;
-        }
-        final slug = parts[2];
-        report.writeln('  Processando slug="$slug" de $path');
-
+      for (final slug in slugs) {
         try {
-          final manifestRaw = await rootBundle.loadString(path);
+          final manifestPath = 'assets/apps/$slug/manifest.json';
+          report.writeln('Carregando manifest: $manifestPath');
+          final manifestRaw = await rootBundle.loadString(manifestPath);
           final manifestData = json.decode(manifestRaw) as Map<String, dynamic>;
-          final manifest = AppManifest.fromJson(slug, manifestData);
-          _manifests[slug] = manifest;
-          report.writeln('    manifest OK (label="${manifest.label}")');
+          _manifests[slug] = AppManifest.fromJson(slug, manifestData);
+          report.writeln('  ✓ Manifest carregado para "$slug"');
 
           final mcpPath = 'assets/apps/$slug/$slug.mcp.json';
-          if (allAssetPaths.contains(mcpPath)) {
+          try {
             final mcpRaw = await rootBundle.loadString(mcpPath);
             final mcpData = json.decode(mcpRaw) as Map<String, dynamic>;
             _mcpConfigs[slug] = AppMcpConfig.fromJson(mcpData);
-            report.writeln('    mcp OK ($mcpPath)');
-          } else {
+            report.writeln('  ✓ MCP carregado para "$slug"');
+          } catch (_) {
             _mcpConfigs[slug] = const AppMcpConfig(aiInstructions: '');
-            report.writeln('    mcp NÃO encontrado em $mcpPath (aiInstructions ficou vazio)');
+            report.writeln('  ○ MCP não encontrado (usando vazio)');
+          }
+
+          final builder = AppBuilderRegistry.get(slug);
+          if (builder == null) {
+            report.writeln('  ✗ NENHUM BUILDER para "$slug"!');
+          } else {
+            report.writeln('  ✓ Builder encontrado');
           }
         } catch (e) {
-          report.writeln('    ERRO ao processar "$slug": $e');
+          report.writeln('  ✗ FALHA ao carregar "$slug": $e');
         }
       }
-    } catch (e, st) {
-      report.writeln('ERRO GERAL ao ler AssetManifest.json: $e');
-      report.writeln('Stack: $st');
+    } catch (e) {
+      report.writeln('✗ FALHA ao ler apps.json: $e');
     } finally {
       _manifestsLoaded = true;
-      debugReport = report.toString();
     }
-  }
 
-  static void register(
-    String slug,
-    WidgetBuilder builder, {
-    List<AppAiTrigger> triggers = const [],
-  }) {
-    _builders[slug] = builder;
-    _triggers[slug] = triggers;
+    report.writeln('----------------------------------------');
+    report.writeln('Manifestos carregados: ${_manifests.length}');
+    report.writeln('Builders registados: ${AppBuilderRegistry.buildersCount}');
+    report.writeln('Apps em AppRegistry.all: ${all.length}');
+    _lastDebugReport = report.toString();
+
+    // Imprime também no console
+    debugPrint(_lastDebugReport);
   }
 
   static List<AppEntry> get all {
     final entries = <AppEntry>[];
     for (final slug in _manifests.keys) {
-      final builder = _builders[slug];
+      final builder = AppBuilderRegistry.get(slug);
       final mcp = _mcpConfigs[slug];
       if (builder == null || mcp == null) continue;
       entries.add(AppEntry(
         manifest: _manifests[slug]!,
         mcp: mcp,
         builder: builder,
-        triggers: _triggers[slug] ?? const [],
+        triggers: AppBuilderRegistry.triggers[slug] ?? const [],
       ));
     }
     return entries;
@@ -203,14 +176,14 @@ class AppRegistry {
 
   static AppEntry? bySlug(String slug) {
     final manifest = _manifests[slug];
-    final builder = _builders[slug];
+    final builder = AppBuilderRegistry.get(slug);
     final mcp = _mcpConfigs[slug];
     if (manifest == null || builder == null || mcp == null) return null;
     return AppEntry(
       manifest: manifest,
       mcp: mcp,
       builder: builder,
-      triggers: _triggers[slug] ?? const [],
+      triggers: AppBuilderRegistry.triggers[slug] ?? const [],
     );
   }
 

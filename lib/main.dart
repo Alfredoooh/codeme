@@ -15,9 +15,9 @@ import 'auth_service.dart';
 import 'authscreens.dart';
 import 'apps/app_types.dart';
 import 'apps/registry/app_registry.dart';
-import 'apps/docs.dart';               // ← IMPORT ADICIONADO
-import 'apps/sheets_app.dart';         // ← IMPORT ADICIONADO
-import 'apps/slides_app.dart';         // ← IMPORT ADICIONADO
+import 'apps/docs.dart';               // necessário para o RootShell
+import 'apps/sheets_app.dart';         // necessário para o RootShell
+import 'apps/slides_app.dart';         // necessário para o RootShell
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
