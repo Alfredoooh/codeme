@@ -38,7 +38,7 @@ void main() async {
   await appTheme.load();
   await appPreferences.load();
 
-  // Registro dos apps com proteção contra falhas
+  // ⚠️ Ordem correta: registar builders ANTES de carregar manifests
   try {
     DocsScreen.bootstrap();
     SheetsScreen.bootstrap();
@@ -48,7 +48,6 @@ void main() async {
     debugPrint('Erro ao registar apps: $e');
   }
 
-  // Carregamento dos manifests com proteção contra falhas
   try {
     await AppRegistry.loadManifests();
   } catch (e) {
@@ -60,7 +59,6 @@ void main() async {
 
 class CraftLabApp extends StatefulWidget {
   const CraftLabApp({super.key});
-
   @override
   State<CraftLabApp> createState() => _CraftLabAppState();
 }
