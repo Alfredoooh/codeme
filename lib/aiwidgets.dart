@@ -1,5 +1,20 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/aiwidgets.dart
+//
+// ATUALIZAÇÃO: os widgets deixam de receber JSON pronto (lat/lng,
+// symbol, etc.) escrito pela IA. Em vez disso, a IA chama uma tool
+// (search_market / search_place / search_calendar_date) com uma
+// query em texto livre; o Flutter resolve essa query de verdade
+// (CoinGecko, Frankfurter, Nominatim) e devolve o resultado à IA
+// via mensagem role:"tool"; só depois a IA escreve o widget final
+// já com o resultado resolvido dentro do JSON. Os construtores dos
+// widgets abaixo continuam a receber um JSON no bloco — mas agora
+// esse JSON já contém o resultado real da pesquisa (preenchido pela
+// IA a partir do tool_result), não mais valores fixos/adivinhados.
+//
+// As três funções de resolução ficam expostas aqui como top-level
+// (resolveMarketQuery / resolvePlaceQuery / resolveCalendarDateQuery)
+// para serem chamadas por aitab.dart quando um ChatToolCallEvent
+// chegar do stream.
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -19,6 +34,7 @@ import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
 import 'app_sheet.dart';
 import 'sheets.dart';
+import 'api_service.dart' show ToolDefinition;
 
 // ══════════════════════════════════════════════════════════════
 // NOTA — GOOGLE MAPS SEM API KEY
@@ -51,6 +67,347 @@ Color? _parseColor(dynamic raw) {
 String _sanitizeText(String? raw) {
   if (raw == null) return '';
   return raw.replaceAll('\n', ' ').replaceAll('\r', '').replaceAll('\t', ' ').trim();
+}
+
+// ══════════════════════════════════════════════════════════════
+// TOOL DEFINITIONS — expostas para aitab.dart montar a lista
+// `tools` do streamChat. Nomes fixados: search_market,
+// search_place, search_calendar_date.
+// ══════════════════════════════════════════════════════════════
+
+const ToolDefinition kSearchMarketTool = ToolDefinition(
+  name: 'search_market',
+  description:
+      'Pesquisa dados reais e atuais de um ativo financeiro (criptomoeda '
+      'por nome ou símbolo, ex: "bitcoin", "ETH"; ou câmbio de moeda por '
+      'código ISO, ex: "EUR", "USD/JPY"). Devolve preço, variação e série '
+      'histórica reais. Usa esta função sempre que precisares de mostrar '
+      'cotações de mercado ao utilizador — nunca inventes valores.',
+  parameters: {
+    'type': 'object',
+    'properties': {
+      'query': {
+        'type': 'string',
+        'description':
+            'Nome, símbolo ou código do ativo a pesquisar, tal como o '
+            'utilizador o mencionou (ex: "bitcoin", "SOL", "EUR", "libra").',
+      },
+    },
+    'required': ['query'],
+  },
+);
+
+const ToolDefinition kSearchPlaceTool = ToolDefinition(
+  name: 'search_place',
+  description:
+      'Pesquisa a localização real (coordenadas e nome formal) de um '
+      'lugar — cidade, morada, ponto de interesse, país, região. Devolve '
+      'latitude, longitude e o nome completo do lugar encontrado. Usa '
+      'esta função sempre que precisares de mostrar um mapa ou localizar '
+      'algo ao utilizador — nunca inventes coordenadas.',
+  parameters: {
+    'type': 'object',
+    'properties': {
+      'query': {
+        'type': 'string',
+        'description':
+            'Nome do lugar a pesquisar, tal como o utilizador o mencionou '
+            '(ex: "Lisboa", "Torre Eiffel", "Maputo, Moçambique").',
+      },
+    },
+    'required': ['query'],
+  },
+);
+
+const ToolDefinition kSearchCalendarDateTool = ToolDefinition(
+  name: 'search_calendar_date',
+  description:
+      'Resolve uma referência de data em linguagem natural (ex: '
+      '"próxima sexta-feira", "daqui a duas semanas", "15 de setembro") '
+      'para uma data absoluta no formato ISO (YYYY-MM-DD), usando a data '
+      'atual do dispositivo como referência. Usa esta função sempre que '
+      'precisares de agendar um evento a partir de uma data relativa.',
+  parameters: {
+    'type': 'object',
+    'properties': {
+      'query': {
+        'type': 'string',
+        'description':
+            'A referência de data em linguagem natural, tal como o '
+            'utilizador a escreveu.',
+      },
+    },
+    'required': ['query'],
+  },
+);
+
+const List<ToolDefinition> kAiWidgetTools = [
+  kSearchMarketTool,
+  kSearchPlaceTool,
+  kSearchCalendarDateTool,
+];
+
+// ══════════════════════════════════════════════════════════════
+// RESOLUÇÃO REAL — chamadas de rede que respondem às tool calls.
+// Sem fallback cruzado: se a query não bater com a fonte certa,
+// devolve notFound explicitamente em vez de tentar adivinhar
+// noutra fonte (ex: "tesla" nunca cai para uma moeda TSLA lixo
+// só porque existe uma no CoinGecko).
+// ══════════════════════════════════════════════════════════════
+
+class MarketResolveResult {
+  final bool found;
+  final String? type; // "crypto" | "forex"
+  final String? symbol;
+  final String? name;
+  final String? coingeckoId;
+  final String? notFoundReason;
+  const MarketResolveResult._({
+    required this.found,
+    this.type,
+    this.symbol,
+    this.name,
+    this.coingeckoId,
+    this.notFoundReason,
+  });
+
+  factory MarketResolveResult.crypto({
+    required String symbol,
+    required String name,
+    required String coingeckoId,
+  }) =>
+      MarketResolveResult._(
+        found: true,
+        type: 'crypto',
+        symbol: symbol,
+        name: name,
+        coingeckoId: coingeckoId,
+      );
+
+  factory MarketResolveResult.forex({required String symbol, required String name}) =>
+      MarketResolveResult._(found: true, type: 'forex', symbol: symbol, name: name);
+
+  factory MarketResolveResult.notFound(String query) => MarketResolveResult._(
+        found: false,
+        notFoundReason: 'Não foi encontrado nenhum ativo (cripto ou câmbio) para "$query".',
+      );
+
+  Map<String, dynamic> toToolResultJson() => found
+      ? {
+          'found': true,
+          'type': type,
+          'symbol': symbol,
+          'name': name,
+          if (coingeckoId != null) 'coingeckoId': coingeckoId,
+        }
+      : {'found': false, 'reason': notFoundReason};
+}
+
+const Map<String, String> _kForexCodeNames = {
+  'EUR': 'Euro',
+  'USD': 'Dólar americano',
+  'GBP': 'Libra esterlina',
+  'JPY': 'Iene japonês',
+  'BRL': 'Real brasileiro',
+  'CHF': 'Franco suíço',
+  'CAD': 'Dólar canadiano',
+  'AUD': 'Dólar australiano',
+  'CNY': 'Yuan chinês',
+  'INR': 'Rupia indiana',
+  'MZN': 'Metical moçambicano',
+  'AOA': 'Kwanza angolano',
+  'CVE': 'Escudo cabo-verdiano',
+};
+
+/// Tenta resolver como código de câmbio ISO (3 letras, ou "XXX/YYY").
+/// Só devolve resultado se a query bater literalmente com um código
+/// conhecido — não adivinha por nome de país nem faz fuzzy matching.
+String? _matchForexCode(String query) {
+  final cleaned = query.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z/]'), '');
+  if (cleaned.isEmpty) return null;
+  if (cleaned.contains('/')) {
+    final parts = cleaned.split('/');
+    if (parts.length == 2 && _kForexCodeNames.containsKey(parts[0]) && _kForexCodeNames.containsKey(parts[1])) {
+      return cleaned;
+    }
+    return null;
+  }
+  if (cleaned.length == 3 && _kForexCodeNames.containsKey(cleaned)) return cleaned;
+  return null;
+}
+
+Future<MarketResolveResult> resolveMarketQuery(String query) async {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) return MarketResolveResult.notFound(query);
+
+  // 1) CoinGecko — pesquisa por nome ou símbolo.
+  try {
+    final uri = Uri.parse('https://api.coingecko.com/api/v3/search?query=${Uri.encodeComponent(trimmed)}');
+    final res = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (res.statusCode == 200) {
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final coins = (decoded['coins'] as List? ?? []);
+      if (coins.isNotEmpty) {
+        final first = coins.first as Map<String, dynamic>;
+        final id = first['id']?.toString();
+        final symbol = (first['symbol']?.toString() ?? '').toUpperCase();
+        final name = first['name']?.toString();
+        if (id != null && id.isNotEmpty && symbol.isNotEmpty && name != null) {
+          return MarketResolveResult.crypto(symbol: symbol, name: name, coingeckoId: id);
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 2) Frankfurter — só se a query bater literalmente com um código ISO.
+  final forexCode = _matchForexCode(trimmed);
+  if (forexCode != null) {
+    if (forexCode.contains('/')) {
+      return MarketResolveResult.forex(symbol: forexCode, name: forexCode);
+    }
+    final name = _kForexCodeNames[forexCode] ?? forexCode;
+    return MarketResolveResult.forex(symbol: forexCode, name: name);
+  }
+
+  // Nada bateu — sem fallback cruzado, devolve explicitamente notFound.
+  return MarketResolveResult.notFound(trimmed);
+}
+
+class PlaceResolveResult {
+  final bool found;
+  final String? name;
+  final double? lat;
+  final double? lng;
+  final String? notFoundReason;
+  const PlaceResolveResult._({required this.found, this.name, this.lat, this.lng, this.notFoundReason});
+
+  factory PlaceResolveResult.found({required String name, required double lat, required double lng}) =>
+      PlaceResolveResult._(found: true, name: name, lat: lat, lng: lng);
+
+  factory PlaceResolveResult.notFound(String query) =>
+      PlaceResolveResult._(found: false, notFoundReason: 'Não foi encontrado nenhum lugar para "$query".');
+
+  Map<String, dynamic> toToolResultJson() =>
+      found ? {'found': true, 'name': name, 'lat': lat, 'lng': lng} : {'found': false, 'reason': notFoundReason};
+}
+
+Future<PlaceResolveResult> resolvePlaceQuery(String query) async {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) return PlaceResolveResult.notFound(query);
+  try {
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/search?format=json&limit=1'
+      '&accept-language=pt&q=${Uri.encodeComponent(trimmed)}',
+    );
+    final res = await http.get(uri, headers: {'User-Agent': 'NexaApp/1.0'}).timeout(const Duration(seconds: 8));
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List;
+      if (list.isNotEmpty) {
+        final first = list.first as Map<String, dynamic>;
+        final lat = double.tryParse(first['lat']?.toString() ?? '');
+        final lng = double.tryParse(first['lon']?.toString() ?? '');
+        final name = first['display_name']?.toString();
+        if (lat != null && lng != null && name != null) {
+          return PlaceResolveResult.found(name: name, lat: lat, lng: lng);
+        }
+      }
+    }
+  } catch (_) {}
+  return PlaceResolveResult.notFound(trimmed);
+}
+
+class CalendarDateResolveResult {
+  final bool found;
+  final String? isoDate; // YYYY-MM-DD
+  final String? humanLabel;
+  final String? notFoundReason;
+  const CalendarDateResolveResult._({required this.found, this.isoDate, this.humanLabel, this.notFoundReason});
+
+  factory CalendarDateResolveResult.found({required String isoDate, required String humanLabel}) =>
+      CalendarDateResolveResult._(found: true, isoDate: isoDate, humanLabel: humanLabel);
+
+  factory CalendarDateResolveResult.notFound(String query) => CalendarDateResolveResult._(
+        found: false,
+        notFoundReason: 'Não foi possível interpretar "$query" como uma data.',
+      );
+
+  Map<String, dynamic> toToolResultJson() => found
+      ? {'found': true, 'isoDate': isoDate, 'humanLabel': humanLabel}
+      : {'found': false, 'reason': notFoundReason};
+}
+
+const List<String> _kWeekdaysPt = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+const Map<String, int> _kMonthsPt = {
+  'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
+  'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8, 'setembro': 9,
+  'outubro': 10, 'novembro': 11, 'dezembro': 12,
+};
+
+String _iso(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// Resolução local, sem chamada de rede — datas relativas em PT-PT
+/// resolvidas contra DateTime.now() do dispositivo.
+Future<CalendarDateResolveResult> resolveCalendarDateQuery(String query) async {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return CalendarDateResolveResult.notFound(query);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+
+  if (q.contains('hoje')) {
+    return CalendarDateResolveResult.found(isoDate: _iso(today), humanLabel: 'hoje');
+  }
+  if (q.contains('amanhã') || q.contains('amanha')) {
+    final d = today.add(const Duration(days: 1));
+    return CalendarDateResolveResult.found(isoDate: _iso(d), humanLabel: 'amanhã');
+  }
+  if (q.contains('depois de amanhã') || q.contains('depois de amanha')) {
+    final d = today.add(const Duration(days: 2));
+    return CalendarDateResolveResult.found(isoDate: _iso(d), humanLabel: 'depois de amanhã');
+  }
+
+  // "daqui a N dias/semanas"
+  final relMatch = RegExp(r'daqui a (\d+) (dia|dias|semana|semanas)').firstMatch(q);
+  if (relMatch != null) {
+    final n = int.tryParse(relMatch.group(1)!) ?? 0;
+    final unit = relMatch.group(2)!;
+    final days = unit.startsWith('semana') ? n * 7 : n;
+    final d = today.add(Duration(days: days));
+    return CalendarDateResolveResult.found(isoDate: _iso(d), humanLabel: query.trim());
+  }
+
+  // "próxima <dia da semana>" / "<dia da semana>"
+  for (int i = 0; i < _kWeekdaysPt.length; i++) {
+    if (q.contains(_kWeekdaysPt[i])) {
+      final targetWeekday = i + 1; // 1=segunda ... 7=domingo (DateTime.weekday)
+      var delta = targetWeekday - today.weekday;
+      if (delta <= 0) delta += 7;
+      final d = today.add(Duration(days: delta));
+      return CalendarDateResolveResult.found(isoDate: _iso(d), humanLabel: query.trim());
+    }
+  }
+
+  // "15 de setembro" / "15 setembro"
+  final dayMonthMatch = RegExp(r'(\d{1,2})\s*(?:de\s*)?([a-zçã]+)').firstMatch(q);
+  if (dayMonthMatch != null) {
+    final day = int.tryParse(dayMonthMatch.group(1)!);
+    final monthName = dayMonthMatch.group(2)!;
+    final month = _kMonthsPt[monthName];
+    if (day != null && month != null && day >= 1 && day <= 31) {
+      var year = today.year;
+      var candidate = DateTime(year, month, day);
+      if (candidate.isBefore(today)) candidate = DateTime(year + 1, month, day);
+      return CalendarDateResolveResult.found(isoDate: _iso(candidate), humanLabel: query.trim());
+    }
+  }
+
+  // Já vem em ISO?
+  final isoMatch = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(q);
+  if (isoMatch != null) {
+    return CalendarDateResolveResult.found(isoDate: q, humanLabel: query.trim());
+  }
+
+  return CalendarDateResolveResult.notFound(query);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -348,14 +705,47 @@ class _AiSearchBarState extends State<_AiSearchBar> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CACHE PERSISTENTE DE PAÍSES/PROVÍNCIAS
+// CACHE PERSISTENTE DE PAÍSES/PROVÍNCIAS — agora com fallback de
+// tradução PT-PT quando a fonte devolve inglês (a API countriesnow
+// devolve os nomes tal como estão na sua base, frequentemente em
+// inglês para países que não sejam de língua inglesa).
 // ══════════════════════════════════════════════════════════════
 class _GeoCache {
-  static const _kCountriesKey = 'aiwidgets_geo_countries_v1';
-  static const _kStatesPrefix = 'aiwidgets_geo_states_v1_';
+  static const _kCountriesKey = 'aiwidgets_geo_countries_v2';
+  static const _kStatesPrefix = 'aiwidgets_geo_states_v2_';
 
   static List<String>? _memCountries;
   static final Map<String, List<String>> _memStates = {};
+
+  // Tradução dos nomes de país mais comuns que a fonte devolve em
+  // inglês. Não é exaustiva — cobre os casos mais frequentes; nomes
+  // não mapeados aqui ficam como a fonte os devolveu.
+  static const Map<String, String> _kCountryNamePt = {
+    'Germany': 'Alemanha', 'Spain': 'Espanha', 'France': 'França',
+    'Italy': 'Itália', 'United Kingdom': 'Reino Unido', 'Ireland': 'Irlanda',
+    'Netherlands': 'Países Baixos', 'Belgium': 'Bélgica', 'Switzerland': 'Suíça',
+    'Austria': 'Áustria', 'Poland': 'Polónia', 'Sweden': 'Suécia',
+    'Norway': 'Noruega', 'Denmark': 'Dinamarca', 'Finland': 'Finlândia',
+    'Greece': 'Grécia', 'Portugal': 'Portugal', 'Russia': 'Rússia',
+    'United States': 'Estados Unidos', 'Canada': 'Canadá', 'Mexico': 'México',
+    'Brazil': 'Brasil', 'Argentina': 'Argentina', 'Chile': 'Chile',
+    'China': 'China', 'Japan': 'Japão', 'South Korea': 'Coreia do Sul',
+    'India': 'Índia', 'Australia': 'Austrália', 'New Zealand': 'Nova Zelândia',
+    'South Africa': 'África do Sul', 'Egypt': 'Egito', 'Morocco': 'Marrocos',
+    'Nigeria': 'Nigéria', 'Kenya': 'Quénia', 'Angola': 'Angola',
+    'Mozambique': 'Moçambique', 'Cape Verde': 'Cabo Verde',
+    'Guinea-Bissau': 'Guiné-Bissau', 'São Tomé and Príncipe': 'São Tomé e Príncipe',
+    'East Timor': 'Timor-Leste', 'Equatorial Guinea': 'Guiné Equatorial',
+    'Turkey': 'Turquia', 'Ukraine': 'Ucrânia', 'Czech Republic': 'República Checa',
+    'Romania': 'Roménia', 'Hungary': 'Hungria', 'Croatia': 'Croácia',
+    'Iceland': 'Islândia', 'Luxembourg': 'Luxemburgo', 'Cyprus': 'Chipre',
+    'Saudi Arabia': 'Arábia Saudita', 'United Arab Emirates': 'Emirados Árabes Unidos',
+    'Israel': 'Israel', 'Thailand': 'Tailândia', 'Vietnam': 'Vietname',
+    'Indonesia': 'Indonésia', 'Philippines': 'Filipinas', 'Malaysia': 'Malásia',
+    'Singapore': 'Singapura', 'Pakistan': 'Paquistão', 'Bangladesh': 'Bangladeche',
+  };
+
+  static String _translateCountry(String english) => _kCountryNamePt[english] ?? english;
 
   static Future<List<String>> getCountries() async {
     if (_memCountries != null) return _memCountries!;
@@ -375,6 +765,7 @@ class _GeoCache {
     final list = (decoded['data'] as List? ?? [])
         .map((e) => _sanitizeText((e as Map)['name']?.toString()))
         .where((n) => n.isNotEmpty)
+        .map(_translateCountry)
         .toSet()
         .toList()
       ..sort();
@@ -387,9 +778,20 @@ class _GeoCache {
     return list;
   }
 
+  /// Nome original (possivelmente inglês) que a API espera, a partir
+  /// do nome traduzido mostrado na UI — necessário porque o endpoint
+  /// de states espera o nome tal como veio da fonte, não o traduzido.
+  static String _originalNameFor(String translated) {
+    for (final entry in _kCountryNamePt.entries) {
+      if (entry.value == translated) return entry.key;
+    }
+    return translated;
+  }
+
   static Future<List<String>> getStates(String country) async {
     if (_memStates.containsKey(country)) return _memStates[country]!;
-    final key = '$_kStatesPrefix${country.toLowerCase()}';
+    final apiCountryName = _originalNameFor(country);
+    final key = '$_kStatesPrefix${apiCountryName.toLowerCase()}';
     try {
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getStringList(key);
@@ -399,20 +801,62 @@ class _GeoCache {
       }
     } catch (_) {}
 
-    final res = await http
-        .post(
-          Uri.parse('https://countriesnow.space/api/v0.1/countries/states'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'country': country}),
-        )
-        .timeout(const Duration(seconds: 10));
-    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-    final data = decoded['data'] as Map<String, dynamic>?;
-    final states = (data?['states'] as List? ?? [])
-        .map((e) => _sanitizeText((e as Map)['name']?.toString()))
-        .where((n) => n.isNotEmpty)
-        .toList()
-      ..sort();
+    List<String> states = [];
+    try {
+      final res = await http
+          .post(
+            Uri.parse('https://countriesnow.space/api/v0.1/countries/states'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'country': apiCountryName}),
+          )
+          .timeout(const Duration(seconds: 10));
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = decoded['data'] as Map<String, dynamic>?;
+      states = (data?['states'] as List? ?? [])
+          .map((e) => _sanitizeText((e as Map)['name']?.toString()))
+          .where((n) => n.isNotEmpty)
+          .toList()
+        ..sort();
+    } catch (_) {
+      states = [];
+    }
+
+    // Se a fonte não devolveu nada (país sem subdivisões na base, ou
+    // erro de rede), tentamos uma segunda fonte (Nominatim) como
+    // reforço, em vez de deixar a lista vazia silenciosamente.
+    if (states.isEmpty) {
+      try {
+        final uri = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?format=json&limit=1'
+          '&featureType=country&accept-language=pt&q=${Uri.encodeComponent(apiCountryName)}',
+        );
+        final countryRes = await http.get(uri, headers: {'User-Agent': 'NexaApp/1.0'}).timeout(const Duration(seconds: 8));
+        if (countryRes.statusCode == 200) {
+          final list = jsonDecode(countryRes.body) as List;
+          if (list.isNotEmpty) {
+            final osmId = (list.first as Map)['osm_id']?.toString();
+            if (osmId != null) {
+              final subUri = Uri.parse(
+                'https://nominatim.openstreetmap.org/search?format=json&limit=50'
+                '&countrycodes=&accept-language=pt&addressdetails=1'
+                '&q=${Uri.encodeComponent(apiCountryName)}',
+              );
+              final subRes = await http.get(subUri, headers: {'User-Agent': 'NexaApp/1.0'}).timeout(const Duration(seconds: 8));
+              if (subRes.statusCode == 200) {
+                final subList = jsonDecode(subRes.body) as List;
+                final names = subList
+                    .map((e) => (e as Map)['address'] is Map ? (e['address']['state']?.toString() ?? '') : '')
+                    .where((n) => n.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+                states = names;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     _memStates[country] = states;
     try {
@@ -468,6 +912,13 @@ class _CryptoIconCache {
 // ══════════════════════════════════════════════════════════════
 // MERCADO — DADOS DE PARES
 // ══════════════════════════════════════════════════════════════
+// A lista de pares abaixo deixou de ser a fonte de verdade para o
+// que o widget pode mostrar — é apenas usada para os atalhos do
+// _MarketSelectorScreen (navegação manual). O widget principal
+// (AiMarketWidget) constrói o par a partir do JSON já resolvido
+// que a IA escreveu no bloco, que por sua vez veio do resultado
+// real de resolveMarketQuery — por isso já não está limitado a
+// esta lista fixa nem cai sempre em Bitcoin por omissão.
 class _MarketPair {
   final String key;
   final String label;
@@ -503,6 +954,56 @@ const List<_MarketPair> _kMarketPairs = [
   _MarketPair(key: 'XAUUSD', label: 'XAU/USD', sub: 'Ouro', badge: 'metal', coingeckoId: 'tether-gold'),
   _MarketPair(key: 'XAGUSD', label: 'XAG/USD', sub: 'Prata', badge: 'metal', coingeckoId: 'silver-token'),
 ];
+
+/// Constrói um _MarketPair dinâmico a partir do JSON resolvido pela
+/// IA (que veio do resultado real de resolveMarketQuery), em vez de
+/// depender exclusivamente da lista fixa _kMarketPairs. Cai na lista
+/// fixa apenas se o JSON não trouxer dados suficientes, como último
+/// recurso de compatibilidade com blocos antigos.
+_MarketPair _pairFromWidgetJson(Map<String, dynamic> json) {
+  final type = json['type']?.toString();
+  final symbol = json['symbol']?.toString();
+  final name = json['name']?.toString();
+  final coingeckoId = json['coingeckoId']?.toString();
+
+  if (type == 'crypto' && symbol != null && symbol.isNotEmpty) {
+    return _MarketPair(
+      key: '${symbol.toUpperCase()}USD',
+      label: '${symbol.toUpperCase()}/USD',
+      sub: name ?? symbol.toUpperCase(),
+      badge: 'cripto',
+      coingeckoId: coingeckoId,
+    );
+  }
+  if (type == 'forex' && symbol != null && symbol.isNotEmpty) {
+    if (symbol.contains('/')) {
+      final parts = symbol.split('/');
+      return _MarketPair(
+        key: symbol.replaceAll('/', ''),
+        label: symbol,
+        sub: name ?? symbol,
+        badge: 'forex',
+        frankfurterCode: parts.length == 2 ? parts[1] : parts.first,
+      );
+    }
+    return _MarketPair(
+      key: '${symbol}USD',
+      label: '$symbol/USD',
+      sub: name ?? symbol,
+      badge: 'forex',
+      frankfurterCode: symbol,
+    );
+  }
+
+  // Compatibilidade com blocos antigos (symbol solto sem type) —
+  // procura na lista fixa antes de desistir.
+  if (symbol != null) {
+    final match = _kMarketPairs.where((p) => p.key == symbol || p.coingeckoId == coingeckoId);
+    if (match.isNotEmpty) return match.first;
+  }
+
+  return _kMarketPairs.first;
+}
 
 class _MarketDataPoint {
   final double t;
@@ -626,15 +1127,15 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
     (key: '1Y', label: '1Y'),
   ];
 
-  late String _currentPairKey;
+  late _MarketPair _currentPair;
   late String _currentTf;
 
   bool _loading = true;
   String? _error;
+  bool _notFound = false;
   List<_MarketDataPoint> _series = [];
   String? _iconUrl;
 
-  _MarketPair get _currentPair => _kMarketPairs.firstWhere((p) => p.key == _currentPairKey, orElse: () => _kMarketPairs.first);
   _WidgetPalette get _p => _WidgetPalette(widget.s);
 
   @override
@@ -643,10 +1144,15 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 420))
       ..addListener(() => setState(() => _progress = Curves.easeOutCubic.transform(_animController.value)));
     _currentTf = '1D';
-    _currentPairKey = _sanitizeText(widget.json['symbol']);
-    if (_currentPairKey.isEmpty || !_kMarketPairs.any((p) => p.key == _currentPairKey)) {
-      _currentPairKey = 'BTCUSD';
+
+    if (widget.json['found'] == false) {
+      _notFound = true;
+      _loading = false;
+      _currentPair = _kMarketPairs.first;
+      return;
     }
+
+    _currentPair = _pairFromWidgetJson(widget.json);
     _loadData();
   }
 
@@ -703,13 +1209,13 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
   }
 
   Future<void> _openMarketSelector() async {
-    final result = await Navigator.of(context).push<String>(
+    final result = await Navigator.of(context).push<_MarketPair>(
       CupertinoPageRoute(
-        builder: (_) => _MarketSelectorScreen(s: widget.s, currentKey: _currentPairKey),
+        builder: (_) => _MarketSelectorScreen(s: widget.s, currentKey: _currentPair.key),
       ),
     );
-    if (result != null && result != _currentPairKey) {
-      setState(() => _currentPairKey = result);
+    if (result != null && result.key != _currentPair.key) {
+      setState(() => _currentPair = result);
       _loadData();
     }
   }
@@ -717,6 +1223,11 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final p = _p;
+
+    if (_notFound) {
+      return _MarketNotFoundCard(p: p, onOpenSelector: _openMarketSelector);
+    }
+
     final pair = _currentPair;
 
     return Container(
@@ -945,6 +1456,59 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
   }
 }
 
+// Card de "não encontrado" — mostrado quando o resultado da tool
+// call trouxe found:false. Sem retry automático da IA (fora do
+// escopo sem tool loop multi-turno); o utilizador pode abrir o
+// seletor manual para escolher outro ativo.
+class _MarketNotFoundCard extends StatelessWidget {
+  final _WidgetPalette p;
+  final VoidCallback onOpenSelector;
+  const _MarketNotFoundCard({required this.p, required this.onOpenSelector});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: p.cardBg,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: p.outline),
+        boxShadow: p.cardShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon('warning', size: 26, color: p.onSurfaceVariant),
+          const SizedBox(height: 10),
+          Text(
+            'Não foi possível encontrar este ativo',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.onSurface, fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tenta escolher manualmente ou pede outro ativo.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5),
+          ),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: onOpenSelector,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
+              child: Text('Escolher manualmente',
+                  style: TextStyle(color: p.onPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MarketChartPainter extends CustomPainter {
   final List<_MarketDataPoint> series;
   final double progress;
@@ -1074,7 +1638,10 @@ class _MarketChartPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — SELETOR DE MERCADO
+// TELA CHEIA — SELETOR DE MERCADO (agora com lista mais longa —
+// pesquisa em tempo real na CoinGecko em vez de ficar limitada
+// aos 14 pares fixos; a lista fixa continua a aparecer quando o
+// campo de busca está vazio, como atalho rápido).
 // ══════════════════════════════════════════════════════════════
 class _MarketSelectorScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -1115,11 +1682,10 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
       setState(() => _remoteResults = []);
       return;
     }
-    if (_localFiltered.isNotEmpty) {
-      setState(() => _remoteResults = []);
-      return;
-    }
-    _debounce = Timer(const Duration(milliseconds: 450), () => _searchRemote(v.trim()));
+    // Sempre dispara pesquisa remota a partir de 2 caracteres, mesmo
+    // que a lista local já tenha resultados — assim a lista fica
+    // realmente longa e dinâmica em vez de parar nos 14 pares fixos.
+    _debounce = Timer(const Duration(milliseconds: 400), () => _searchRemote(v.trim()));
   }
 
   Future<void> _searchRemote(String q) async {
@@ -1129,7 +1695,7 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
       final res = await http.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-        final coins = (decoded['coins'] as List? ?? []).take(8);
+        final coins = (decoded['coins'] as List? ?? []).take(30);
         final results = <_MarketPair>[];
         for (final c in coins) {
           final m = c as Map<String, dynamic>;
@@ -1150,9 +1716,17 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
   @override
   Widget build(BuildContext context) {
     final p = _p;
-    final results = _query.trim().isEmpty
-        ? _kMarketPairs
-        : (_localFiltered.isNotEmpty ? _localFiltered : _remoteResults);
+    // Combina local + remoto sem duplicar por coingeckoId/key, para
+    // dar uma lista longa (empresas/moedas incluídas) em vez de só
+    // os 14 pares fixos quando o utilizador está a pesquisar.
+    final combined = <String, _MarketPair>{};
+    if (_query.trim().isEmpty) {
+      for (final p in _kMarketPairs) combined[p.key] = p;
+    } else {
+      for (final p in _localFiltered) combined[p.key] = p;
+      for (final p in _remoteResults) combined.putIfAbsent(p.key, () => p);
+    }
+    final results = combined.values.toList();
 
     return Scaffold(
       backgroundColor: p.pageBg,
@@ -1184,7 +1758,7 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
                               ),
                             );
                             if (confirmed == true && mounted) {
-                              Navigator.of(context).pop(pair.key);
+                              Navigator.of(context).pop(pair);
                             }
                           },
                         );
@@ -1194,7 +1768,7 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
             _AiSearchBar(
               p: p,
               controller: _searchCtrl,
-              hint: 'Procurar símbolo, ex: BTC, EUR…',
+              hint: 'Procurar símbolo ou empresa, ex: BTC, Tesla, EUR…',
               onChanged: _onQueryChanged,
               onClear: () {
                 setState(() {
@@ -1664,7 +2238,8 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — NOVO EVENTO
+// TELA CHEIA — NOVO EVENTO — botão de guardar movido para container
+// fixo no fundo do ecrã, mesmo padrão do _LogoutButton em settings.
 // ══════════════════════════════════════════════════════════════
 class _NewEventScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -1714,56 +2289,76 @@ class _NewEventScreenState extends State<_NewEventScreen> {
       backgroundColor: p.pageBg,
       appBar: aiScreenAppBar(p: p, title: 'Novo evento', onBack: () => Navigator.of(context).pop()),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.dateKey, style: TextStyle(color: p.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 18),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 110),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.dateKey, style: TextStyle(color: p.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 18),
 
-              _FieldLabel(p: p, text: 'Nome do evento'),
-              const SizedBox(height: 6),
-              _StyledField(p: p, controller: _nameCtrl, hint: 'Ex: Reunião com equipa'),
+                  _FieldLabel(p: p, text: 'Nome do evento'),
+                  const SizedBox(height: 6),
+                  _StyledField(p: p, controller: _nameCtrl, hint: 'Ex: Reunião com equipa'),
 
-              const SizedBox(height: 18),
-              _FieldLabel(p: p, text: 'Hora'),
-              const SizedBox(height: 6),
-              _StyledField(p: p, controller: _timeCtrl, hint: 'Ex: 14:00', keyboardType: TextInputType.datetime),
+                  const SizedBox(height: 18),
+                  _FieldLabel(p: p, text: 'Hora'),
+                  const SizedBox(height: 6),
+                  _StyledField(p: p, controller: _timeCtrl, hint: 'Ex: 14:00', keyboardType: TextInputType.datetime),
 
-              const SizedBox(height: 18),
-              _FieldLabel(p: p, text: 'Cor'),
-              const SizedBox(height: 10),
-              Row(
-                children: _palette.map((c) {
-                  final active = c.value == _selectedColor.value;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedColor = c),
-                    child: Container(
-                      width: 34, height: 34,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        color: c, shape: BoxShape.circle,
-                        border: active ? Border.all(color: p.onSurface, width: 2.5) : null,
-                      ),
-                    ),
-                  );
-                }).toList(),
+                  const SizedBox(height: 18),
+                  _FieldLabel(p: p, text: 'Cor'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: _palette.map((c) {
+                      final active = c.value == _selectedColor.value;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedColor = c),
+                        child: Container(
+                          width: 34, height: 34,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            color: c, shape: BoxShape.circle,
+                            border: active ? Border.all(color: p.onSurface, width: 2.5) : null,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 32),
-              GestureDetector(
-                onTap: _submit,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Adicionar evento', style: TextStyle(color: p.onPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+            // Botão fixo no fundo — mesmo padrão do _LogoutButton em
+            // settings.dart: container com gradiente fade-to-transparent.
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [p.pageBg, p.pageBg.withOpacity(0.0)],
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: GestureDetector(
+                    onTap: _submit,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
+                      child: Text('Adicionar evento', style: TextStyle(color: p.onPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1821,6 +2416,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
   late double _lng;
   late double _zoom;
   late String _name;
+  bool _notFound = false;
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
@@ -1834,11 +2430,20 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _mapController = MapController();
-    _lat = (widget.json['lat'] is num) ? (widget.json['lat'] as num).toDouble() : 38.7223;
-    _lng = (widget.json['lng'] is num) ? (widget.json['lng'] as num).toDouble() : -9.1393;
-    _zoom = (widget.json['zoom'] is num) ? (widget.json['zoom'] as num).toDouble() : 13.0;
-    _name = _sanitizeText(widget.json['name']);
-    if (_name.isEmpty) _name = 'Lisboa, Portugal';
+
+    if (widget.json['found'] == false) {
+      _notFound = true;
+      _lat = 38.7223;
+      _lng = -9.1393;
+      _zoom = 13.0;
+      _name = '';
+    } else {
+      _lat = (widget.json['lat'] is num) ? (widget.json['lat'] as num).toDouble() : 38.7223;
+      _lng = (widget.json['lng'] is num) ? (widget.json['lng'] as num).toDouble() : -9.1393;
+      _zoom = (widget.json['zoom'] is num) ? (widget.json['zoom'] as num).toDouble() : 13.0;
+      _name = _sanitizeText(widget.json['name']);
+      if (_name.isEmpty) _name = 'Local';
+    }
 
     _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 0.8, end: 1.4).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeOut));
@@ -1895,6 +2500,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
         _lng = result.lng;
         _name = result.name;
         _zoom = 12.0;
+        _notFound = false;
       });
       _mapController.move(ll.LatLng(_lat, _lng), _zoom);
     }
@@ -1943,6 +2549,11 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final p = _p;
+
+    if (_notFound) {
+      return _PlaceNotFoundCard(p: p, onOpenPicker: _openLocationPicker);
+    }
+
     return Container(
       constraints: const BoxConstraints(maxWidth: 420),
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -2038,6 +2649,57 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Card de "lugar não encontrado" — mesmo princípio do market: sem
+// retry automático da IA, o utilizador escolhe manualmente.
+class _PlaceNotFoundCard extends StatelessWidget {
+  final _WidgetPalette p;
+  final VoidCallback onOpenPicker;
+  const _PlaceNotFoundCard({required this.p, required this.onOpenPicker});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: p.cardBg,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: p.outline),
+        boxShadow: p.cardShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon('warning', size: 26, color: p.onSurfaceVariant),
+          const SizedBox(height: 10),
+          Text(
+            'Não foi possível encontrar este lugar',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.onSurface, fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tenta escolher manualmente ou pede outro lugar.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5),
+          ),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: onOpenPicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(color: p.primary, borderRadius: BorderRadius.circular(999)),
+              child: Text('Escolher manualmente',
+                  style: TextStyle(color: p.onPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
           ),
         ],
       ),
@@ -2322,7 +2984,10 @@ class _AlphabetIndex extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA CHEIA — SELETOR DE PROVÍNCIAS
+// TELA CHEIA — SELETOR DE PROVÍNCIAS — agora com fallback de
+// segunda fonte quando a API principal não devolve nada (ver
+// _GeoCache.getStates acima), reduzindo o "falha ao achar
+// províncias" para os casos em que ambas as fontes falham mesmo.
 // ══════════════════════════════════════════════════════════════
 class _StatePickerScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -2370,8 +3035,8 @@ class _StatePickerScreenState extends State<_StatePickerScreen> {
 
   void _selectState(String stateName) async {
     try {
-      final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${Uri.encodeComponent('$stateName, ${widget.country}')}');
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=pt&q=${Uri.encodeComponent('$stateName, ${widget.country}')}');
+      final res = await http.get(uri, headers: {'User-Agent': 'NexaApp/1.0'}).timeout(const Duration(seconds: 8));
       final list = jsonDecode(res.body) as List;
       if (list.isNotEmpty) {
         final first = list.first as Map<String, dynamic>;

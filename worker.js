@@ -3,6 +3,12 @@
 // título automático obrigatório, resposta com marcador de "processo"
 // para o cliente poder ocultar streaming de blocos especiais
 // (documentos, tabelas, gráficos) atrás de um pill.
+//
+// ATUALIZAÇÃO: handleAiChat agora aceita um campo `tools` opcional
+// no body e repassa-o directamente ao DeepSeek (formato OpenAI-
+// compatible: tools: [{type:"function", function:{...}}]). Se o
+// body não trouxer `tools`, o comportamento é 100% igual ao de
+// antes — nada mudou para quem não usa esta funcionalidade.
 // ══════════════════════════════════════════════════════════════
 
 const CORS_HEADERS = {
@@ -233,6 +239,14 @@ function extractSpkiFromCert(certDer) {
 // OpenAI-compatible: messages: [{role, content}], stream: bool.
 // thinking / reasoning_effort controlam o modo de raciocínio no
 // V4-Flash — não são mais nomes de modelo separados.
+//
+// `tools` (opcional): array no formato OpenAI-compatible,
+// [{type:"function", function:{name, description, parameters}}].
+// Quando presente, é repassado tal-e-qual ao DeepSeek. O DeepSeek
+// devolve tool_calls dentro de choices[0].delta (stream) ou
+// choices[0].message (não-stream), exactamente como faria com
+// content normal — nenhuma lógica adicional de parsing é feita
+// aqui no worker, é tudo repassado como está.
 // ══════════════════════════════════════════════════════════════
 
 function buildSystemInstruction(language, customSystemPrompt) {
@@ -249,11 +263,22 @@ function buildDeepseekMessages(messages, systemPrompt, language) {
   return [
     { role: "system", content: sysContent },
     ...messages.filter(function(m) { return m.role !== "system"; })
-      .map(function(m) { return { role: m.role, content: m.content }; }),
+      .map(function(m) {
+        // Mensagens role:"tool" (resultado de uma tool call) e
+        // mensagens assistant com tool_calls precisam de passar
+        // campos extra além de role/content — preservamos tudo o
+        // que vier no objecto original em vez de recriar apenas
+        // {role, content}, para não perder tool_call_id / tool_calls.
+        const out = { role: m.role, content: m.content };
+        if (m.tool_call_id !== undefined) out.tool_call_id = m.tool_call_id;
+        if (m.tool_calls !== undefined) out.tool_calls = m.tool_calls;
+        if (m.name !== undefined) out.name = m.name;
+        return out;
+      }),
   ];
 }
 
-async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, stream) {
+async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, stream, tools) {
   const cfg = DEEPSEEK_MODELS[modelKey] || DEEPSEEK_MODELS.flash;
   const allMessages = buildDeepseekMessages(messages, systemPrompt, language);
 
@@ -267,6 +292,7 @@ async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, 
   if (cfg.temperature !== undefined) requestBody.temperature = cfg.temperature;
   if (cfg.thinking !== undefined) requestBody.thinking = cfg.thinking;
   if (cfg.reasoning_effort !== undefined) requestBody.reasoning_effort = cfg.reasoning_effort;
+  if (Array.isArray(tools) && tools.length > 0) requestBody.tools = tools;
 
   return fetch(DEEPSEEK_BASE + "/chat/completions", {
     method: "POST",
@@ -353,7 +379,11 @@ async function groqChatStream(apiKey, messages, model, systemPrompt, language) {
 
 async function expandMessagesWithAttachments(messages) {
   return messages.map(function(m) {
-    return { role: m.role, content: m.content };
+    const out = { role: m.role, content: m.content };
+    if (m.tool_call_id !== undefined) out.tool_call_id = m.tool_call_id;
+    if (m.tool_calls !== undefined) out.tool_calls = m.tool_calls;
+    if (m.name !== undefined) out.name = m.name;
+    return out;
   });
 }
 
@@ -902,7 +932,9 @@ async function handleAiTitle(request, env) {
 
 // ══════════════════════════════════════════════════════════════
 // /ai/chat — DeepSeek V4 (flash | pro | reasoning) ou Groq,
-// stream ou não.
+// stream ou não. Suporta `tools` opcional para tool calling
+// (formato OpenAI-compatible). Sem `tools` no body, comportamento
+// idêntico ao anterior.
 // ══════════════════════════════════════════════════════════════
 
 async function handleAiChat(request, env) {
@@ -926,8 +958,13 @@ async function handleAiChat(request, env) {
   const customSystemPrompt = body.systemPrompt || "";
   const provider           = body.provider || "deepseek";
   const modelKey           = body.model || "flash"; // flash | pro | reasoning
+  const tools              = Array.isArray(body.tools) ? body.tools : null;
 
   if (provider === "groq") {
+    // Nota: tool calling não é repassado ao Groq nesta versão —
+    // o fluxo de tools foi desenhado a pensar no DeepSeek, que é
+    // o provider usado por AiTab. Groq continua a funcionar como
+    // antes, sem tools.
     const groqModel = body.groqModel || "llama-3.3-70b-versatile";
     if (!env.GROQ_API_KEY) return error("Groq não configurado", 500);
     if (stream) {
@@ -946,7 +983,7 @@ async function handleAiChat(request, env) {
 
   // provider === "deepseek" (padrão)
   if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
-  const dsRes = await deepseekChat(env.DEEPSEEK_API_KEY, messages, modelKey, customSystemPrompt, language, stream);
+  const dsRes = await deepseekChat(env.DEEPSEEK_API_KEY, messages, modelKey, customSystemPrompt, language, stream, tools);
   if (!dsRes.ok) {
     const errText = await dsRes.text();
     console.error("[NEXA CHAT ERROR]", dsRes.status, errText);
@@ -963,7 +1000,8 @@ async function handleAiChat(request, env) {
   const choice    = data.choices?.[0];
   const content   = choice?.message?.content || "";
   const reasoning = choice?.message?.reasoning_content || null;
-  return json({ content, reasoning, model: data.model || modelKey, usage: data.usage || null });
+  const toolCalls = choice?.message?.tool_calls || null;
+  return json({ content, reasoning, toolCalls, model: data.model || modelKey, usage: data.usage || null });
 }
 
 async function handleAiSummarize(request, env) {

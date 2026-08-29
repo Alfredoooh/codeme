@@ -1,3 +1,19 @@
+// ══════════════════════════════════════════════════════════════
+//
+// ATUALIZAÇÃO: _send() agora lida com um segundo tipo de evento
+// vindo do stream — ChatToolCallEvent. Quando isso acontece:
+//   1) Mostra um card de progresso (reaproveitando o mesmo padrão
+//      visual de _StreamGenericOpenBlock / _CanvasProgressCard já
+//      usado para "A criar documento...", mas com o label
+//      "A pesquisar mercado..." / "A localizar..." / etc.)
+//   2) Executa a função local correspondente (resolveMarketQuery /
+//      resolvePlaceQuery / resolveCalendarDateQuery de aiwidgets.dart)
+//   3) Faz uma SEGUNDA chamada a streamChat, reenviando o histórico
+//      + uma mensagem assistant com tool_calls + uma mensagem
+//      role:"tool" com o resultado serializado
+//   4) Só a resposta dessa segunda chamada é que vira uma mensagem
+//      normal no histórico da conversa
+// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -99,22 +115,60 @@ correta — nunca precisas de explicar a notação, apenas escrevê-la.
 
 const String kAiWidgetsInstructions = '''
 Tens também acesso a widgets visuais interativos, que aparecem diretamente
-dentro da conversa (nunca em canvas). Quando fizer sentido para a resposta,
-gera um bloco de código com uma das seguintes linguagens especiais, contendo
-APENAS um objeto JSON válido no corpo do bloco:
+dentro da conversa (nunca em canvas), e a três funções (tools) que te
+permitem pesquisar dados reais antes de escrever esses widgets:
+search_market, search_place e search_calendar_date.
 
-- ```widget_market``` — { "type": "crypto", "symbol": "BTC", "name": "Bitcoin" } ou { "type": "forex", "symbol": "USDEUR" }
-- ```widget_calendar``` — { "events": [{"date":"2026-08-10","name":"Reunião","time":"14:00","color":"#6F5AF6"}] }
-- ```widget_map``` — { "lat": 38.7223, "lng": -9.1393, "zoom": 12, "name": "Lisboa" }
+REGRA IMPORTANTE: nunca escrevas um bloco widget_market, widget_calendar ou
+widget_map com valores adivinhados (coordenadas, símbolos, preços). Chama
+sempre a função correspondente primeiro, espera pelo resultado, e só depois
+escreve o bloco widget com os dados reais que a função devolveu.
+
+Fluxo para cada tipo de widget:
+
+1. MERCADO: quando o utilizador pedir uma cotação, chama search_market com
+   a query tal como o utilizador a mencionou (ex: "bitcoin", "euro",
+   "tesla"). O resultado vem no formato {"found": true/false, "type":
+   "crypto"|"forex", "symbol": "...", "name": "...", "coingeckoId": "..."}
+   (coingeckoId só existe para cripto). Se found for true, escreve:
+   ```widget_market
+   {"found": true, "type": "<type>", "symbol": "<symbol>", "name": "<name>", "coingeckoId": "<coingeckoId ou omite se forex>"}
+   ```
+   Se found for false, escreve o mesmo JSON tal como veio (com found:false)
+   dentro do bloco widget_market — o cartão mostra automaticamente um
+   estado de "não encontrado" ao utilizador, não precisas de explicar isso
+   em texto. Não tentes adivinhar outro símbolo sozinho.
+
+2. LUGAR/MAPA: quando precisares de mostrar uma localização, chama
+   search_place com a query (ex: "Lisboa", "Torre Eiffel"). O resultado vem
+   como {"found": true/false, "name": "...", "lat": ..., "lng": ...}. Se
+   found for true, escreve:
+   ```widget_map
+   {"found": true, "lat": <lat>, "lng": <lng>, "zoom": 12, "name": "<name>"}
+   ```
+   Se found for false, escreve o mesmo JSON com found:false dentro do
+   bloco widget_map.
+
+3. CALENDÁRIO/DATA: quando o utilizador mencionar uma data relativa (ex:
+   "marca para sexta-feira", "daqui a duas semanas") e precisares de a
+   converter para uma data absoluta antes de criar um evento, chama
+   search_calendar_date com a expressão tal como o utilizador a escreveu.
+   O resultado vem como {"found": true/false, "isoDate": "YYYY-MM-DD",
+   "humanLabel": "..."}. Usa o isoDate resolvido no campo "date" de um
+   evento dentro de um bloco widget_calendar, no formato:
+   ```widget_calendar
+   {"events": [{"date":"<isoDate>","name":"...","time":"...","color":"#6F5AF6"}]}
+   ```
 
 Não uses widget_code — blocos de código normais já aparecem automaticamente
 formatados. Não uses widget_sheet — foi descontinuado (usa
 [[canvas:sheet:...]] para folhas de cálculo reais). Usa estes widgets
 apenas quando acrescentam valor real à resposta (dados quantitativos,
 comparações visuais, localização, tempo), nunca como enfeite. Nunca
-expliques ao utilizador que estás a gerar um bloco widget — ele é
-processado automaticamente e transformado num cartão interativo, sem nunca
-mostrar o JSON cru.
+expliques ao utilizador que estás a chamar uma função ou a gerar um bloco
+widget — isso é processado automaticamente e transformado num cartão
+interativo, sem nunca mostrar o JSON cru nem mencionar "tool" ou "função"
+na tua resposta em texto.
 ''';
 
 const String kAiWebSearchInstructions = '''
@@ -891,6 +945,15 @@ String _labelForWidgetId(String widgetId) => switch (widgetId) {
       _ => 'Criando widget...',
     };
 
+/// Label mostrado no card de progresso enquanto uma tool call está
+/// a ser executada (antes de haver qualquer texto no stream).
+String _labelForToolName(String toolName) => switch (toolName) {
+      'search_market' => 'A pesquisar mercado...',
+      'search_place' => 'A localizar...',
+      'search_calendar_date' => 'A interpretar data...',
+      _ => 'A pesquisar...',
+    };
+
 _StreamElement _openBlockToElement(String raw, _OpenBlockInfo info) {
   final canvasOpenMatch = RegExp(r'\[\[canvas:(doc|sheet|slide):').allMatches(raw).toList();
   final widgetOpenMatch = RegExp(r'```(widget_[a-z]+)').allMatches(raw).toList();
@@ -1377,6 +1440,40 @@ class _WidgetProgressCard extends StatelessWidget {
   }
 }
 
+// Card de progresso para uma tool call em execução (search_market /
+// search_place / search_calendar_date). Mesmo padrão visual dos
+// cards acima — ícone animado + label — mas sem modal de detalhe,
+// porque não há conteúdo streaming para mostrar durante a execução
+// da função (é uma chamada de rede única, não geração de texto).
+class _ToolCallProgressCard extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+
+  const _ToolCallProgressCard({required this.s, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: s.cardShadow,
+      ),
+      child: Row(
+        children: [
+          NexaLoaderLogo(size: 32, tintColor: s.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<void> showCanvasStreamingModal(
   BuildContext context,
   AppColorScheme s, {
@@ -1689,6 +1786,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final ValueNotifier<String> _openWidgetContentNotifier = ValueNotifier<String>('');
   final ValueNotifier<bool> _openWidgetDoneNotifier = ValueNotifier<bool>(false);
 
+  // Estado do ciclo de tool calling: enquanto não-nulo, mostra o
+  // _ToolCallProgressCard em vez do texto normal do stream.
+  String? _activeToolCallLabel;
+
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
   int get canvasCount => _canvases.length;
@@ -1792,6 +1893,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _openCanvasFinalItem = null;
     _openWidgetContentNotifier.value = '';
     _openWidgetDoneNotifier.value = false;
+    _activeToolCallLabel = null;
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
     _notifyHeader();
@@ -1862,6 +1964,88 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
+  /// Executa a função local correspondente a uma ToolCall e devolve
+  /// o JSON de resultado já serializado, pronto para ir na mensagem
+  /// role:"tool" da segunda chamada.
+  Future<Map<String, dynamic>> _executeToolCall(ToolCall call) async {
+    final query = call.arguments['query']?.toString() ?? '';
+    switch (call.name) {
+      case 'search_market':
+        final result = await resolveMarketQuery(query);
+        return result.toToolResultJson();
+      case 'search_place':
+        final result = await resolvePlaceQuery(query);
+        return result.toToolResultJson();
+      case 'search_calendar_date':
+        final result = await resolveCalendarDateQuery(query);
+        return result.toToolResultJson();
+      default:
+        return {'found': false, 'reason': 'Função desconhecida: ${call.name}'};
+    }
+  }
+
+  /// Segunda fase do ciclo de tool calling: executa todas as
+  /// tool calls pendentes, monta as mensagens assistant+tool, e
+  /// dispara uma nova chamada a streamChat com o histórico completo.
+  /// Só a resposta desta segunda chamada é tratada como resposta
+  /// final (mesmo _listenToStream de sempre).
+  Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
+    setState(() => _activeToolCallLabel = _labelForToolName(calls.first.name));
+    _notifyHeader();
+
+    // Mensagem assistant "vazia" que registou a intenção de chamar
+    // a(s) função(ões) — necessária no histórico para o DeepSeek
+    // conseguir emparelhar as respostas role:"tool" seguintes com
+    // os tool_calls que as originaram.
+    final assistantToolCallMsg = ChatMessage(
+      role: 'assistant',
+      content: '',
+      toolCalls: calls.map((c) => c.toMessageJson()).toList(),
+    );
+
+    final toolResultMsgs = <ChatMessage>[];
+    for (final call in calls) {
+      final resultJson = await _executeToolCall(call);
+      toolResultMsgs.add(ChatMessage(
+        role: 'tool',
+        content: jsonEncode(resultJson),
+        toolCallId: call.id,
+        name: call.name,
+      ));
+    }
+
+    if (!mounted) return;
+    setState(() => _activeToolCallLabel = null);
+
+    final token = authController.token;
+    if (token == null) {
+      setState(() {
+        _sending = false;
+        _msgs.add(const ChatMessage(role: 'assistant', content: 'Sessão expirada. Volta a iniciar sessão.'));
+      });
+      return;
+    }
+
+    final historyWithToolResults = [
+      ..._msgs,
+      assistantToolCallMsg,
+      ...toolResultMsgs,
+    ];
+
+    _streamSub?.cancel();
+    _streamSub = AiApiService.streamChat(
+      token: token,
+      messages: historyWithToolResults,
+      provider: _model.provider,
+      language: 'pt',
+      systemPrompt: _effectiveSystemPrompt,
+      tools: kAiWidgetTools,
+    ).listen(
+      (event) => _handleStreamEvent(event, isFirst, originalUserText, historyWithToolResults),
+      onError: (e) => _handleStreamError(e),
+    );
+  }
+
   Future<void> _send() async {
     final t = _ctrl.text.trim();
     if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
@@ -1907,6 +2091,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _openCanvasFinalItem = null;
     _openWidgetContentNotifier.value = '';
     _openWidgetDoneNotifier.value = false;
+    _activeToolCallLabel = null;
     if (isFirst) {
       widget.onFirstMessage();
       widget.onHasMessagesChanged?.call(true);
@@ -1930,95 +2115,117 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       provider: _model.provider,
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
+      tools: _widgetsEnabled ? kAiWidgetTools : null,
     ).listen(
-      (event) {
-        if (!mounted) return;
-        switch (event) {
-          case ChatTokenEvent(text: final text):
-            _streamingTextNotifier.value += text;
-            _updateOpenCanvasNotifier();
-            _updateOpenWidgetNotifier();
-            // Sem rolagem automática durante streaming.
-            break;
-          case ChatThinkEvent(text: final text):
-            _streamingThinkNotifier.value = (_streamingThinkNotifier.value ?? '') + text;
-            break;
-          case ChatDoneEvent(fullText: final fullText):
-            final finalText = fullText.isNotEmpty ? fullText : _streamingTextNotifier.value;
-            final scan = _markCanvasItems(finalText, _nextCanvasId);
-            final thinkingText = _streamingThinkNotifier.value != null ? cleanAiText(_streamingThinkNotifier.value!) : '';
-            final bodyWithCanvasBlocks = _resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
-            final combined = thinkingText.isNotEmpty
-                ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$bodyWithCanvasBlocks'
-                : bodyWithCanvasBlocks;
+      (event) => _handleStreamEvent(event, isFirst, t, _msgs),
+      onError: (e) => _handleStreamError(e),
+    );
+  }
 
-            setState(() {
-              if (combined.trim().isNotEmpty || scan.items.isNotEmpty) {
-                _msgs.add(ChatMessage(role: 'assistant', content: combined));
-              }
-              _canvases.addAll(scan.items);
-              _sending = false;
-            });
-            _streamingTextNotifier.value = '';
-            _streamingThinkNotifier.value = null;
-            if (scan.items.isNotEmpty) {
-              _openCanvasDoneNotifier.value = true;
-              _openCanvasFinalItem = scan.items.last;
-            }
-            final widgetParse = parseAiWidgetBlocks(finalText);
-            if (widgetParse.blocks.isNotEmpty) {
-              _openWidgetDoneNotifier.value = true;
-            }
-            _notifyHeader();
-            _scrollToEnd();
-            final enabledSlugs = enabledAppsController.all.entries
-                .where((e) => e.value == true)
-                .map((e) => e.key)
-                .toSet();
-            AppRegistry.checkAiTriggers(context, combined, enabledSlugs);
-            if (isFirst && _conversationId == null && !_incognito) {
-              _createConversationWithGeneratedTitle(t);
-            } else {
-              _persistConversation();
-            }
-            if (scan.items.isNotEmpty) {
-              widget.onCanvasCreated?.call(scan.items.last);
-            }
-            break;
-          case ChatErrorEvent(message: final message):
-            setState(() {
-              _sending = false;
-              _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
-            });
-            _streamingTextNotifier.value = '';
-            _streamingThinkNotifier.value = null;
-            _scrollToEnd();
-            break;
-          case ChatCreditsExhaustedEvent():
-            setState(() {
-              _sending = false;
-              _msgs.add(const ChatMessage(
-                  role: 'assistant',
-                  content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
-            });
-            _streamingTextNotifier.value = '';
-            _streamingThinkNotifier.value = null;
-            _scrollToEnd();
-            authController.refreshBalance();
-            break;
+  /// Handler único reaproveitado tanto pela primeira chamada (_send)
+  /// como pela segunda chamada após uma tool call (_handleToolCalls),
+  /// para não duplicar a lógica de parsing de canvas/widgets/persistência.
+  void _handleStreamEvent(
+    ChatStreamEvent event,
+    bool isFirst,
+    String originalUserText,
+    List<ChatMessage> historySnapshot,
+  ) {
+    if (!mounted) return;
+    switch (event) {
+      case ChatTokenEvent(text: final text):
+        _streamingTextNotifier.value += text;
+        _updateOpenCanvasNotifier();
+        _updateOpenWidgetNotifier();
+        break;
+      case ChatThinkEvent(text: final text):
+        _streamingThinkNotifier.value = (_streamingThinkNotifier.value ?? '') + text;
+        break;
+      case ChatToolCallEvent(calls: final calls):
+        // A IA decidiu chamar uma ou mais funções em vez de escrever
+        // texto. Executa-as e encadeia a segunda chamada — não marca
+        // _sending como false ainda, a conversa continua "a gerar".
+        _handleToolCalls(calls, isFirst, originalUserText);
+        break;
+      case ChatDoneEvent(fullText: final fullText):
+        final finalText = fullText.isNotEmpty ? fullText : _streamingTextNotifier.value;
+        final scan = _markCanvasItems(finalText, _nextCanvasId);
+        final thinkingText = _streamingThinkNotifier.value != null ? cleanAiText(_streamingThinkNotifier.value!) : '';
+        final bodyWithCanvasBlocks = _resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
+        final combined = thinkingText.isNotEmpty
+            ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$bodyWithCanvasBlocks'
+            : bodyWithCanvasBlocks;
+
+        setState(() {
+          if (combined.trim().isNotEmpty || scan.items.isNotEmpty) {
+            _msgs.add(ChatMessage(role: 'assistant', content: combined));
+          }
+          _canvases.addAll(scan.items);
+          _sending = false;
+          _activeToolCallLabel = null;
+        });
+        _streamingTextNotifier.value = '';
+        _streamingThinkNotifier.value = null;
+        if (scan.items.isNotEmpty) {
+          _openCanvasDoneNotifier.value = true;
+          _openCanvasFinalItem = scan.items.last;
         }
-      },
-      onError: (e) {
-        if (!mounted) return;
+        final widgetParse = parseAiWidgetBlocks(finalText);
+        if (widgetParse.blocks.isNotEmpty) {
+          _openWidgetDoneNotifier.value = true;
+        }
+        _notifyHeader();
+        _scrollToEnd();
+        final enabledSlugs = enabledAppsController.all.entries
+            .where((e) => e.value == true)
+            .map((e) => e.key)
+            .toSet();
+        AppRegistry.checkAiTriggers(context, combined, enabledSlugs);
+        if (isFirst && _conversationId == null && !_incognito) {
+          _createConversationWithGeneratedTitle(originalUserText);
+        } else {
+          _persistConversation();
+        }
+        if (scan.items.isNotEmpty) {
+          widget.onCanvasCreated?.call(scan.items.last);
+        }
+        break;
+      case ChatErrorEvent(message: final message):
         setState(() {
           _sending = false;
-          _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
+          _activeToolCallLabel = null;
+          _msgs.add(ChatMessage(role: 'assistant', content: 'Erro: $message'));
         });
         _streamingTextNotifier.value = '';
         _streamingThinkNotifier.value = null;
         _scrollToEnd();
-      },
-    );
+        break;
+      case ChatCreditsExhaustedEvent():
+        setState(() {
+          _sending = false;
+          _activeToolCallLabel = null;
+          _msgs.add(const ChatMessage(
+              role: 'assistant',
+              content: 'Sem créditos disponíveis. Recarrega para continuar a conversar.'));
+        });
+        _streamingTextNotifier.value = '';
+        _streamingThinkNotifier.value = null;
+        _scrollToEnd();
+        authController.refreshBalance();
+        break;
+    }
+  }
+
+  void _handleStreamError(Object e) {
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      _activeToolCallLabel = null;
+      _msgs.add(ChatMessage(role: 'assistant', content: 'Erro de rede: $e'));
+    });
+    _streamingTextNotifier.value = '';
+    _streamingThinkNotifier.value = null;
+    _scrollToEnd();
   }
 
   void _pauseGeneration() {
@@ -2038,6 +2245,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       }
       _canvases.addAll(scan.items);
       _sending = false;
+      _activeToolCallLabel = null;
     });
     _streamingTextNotifier.value = '';
     _streamingThinkNotifier.value = null;
@@ -2271,6 +2479,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _openCanvasFinalItem = null;
         _openWidgetContentNotifier.value = '';
         _openWidgetDoneNotifier.value = false;
+        _activeToolCallLabel = null;
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -2292,6 +2501,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _openCanvasFinalItem = null;
         _openWidgetContentNotifier.value = '';
         _openWidgetDoneNotifier.value = false;
+        _activeToolCallLabel = null;
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -2331,6 +2541,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _openCanvasFinalItem = null;
         _openWidgetContentNotifier.value = '';
         _openWidgetDoneNotifier.value = false;
+        _activeToolCallLabel = null;
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -2466,12 +2677,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                   builder: (_, text, __) {
                                     final elements = _parseStreamingContent(text, _nextCanvasId);
                                     final thinking = _streamingThinkNotifier.value;
-                                    final isThinkingOnly = text.isEmpty && (thinking == null || thinking.isEmpty);
+                                    final isThinkingOnly = text.isEmpty &&
+                                        (thinking == null || thinking.isEmpty) &&
+                                        _activeToolCallLabel == null;
                                     return _StreamingBubble(
                                       s: s,
                                       elements: elements,
                                       thinking: thinking != null ? cleanAiText(thinking) : null,
                                       showLogoLoader: isThinkingOnly,
+                                      activeToolCallLabel: _activeToolCallLabel,
                                       widgetsEnabled: _widgetsEnabled,
                                       onEnableWidgets: () => setWidgetsEnabled(true),
                                       onSuggestionTap: sendSuggestedMessage,
@@ -3000,6 +3214,7 @@ class _StreamingBubble extends StatefulWidget {
   final List<_StreamElement> elements;
   final String? thinking;
   final bool showLogoLoader;
+  final String? activeToolCallLabel;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
@@ -3014,6 +3229,7 @@ class _StreamingBubble extends StatefulWidget {
     required this.elements,
     this.thinking,
     this.showLogoLoader = false,
+    this.activeToolCallLabel,
     required this.widgetsEnabled,
     required this.onEnableWidgets,
     required this.onSuggestionTap,
@@ -3044,7 +3260,14 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
       ));
     }
 
-    bool anyContent = false;
+    // Tool call em curso — mostra o card de progresso ANTES de
+    // qualquer texto (a IA não escreveu nada ainda; está à espera
+    // do resultado da função para continuar).
+    if (widget.activeToolCallLabel != null) {
+      children.add(_ToolCallProgressCard(s: s, label: widget.activeToolCallLabel!));
+    }
+
+    bool anyContent = widget.activeToolCallLabel != null;
     for (final el in widget.elements) {
       switch (el) {
         case _StreamText(:final text):

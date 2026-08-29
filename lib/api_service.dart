@@ -29,15 +29,30 @@ const Map<ApiProvider, ProviderConfig> kProviderMap = {
 // MENSAGEM DE CHAT
 // ══════════════════════════════════════════════════════════════
 class ChatMessage {
-  final String role; // "user" | "assistant"
+  final String role; // "user" | "assistant" | "tool"
   final String content;
   final List<Map<String, dynamic>>? attachments;
-  const ChatMessage({required this.role, required this.content, this.attachments});
+  // Presentes apenas em mensagens do ciclo de tool calling:
+  final String? toolCallId; // usado em mensagens role:"tool" — id da chamada que este resultado responde
+  final List<Map<String, dynamic>>? toolCalls; // usado em mensagens role:"assistant" que pediram tool calls
+  final String? name; // nome da função, usado em mensagens role:"tool"
+
+  const ChatMessage({
+    required this.role,
+    required this.content,
+    this.attachments,
+    this.toolCallId,
+    this.toolCalls,
+    this.name,
+  });
 
   Map<String, dynamic> toJson() => {
         'role': role,
         'content': content,
         if (attachments != null && attachments!.isNotEmpty) 'attachments': attachments,
+        if (toolCallId != null) 'tool_call_id': toolCallId,
+        if (toolCalls != null) 'tool_calls': toolCalls,
+        if (name != null) 'name': name,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -46,6 +61,11 @@ class ChatMessage {
         attachments: (j['attachments'] is List)
             ? (j['attachments'] as List).whereType<Map<String, dynamic>>().toList()
             : null,
+        toolCallId: j['tool_call_id']?.toString(),
+        toolCalls: (j['tool_calls'] is List)
+            ? (j['tool_calls'] as List).whereType<Map<String, dynamic>>().toList()
+            : null,
+        name: j['name']?.toString(),
       );
 }
 
@@ -84,6 +104,84 @@ class ChatErrorEvent extends ChatStreamEvent {
 }
 
 class ChatCreditsExhaustedEvent extends ChatStreamEvent {}
+
+// ══════════════════════════════════════════════════════════════
+// TOOL CALLING
+// ══════════════════════════════════════════════════════════════
+//
+// Fluxo: 1) Flutter manda `tools` no body do POST /ai/chat.
+// 2) DeepSeek devolve tool_calls em vez de content, via SSE
+//    (delta.tool_calls, fragmentado em vários chunks por índice).
+// 3) Ao fechar o stream (finish_reason == "tool_calls" ou [DONE]
+//    com tool_calls pendentes), emitimos ChatToolCallEvent com a
+//    lista de chamadas já reconstruídas.
+// 4) Quem consome o stream (aitab.dart) executa a função local
+//    correspondente, e faz uma SEGUNDA chamada a streamChat
+//    passando o histórico + a mensagem assistant com tool_calls +
+//    uma mensagem role:"tool" com o resultado. Só essa segunda
+//    resposta é que chega ao utilizador como texto final.
+// ══════════════════════════════════════════════════════════════
+
+class ToolDefinition {
+  final String name;
+  final String description;
+  final Map<String, dynamic> parameters;
+  const ToolDefinition({
+    required this.name,
+    required this.description,
+    required this.parameters,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': 'function',
+        'function': {
+          'name': name,
+          'description': description,
+          'parameters': parameters,
+        },
+      };
+}
+
+class ToolCall {
+  final String id;
+  final String name;
+  final String argumentsJson;
+  const ToolCall({required this.id, required this.name, required this.argumentsJson});
+
+  Map<String, dynamic> get arguments {
+    if (argumentsJson.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(argumentsJson);
+      return decoded is Map<String, dynamic> ? decoded : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Representação desta chamada como apareceria numa mensagem
+  /// assistant com tool_calls, para reenviar no histórico da
+  /// segunda chamada.
+  Map<String, dynamic> toMessageJson() => {
+        'id': id,
+        'type': 'function',
+        'function': {'name': name, 'arguments': argumentsJson},
+      };
+}
+
+class ChatToolCallEvent extends ChatStreamEvent {
+  final List<ToolCall> calls;
+  ChatToolCallEvent(this.calls);
+}
+
+/// Se o Worker rejeitar `tools` uma vez (400/422) numa sessão de
+/// app, paramos de o mandar nas chamadas seguintes em vez de
+/// falhar sempre. Reinicia a cada abertura da app (estado em
+/// memória, não persistido).
+class ToolCallingSupport {
+  static bool _supported = true;
+  static bool get supported => _supported;
+  static void markUnsupported() => _supported = false;
+}
 
 // ══════════════════════════════════════════════════════════════
 // CANVAS
@@ -646,9 +744,11 @@ class AiApiService {
     required ApiProvider provider,
     String language = 'pt',
     String? systemPrompt,
+    List<ToolDefinition>? tools,
   }) async* {
     final cfg = kProviderMap[provider]!;
     final client = http.Client();
+    final sendTools = tools != null && tools.isNotEmpty && ToolCallingSupport.supported;
 
     try {
       final req = http.Request('POST', Uri.parse('$kApiBase/ai/chat'));
@@ -661,6 +761,7 @@ class AiApiService {
         'provider': cfg.provider,
         'model': cfg.deepseekModel,
         if (systemPrompt != null && systemPrompt.trim().isNotEmpty) 'systemPrompt': systemPrompt,
+        if (sendTools) 'tools': tools.map((t) => t.toJson()).toList(),
       });
 
       final streamed = await client.send(req);
@@ -671,6 +772,13 @@ class AiApiService {
       }
       if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
         final bodyStr = await streamed.stream.bytesToString();
+        // Se mandámos `tools` e o Worker rejeitou por causa disso,
+        // desativa para as próximas chamadas desta sessão de app —
+        // a chamada seguinte (sem tools) tende a funcionar normalmente
+        // em vez de falhar sempre.
+        if (sendTools && (streamed.statusCode == 400 || streamed.statusCode == 422)) {
+          ToolCallingSupport.markUnsupported();
+        }
         String msg = 'Erro ${streamed.statusCode}';
         try {
           final decoded = jsonDecode(bodyStr);
@@ -682,6 +790,23 @@ class AiApiService {
 
       String pending = '';
       String fullText = '';
+      // Tool calls chegam fragmentados por índice ao longo de vários
+      // chunks SSE (ex: chunk 1 traz o nome, chunks seguintes trazem
+      // pedaços dos argumentos). Acumulamos por índice até ao fim.
+      final Map<int, ({String? id, String name, StringBuffer args})> pendingToolCalls = {};
+
+      List<ToolCall> finalizeToolCalls() {
+        final entries = pendingToolCalls.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
+        return entries
+            .where((e) => e.value.id != null && e.value.name.isNotEmpty)
+            .map((e) => ToolCall(
+                  id: e.value.id!,
+                  name: e.value.name,
+                  argumentsJson: e.value.args.toString(),
+                ))
+            .toList();
+      }
 
       await for (final chunk in streamed.stream.transform(utf8.decoder)) {
         pending += chunk;
@@ -694,6 +819,13 @@ class AiApiService {
           final raw = line.substring(6).trim();
           if (raw.isEmpty) continue;
           if (raw == '[DONE]') {
+            if (pendingToolCalls.isNotEmpty) {
+              final calls = finalizeToolCalls();
+              if (calls.isNotEmpty) {
+                yield ChatToolCallEvent(calls);
+                return;
+              }
+            }
             yield ChatDoneEvent(fullText);
             return;
           }
@@ -706,7 +838,25 @@ class AiApiService {
             if (choices is List && choices.isNotEmpty) {
               final choice = choices[0];
               final delta = choice is Map ? choice['delta'] : null;
+
               if (delta is Map) {
+                final rawToolCalls = delta['tool_calls'];
+                if (rawToolCalls is List) {
+                  for (final tc in rawToolCalls) {
+                    if (tc is! Map) continue;
+                    final index = (tc['index'] is num) ? (tc['index'] as num).toInt() : 0;
+                    final fn = tc['function'];
+                    final existing = pendingToolCalls[index];
+                    final id = tc['id']?.toString() ?? existing?.id;
+                    final name = (fn is Map ? fn['name']?.toString() : null) ?? existing?.name ?? '';
+                    final argsFragment = (fn is Map ? fn['arguments']?.toString() : null) ?? '';
+                    final buf = existing?.args ?? StringBuffer();
+                    buf.write(argsFragment);
+                    pendingToolCalls[index] = (id: id, name: name, args: buf);
+                  }
+                  handledAsChoices = true;
+                }
+
                 final deltaContent = delta['content']?.toString();
                 final deltaThink = delta['reasoning_content']?.toString() ?? delta['reasoning']?.toString();
                 if (deltaThink != null && deltaThink.isNotEmpty) {
@@ -719,8 +869,16 @@ class AiApiService {
                   handledAsChoices = true;
                 }
               }
+
               final fr = choice is Map ? choice['finish_reason']?.toString() : null;
               if (fr != null && fr.isNotEmpty && fr != 'null') {
+                if (fr == 'tool_calls' && pendingToolCalls.isNotEmpty) {
+                  final calls = finalizeToolCalls();
+                  if (calls.isNotEmpty) {
+                    yield ChatToolCallEvent(calls);
+                    return;
+                  }
+                }
                 yield ChatDoneEvent(fullText);
                 return;
               }
@@ -755,6 +913,13 @@ class AiApiService {
         }
       }
 
+      if (pendingToolCalls.isNotEmpty) {
+        final calls = finalizeToolCalls();
+        if (calls.isNotEmpty) {
+          yield ChatToolCallEvent(calls);
+          return;
+        }
+      }
       yield ChatDoneEvent(fullText);
     } catch (e) {
       yield ChatErrorEvent('Erro de rede: $e');
@@ -769,8 +934,10 @@ class AiApiService {
     required ApiProvider provider,
     String language = 'pt',
     String? systemPrompt,
+    List<ToolDefinition>? tools,
   }) async {
     final cfg = kProviderMap[provider]!;
+    final sendTools = tools != null && tools.isNotEmpty && ToolCallingSupport.supported;
     final res = await http.post(
       Uri.parse('$kApiBase/ai/chat'),
       headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
@@ -781,11 +948,15 @@ class AiApiService {
         'provider': cfg.provider,
         'model': cfg.deepseekModel,
         if (systemPrompt != null && systemPrompt.trim().isNotEmpty) 'systemPrompt': systemPrompt,
+        if (sendTools) 'tools': tools.map((t) => t.toJson()).toList(),
       }),
     );
     final data = _decode(res.body);
     if (res.statusCode == 402) throw CreditsExhaustedException();
     if (res.statusCode < 200 || res.statusCode >= 300) {
+      if (sendTools && (res.statusCode == 400 || res.statusCode == 422)) {
+        ToolCallingSupport.markUnsupported();
+      }
       throw ApiException(data['error']?.toString() ?? 'Erro ${res.statusCode}', statusCode: res.statusCode);
     }
     return data;
