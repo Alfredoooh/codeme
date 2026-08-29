@@ -1,10 +1,10 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/authscreens.dart
 // ══════════════════════════════════════════════════════════════
-import 'dart:math' as math;
-import 'package:flutter/cupertino.dart';
 import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'colors.dart';
@@ -731,11 +731,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // MOCK — Google Sign-In real fica para uma próxima iteração.
+  // Por agora só dá feedback visual (loading fake) e não faz nada.
+  bool _googleLoading = false;
+
   Future<void> _continueWithGoogle() async {
-    // Integração real do Google Sign-In fica a cargo do auth_service.
-    authController.clearError();
-    final ok = await authController.loginWithGoogle();
-    if (!ok && mounted) setState(() {});
+    if (_googleLoading) return;
+    setState(() => _googleLoading = true);
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (mounted) setState(() => _googleLoading = false);
+    // TODO: ligar Google Sign-In real aqui quando estiver pronto.
   }
 
   @override
@@ -816,8 +821,20 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 14),
                             _GlassAuthButton(
-                              icon: const _GoogleIcon(size: 20),
-                              label: 'Continuar com Google',
+                              icon: _googleLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        valueColor: AlwaysStoppedAnimation(
+                                            _LoginPalette.text),
+                                      ),
+                                    )
+                                  : const _GoogleIcon(size: 20),
+                              label: _googleLoading
+                                  ? 'A continuar...'
+                                  : 'Continuar com Google',
                               onTap: _continueWithGoogle,
                             ),
                             const SizedBox(height: 14),
