@@ -48,6 +48,49 @@ class AllAppsScreen extends StatelessWidget {
                     ]),
                   ),
                 ),
+                // ══════════════════════════════════════════════
+                // BLOCO DE DIAGNÓSTICO TEMPORÁRIO
+                // Mostra no próprio ecrã porque razão a lista está
+                // vazia. Remover depois de confirmares a causa.
+                // ══════════════════════════════════════════════
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppRegistry.all.isEmpty
+                            ? Colors.red.withOpacity(0.12)
+                            : Colors.green.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppRegistry.all.isEmpty ? Colors.red : Colors.green,
+                        ),
+                      ),
+                      child: Text(
+                        AppRegistry.all.isEmpty
+                            ? 'DIAGNÓSTICO: AppRegistry.all está vazio.\n'
+                                'Nenhum assets/apps/*/manifest.json foi '
+                                'encontrado no AssetManifest.json do build '
+                                'instalado. Verifica se o pubspec.yaml foi '
+                                'aplicado no build que instalaste (pub get '
+                                'antes de gerar o pacote), e se a pasta '
+                                'assets/apps foi mesmo incluída nele.'
+                            : 'DIAGNÓSTICO: AppRegistry.all tem '
+                                '${AppRegistry.all.length} apps: '
+                                '${AppRegistry.all.map((e) => e.manifest.slug).join(", ")}.\n'
+                                'Os manifests carregaram bem — se a lista '
+                                'continua vazia lá em baixo, o problema está '
+                                'no SliverList, não no registry.',
+                        style: TextStyle(
+                          color: AppRegistry.all.isEmpty ? Colors.red : Colors.green[800],
+                          fontSize: 12.5,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
                   sliver: SliverList.separated(
