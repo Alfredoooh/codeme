@@ -61,7 +61,6 @@ flutter:
     - assets/editor/sheets.html
     - assets/editor/slides.html
     #- assets/logo.png
-    - assets/images/background1.jpg
 
   fonts:
     - family: IndispensableSerif
