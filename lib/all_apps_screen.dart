@@ -2,6 +2,7 @@
 // FILE: lib/all_apps_screen.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle;
 import 'colors.dart';
