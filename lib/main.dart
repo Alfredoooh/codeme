@@ -248,9 +248,9 @@ class _RootShellState extends State<RootShell>
     return RootShellNavigation(
       switchToEditTab: (type) {
         final screen = switch (type) {
-          EditorType.docs   => const DocsScreen(),
-          EditorType.sheets => const SheetsScreen(),
-          EditorType.slides => const SlidesScreen(),
+          EditorType.docs   => DocsScreen(),
+          EditorType.sheets => SheetsScreen(),
+          EditorType.slides => SlidesScreen(),
         };
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
       },
