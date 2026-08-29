@@ -15,10 +15,6 @@ import 'auth_service.dart';
 import 'authscreens.dart';
 import 'apps/app_types.dart';
 import 'apps/registry/app_registry.dart';
-import 'apps/docs.dart';
-import 'apps/sheets_app.dart';
-import 'apps/slides_app.dart';
-import 'apps/sound.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,16 +34,6 @@ void main() async {
   await appTheme.load();
   await appPreferences.load();
 
-  // ⚠️ Ordem correta: registar builders ANTES de carregar manifests
-  try {
-    DocsScreen.bootstrap();
-    SheetsScreen.bootstrap();
-    SlidesScreen.bootstrap();
-    SoundScreen.bootstrap();
-  } catch (e) {
-    debugPrint('Erro ao registar apps: $e');
-  }
-
   try {
     await AppRegistry.loadManifests();
   } catch (e) {
@@ -59,6 +45,7 @@ void main() async {
 
 class CraftLabApp extends StatefulWidget {
   const CraftLabApp({super.key});
+
   @override
   State<CraftLabApp> createState() => _CraftLabAppState();
 }
