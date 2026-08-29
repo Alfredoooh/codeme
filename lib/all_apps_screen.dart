@@ -12,6 +12,8 @@ import 'apps/app_detail_screen.dart';
 class AllAppsScreen extends StatelessWidget {
   const AllAppsScreen({super.key});
 
+  static const String backgroundImageAsset = 'assets/images/background.png';
+
   void _openAppDetail(BuildContext context, AppEntry app) {
     HapticFeedback.lightImpact();
     Navigator.of(context).push(
@@ -24,15 +26,24 @@ class AllAppsScreen extends StatelessWidget {
     final s = AppTheme.of(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: s.statusBarStyle,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ColoredBox(
-          color: s.pageBackground,
-          child: SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // ── Background image (single image, used for both light/dark) ──
+            Image.asset(
+              backgroundImageAsset,
+              fit: BoxFit.cover,
+            ),
+            // Slight scrim so the fixed header stays legible regardless of
+            // what's behind it, without turning into a solid card.
+            Container(color: Colors.black.withOpacity(0.05)),
+            SafeArea(
+              child: Column(
+                children: [
+                  // ── Fixed header: back button + title, never scrolls ──
+                  Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                     child: Row(children: [
                       _BackButton(s: s, onTap: () => Navigator.pop(context)),
@@ -47,58 +58,33 @@ class AllAppsScreen extends StatelessWidget {
                       ),
                     ]),
                   ),
-                ),
-                // ══════════════════════════════════════════════
-                // BLOCO DE DIAGNÓSTICO TEMPORÁRIO
-                // Mostra o relatório detalhado de loadManifests().
-                // Toca e mantém o texto para selecionar e copiar.
-                // Remover depois de confirmares a causa.
-                // ══════════════════════════════════════════════
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppRegistry.all.isEmpty
-                            ? Colors.red.withOpacity(0.12)
-                            : Colors.green.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppRegistry.all.isEmpty ? Colors.red : Colors.green,
+                  // ── Scrollable list, header above stays put ──
+                  Expanded(
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                          sliver: SliverList.separated(
+                            itemCount: AppRegistry.all.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 18),
+                            itemBuilder: (_, i) {
+                              final app = AppRegistry.all[i];
+                              return _AppListRow(
+                                s: s,
+                                app: app,
+                                index: i,
+                                onTap: () => _openAppDetail(context, app),
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      child: SelectableText(
-                        AppRegistry.debugReport,
-                        style: TextStyle(
-                          color: AppRegistry.all.isEmpty ? Colors.red : Colors.green[800],
-                          fontSize: 11,
-                          height: 1.4,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
+                      ],
                     ),
                   ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-                  sliver: SliverList.separated(
-                    itemCount: AppRegistry.all.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 18),
-                    itemBuilder: (_, i) {
-                      final app = AppRegistry.all[i];
-                      return _AppListRow(
-                        s: s,
-                        app: app,
-                        index: i,
-                        onTap: () => _openAppDetail(context, app),
-                      );
-                    },
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -165,63 +151,77 @@ class _AppListRowState extends State<_AppListRow>
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 110),
             opacity: _pressed ? 0.6 : 1.0,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    widget.app.manifest.isCircularIcon ? _iconSize / 2 : 14,
-                  ),
-                  child: Container(
-                    width: _iconSize,
-                    height: _iconSize,
-                    color: widget.app.manifest.isCircularIcon ? Colors.white : Colors.transparent,
-                    child: Image.asset(
-                      widget.app.manifest.iconAsset,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
+            child: ClipRRect(
+              // Very light blur behind each row only — never a solid card,
+              // just enough to keep text readable over the background image.
+              borderRadius: BorderRadius.circular(14),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.white.withOpacity(0.05),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        widget.app.manifest.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w700,
-                          color: s.onSurface,
-                          height: 1.25,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          widget.app.manifest.isCircularIcon ? _iconSize / 2 : 14,
+                        ),
+                        child: Container(
+                          width: _iconSize,
+                          height: _iconSize,
+                          color: widget.app.manifest.isCircularIcon
+                              ? Colors.white
+                              : Colors.transparent,
+                          child: Image.asset(
+                            widget.app.manifest.iconAsset,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.app.manifest.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12.5,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.app.manifest.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w700,
+                                color: s.onSurface,
+                                height: 1.25,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.app.manifest.description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: s.onSurfaceVariant,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 4),
+                        child: Icon(
+                          CupertinoIcons.chevron_right,
+                          size: 16,
                           color: s.onSurfaceVariant,
-                          height: 1.3,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: Icon(
-                    CupertinoIcons.chevron_right,
-                    size: 16,
-                    color: s.onSurfaceVariant,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
