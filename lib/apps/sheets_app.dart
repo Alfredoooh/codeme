@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/apps/sheets_app.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -8,15 +11,40 @@ import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
-import 'registry/app_registry.dart';
+
+Future<T?> _showAppPopupMenu<T>(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required List<PopupMenuEntry<T>> items,
+}) async {
+  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (box == null) return null;
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final offset = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  final size = box.size;
+  final position = RelativeRect.fromLTRB(
+    offset.dx,
+    offset.dy + size.height,
+    overlayBox.size.width - (offset.dx + size.width),
+    overlayBox.size.height - (offset.dy + size.height),
+  );
+  return showMenu<T>(
+    context: context,
+    position: position,
+    color: s.floatingSurface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(22),
+      side: BorderSide(color: s.outline.withOpacity(0.25)),
+    ),
+    items: items,
+  );
+}
 
 class SheetsScreen extends StatefulWidget {
   const SheetsScreen({super.key});
   @override State<SheetsScreen> createState() => _SheetsScreenState();
-
-  static void bootstrap() {
-    AppRegistry.register('sheets', (_) => const SheetsScreen());
-  }
 }
 
 class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsScreen> {
@@ -31,6 +59,8 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   bool _restoringContent = false;
 
   bool _readyForWebView = false;
+
+  final GlobalKey _moreMenuKey = GlobalKey();
 
   @override
   void initState() {
@@ -211,56 +241,43 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     });
   }
 
-  void _onOpenMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final s = AppTheme.of(context);
-        return Container(
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(color: s.outline.withOpacity(0.4), borderRadius: BorderRadius.circular(999)),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: AppIcon('add', color: s.onSurface, size: 20),
-                title: const Text('Adicionar 50 linhas'),
-                onTap: () { Navigator.pop(ctx); _addFiftyRows(); },
-              ),
-              ListTile(
-                leading: AppIcon('chart', color: s.onSurface, size: 20),
-                title: const Text('Inserir gráfico'),
-                onTap: () { Navigator.pop(ctx); _onInsertChart(); },
-              ),
-              ListTile(
-                leading: AppIcon('image', color: s.onSurface, size: 20),
-                title: const Text('Inserir imagem'),
-                onTap: () { Navigator.pop(ctx); _onInsertImage(); },
-              ),
-              ListTile(
-                leading: AppIcon('link', color: s.onSurface, size: 20),
-                title: const Text('Inserir hiperligação'),
-                onTap: () { Navigator.pop(ctx); _onInsertLink(); },
-              ),
-              ListTile(
-                leading: AppIcon('sparkles', color: s.onSurface, size: 20),
-                title: const Text('Editar com IA'),
-                onTap: () { Navigator.pop(ctx); _openAiEditModal(); },
-              ),
-            ],
-          ),
-        );
-      },
+  // Menu "more" como popup
+  void _openMenu() async {
+    final result = await _showAppPopupMenu<int>(
+      context,
+      AppTheme.of(context),
+      anchorKey: _moreMenuKey,
+      items: [
+        PopupMenuItem(value: 1, child: _buildPopupItem('add', 'Adicionar 50 linhas', false)),
+        PopupMenuItem(value: 2, child: _buildPopupItem('chart', 'Inserir gráfico', false)),
+        PopupMenuItem(value: 3, child: _buildPopupItem('image', 'Inserir imagem', false)),
+        PopupMenuItem(value: 4, child: _buildPopupItem('link', 'Inserir hiperligação', false)),
+        PopupMenuItem(value: 5, child: _buildPopupItem('sparkles', 'Editar com IA', false)),
+      ],
+    );
+    if (result == 1) _addFiftyRows();
+    else if (result == 2) _onInsertChart();
+    else if (result == 3) _onInsertImage();
+    else if (result == 4) _onInsertLink();
+    else if (result == 5) _openAiEditModal();
+  }
+
+  Widget _buildPopupItem(String assetName, String label, bool destructive) {
+    final s = AppTheme.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          AppIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(fontSize: 14, color: destructive ? s.error : s.onSurface)),
+        ],
+      ),
     );
   }
 
@@ -325,7 +342,8 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
                 onUndo: _undo,
                 onRedo: _redo,
                 onAddRow: _addSingleRow,
-                onMenu: _onOpenMenu,
+                onMenu: _openMenu,
+                menuKey: _moreMenuKey,
               ),
               _SheetBottomToolbar(
                 s: s,
@@ -357,6 +375,7 @@ class _ScreenHeader extends StatelessWidget {
   final VoidCallback onRedo;
   final VoidCallback onAddRow;
   final VoidCallback onMenu;
+  final GlobalKey menuKey;
 
   const _ScreenHeader({
     required this.s,
@@ -365,6 +384,7 @@ class _ScreenHeader extends StatelessWidget {
     required this.onRedo,
     required this.onAddRow,
     required this.onMenu,
+    required this.menuKey,
   });
 
   @override
@@ -397,7 +417,7 @@ class _ScreenHeader extends StatelessWidget {
           const SizedBox(width: 8),
           _HeaderIconButton(s: s, assetName: 'add', onTap: onAddRow),
           const SizedBox(width: 8),
-          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu),
+          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu, anchorKey: menuKey),
         ]),
       ),
     );
@@ -408,11 +428,18 @@ class _HeaderIconButton extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
-  const _HeaderIconButton({required this.s, required this.assetName, required this.onTap});
+  final GlobalKey? anchorKey;
+  const _HeaderIconButton({
+    required this.s,
+    required this.assetName,
+    required this.onTap,
+    this.anchorKey,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: anchorKey,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(

@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/apps/sound.dart
+// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -7,7 +10,6 @@ import 'package:just_audio/just_audio.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../all_apps_screen.dart';
-import 'registry/app_registry.dart';
 import 'sound/sound_models.dart';
 import 'sound/sound_widgets.dart';
 import 'sound/sound_player_full.dart';
@@ -17,25 +19,6 @@ class SoundScreen extends StatefulWidget {
   const SoundScreen({super.key});
   @override
   State<SoundScreen> createState() => _SoundScreenState();
-
-  static void bootstrap() {
-    AppRegistry.register(
-      'sound',
-      (_) => const SoundScreen(),
-      triggers: [
-        AppAiTrigger(
-          pattern: RegExp(r'\[\[sound_search:(.*?)\]\]'),
-          onMatch: (context, query) {
-            if (query.isEmpty) return;
-            soundTabController.requestSearch(query);
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SoundScreen()),
-            );
-          },
-        ),
-      ],
-    );
-  }
 }
 
 class _SoundScreenState extends State<SoundScreen> with ThemeReactive<SoundScreen> {

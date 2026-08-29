@@ -11,15 +11,40 @@ import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
 import 'app_types.dart';
-import 'registry/app_registry.dart';
+
+Future<T?> _showAppPopupMenu<T>(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required List<PopupMenuEntry<T>> items,
+}) async {
+  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (box == null) return null;
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final offset = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  final size = box.size;
+  final position = RelativeRect.fromLTRB(
+    offset.dx,
+    offset.dy + size.height,
+    overlayBox.size.width - (offset.dx + size.width),
+    overlayBox.size.height - (offset.dy + size.height),
+  );
+  return showMenu<T>(
+    context: context,
+    position: position,
+    color: s.floatingSurface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(22),
+      side: BorderSide(color: s.outline.withOpacity(0.25)),
+    ),
+    items: items,
+  );
+}
 
 class DocsScreen extends StatefulWidget {
   const DocsScreen({super.key});
   @override State<DocsScreen> createState() => _DocsScreenState();
-
-  static void bootstrap() {
-    AppRegistry.register('docs', (_) => const DocsScreen());
-  }
 }
 
 class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> {
@@ -34,6 +59,9 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   bool _restoringContent = false;
 
   bool _readyForWebView = false;
+
+  final GlobalKey _moreMenuKey = GlobalKey();
+  final GlobalKey _shapesMenuKey = GlobalKey();
 
   @override
   void initState() {
@@ -212,103 +240,64 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     });
   }
 
-  void _onOpenMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final s = AppTheme.of(context);
-        return Container(
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 36, height: 4,
-                decoration: BoxDecoration(color: s.outline.withOpacity(0.4), borderRadius: BorderRadius.circular(999)),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: AppIcon('table', color: s.onSurface, size: 20),
-                title: const Text('Inserir tabela'),
-                onTap: () { Navigator.pop(ctx); _onInsertTable(); },
-              ),
-              ListTile(
-                leading: AppIcon('image', color: s.onSurface, size: 20),
-                title: const Text('Inserir imagem'),
-                onTap: () { Navigator.pop(ctx); _onInsertImage(); },
-              ),
-              ListTile(
-                leading: AppIcon('link', color: s.onSurface, size: 20),
-                title: const Text('Inserir hiperligação'),
-                onTap: () { Navigator.pop(ctx); _onInsertLink(); },
-              ),
-              ListTile(
-                leading: AppIcon('shapes', color: s.onSurface, size: 20),
-                title: const Text('Inserir forma'),
-                onTap: () { Navigator.pop(ctx); _showShapeMenu(); },
-              ),
-              ListTile(
-                leading: AppIcon('chart', color: s.onSurface, size: 20),
-                title: const Text('Inserir gráfico'),
-                onTap: () { Navigator.pop(ctx); _onInsertChart(); },
-              ),
-              ListTile(
-                leading: AppIcon('sparkles', color: s.onSurface, size: 20),
-                title: const Text('Editar com IA'),
-                onTap: () { Navigator.pop(ctx); _openAiEditModal(); },
-              ),
-            ],
-          ),
-        );
-      },
+  // Menu "more" como popup
+  void _openMenu() async {
+    final result = await _showAppPopupMenu<int>(
+      context,
+      AppTheme.of(context),
+      anchorKey: _moreMenuKey,
+      items: [
+        PopupMenuItem(value: 1, child: _buildPopupItem('table', 'Inserir tabela', false)),
+        PopupMenuItem(value: 2, child: _buildPopupItem('image', 'Inserir imagem', false)),
+        PopupMenuItem(value: 3, child: _buildPopupItem('link', 'Inserir hiperligação', false)),
+        PopupMenuItem(value: 4, child: _buildPopupItem('shapes', 'Inserir forma', false)),
+        PopupMenuItem(value: 5, child: _buildPopupItem('chart', 'Inserir gráfico', false)),
+        PopupMenuItem(value: 6, child: _buildPopupItem('sparkles', 'Editar com IA', false)),
+      ],
     );
+    if (result == 1) _onInsertTable();
+    else if (result == 2) _onInsertImage();
+    else if (result == 3) _onInsertLink();
+    else if (result == 4) _showShapeMenuPopup();
+    else if (result == 5) _onInsertChart();
+    else if (result == 6) _openAiEditModal();
   }
 
-  void _showShapeMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final s = AppTheme.of(context);
-        return Container(
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: AppIcon('rect', color: s.onSurface, size: 20),
-                title: const Text('Retângulo'),
-                onTap: () { Navigator.pop(ctx); _onInsertShape('rect'); },
-              ),
-              ListTile(
-                leading: AppIcon('circle', color: s.onSurface, size: 20),
-                title: const Text('Círculo'),
-                onTap: () { Navigator.pop(ctx); _onInsertShape('circle'); },
-              ),
-              ListTile(
-                leading: AppIcon('line', color: s.onSurface, size: 20),
-                title: const Text('Linha'),
-                onTap: () { Navigator.pop(ctx); _onInsertShape('line'); },
-              ),
-              ListTile(
-                leading: AppIcon('arrow', color: s.onSurface, size: 20),
-                title: const Text('Seta'),
-                onTap: () { Navigator.pop(ctx); _onInsertShape('arrow'); },
-              ),
-            ],
-          ),
-        );
-      },
+  // Menu de formas como popup
+  Future<void> _showShapeMenuPopup() async {
+    final result = await _showAppPopupMenu<int>(
+      context,
+      AppTheme.of(context),
+      anchorKey: _shapesMenuKey,
+      items: [
+        PopupMenuItem(value: 1, child: _buildPopupItem('rect', 'Retângulo', false)),
+        PopupMenuItem(value: 2, child: _buildPopupItem('circle', 'Círculo', false)),
+        PopupMenuItem(value: 3, child: _buildPopupItem('line', 'Linha', false)),
+        PopupMenuItem(value: 4, child: _buildPopupItem('arrow', 'Seta', false)),
+      ],
+    );
+    if (result == 1) _onInsertShape('rect');
+    else if (result == 2) _onInsertShape('circle');
+    else if (result == 3) _onInsertShape('line');
+    else if (result == 4) _onInsertShape('arrow');
+  }
+
+  Widget _buildPopupItem(String assetName, String label, bool destructive) {
+    final s = AppTheme.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          AppIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(fontSize: 14, color: destructive ? s.error : s.onSurface)),
+        ],
+      ),
     );
   }
 
@@ -388,7 +377,8 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
                 title: _documentTitle,
                 onUndo: _undo,
                 onRedo: _redo,
-                onMenu: _onOpenMenu,
+                onMenu: _openMenu,
+                menuKey: _moreMenuKey,
               ),
               _DocsBottomToolbar(
                 s: s,
@@ -407,11 +397,12 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
                 onInsertImage: _onInsertImage,
                 onInsertTable: _onInsertTable,
                 onInsertLink: _onInsertLink,
-                onInsertShape: () => _showShapeMenu(),
+                onInsertShape: _showShapeMenuPopup,
                 onInsertChart: _onInsertChart,
                 onAiEdit: () => _openAiEditModal(),
                 onFront: () => _runJs("editorApi.trazerParaFrente()"),
                 onBack: () => _runJs("editorApi.enviarParaTras()"),
+                shapeMenuKey: _shapesMenuKey,
               ),
             ]),
           ),
@@ -427,7 +418,15 @@ class _ScreenHeader extends StatelessWidget {
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onMenu;
-  const _ScreenHeader({required this.s, required this.title, required this.onUndo, required this.onRedo, required this.onMenu});
+  final GlobalKey menuKey;
+  const _ScreenHeader({
+    required this.s,
+    required this.title,
+    required this.onUndo,
+    required this.onRedo,
+    required this.onMenu,
+    required this.menuKey,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +456,7 @@ class _ScreenHeader extends StatelessWidget {
           _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
           _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
           const SizedBox(width: 8),
-          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu),
+          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu, anchorKey: menuKey),
         ]),
       ),
     );
@@ -468,11 +467,18 @@ class _HeaderIconButton extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
-  const _HeaderIconButton({required this.s, required this.assetName, required this.onTap});
+  final GlobalKey? anchorKey;
+  const _HeaderIconButton({
+    required this.s,
+    required this.assetName,
+    required this.onTap,
+    this.anchorKey,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: anchorKey,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
@@ -507,6 +513,7 @@ class _DocsBottomToolbar extends StatelessWidget {
   final VoidCallback onAiEdit;
   final VoidCallback onFront;
   final VoidCallback onBack;
+  final GlobalKey shapeMenuKey;
 
   const _DocsBottomToolbar({
     required this.s,
@@ -530,6 +537,7 @@ class _DocsBottomToolbar extends StatelessWidget {
     required this.onAiEdit,
     required this.onFront,
     required this.onBack,
+    required this.shapeMenuKey,
   });
 
   @override
@@ -563,7 +571,7 @@ class _DocsBottomToolbar extends StatelessWidget {
               _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
               _ToolbarButton(s: s, assetName: 'table', onTap: onInsertTable),
               _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
-              _ToolbarButton(s: s, assetName: 'shapes', onTap: onInsertShape),
+              _ToolbarButton(s: s, assetName: 'shapes', onTap: onInsertShape, anchorKey: shapeMenuKey),
               _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
               _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
               _ToolbarButton(s: s, assetName: 'front', onTap: onFront),
@@ -580,11 +588,18 @@ class _ToolbarButton extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
-  const _ToolbarButton({required this.s, required this.assetName, required this.onTap});
+  final GlobalKey? anchorKey;
+  const _ToolbarButton({
+    required this.s,
+    required this.assetName,
+    required this.onTap,
+    this.anchorKey,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: anchorKey,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
