@@ -51,8 +51,6 @@ class AppDetailScreen extends StatelessWidget {
                       child: Row(
                         children: [
                           _DetailBackButton(s: s, onTap: () => Navigator.pop(context)),
-                          const Spacer(),
-                          _FeedbackButton(s: s, onTap: () => _showFeedbackSheet(context)),
                         ],
                       ),
                     ),
@@ -82,6 +80,10 @@ class AppDetailScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 26),
+                          _SectionTitle(s: s, text: 'Classificações e críticas'),
+                          const SizedBox(height: 10),
+                          _RatingsCard(s: s),
+                          const SizedBox(height: 26),
                           _SectionTitle(s: s, text: 'Assistente de IA'),
                           const SizedBox(height: 10),
                           _AiConnectSwitchRow(s: s, app: app),
@@ -92,15 +94,31 @@ class AppDetailScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                // Botão fixo no fundo, mesmo padrão do _LogoutButton em
+                // Settings: container com gradiente fade-to-transparent,
+                // sem glow/sombra colorida no botão em si.
                 Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 20,
-                  child: SafeArea(
-                    top: false,
-                    child: _OpenAppFloatingButton(
-                      s: s,
-                      onTap: () => AppDetailScreen.openApp(context, app),
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          s.pageBackground,
+                          s.pageBackground.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: _OpenAppButton(
+                        s: s,
+                        onTap: () => AppDetailScreen.openApp(context, app),
+                      ),
                     ),
                   ),
                 ),
@@ -176,6 +194,7 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+// Funcionalidades como bullet points (•), sem ícones.
 class _FeatureRow extends StatelessWidget {
   final AppColorScheme s;
   final String text;
@@ -186,18 +205,18 @@ class _FeatureRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+        SizedBox(
           width: 22,
-          height: 22,
-          margin: const EdgeInsets.only(top: 1),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: s.primary.withOpacity(0.15),
-            shape: BoxShape.circle,
+          child: Text(
+            '•',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: s.onSurfaceVariant,
+              height: 1.4,
+            ),
           ),
-          child: Icon(CupertinoIcons.checkmark_alt, size: 13, color: s.primary),
         ),
-        const SizedBox(width: 12),
         Expanded(
           child: Text(
             text,
@@ -208,6 +227,112 @@ class _FeatureRow extends StatelessWidget {
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// CLASSIFICAÇÕES E CRÍTICAS — desativado por agora.
+// Número grande "0.0", 5 estrelas outline (star.svg), e 5 progress
+// bars (5→1) vazias. Tudo com opacidade reduzida para ler como
+// funcionalidade ainda por chegar.
+// ══════════════════════════════════════════════════════════════
+
+class _RatingsCard extends StatelessWidget {
+  final AppColorScheme s;
+  const _RatingsCard({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.5,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: s.cardShadowSoft,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Número + estrelas
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '0.0',
+                    style: TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800,
+                      color: s.onSurface,
+                      height: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      5,
+                      (_) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1),
+                        child: AppIcon('star', size: 14, color: s.onSurfaceVariant),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 20),
+              // Barras 5 → 1
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(5, (i) {
+                    final star = 5 - i;
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: star == 1 ? 0 : 6),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 12,
+                            child: Text(
+                              '$star',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: s.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: 0,
+                                minHeight: 6,
+                                backgroundColor: s.hover,
+                                valueColor:
+                                    AlwaysStoppedAnimation(s.onSurfaceVariant),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SWITCH "Ligar ao Nexa AI" — mesmo visual pill do
+// _ThemeSegmentedControl em Settings (thumb animado dentro de trilho).
+// ══════════════════════════════════════════════════════════════
 
 class _AiConnectSwitchRow extends StatefulWidget {
   final AppColorScheme s;
@@ -269,10 +394,11 @@ class _AiConnectSwitchRowState extends State<_AiConnectSwitchRow> {
               ],
             ),
           ),
-          Switch(
+          const SizedBox(width: 12),
+          _PillSwitch(
+            s: s,
             value: value,
             onChanged: (v) => enabledAppsController.setEnabled(slug, v),
-            activeColor: s.primary,
           ),
         ],
       ),
@@ -280,6 +406,57 @@ class _AiConnectSwitchRowState extends State<_AiConnectSwitchRow> {
   }
 }
 
+class _PillSwitch extends StatelessWidget {
+  final AppColorScheme s;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _PillSwitch({
+    required this.s,
+    required this.value,
+    required this.onChanged,
+  });
+
+  static const double _width = 48;
+  static const double _height = 28;
+  static const double _thumbSize = 22;
+  static const double _padding = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        width: _width,
+        height: _height,
+        padding: const EdgeInsets.all(_padding),
+        decoration: BoxDecoration(
+          color: value ? s.primary : s.hover,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: _thumbSize,
+            height: _thumbSize,
+            decoration: BoxDecoration(
+              color: value ? s.onPrimary : s.cardBackground,
+              shape: BoxShape.circle,
+              boxShadow: s.cardShadow,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Row "Enviar feedback" — usa comment.svg, é a única entrada de
+// feedback agora que o botão do topo foi removido.
 class _FeedbackRow extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
@@ -311,7 +488,7 @@ class _FeedbackRowState extends State<_FeedbackRow> {
         ),
         child: Row(
           children: [
-            Icon(CupertinoIcons.chat_bubble_text, size: 19, color: s.onSurfaceVariant),
+            AppIcon('comment', size: 19, color: s.onSurfaceVariant),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -331,16 +508,21 @@ class _FeedbackRowState extends State<_FeedbackRow> {
   }
 }
 
-class _OpenAppFloatingButton extends StatefulWidget {
+// ══════════════════════════════════════════════════════════════
+// BOTÃO "Abrir aplicativo" — sólido, sem glow/sombra colorida.
+// Vive dentro do container com gradiente fixo no fundo do ecrã.
+// ══════════════════════════════════════════════════════════════
+
+class _OpenAppButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
-  const _OpenAppFloatingButton({required this.s, required this.onTap});
+  const _OpenAppButton({required this.s, required this.onTap});
 
   @override
-  State<_OpenAppFloatingButton> createState() => _OpenAppFloatingButtonState();
+  State<_OpenAppButton> createState() => _OpenAppButtonState();
 }
 
-class _OpenAppFloatingButtonState extends State<_OpenAppFloatingButton> {
+class _OpenAppButtonState extends State<_OpenAppButton> {
   bool _pressed = false;
 
   @override
@@ -354,8 +536,8 @@ class _OpenAppFloatingButtonState extends State<_OpenAppFloatingButton> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 110),
+        curve: kCupertinoOut,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -363,13 +545,6 @@ class _OpenAppFloatingButtonState extends State<_OpenAppFloatingButton> {
           decoration: BoxDecoration(
             color: s.primary,
             borderRadius: BorderRadius.circular(999),
-            boxShadow: [
-              BoxShadow(
-                color: s.primary.withOpacity(0.35),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Text(
             'Abrir aplicativo',
@@ -532,44 +707,6 @@ class _DetailBackButtonState extends State<_DetailBackButton> {
             boxShadow: widget.s.cardShadow,
           ),
           child: AppIcon('back', size: 18, color: widget.s.onSurface),
-        ),
-      ),
-    );
-  }
-}
-
-class _FeedbackButton extends StatefulWidget {
-  final AppColorScheme s;
-  final VoidCallback onTap;
-  const _FeedbackButton({required this.s, required this.onTap});
-  @override
-  State<_FeedbackButton> createState() => _FeedbackButtonState();
-}
-
-class _FeedbackButtonState extends State<_FeedbackButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.9 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.s.cardBackground,
-            shape: BoxShape.circle,
-            boxShadow: widget.s.cardShadow,
-          ),
-          child: Icon(CupertinoIcons.chat_bubble_text, size: 18, color: widget.s.onSurface),
         ),
       ),
     );

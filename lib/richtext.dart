@@ -1845,10 +1845,17 @@ List<_TokenPattern> _patternsForLanguage(String language) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TELA DE PREVIEW SEPARADA
+// TELA DE PREVIEW — código / pré-visualização com tabs
+// ══════════════════════════════════════════════════════════════
+//
+// Header escuro fixo no topo com curvatura côncava nos cantos de
+// baixo (morde o card claro que vem a seguir), mesmo princípio
+// visual invertido do card convexo. Tabs "Código" / "Pré-visualizar"
+// no mesmo padrão pill/thumb-deslizante do _ThemeSegmentedControl
+// (Aparência, em settings.dart). Botão de partilha usa share1.svg.
 // ══════════════════════════════════════════════════════════════
 
-class AiCodePreviewScreen extends StatelessWidget {
+class AiCodePreviewScreen extends StatefulWidget {
   final String code;
   final String language;
   final AppColorScheme s;
@@ -1861,35 +1868,263 @@ class AiCodePreviewScreen extends StatelessWidget {
   });
 
   @override
+  State<AiCodePreviewScreen> createState() => _AiCodePreviewScreenState();
+}
+
+enum _PreviewTab { code, preview }
+
+class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
+  _PreviewTab _tab = _PreviewTab.preview;
+
+  static const Color _headerColor = Color(0xFF161616);
+  static const Color _cardColor = Color(0xFFF5F5F5);
+  static const double _concaveRadius = 28;
+
+  Future<void> _share() async {
+    await Share.share(widget.code);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161616),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          language.isEmpty ? 'Preview' : 'Preview · $language',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400),
-        ),
-        leading: IconButton(
-          icon: const AppIcon('back.svg', color: Colors.white, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+      backgroundColor: _headerColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Header escuro: X · tabs · share ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+              child: Row(
+                children: [
+                  _RoundIconButton(
+                    svgAsset: 'close.svg',
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _PreviewTabSwitch(
+                      value: _tab,
+                      onChanged: (t) => setState(() => _tab = t),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _RoundIconButton(
+                    svgAsset: 'share1.svg',
+                    onTap: _share,
+                  ),
+                ],
+              ),
+            ),
+            // ── Card claro: cantos convexos em cima, encaixando na
+            // curvatura côncava do header acima ──
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: _cardColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(_concaveRadius),
+                    topRight: Radius.circular(_concaveRadius),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _tab == _PreviewTab.code
+                    ? _CodeTabView(code: widget.code, language: widget.language)
+                    : _PreviewTabView(code: widget.code),
+              ),
+            ),
+          ],
         ),
       ),
-      body: InAppWebView(
-        initialData: InAppWebViewInitialData(
-          data: code,
-          mimeType: 'text/html',
-          baseUrl: WebUri('about:blank'),
+    );
+  }
+}
+
+// ── Curvatura côncava sob o header: um clipper que "morde" os
+// cantos inferiores para dentro, em vez de arredondá-los para fora ──
+class _ConcaveBottomClipper extends CustomClipper<Path> {
+  final double radius;
+  const _ConcaveBottomClipper(this.radius);
+
+  @override
+  Path getClip(Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..quadraticBezierTo(
+        size.width - radius, size.height - radius,
+        size.width - radius * 2, size.height,
+      )
+      ..lineTo(radius * 2, size.height)
+      ..quadraticBezierTo(
+        radius, size.height - radius,
+        0, size.height,
+      )
+      ..close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+// ── Tabs "Código" / "Pré-visualizar", mesmo padrão pill do
+// _ThemeSegmentedControl em settings.dart ──
+class _PreviewTabSwitch extends StatelessWidget {
+  final _PreviewTab value;
+  final ValueChanged<_PreviewTab> onChanged;
+  const _PreviewTabSwitch({required this.value, required this.onChanged});
+
+  static const _options = [
+    (_PreviewTab.code, 'Código'),
+    (_PreviewTab.preview, 'Pré-visualizar'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedIndex = _options.indexWhere((o) => o.$1 == value);
+
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final segmentWidth = constraints.maxWidth / _options.length;
+        return Stack(children: [
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            left: segmentWidth * selectedIndex.clamp(0, _options.length - 1),
+            top: 0,
+            bottom: 0,
+            width: segmentWidth,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF454545),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              for (final (tab, label) in _options)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(tab),
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight:
+                              value == tab ? FontWeight.w700 : FontWeight.w500,
+                          color: value == tab
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.55),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ]);
+      }),
+    );
+  }
+}
+
+class _RoundIconButton extends StatefulWidget {
+  final String svgAsset;
+  final VoidCallback onTap;
+  const _RoundIconButton({required this.svgAsset, required this.onTap});
+
+  @override
+  State<_RoundIconButton> createState() => _RoundIconButtonState();
+}
+
+class _RoundIconButtonState extends State<_RoundIconButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        child: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: Color(0xFF2A2A2A),
+            shape: BoxShape.circle,
+          ),
+          child: AppIcon(widget.svgAsset, size: 17, color: Colors.white),
         ),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          supportZoom: false,
-          transparentBackground: false,
-          allowFileAccessFromFileURLs: true,
-          allowUniversalAccessFromFileURLs: true,
+      ),
+    );
+  }
+}
+
+// ── Tab "Código": reaproveita o highlighter existente
+// (_highlightCode), mas em fundo claro para bater com o card ──
+class _CodeTabView extends StatelessWidget {
+  final String code;
+  final String language;
+  const _CodeTabView({required this.code, required this.language});
+
+  @override
+  Widget build(BuildContext context) {
+    final baseStyle = const TextStyle(
+      fontFamily: 'monospace',
+      fontSize: 14.5,
+      height: 1.7,
+      color: Color(0xFF1F1F1F),
+    );
+    final spans = _highlightCode(code, language, baseStyle);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SelectableText.rich(
+          TextSpan(style: baseStyle, children: spans),
         ),
+      ),
+    );
+  }
+}
+
+// ── Tab "Pré-visualizar": o WebView, exatamente como antes ──
+class _PreviewTabView extends StatelessWidget {
+  final String code;
+  const _PreviewTabView({required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    return InAppWebView(
+      initialData: InAppWebViewInitialData(
+        data: code,
+        mimeType: 'text/html',
+        baseUrl: WebUri('about:blank'),
+      ),
+      initialSettings: InAppWebViewSettings(
+        javaScriptEnabled: true,
+        supportZoom: false,
+        transparentBackground: false,
+        allowFileAccessFromFileURLs: true,
+        allowUniversalAccessFromFileURLs: true,
       ),
     );
   }

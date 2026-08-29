@@ -2,7 +2,6 @@
 // FILE: lib/all_apps_screen.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle;
 import 'colors.dart';
@@ -12,8 +11,6 @@ import 'apps/app_detail_screen.dart';
 
 class AllAppsScreen extends StatelessWidget {
   const AllAppsScreen({super.key});
-
-  static const String backgroundImageAsset = 'assets/images/background.png';
 
   void _openAppDetail(BuildContext context, AppEntry app) {
     HapticFeedback.lightImpact();
@@ -27,24 +24,15 @@ class AllAppsScreen extends StatelessWidget {
     final s = AppTheme.of(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: s.statusBarStyle,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ── Background image (single image, used for both light/dark) ──
-            Image.asset(
-              backgroundImageAsset,
-              fit: BoxFit.cover,
-            ),
-            // Slight scrim so the fixed header stays legible regardless of
-            // what's behind it, without turning into a solid card.
-            Container(color: Colors.black.withOpacity(0.05)),
-            SafeArea(
-              child: Column(
-                children: [
-                  // ── Fixed header: back button + title, never scrolls ──
-                  Padding(
+      child: Material(
+        type: MaterialType.transparency,
+        child: ColoredBox(
+          color: s.pageBackground,
+          child: SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                     child: Row(children: [
                       _BackButton(s: s, onTap: () => Navigator.pop(context)),
@@ -59,45 +47,107 @@ class AllAppsScreen extends StatelessWidget {
                       ),
                     ]),
                   ),
-                  // ── Scrollable list, header above stays put ──
-                  Expanded(
-                    child: CustomScrollView(
-                      slivers: [
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-                          sliver: SliverList.separated(
-                            itemCount: AppRegistry.all.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 18),
-                            itemBuilder: (_, i) {
-                              final app = AppRegistry.all[i];
-                              return _AppListRow(
-                                s: s,
-                                app: app,
-                                index: i,
-                                onTap: () => _openAppDetail(context, app),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+                  sliver: SliverToBoxAdapter(
+                    child: _AppsGroup(
+                      s: s,
+                      apps: AppRegistry.all,
+                      onTapApp: (app) => _openAppDetail(context, app),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _AppListRow extends StatefulWidget {
+// ══════════════════════════════════════════════════════════════
+// GRUPO DE APPS — mesmo padrão visual de _SettingsGroup/_SettingsCard
+// (cantos grandes só nas pontas do grupo, 2px entre linhas, cantos
+// pequenos onde as linhas se tocam), mas com linhas mais altas para
+// caber o ícone grande de cada app.
+// ══════════════════════════════════════════════════════════════
+
+class _AppsGroup extends StatelessWidget {
+  final AppColorScheme s;
+  final List<AppEntry> apps;
+  final ValueChanged<AppEntry> onTapApp;
+  const _AppsGroup({
+    required this.s,
+    required this.apps,
+    required this.onTapApp,
+  });
+
+  static const double _outerRadius = 20;
+  static const double _innerRadius = 6;
+
+  BorderRadius _radiusFor(int index, int count) {
+    if (count == 1) return BorderRadius.circular(_outerRadius);
+    final isFirst = index == 0;
+    final isLast = index == count - 1;
+    return BorderRadius.only(
+      topLeft: Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      topRight: Radius.circular(isFirst ? _outerRadius : _innerRadius),
+      bottomLeft: Radius.circular(isLast ? _outerRadius : _innerRadius),
+      bottomRight: Radius.circular(isLast ? _outerRadius : _innerRadius),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < apps.length; i++) {
+      children.add(_AppCard(
+        s: s,
+        radius: _radiusFor(i, apps.length),
+        app: apps[i],
+        index: i,
+        onTap: () => onTapApp(apps[i]),
+      ));
+      if (i != apps.length - 1) children.add(const SizedBox(height: 2));
+    }
+    return Column(children: children);
+  }
+}
+
+class _AppCard extends StatelessWidget {
+  final AppColorScheme s;
+  final BorderRadius radius;
+  final AppEntry app;
+  final int index;
+  final VoidCallback onTap;
+  const _AppCard({
+    required this.s,
+    required this.radius,
+    required this.app,
+    required this.index,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: radius,
+          boxShadow: s.cardShadowSoft,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _AppRow(s: s, app: app, index: index, onTap: onTap),
+      );
+}
+
+class _AppRow extends StatefulWidget {
   final AppColorScheme s;
   final AppEntry app;
   final int index;
   final VoidCallback onTap;
-  const _AppListRow({
+  const _AppRow({
     required this.s,
     required this.app,
     required this.index,
@@ -105,16 +155,16 @@ class _AppListRow extends StatefulWidget {
   });
 
   @override
-  State<_AppListRow> createState() => _AppListRowState();
+  State<_AppRow> createState() => _AppRowState();
 }
 
-class _AppListRowState extends State<_AppListRow>
+class _AppRowState extends State<_AppRow>
     with SingleTickerProviderStateMixin {
   bool _pressed = false;
   late final AnimationController _enterController;
   late final Animation<double> _enterAnim;
 
-  static const double _iconSize = 56;
+  static const double _iconSize = 60;
 
   @override
   void initState() {
@@ -149,80 +199,69 @@ class _AppListRowState extends State<_AppListRow>
           onTapCancel: () => setState(() => _pressed = false),
           onTapUp: (_) => setState(() => _pressed = false),
           onTap: widget.onTap,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 110),
-            opacity: _pressed ? 0.6 : 1.0,
-            child: ClipRRect(
-              // Very light blur behind each row only — never a solid card,
-              // just enough to keep text readable over the background image.
-              borderRadius: BorderRadius.circular(14),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.white.withOpacity(0.05),
-                  child: Row(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            color: _pressed ? s.hover : Colors.transparent,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    widget.app.manifest.isCircularIcon ? _iconSize / 2 : 16,
+                  ),
+                  child: Container(
+                    width: _iconSize,
+                    height: _iconSize,
+                    color: widget.app.manifest.isCircularIcon
+                        ? Colors.white
+                        : Colors.transparent,
+                    child: Image.asset(
+                      widget.app.manifest.iconAsset,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          widget.app.manifest.isCircularIcon ? _iconSize / 2 : 14,
-                        ),
-                        child: Container(
-                          width: _iconSize,
-                          height: _iconSize,
-                          color: widget.app.manifest.isCircularIcon
-                              ? Colors.white
-                              : Colors.transparent,
-                          child: Image.asset(
-                            widget.app.manifest.iconAsset,
-                            fit: BoxFit.cover,
-                          ),
+                      Text(
+                        widget.app.manifest.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: s.onSurface,
+                          height: 1.25,
                         ),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.app.manifest.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 15.5,
-                                fontWeight: FontWeight.w700,
-                                color: s.onSurface,
-                                height: 1.25,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.app.manifest.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: s.onSurfaceVariant,
-                                height: 1.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8, top: 4),
-                        child: Icon(
-                          CupertinoIcons.chevron_right,
-                          size: 16,
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.app.manifest.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
                           color: s.onSurfaceVariant,
+                          height: 1.3,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: s.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
