@@ -1,11 +1,6 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
-// NOVO: CraftLabApp agora é um StatefulWidget que escuta appTheme
-// e appPreferences e atualiza o SystemUiOverlayStyle imediatamente
-// quando o tema ou a escala de texto muda, sem atrasos.
-// O MaterialApp continua a reconstruir com o ThemeMode reativo.
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -39,18 +34,26 @@ void main() async {
     systemNavigationBarDividerColor: Colors.transparent,
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
   await appTheme.load();
-  await appPreferences.load(); // ← garante persistência do fontScale
+  await appPreferences.load();
 
-  // Cada app regista-se a si próprio (builder + triggers de IA, se
-  // tiver). Esta é a ÚNICA lista que cresce quando um app novo é
-  // adicionado — main.dart nunca sabe o que cada app faz por dentro.
-  DocsScreen.bootstrap();
-  SheetsScreen.bootstrap();
-  SlidesScreen.bootstrap();
-  SoundScreen.bootstrap();
+  // Registro dos apps com proteção contra falhas
+  try {
+    DocsScreen.bootstrap();
+    SheetsScreen.bootstrap();
+    SlidesScreen.bootstrap();
+    SoundScreen.bootstrap();
+  } catch (e) {
+    debugPrint('Erro ao registar apps: $e');
+  }
 
-  await AppRegistry.loadManifests();
+  // Carregamento dos manifests com proteção contra falhas
+  try {
+    await AppRegistry.loadManifests();
+  } catch (e) {
+    debugPrint('Erro ao carregar manifests: $e');
+  }
 
   runApp(const CraftLabApp());
 }
