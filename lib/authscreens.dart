@@ -353,7 +353,7 @@ class _StreamingPhrasesState extends State<_StreamingPhrases>
   }
 }
 
-// ── Ilustração de topo (background1.png) — só a tela de LOGIN usa,
+// ── Ilustração de topo (background.png) — só a tela de LOGIN usa,
 // com fade real na base fundindo para a paleta fixa do login.
 class _AuthHeroImage extends StatelessWidget {
   final double height;
@@ -376,7 +376,7 @@ class _AuthHeroImage extends StatelessWidget {
               ).createShader(rect),
               blendMode: BlendMode.dstIn,
               child: Image.asset(
-                'assets/images/background1.png',
+                'assets/images/background.png',
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
               ),
@@ -705,7 +705,7 @@ class _AuthErrorBanner extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOGIN SCREEN — réplica 1:1 do HTML: fundo background1.png fixo
+// LOGIN SCREEN — réplica 1:1 do HTML: fundo background.png fixo
 // (sem depender de tema), logo animado no topo, frases streaming
 // no centro, subtítulo colado ao primeiro botão, botões glass
 // (Google + Continuar com email) ancorados na base.
@@ -762,7 +762,7 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: const BoxDecoration(
             color: _LoginPalette.bg,
             image: DecorationImage(
-              image: AssetImage('assets/images/background1.png'),
+              image: AssetImage('assets/images/background.png'),
               fit: BoxFit.cover,
             ),
           ),
