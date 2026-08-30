@@ -1006,3 +1006,240 @@ Map<String, dynamic> _decode(String body) {
     return {};
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// TOOLS API — execução no servidor de tools
+// ══════════════════════════════════════════════════════════════
+class ToolsApiService {
+  static Future<Map<String, dynamic>> executeTool({
+    required String token,
+    required String name,
+    required Map<String, dynamic> input,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$kApiBase/tools/execute'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'name': name, 'input': input}),
+    );
+    final data = _decode(res.body);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw ApiException(data['error']?.toString() ?? 'Erro ao executar tool', statusCode: res.statusCode);
+    }
+    // O servidor devolve { tool_name: "...", result: { ... } }
+    // Extrai apenas o result para uniformizar com as tools locais.
+    if (data is Map && data.containsKey('result')) {
+      final result = data['result'];
+      if (result is Map<String, dynamic>) return result;
+      if (result is Map) return Map<String, dynamic>.from(result);
+      return {};
+    }
+    return data;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// DEFINIÇÕES COMPLETAS DAS TOOLS — todas as expostas pelo servidor
+// ══════════════════════════════════════════════════════════════
+const List<ToolDefinition> kAllTools = [
+  ToolDefinition(
+    name: 'web_search',
+    description: 'Pesquisa informação atual na web usando um motor de busca real. Usa sempre que precisares de informação recente, notícias, ou dados que possam ter mudado — nunca inventes resultados.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Termo de busca'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'search_market',
+    description: 'Pesquisa dados reais de um ativo financeiro: cripto (nome/símbolo, ex "bitcoin"), câmbio (código ISO, ex "EUR", "USD/JPY"), ou ação/índice (ticker, ex "AAPL"). Devolve preço e variação reais — nunca inventes valores.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Nome, símbolo, código ou ticker'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'search_place',
+    description: 'Pesquisa a localização real (coordenadas e nome formal) de um lugar — cidade, morada, ponto de interesse. Nunca inventes coordenadas.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Nome do lugar'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'search_calendar_date',
+    description: 'Resolve uma data em linguagem natural (ex "próxima sexta-feira") para ISO (YYYY-MM-DD).',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Referência de data em linguagem natural'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_pdf',
+    description: 'Gera um PDF a partir de texto simples (sem HTML), devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'title': {'type': 'string'},
+        'content': {'type': 'string', 'description': 'Parágrafos separados por \\n\\n'},
+      },
+      'required': ['title', 'content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_docx',
+    description: 'Gera um Word (.docx) a partir de texto simples (sem HTML), devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'title': {'type': 'string'},
+        'content': {'type': 'string', 'description': 'Parágrafos separados por \\n\\n'},
+      },
+      'required': ['title', 'content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_xlsx',
+    description: 'Gera uma planilha Excel (.xlsx) a partir de headers e linhas já estruturados, devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'sheet_name': {'type': 'string'},
+        'headers': {'type': 'array', 'items': {'type': 'string'}},
+        'rows': {'type': 'array', 'items': {'type': 'array', 'items': {'type': 'string'}}},
+      },
+      'required': ['headers', 'rows'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_pptx',
+    description: 'Gera um PowerPoint (.pptx) a partir de slides já estruturados, devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'title': {'type': 'string'},
+        'slides': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'heading': {'type': 'string'},
+              'bullets': {'type': 'array', 'items': {'type': 'string'}},
+            },
+          },
+        },
+      },
+      'required': ['title', 'slides'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_chart',
+    description: 'Gera um gráfico como PNG, devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'chart_type': {'type': 'string', 'enum': ['line', 'bar', 'pie', 'doughnut']},
+        'title': {'type': 'string'},
+        'labels': {'type': 'array', 'items': {'type': 'string'}},
+        'data': {'type': 'array', 'items': {'type': 'number'}},
+        'dataset_label': {'type': 'string'},
+      },
+      'required': ['chart_type', 'labels', 'data'],
+    },
+  ),
+  ToolDefinition(
+    name: 'csv_to_xlsx',
+    description: 'Converte CSV em planilha Excel (.xlsx), devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'csv_content': {'type': 'string'},
+      },
+      'required': ['csv_content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'json_transform',
+    description: 'Transforma array JSON de objetos em tabela (headers + rows).',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'json_data': {'type': 'string'},
+      },
+      'required': ['json_data'],
+    },
+  ),
+  ToolDefinition(
+    name: 'convert_document',
+    description: 'Converte um documento entre formatos (docx, pdf, xlsx, pptx, txt, csv, html) a partir de conteúdo base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'source_format': {'type': 'string'},
+        'target_format': {'type': 'string'},
+        'content_base64': {'type': 'string', 'description': 'Conteúdo do ficheiro de origem em base64'},
+        'filename': {'type': 'string'},
+      },
+      'required': ['source_format', 'target_format', 'content_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'html_to_docx',
+    description: 'Converte HTML (qualquer estrutura) em Word (.docx), devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'html_content': {'type': 'string', 'description': 'HTML completo ou fragmento'},
+        'filename': {'type': 'string'},
+      },
+      'required': ['html_content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'html_to_pdf',
+    description: 'Converte HTML em PDF preservando títulos, parágrafos, listas, tabelas e negrito/itálico — não reproduz CSS avançado. Devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'html_content': {'type': 'string'},
+        'title': {'type': 'string'},
+      },
+      'required': ['html_content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'html_to_xlsx',
+    description: 'Converte HTML em planilha Excel (.xlsx). Procura <table> em qualquer profundidade; sem <table>, cada <p>/<li> vira uma linha. Devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'html_content': {'type': 'string'},
+        'sheet_name': {'type': 'string'},
+      },
+      'required': ['html_content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'html_to_pptx',
+    description: 'Converte HTML em PowerPoint (.pptx). Cada <h1>/<h2> inicia um novo slide; headings viram título, resto do conteúdo vira bullets. Devolve em base64.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'html_content': {'type': 'string'},
+        'title': {'type': 'string'},
+      },
+      'required': ['html_content'],
+    },
+  ),
+];

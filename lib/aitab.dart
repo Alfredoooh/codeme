@@ -1,19 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-//
-// ATUALIZAÇÃO: _send() agora lida com um segundo tipo de evento
-// vindo do stream — ChatToolCallEvent. Quando isso acontece:
-//   1) Mostra um card de progresso (reaproveitando o mesmo padrão
-//      visual de _StreamGenericOpenBlock / _CanvasProgressCard já
-//      usado para "A criar documento...", mas com o label
-//      "A pesquisar mercado..." / "A localizar..." / etc.)
-//   2) Executa a função local correspondente (resolveMarketQuery /
-//      resolvePlaceQuery / resolveCalendarDateQuery de aiwidgets.dart)
-//   3) Faz uma SEGUNDA chamada a streamChat, reenviando o histórico
-//      + uma mensagem assistant com tool_calls + uma mensagem
-//      role:"tool" com o resultado serializado
-//   4) Só a resposta dessa segunda chamada é que vira uma mensagem
-//      normal no histórico da conversa
-// ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -115,50 +99,11 @@ correta — nunca precisas de explicar a notação, apenas escrevê-la.
 
 const String kAiWidgetsInstructions = '''
 Tens também acesso a widgets visuais interativos, que aparecem diretamente
-dentro da conversa (nunca em canvas), e a três funções (tools) que te
-permitem pesquisar dados reais antes de escrever esses widgets:
-search_market, search_place e search_calendar_date.
+dentro da conversa (nunca em canvas), e a várias funções (tools) para pesquisar, criar documentos, converter ficheiros, etc. As tools disponíveis são: web_search, search_market, search_place, search_calendar_date, create_pdf, create_docx, create_xlsx, create_pptx, generate_chart, csv_to_xlsx, json_transform, convert_document, html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx.
 
-REGRA IMPORTANTE: nunca escrevas um bloco widget_market, widget_calendar ou
-widget_map com valores adivinhados (coordenadas, símbolos, preços). Chama
-sempre a função correspondente primeiro, espera pelo resultado, e só depois
-escreve o bloco widget com os dados reais que a função devolveu.
+Para widgets de mercado, lugar e calendário, chama primeiro a tool correspondente, espera o resultado, e escreve o bloco widget com os dados reais.
 
-Fluxo para cada tipo de widget:
-
-1. MERCADO: quando o utilizador pedir uma cotação, chama search_market com
-   a query tal como o utilizador a mencionou (ex: "bitcoin", "euro",
-   "tesla"). O resultado vem no formato {"found": true/false, "type":
-   "crypto"|"forex", "symbol": "...", "name": "...", "coingeckoId": "..."}
-   (coingeckoId só existe para cripto). Se found for true, escreve:
-   ```widget_market
-   {"found": true, "type": "<type>", "symbol": "<symbol>", "name": "<name>", "coingeckoId": "<coingeckoId ou omite se forex>"}
-   ```
-   Se found for false, escreve o mesmo JSON tal como veio (com found:false)
-   dentro do bloco widget_market — o cartão mostra automaticamente um
-   estado de "não encontrado" ao utilizador, não precisas de explicar isso
-   em texto. Não tentes adivinhar outro símbolo sozinho.
-
-2. LUGAR/MAPA: quando precisares de mostrar uma localização, chama
-   search_place com a query (ex: "Lisboa", "Torre Eiffel"). O resultado vem
-   como {"found": true/false, "name": "...", "lat": ..., "lng": ...}. Se
-   found for true, escreve:
-   ```widget_map
-   {"found": true, "lat": <lat>, "lng": <lng>, "zoom": 12, "name": "<name>"}
-   ```
-   Se found for false, escreve o mesmo JSON com found:false dentro do
-   bloco widget_map.
-
-3. CALENDÁRIO/DATA: quando o utilizador mencionar uma data relativa (ex:
-   "marca para sexta-feira", "daqui a duas semanas") e precisares de a
-   converter para uma data absoluta antes de criar um evento, chama
-   search_calendar_date com a expressão tal como o utilizador a escreveu.
-   O resultado vem como {"found": true/false, "isoDate": "YYYY-MM-DD",
-   "humanLabel": "..."}. Usa o isoDate resolvido no campo "date" de um
-   evento dentro de um bloco widget_calendar, no formato:
-   ```widget_calendar
-   {"events": [{"date":"<isoDate>","name":"...","time":"...","color":"#6F5AF6"}]}
-   ```
+Quando usares web_search, inclui as fontes no final da resposta de forma natural.
 
 Não uses widget_code — blocos de código normais já aparecem automaticamente
 formatados. Não uses widget_sheet — foi descontinuado (usa
@@ -315,9 +260,6 @@ extension ConversationActionX on ConversationAction {
       }[this]!;
 }
 
-// ══════════════════════════════════════════════════════════════
-// POPUP GENÉRICO (showMenu nativo)
-// ══════════════════════════════════════════════════════════════
 class PopupMenuEntry<T> {
   final T value;
   final String label;
@@ -447,9 +389,6 @@ class PopupMenu<T> extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CABEÇALHO DO CHAT (menu de ações)
-// ══════════════════════════════════════════════════════════════
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
@@ -584,9 +523,6 @@ class _HeaderMenuButton extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// AÇÕES DA MENSAGEM (long press)
-// ══════════════════════════════════════════════════════════════
 void showMessageActionsPopup(
   BuildContext context,
   AppColorScheme s, {
@@ -670,9 +606,6 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// ANEXAR (popup)
-// ══════════════════════════════════════════════════════════════
 void showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
@@ -945,13 +878,24 @@ String _labelForWidgetId(String widgetId) => switch (widgetId) {
       _ => 'Criando widget...',
     };
 
-/// Label mostrado no card de progresso enquanto uma tool call está
-/// a ser executada (antes de haver qualquer texto no stream).
 String _labelForToolName(String toolName) => switch (toolName) {
+      'web_search' => 'A pesquisar na web...',
       'search_market' => 'A pesquisar mercado...',
       'search_place' => 'A localizar...',
       'search_calendar_date' => 'A interpretar data...',
-      _ => 'A pesquisar...',
+      'create_pdf' => 'A criar PDF...',
+      'create_docx' => 'A criar documento Word...',
+      'create_xlsx' => 'A criar folha de cálculo...',
+      'create_pptx' => 'A criar apresentação...',
+      'generate_chart' => 'A gerar gráfico...',
+      'csv_to_xlsx' => 'A converter CSV...',
+      'json_transform' => 'A transformar JSON...',
+      'convert_document' => 'A converter documento...',
+      'html_to_docx' => 'A converter HTML para Word...',
+      'html_to_pdf' => 'A converter HTML para PDF...',
+      'html_to_xlsx' => 'A converter HTML para Excel...',
+      'html_to_pptx' => 'A converter HTML para PowerPoint...',
+      _ => 'A executar...',
     };
 
 _StreamElement _openBlockToElement(String raw, _OpenBlockInfo info) {
@@ -1440,11 +1384,6 @@ class _WidgetProgressCard extends StatelessWidget {
   }
 }
 
-// Card de progresso para uma tool call em execução (search_market /
-// search_place / search_calendar_date). Mesmo padrão visual dos
-// cards acima — ícone animado + label — mas sem modal de detalhe,
-// porque não há conteúdo streaming para mostrar durante a execução
-// da função (é uma chamada de rede única, não geração de texto).
 class _ToolCallProgressCard extends StatelessWidget {
   final AppColorScheme s;
   final String label;
@@ -1463,7 +1402,19 @@ class _ToolCallProgressCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          NexaLoaderLogo(size: 32, tintColor: s.primary),
+          ShaderMask(
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                s.primary.withOpacity(0.3),
+                s.primary,
+                s.primary.withOpacity(0.3),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ).createShader(bounds),
+            child: AppIcon('tools', size: 24, color: Colors.white),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
@@ -1786,8 +1737,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final ValueNotifier<String> _openWidgetContentNotifier = ValueNotifier<String>('');
   final ValueNotifier<bool> _openWidgetDoneNotifier = ValueNotifier<bool>(false);
 
-  // Estado do ciclo de tool calling: enquanto não-nulo, mostra o
-  // _ToolCallProgressCard em vez do texto normal do stream.
   String? _activeToolCallLabel;
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
@@ -1810,7 +1759,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   @override
   void initState() {
     super.initState();
-    // Defaults dos apps
     enabledAppsController.setDefaultIfAbsent('docs', true);
     enabledAppsController.setDefaultIfAbsent('sheets', true);
     enabledAppsController.setDefaultIfAbsent('slides', true);
@@ -1964,39 +1912,43 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
-  /// Executa a função local correspondente a uma ToolCall e devolve
-  /// o JSON de resultado já serializado, pronto para ir na mensagem
-  /// role:"tool" da segunda chamada.
   Future<Map<String, dynamic>> _executeToolCall(ToolCall call) async {
-    final query = call.arguments['query']?.toString() ?? '';
+    final token = authController.token;
+    if (token == null) {
+      return {'found': false, 'reason': 'Sessão expirada'};
+    }
+
     switch (call.name) {
       case 'search_market':
+        final query = call.arguments['query']?.toString() ?? '';
         final result = await resolveMarketQuery(query);
         return result.toToolResultJson();
       case 'search_place':
+        final query = call.arguments['query']?.toString() ?? '';
         final result = await resolvePlaceQuery(query);
         return result.toToolResultJson();
       case 'search_calendar_date':
+        final query = call.arguments['query']?.toString() ?? '';
         final result = await resolveCalendarDateQuery(query);
         return result.toToolResultJson();
-      default:
-        return {'found': false, 'reason': 'Função desconhecida: ${call.name}'};
+    }
+
+    try {
+      final result = await ToolsApiService.executeTool(
+        token: token,
+        name: call.name,
+        input: call.arguments,
+      );
+      return result;
+    } catch (e) {
+      return {'found': false, 'reason': 'Erro: $e'};
     }
   }
 
-  /// Segunda fase do ciclo de tool calling: executa todas as
-  /// tool calls pendentes, monta as mensagens assistant+tool, e
-  /// dispara uma nova chamada a streamChat com o histórico completo.
-  /// Só a resposta desta segunda chamada é tratada como resposta
-  /// final (mesmo _listenToStream de sempre).
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
     setState(() => _activeToolCallLabel = _labelForToolName(calls.first.name));
     _notifyHeader();
 
-    // Mensagem assistant "vazia" que registou a intenção de chamar
-    // a(s) função(ões) — necessária no histórico para o DeepSeek
-    // conseguir emparelhar as respostas role:"tool" seguintes com
-    // os tool_calls que as originaram.
     final assistantToolCallMsg = ChatMessage(
       role: 'assistant',
       content: '',
@@ -2122,9 +2074,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
   }
 
-  /// Handler único reaproveitado tanto pela primeira chamada (_send)
-  /// como pela segunda chamada após uma tool call (_handleToolCalls),
-  /// para não duplicar a lógica de parsing de canvas/widgets/persistência.
   void _handleStreamEvent(
     ChatStreamEvent event,
     bool isFirst,
@@ -2142,9 +2091,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _streamingThinkNotifier.value = (_streamingThinkNotifier.value ?? '') + text;
         break;
       case ChatToolCallEvent(calls: final calls):
-        // A IA decidiu chamar uma ou mais funções em vez de escrever
-        // texto. Executa-as e encadeia a segunda chamada — não marca
-        // _sending como false ainda, a conversa continua "a gerar".
         _handleToolCalls(calls, isFirst, originalUserText);
         break;
       case ChatDoneEvent(fullText: final fullText):
@@ -3260,9 +3206,6 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
       ));
     }
 
-    // Tool call em curso — mostra o card de progresso ANTES de
-    // qualquer texto (a IA não escreveu nada ainda; está à espera
-    // do resultado da função para continuar).
     if (widget.activeToolCallLabel != null) {
       children.add(_ToolCallProgressCard(s: s, label: widget.activeToolCallLabel!));
     }

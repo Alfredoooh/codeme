@@ -13,6 +13,7 @@ import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
+import 'libraryscreen.dart';
 import 'apps/app_types.dart';
 import 'apps/registry/app_registry.dart';
 import 'apps/docs.dart';               // necessário para o RootShell
@@ -158,6 +159,12 @@ class _RootShellState extends State<RootShell>
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
   }
 
+  void _openLibrary() {
+    _closeDrawer();
+    Navigator.of(context)
+        .push(CupertinoPageRoute(builder: (_) => const LibraryScreen()));
+  }
+
   void _onMessageSent() {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
@@ -237,6 +244,7 @@ class _RootShellState extends State<RootShell>
               onMenu: _toggleDrawer,
               transparent: true,
               headerBackground: s.pageBackground,
+              leadingExtra: _LibraryButton(s: s, onTap: _openLibrary),
               trailing: AiConversationMenuButton(
                 s: s,
                 hasMessages: _hasMessages,
@@ -368,6 +376,40 @@ class _RootShellState extends State<RootShell>
   }
 }
 
+class _LibraryButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _LibraryButton({required this.s, required this.onTap});
+  @override
+  State<_LibraryButton> createState() => _LibraryButtonState();
+}
+
+class _LibraryButtonState extends State<_LibraryButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: widget.s.cardBackground,
+          shape: BoxShape.circle,
+          boxShadow: widget.s.cardShadow,
+        ),
+        child: AppIcon('library', size: 18, color: widget.s.onSurface),
+      ),
+    );
+  }
+}
+
 class _AiTabHeaderRefresh extends ChangeNotifier {
   static final _AiTabHeaderRefresh _instance = _AiTabHeaderRefresh._();
   _AiTabHeaderRefresh._();
@@ -450,6 +492,7 @@ class _AppHeader extends StatelessWidget {
   final String title;
   final VoidCallback onMenu;
   final Widget? trailing;
+  final Widget? leadingExtra;
   final bool transparent;
   final Color headerBackground;
 
@@ -459,6 +502,7 @@ class _AppHeader extends StatelessWidget {
     required this.onMenu,
     required this.headerBackground,
     this.trailing,
+    this.leadingExtra,
     this.transparent = false,
   });
 
@@ -483,6 +527,10 @@ class _AppHeader extends StatelessWidget {
             child: AppIcon('menu', color: s.onSurface, size: 20),
           ),
         ),
+        if (leadingExtra != null) ...[
+          const SizedBox(width: 8),
+          leadingExtra!,
+        ],
         const SizedBox(width: 8),
         if (title.isNotEmpty)
           Text(

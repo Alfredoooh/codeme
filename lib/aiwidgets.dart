@@ -15,6 +15,10 @@
 // (resolveMarketQuery / resolvePlaceQuery / resolveCalendarDateQuery)
 // para serem chamadas por aitab.dart quando um ChatToolCallEvent
 // chegar do stream.
+//
+// ATUALIZAÇÃO 2: passamos a importar kAllTools (todas as tools do
+// servidor) em vez de apenas as 3 locais, para que a IA tenha acesso
+// a todas as funções disponíveis (web_search, create_pdf, etc.).
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
@@ -34,7 +38,7 @@ import 'widgets.dart';
 import 'richtext.dart' show buildAiTableFromWidgetJson;
 import 'app_sheet.dart';
 import 'sheets.dart';
-import 'api_service.dart' show ToolDefinition;
+import 'api_service.dart' show ToolDefinition, kAllTools;
 
 // ══════════════════════════════════════════════════════════════
 // NOTA — GOOGLE MAPS SEM API KEY
@@ -71,8 +75,7 @@ String _sanitizeText(String? raw) {
 
 // ══════════════════════════════════════════════════════════════
 // TOOL DEFINITIONS — expostas para aitab.dart montar a lista
-// `tools` do streamChat. Nomes fixados: search_market,
-// search_place, search_calendar_date.
+// `tools` do streamChat. Agora incluem todas as tools do servidor.
 // ══════════════════════════════════════════════════════════════
 
 const ToolDefinition kSearchMarketTool = ToolDefinition(
@@ -141,11 +144,8 @@ const ToolDefinition kSearchCalendarDateTool = ToolDefinition(
   },
 );
 
-const List<ToolDefinition> kAiWidgetTools = [
-  kSearchMarketTool,
-  kSearchPlaceTool,
-  kSearchCalendarDateTool,
-];
+// kAllTools já contém as 3 acima + web_search, create_pdf, etc.
+const List<ToolDefinition> kAiWidgetTools = kAllTools;
 
 // ══════════════════════════════════════════════════════════════
 // RESOLUÇÃO REAL — chamadas de rede que respondem às tool calls.
