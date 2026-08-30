@@ -1,13 +1,9 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/libraryscreen.dart
-// ══════════════════════════════════════════════════════════════
-//
-// ATUALIZAÇÃO: Carrega todos os documentos (canvas) de todas as
-// conversas da conta. Ao pressionar um card, mostra popup com
-// opções de partilhar e baixar (formato correto via API).
+// FILE: lib/library_screen.dart
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'colors.dart';
@@ -61,18 +57,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
         if (detail == null) continue;
         final messages = detail['messages'];
         if (messages is! List) continue;
+
         for (final msg in messages) {
           if (msg is! Map<String, dynamic>) continue;
           final content = msg['content']?.toString() ?? '';
           if (content.isEmpty) continue;
+
           final parsed = CanvasParser.parse(
             content,
-            idGen: () => 'lib_${DateTime.now().millisecondsSinceEpoch}_${docs.length}',
+            idGen: () =>
+                'lib_${DateTime.now().millisecondsSinceEpoch}_${docs.length}',
           );
+
           for (final item in parsed.items) {
+            // Converte CanvasItem (api_service) → LocalCanvasItem (app_types)
+            final localItem = _toLocalCanvasItem(item);
+            if (localItem == null) continue;
             docs.add(LibraryDocument(
-              id: item.id,
-              item: item,
+              id: localItem.id,
+              item: localItem,
               conversationId: convId,
             ));
           }
@@ -95,6 +98,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  /// Converte um CanvasItem (vindo da API) para LocalCanvasItem (usado localmente).
+  /// Devolve null se o kind não for reconhecido.
+  LocalCanvasItem? _toLocalCanvasItem(CanvasItem item) {
+    final LocalCanvasKind kind;
+    switch (item.kind) {
+      case CanvasKind.doc:
+        kind = LocalCanvasKind.doc;
+        break;
+      case CanvasKind.sheet:
+        kind = LocalCanvasKind.sheet;
+        break;
+      case CanvasKind.slide:
+        kind = LocalCanvasKind.slide;
+        break;
+      default:
+        return null;
+    }
+    return LocalCanvasItem(
+      id: item.id,
+      title: item.title,
+      kind: kind,
+      content: item.content,
+    );
+  }
+
   void _openDocumentActions(LibraryDocument doc) {
     showModalBottomSheet(
       context: context,
@@ -104,7 +132,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         return Container(
           decoration: BoxDecoration(
             color: s.floatingSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: SafeArea(
@@ -125,7 +154,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _formatLabel(doc.item.kind),
-                  style: TextStyle(color: s.onSurfaceVariant, fontSize: 13),
+                  style:
+                      TextStyle(color: s.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 _ActionTile(
@@ -165,8 +195,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     try {
       final bytes = await _exportDocument(doc);
       final filename = _buildFilename(doc);
-      // Como não há sistema de ficheiros visível, usamos o share como
-      // download indireto — o utilizador pode guardar onde quiser.
       await ExportService.shareBytes(bytes, filename: filename);
     } catch (e) {
       _showError('Erro ao baixar: $e');
@@ -181,7 +209,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String _formatForKind(LocalCanvasKind kind) {
     switch (kind) {
       case LocalCanvasKind.doc:
-        return 'pdf'; // documento HTML → PDF por defeito
+        return 'pdf';
       case LocalCanvasKind.sheet:
         return 'xlsx';
       case LocalCanvasKind.slide:
@@ -193,7 +221,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   String _buildFilename(LibraryDocument doc) {
     final ext = _formatForKind(doc.item.kind);
-    final safeTitle = doc.item.title.replaceAll(RegExp(r'[^\w\s]+'), '_');
+    final safeTitle =
+        doc.item.title.replaceAll(RegExp(r'[^\w\s]+'), '_');
     return '${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.$ext';
   }
 
@@ -229,7 +258,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
               child: Row(
                 children: [
-                  _BackCircleButton(s: s, onTap: () => Navigator.pop(context)),
+                  _BackCircleButton(
+                      s: s, onTap: () => Navigator.pop(context)),
                   const SizedBox(width: 12),
                   Text(
                     'Biblioteca',
@@ -242,9 +272,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ],
               ),
             ),
-            Expanded(
-              child: _buildBody(s),
-            ),
+            Expanded(child: _buildBody(s)),
           ],
         ),
       ),
@@ -268,7 +296,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
               onTap: _loadDocuments,
               child: Text(
                 'Tentar novamente',
-                style: TextStyle(color: s.primary, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                    color: s.primary, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -297,6 +326,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// MODELOS E COMPONENTES
+// ══════════════════════════════════════════════════════════════
 
 class LibraryDocument {
   final String id;
@@ -333,7 +366,8 @@ class _LibraryCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: s.cardBackground,
           borderRadius: BorderRadius.circular(20),
@@ -373,7 +407,8 @@ class _LibraryCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     kindLabel,
-                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                    style: TextStyle(
+                        fontSize: 12, color: s.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -419,7 +454,8 @@ class _ActionTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: s.surface,
           borderRadius: BorderRadius.circular(20),
@@ -443,12 +479,14 @@ class _ActionTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                    style: TextStyle(
+                        fontSize: 11.5, color: s.onSurfaceVariant),
                   ),
                 ],
               ),
             ),
-            AppIcon('chevron_forward', color: s.onSurfaceVariant, size: 14),
+            AppIcon('chevron_forward',
+                color: s.onSurfaceVariant, size: 14),
           ],
         ),
       ),
