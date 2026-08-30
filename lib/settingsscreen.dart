@@ -732,7 +732,7 @@ class _AvatarBlock extends StatelessWidget {
         // Email em subtítulo
         if (user?.email != null)
           Text(
-            user!.email,
+    user!.email ?? '',
             style: TextStyle(
               fontSize: 13,
               color: s.onSurfaceVariant,
