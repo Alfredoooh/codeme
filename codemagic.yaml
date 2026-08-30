@@ -21,18 +21,22 @@ workflows:
       - name: Install Pillow
         script: pip3 install Pillow --quiet
 
-      - name: Process launcher and splash icons (Fluent style)
+      - name: Process launcher icons + dual splash (light/dark)
         script: |
           python3 << 'PYEOF'
-          import os, shutil
+          import os
           from PIL import Image, ImageDraw
-          CM  = os.environ["CM_BUILD_DIR"]
-          RES = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER = os.path.join(CM, "ic_launcher.png")
-          SPLASH   = os.path.join(CM, "splash_icon.png")
+
+          CM      = os.environ["CM_BUILD_DIR"]
+          RES     = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
+          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
+          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
+          # Fallback: se não existir splash dedicado, usa o launcher centralizado
+          SPLASH_FALLBACK = LAUNCHER
 
           if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError("ic_launcher.png nao encontrado na raiz do repo!")
+              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -57,11 +61,11 @@ workflows:
               img.save(path, "PNG", optimize=True)
               print(f"  -> {path}")
 
+          # ── Ícones do launcher ──────────────────────────────────────────
           src = Image.open(LAUNCHER)
           for d, sz in DENSITIES.items():
               save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
               save(fluent_rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
-
           for d, fg in FG_SIZES.items():
               icon_sz = int(fg * 0.66)
               fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
@@ -70,32 +74,185 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          # ── Splash icon: usa splash_icon.png se existir,
-          #    caso contrário centra o ic_launcher num canvas transparente
-          #    de 288x288 (nunca copia o launcher direto como splash)
-          drawable = os.path.join(RES, "drawable")
-          os.makedirs(drawable, exist_ok=True)
-          dest = os.path.join(drawable, "splash_icon.png")
+          # ── Splash icon LIGHT ───────────────────────────────────────────
+          def make_splash(source_path, dest_path):
+              CANVAS, ICON = 288, 288
+              src_img = Image.open(source_path).convert("RGBA")
+              # Se a imagem for menor que o canvas, centraliza num fundo transparente
+              if src_img.size != (CANVAS, CANVAS):
+                  ICON = 160
+                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
+                  off    = (CANVAS - ICON) // 2
+                  canvas.paste(icon, (off, off), icon)
+                  canvas.save(dest_path, "PNG", optimize=True)
+              else:
+                  src_img.save(dest_path, "PNG", optimize=True)
+              print(f"  -> {dest_path}")
 
-          if os.path.exists(SPLASH):
-              splash_src = Image.open(SPLASH).convert("RGBA")
-              SPLASH_SIZE = 288
-              splash_src = splash_src.resize((SPLASH_SIZE, SPLASH_SIZE), Image.LANCZOS)
-              splash_src.save(dest, "PNG", optimize=True)
-              print(f"  -> {dest} (splash_icon.png dedicado)")
-          else:
-              # centra o launcher (sem rounded corners) num canvas maior
-              CANVAS = 288
-              ICON   = 160
-              canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-              icon   = src.convert("RGBA").resize((ICON, ICON), Image.LANCZOS)
-              off    = (CANVAS - ICON) // 2
-              canvas.paste(icon, (off, off), icon)
-              canvas.save(dest, "PNG", optimize=True)
-              print(f"  -> {dest} (splash gerado a partir do launcher — adiciona splash_icon.png ao repo para controlo total)")
+          drawable_light = os.path.join(RES, "drawable")
+          drawable_dark  = os.path.join(RES, "drawable-night")
+          os.makedirs(drawable_light, exist_ok=True)
+          os.makedirs(drawable_dark,  exist_ok=True)
 
-          print("Icones e splash processados com sucesso!")
+          # Light splash
+          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
+          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
+          if light_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
+
+          # Dark splash
+          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
+          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
+          if dark_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
+
+          print("✅ Ícones e splash (light/dark) processados com sucesso!")
           PYEOF
+
+      - name: Write launch_background XMLs (light + dark)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          # Light: fundo branco + splash_icon centrado
+          mkdir -p "${RES}/drawable"
+          cat > "${RES}/drawable/launch_background.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@android:color/white" />
+              <item>
+                  <bitmap
+                      android:gravity="center"
+                      android:src="@drawable/splash_icon" />
+              </item>
+          </layer-list>
+          EOF
+          echo "✅ drawable/launch_background.xml (light) criado"
+
+          # Dark: fundo #0d0d0d + splash_icon centrado (vem de drawable-night)
+          mkdir -p "${RES}/drawable-night"
+          cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item>
+                  <color android:color="#0d0d0d" />
+              </item>
+              <item>
+                  <bitmap
+                      android:gravity="center"
+                      android:src="@drawable/splash_icon" />
+              </item>
+          </layer-list>
+          EOF
+          echo "✅ drawable-night/launch_background.xml (dark) criado"
+
+      - name: Write styles XMLs (light + dark)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          # values/styles.xml — tema claro (padrão)
+          mkdir -p "${RES}/values"
+          cat > "${RES}/values/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ values/styles.xml (light) escrito"
+
+          # values-night/styles.xml — tema escuro
+          mkdir -p "${RES}/values-night"
+          cat > "${RES}/values-night/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">#0d0d0d</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ values-night/styles.xml (dark) escrito"
+
+          # values-v27/styles.xml — claro, API 27+ (windowLightNavigationBar)
+          mkdir -p "${RES}/values-v27"
+          cat > "${RES}/values-v27/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ values-v27/styles.xml (light v27) escrito"
+
+          # values-night-v27/styles.xml — escuro, API 27+
+          mkdir -p "${RES}/values-night-v27"
+          cat > "${RES}/values-night-v27/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">#0d0d0d</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ values-night-v27/styles.xml (dark v27) escrito"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |
@@ -150,18 +307,21 @@ workflows:
       - name: Install Pillow
         script: pip3 install Pillow --quiet
 
-      - name: Process launcher and splash icons (Fluent style)
+      - name: Process launcher icons + dual splash (light/dark)
         script: |
           python3 << 'PYEOF'
-          import os, shutil
+          import os
           from PIL import Image, ImageDraw
-          CM  = os.environ["CM_BUILD_DIR"]
-          RES = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER = os.path.join(CM, "ic_launcher.png")
-          SPLASH   = os.path.join(CM, "splash_icon.png")
+
+          CM      = os.environ["CM_BUILD_DIR"]
+          RES     = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
+          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
+          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
+          SPLASH_FALLBACK = LAUNCHER
 
           if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError("ic_launcher.png nao encontrado na raiz do repo!")
+              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -190,7 +350,6 @@ workflows:
           for d, sz in DENSITIES.items():
               save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
               save(fluent_rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
-
           for d, fg in FG_SIZES.items():
               icon_sz = int(fg * 0.66)
               fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
@@ -199,28 +358,171 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          drawable = os.path.join(RES, "drawable")
-          os.makedirs(drawable, exist_ok=True)
-          dest = os.path.join(drawable, "splash_icon.png")
+          def make_splash(source_path, dest_path):
+              CANVAS, ICON = 288, 288
+              src_img = Image.open(source_path).convert("RGBA")
+              if src_img.size != (CANVAS, CANVAS):
+                  ICON = 160
+                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
+                  off    = (CANVAS - ICON) // 2
+                  canvas.paste(icon, (off, off), icon)
+                  canvas.save(dest_path, "PNG", optimize=True)
+              else:
+                  src_img.save(dest_path, "PNG", optimize=True)
+              print(f"  -> {dest_path}")
 
-          if os.path.exists(SPLASH):
-              splash_src = Image.open(SPLASH).convert("RGBA")
-              SPLASH_SIZE = 288
-              splash_src = splash_src.resize((SPLASH_SIZE, SPLASH_SIZE), Image.LANCZOS)
-              splash_src.save(dest, "PNG", optimize=True)
-              print(f"  -> {dest} (splash_icon.png dedicado)")
-          else:
-              CANVAS = 288
-              ICON   = 160
-              canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-              icon   = src.convert("RGBA").resize((ICON, ICON), Image.LANCZOS)
-              off    = (CANVAS - ICON) // 2
-              canvas.paste(icon, (off, off), icon)
-              canvas.save(dest, "PNG", optimize=True)
-              print(f"  -> {dest} (splash gerado a partir do launcher)")
+          drawable_light = os.path.join(RES, "drawable")
+          drawable_dark  = os.path.join(RES, "drawable-night")
+          os.makedirs(drawable_light, exist_ok=True)
+          os.makedirs(drawable_dark,  exist_ok=True)
 
-          print("Icones e splash processados com sucesso!")
+          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
+          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
+          if light_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
+
+          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
+          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
+          if dark_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
+
+          print("✅ Ícones e splash (light/dark) processados com sucesso!")
           PYEOF
+
+      - name: Write launch_background XMLs (light + dark)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          mkdir -p "${RES}/drawable"
+          cat > "${RES}/drawable/launch_background.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@android:color/white" />
+              <item>
+                  <bitmap
+                      android:gravity="center"
+                      android:src="@drawable/splash_icon" />
+              </item>
+          </layer-list>
+          EOF
+
+          mkdir -p "${RES}/drawable-night"
+          cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item>
+                  <color android:color="#0d0d0d" />
+              </item>
+              <item>
+                  <bitmap
+                      android:gravity="center"
+                      android:src="@drawable/splash_icon" />
+              </item>
+          </layer-list>
+          EOF
+          echo "✅ launch_background XMLs (light/dark) criados"
+
+      - name: Write styles XMLs (light + dark)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          mkdir -p "${RES}/values"
+          cat > "${RES}/values/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+
+          mkdir -p "${RES}/values-night"
+          cat > "${RES}/values-night/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">#0d0d0d</item>
+                  <item name="android:windowFullscreen">false</item>
+                  <item name="android:windowContentOverlay">@null</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+
+          mkdir -p "${RES}/values-v27"
+          cat > "${RES}/values-v27/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+              </style>
+          </resources>
+          EOF
+
+          mkdir -p "${RES}/values-night-v27"
+          cat > "${RES}/values-night-v27/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">#0d0d0d</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ Todos os styles.xml (light/dark/v27) escritos"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |

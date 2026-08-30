@@ -13,7 +13,7 @@ import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
-import 'libraryscreen.dart';
+import 'library_screen.dart';
 import 'apps/app_types.dart';
 import 'apps/registry/app_registry.dart';
 import 'apps/docs.dart';               // necessário para o RootShell
