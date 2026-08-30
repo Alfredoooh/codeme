@@ -1043,11 +1043,22 @@ class ToolsApiService {
 const List<ToolDefinition> kAllTools = [
   ToolDefinition(
     name: 'web_search',
-    description: 'Pesquisa informação atual na web usando um motor de busca real. Usa sempre que precisares de informação recente, notícias, ou dados que possam ter mudado — nunca inventes resultados.',
+    description: 'Pesquisa informação atual na web. Devolve resultados com snippets, imagens e a data atual injetada automaticamente. Usa sempre que precisares de informação recente — nunca inventes resultados.',
     parameters: {
       'type': 'object',
       'properties': {
         'query': {'type': 'string', 'description': 'Termo de busca'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'search_images',
+    description: 'Pesquisa imagens na web via Serper. Devolve URLs de imagens relevantes. Usa quando o utilizador pede imagens de algo.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Termo de busca de imagens'},
       },
       'required': ['query'],
     },
@@ -1086,32 +1097,136 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'create_pdf',
-    description: 'Gera um PDF a partir de texto simples (sem HTML), devolve em base64.',
+    name: 'get_weather',
+    description: 'Obtém o clima atual de uma cidade e gera um card visual PNG base64. Usa sempre que o utilizador perguntar sobre o tempo ou clima — nunca inventes valores meteorológicos.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'city': {'type': 'string', 'description': 'Nome da cidade'},
+      },
+      'required': ['city'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_chart',
+    description: 'Gera um gráfico visual como PNG base64. Suporta line, bar, pie, doughnut, radar, polarArea. Aceita múltiplos datasets. Devolve content_base64 com PNG — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'chart_type': {'type': 'string', 'enum': ['line', 'bar', 'pie', 'doughnut', 'radar', 'polarArea']},
+        'title': {'type': 'string'},
+        'labels': {'type': 'array', 'items': {'type': 'string'}},
+        'datasets': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'label': {'type': 'string'},
+              'data': {'type': 'array', 'items': {'type': 'number'}},
+              'color': {'type': 'string'},
+            },
+          },
+        },
+      },
+      'required': ['chart_type', 'labels', 'datasets'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_qrcode',
+    description: 'Gera um QR code como PNG base64 a partir de qualquer texto ou URL. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'content': {'type': 'string', 'description': 'Texto ou URL para o QR code'},
+        'size': {'type': 'number', 'description': 'Tamanho em pixels (default 300)'},
+      },
+      'required': ['content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_barcode',
+    description: 'Gera um código de barras como PNG base64. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'content': {'type': 'string', 'description': 'Conteúdo do código de barras'},
+        'format': {'type': 'string', 'enum': ['code128', 'ean13', 'ean8', 'upca', 'qrcode']},
+      },
+      'required': ['content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_math',
+    description: 'Avalia uma expressão matemática e gera imagem PNG com resultado. Se for função (ex: x^2), gera gráfico automaticamente. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'expression': {'type': 'string', 'description': 'Expressão matemática ex: "2^10", "sqrt(144)", "x^2 + 2*x + 1"'},
+        'variable_range': {
+          'type': 'object',
+          'properties': {
+            'min': {'type': 'number'},
+            'max': {'type': 'number'},
+          },
+        },
+      },
+      'required': ['expression'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_table_image',
+    description: 'Gera uma tabela complexa como PNG base64. Usa quando markdown não é suficiente. Devolve content_base64 — exibe diretamente no chat.',
     parameters: {
       'type': 'object',
       'properties': {
         'title': {'type': 'string'},
-        'content': {'type': 'string', 'description': 'Parágrafos separados por \\n\\n'},
+        'headers': {'type': 'array', 'items': {'type': 'string'}},
+        'rows': {'type': 'array', 'items': {'type': 'array', 'items': {'type': 'string'}}},
+        'theme': {'type': 'string', 'enum': ['dark', 'light', 'purple']},
       },
-      'required': ['title', 'content'],
+      'required': ['headers', 'rows'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_html_image',
+    description: 'Converte um snippet HTML/CSS em PNG base64. Usa para criar cards visuais, infográficos, dashboards, snippets de código com syntax highlight, ou qualquer layout visual personalizado. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'html': {'type': 'string', 'description': 'HTML completo com estilos inline ou tag <style>'},
+        'width': {'type': 'number', 'description': 'Largura em pixels (default 800)'},
+        'height': {'type': 'number', 'description': 'Altura em pixels (default 600)'},
+      },
+      'required': ['html'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_pdf',
+    description: 'Gera um PDF a partir de HTML rico. Devolve content_base64 e filename — mostra botão de download no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'title': {'type': 'string'},
+        'html_content': {'type': 'string'},
+      },
+      'required': ['title', 'html_content'],
     },
   ),
   ToolDefinition(
     name: 'create_docx',
-    description: 'Gera um Word (.docx) a partir de texto simples (sem HTML), devolve em base64.',
+    description: 'Gera um Word (.docx) a partir de HTML. Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
         'title': {'type': 'string'},
-        'content': {'type': 'string', 'description': 'Parágrafos separados por \\n\\n'},
+        'html_content': {'type': 'string'},
       },
-      'required': ['title', 'content'],
+      'required': ['title', 'html_content'],
     },
   ),
   ToolDefinition(
     name: 'create_xlsx',
-    description: 'Gera uma planilha Excel (.xlsx) a partir de headers e linhas já estruturados, devolve em base64.',
+    description: 'Gera planilha Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1124,7 +1239,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'create_pptx',
-    description: 'Gera um PowerPoint (.pptx) a partir de slides já estruturados, devolve em base64.',
+    description: 'Gera PowerPoint (.pptx). Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1144,23 +1259,8 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'generate_chart',
-    description: 'Gera um gráfico como PNG, devolve em base64.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'chart_type': {'type': 'string', 'enum': ['line', 'bar', 'pie', 'doughnut']},
-        'title': {'type': 'string'},
-        'labels': {'type': 'array', 'items': {'type': 'string'}},
-        'data': {'type': 'array', 'items': {'type': 'number'}},
-        'dataset_label': {'type': 'string'},
-      },
-      'required': ['chart_type', 'labels', 'data'],
-    },
-  ),
-  ToolDefinition(
     name: 'csv_to_xlsx',
-    description: 'Converte CSV em planilha Excel (.xlsx), devolve em base64.',
+    description: 'Converte CSV em Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1182,13 +1282,13 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'convert_document',
-    description: 'Converte um documento entre formatos (docx, pdf, xlsx, pptx, txt, csv, html) a partir de conteúdo base64.',
+    description: 'Converte um documento entre formatos a partir de conteúdo base64. Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
         'source_format': {'type': 'string'},
         'target_format': {'type': 'string'},
-        'content_base64': {'type': 'string', 'description': 'Conteúdo do ficheiro de origem em base64'},
+        'content_base64': {'type': 'string'},
         'filename': {'type': 'string'},
       },
       'required': ['source_format', 'target_format', 'content_base64'],
@@ -1196,11 +1296,11 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'html_to_docx',
-    description: 'Converte HTML (qualquer estrutura) em Word (.docx), devolve em base64.',
+    description: 'Converte HTML em Word (.docx). Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'html_content': {'type': 'string', 'description': 'HTML completo ou fragmento'},
+        'html_content': {'type': 'string'},
         'filename': {'type': 'string'},
       },
       'required': ['html_content'],
@@ -1208,7 +1308,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'html_to_pdf',
-    description: 'Converte HTML em PDF preservando títulos, parágrafos, listas, tabelas e negrito/itálico — não reproduz CSS avançado. Devolve em base64.',
+    description: 'Converte HTML em PDF. Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1220,7 +1320,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'html_to_xlsx',
-    description: 'Converte HTML em planilha Excel (.xlsx). Procura <table> em qualquer profundidade; sem <table>, cada <p>/<li> vira uma linha. Devolve em base64.',
+    description: 'Converte HTML em Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1232,7 +1332,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'html_to_pptx',
-    description: 'Converte HTML em PowerPoint (.pptx). Cada <h1>/<h2> inicia um novo slide; headings viram título, resto do conteúdo vira bullets. Devolve em base64.',
+    description: 'Converte HTML em PowerPoint (.pptx). Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {

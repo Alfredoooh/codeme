@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'widgets/animated_canvas_icon.dart';
@@ -879,23 +883,30 @@ String _labelForWidgetId(String widgetId) => switch (widgetId) {
     };
 
 String _labelForToolName(String toolName) => switch (toolName) {
-      'web_search' => 'A pesquisar na web...',
-      'search_market' => 'A pesquisar mercado...',
-      'search_place' => 'A localizar...',
+      'web_search'           => 'A pesquisar na web...',
+      'search_images'        => 'A pesquisar imagens...',
+      'search_market'        => 'A pesquisar mercado...',
+      'search_place'         => 'A localizar...',
       'search_calendar_date' => 'A interpretar data...',
-      'create_pdf' => 'A criar PDF...',
-      'create_docx' => 'A criar documento Word...',
-      'create_xlsx' => 'A criar folha de cálculo...',
-      'create_pptx' => 'A criar apresentação...',
-      'generate_chart' => 'A gerar gráfico...',
-      'csv_to_xlsx' => 'A converter CSV...',
-      'json_transform' => 'A transformar JSON...',
-      'convert_document' => 'A converter documento...',
-      'html_to_docx' => 'A converter HTML para Word...',
-      'html_to_pdf' => 'A converter HTML para PDF...',
-      'html_to_xlsx' => 'A converter HTML para Excel...',
-      'html_to_pptx' => 'A converter HTML para PowerPoint...',
-      _ => 'A executar...',
+      'get_weather'          => 'A obter clima...',
+      'generate_chart'       => 'A gerar gráfico...',
+      'generate_qrcode'      => 'A gerar QR code...',
+      'generate_barcode'     => 'A gerar código de barras...',
+      'generate_math'        => 'A calcular...',
+      'generate_table_image' => 'A gerar tabela visual...',
+      'generate_html_image'  => 'A gerar imagem...',
+      'create_pdf'           => 'A criar PDF...',
+      'create_docx'          => 'A criar documento Word...',
+      'create_xlsx'          => 'A criar folha de cálculo...',
+      'create_pptx'          => 'A criar apresentação...',
+      'csv_to_xlsx'          => 'A converter CSV...',
+      'json_transform'       => 'A transformar JSON...',
+      'convert_document'     => 'A converter documento...',
+      'html_to_docx'         => 'A converter HTML para Word...',
+      'html_to_pdf'          => 'A converter HTML para PDF...',
+      'html_to_xlsx'         => 'A converter HTML para Excel...',
+      'html_to_pptx'         => 'A converter HTML para PowerPoint...',
+      _                      => 'A executar...',
     };
 
 _StreamElement _openBlockToElement(String raw, _OpenBlockInfo info) {
@@ -1709,6 +1720,9 @@ class AiTab extends StatefulWidget {
 }
 
 class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
+
+  final List<_VisualToolResult> _pendingVisualResults = [];
+  final List<_DocumentToolResult> _pendingDocumentResults = [];
   final TextEditingController _ctrl   = TextEditingController();
   final ScrollController       _scroll = ScrollController();
   final List<ChatMessage>      _msgs  = [];
@@ -1945,7 +1959,20 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
+  static const Set<String> _kVisualTools = {
+    'generate_chart', 'generate_qrcode', 'generate_barcode',
+    'generate_math', 'generate_table_image', 'generate_html_image',
+    'get_weather',
+  };
+
+  static const Set<String> _kDocumentTools = {
+    'create_pdf', 'create_docx', 'create_xlsx', 'create_pptx',
+    'csv_to_xlsx', 'convert_document',
+    'html_to_docx', 'html_to_pdf', 'html_to_xlsx', 'html_to_pptx',
+  };
+
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
+    if (calls.isEmpty) return;
     setState(() => _activeToolCallLabel = _labelForToolName(calls.first.name));
     _notifyHeader();
 
@@ -1956,8 +1983,49 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
 
     final toolResultMsgs = <ChatMessage>[];
+    final visualResults = <_VisualToolResult>[];
+    final documentResults = <_DocumentToolResult>[];
+
     for (final call in calls) {
       final resultJson = await _executeToolCall(call);
+
+      if (_kVisualTools.contains(call.name)) {
+        final base64Png = resultJson['content_base64']?.toString();
+        if (base64Png != null && base64Png.isNotEmpty) {
+          visualResults.add(_VisualToolResult(
+            label: _labelForToolName(call.name).replaceAll('...', ''),
+            base64Png: base64Png,
+          ));
+          toolResultMsgs.add(ChatMessage(
+            role: 'tool',
+            content: jsonEncode({'success': true, 'rendered': true, 'tool': call.name}),
+            toolCallId: call.id,
+            name: call.name,
+          ));
+          continue;
+        }
+      }
+
+      if (_kDocumentTools.contains(call.name)) {
+        final base64Data = resultJson['content_base64']?.toString();
+        final filename = resultJson['filename']?.toString() ?? '${call.name}_${DateTime.now().millisecondsSinceEpoch}.bin';
+        final mimeType = resultJson['mime_type']?.toString() ?? 'application/octet-stream';
+        if (base64Data != null && base64Data.isNotEmpty) {
+          documentResults.add(_DocumentToolResult(
+            base64Data: base64Data,
+            filename: filename,
+            mimeType: mimeType,
+          ));
+          toolResultMsgs.add(ChatMessage(
+            role: 'tool',
+            content: jsonEncode({'success': true, 'filename': filename, 'ready_for_download': true}),
+            toolCallId: call.id,
+            name: call.name,
+          ));
+          continue;
+        }
+      }
+
       toolResultMsgs.add(ChatMessage(
         role: 'tool',
         content: jsonEncode(resultJson),
@@ -1967,7 +2035,43 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
 
     if (!mounted) return;
-    setState(() => _activeToolCallLabel = null);
+    setState(() {
+      _activeToolCallLabel = null;
+      _pendingVisualResults.addAll(visualResults);
+      _pendingDocumentResults.addAll(documentResults);
+    });
+
+    final allHandledLocally = toolResultMsgs.every((m) {
+      try {
+        final decoded = jsonDecode(m.content) as Map<String, dynamic>;
+        return decoded['rendered'] == true || decoded['ready_for_download'] == true;
+      } catch (_) {
+        return false;
+      }
+    });
+
+    if (allHandledLocally && toolResultMsgs.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          final extras = <String>[];
+          for (final v in visualResults) {
+            extras.add('[[VISUAL:${v.base64Png}:${v.label}]]');
+          }
+          for (final d in documentResults) {
+            extras.add('[[DOCUMENT:${d.base64Data}:${d.filename}:${d.mimeType}]]');
+          }
+          if (extras.isNotEmpty) {
+            _msgs.add(ChatMessage(role: 'assistant', content: extras.join('\n')));
+          }
+          _pendingVisualResults.clear();
+          _pendingDocumentResults.clear();
+          _sending = false;
+        });
+        _scrollToEnd();
+        _persistConversation();
+      }
+      return;
+    }
 
     final token = authController.token;
     if (token == null) {
@@ -2938,6 +3042,229 @@ class _Bubble extends StatelessWidget {
   }
 }
 
+class _VisualToolResult {
+  final String label;
+  final String base64Png;
+  const _VisualToolResult({required this.label, required this.base64Png});
+}
+
+class _DocumentToolResult {
+  final String base64Data;
+  final String filename;
+  final String mimeType;
+  const _DocumentToolResult({
+    required this.base64Data,
+    required this.filename,
+    required this.mimeType,
+  });
+}
+
+final RegExp _kVisualResultRe = RegExp(r'\[\[VISUAL:(.*?):(.*?)\]\]', dotAll: true);
+final RegExp _kDocumentResultRe = RegExp(r'\[\[DOCUMENT:(.*?):(.*?):(.*?)\]\]', dotAll: true);
+
+List<Widget> _extractVisualResults(String text, AppColorScheme s) {
+  final results = <Widget>[];
+  for (final m in _kVisualResultRe.allMatches(text)) {
+    results.add(_ToolResultImageCard(
+      s: s,
+      base64Png: m.group(1)!,
+      label: m.group(2)!,
+    ));
+  }
+  return results;
+}
+
+List<Widget> _extractDocumentResults(String text, AppColorScheme s) {
+  final results = <Widget>[];
+  for (final m in _kDocumentResultRe.allMatches(text)) {
+    results.add(_ToolResultDownloadCard(
+      s: s,
+      base64Data: m.group(1)!,
+      filename: m.group(2)!,
+      mimeType: m.group(3)!,
+    ));
+  }
+  return results;
+}
+
+class _ToolResultImageCard extends StatelessWidget {
+  final AppColorScheme s;
+  final String base64Png;
+  final String label;
+
+  const _ToolResultImageCard({
+    required this.s,
+    required this.base64Png,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = base64Decode(base64Png);
+    return GestureDetector(
+      onTap: () => _openFullscreen(context, bytes, label),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: s.cardShadow,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Image.memory(bytes, fit: BoxFit.contain),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  AppIcon('expand', size: 16, color: s.onSurfaceVariant),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openFullscreen(BuildContext context, Uint8List bytes, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => _FullscreenImageScreen(bytes: bytes, label: label),
+    ));
+  }
+}
+
+class _FullscreenImageScreen extends StatelessWidget {
+  final Uint8List bytes;
+  final String label;
+  const _FullscreenImageScreen({required this.bytes, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(label, style: const TextStyle(fontSize: 15)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () async {
+              final dir = await getTemporaryDirectory();
+              final file = File('${dir.path}/imagem.png');
+              await file.writeAsBytes(bytes);
+              await Share.shareXFiles([XFile(file.path)]);
+            },
+          ),
+        ],
+      ),
+      body: Center(child: InteractiveViewer(child: Image.memory(bytes))),
+    );
+  }
+}
+
+class _ToolResultDownloadCard extends StatelessWidget {
+  final AppColorScheme s;
+  final String base64Data;
+  final String filename;
+  final String mimeType;
+
+  const _ToolResultDownloadCard({
+    required this.s,
+    required this.base64Data,
+    required this.filename,
+    required this.mimeType,
+  });
+
+  String get _icon {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'pdf';
+    if (lower.endsWith('.docx')) return 'doc';
+    if (lower.endsWith('.xlsx')) return 'table';
+    if (lower.endsWith('.pptx')) return 'stacks';
+    return 'doc';
+  }
+
+  String get _label {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'Documento PDF';
+    if (lower.endsWith('.docx')) return 'Documento Word';
+    if (lower.endsWith('.xlsx')) return 'Folha de cálculo';
+    if (lower.endsWith('.pptx')) return 'Apresentação';
+    return 'Documento';
+  }
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final bytes = base64Decode(base64Data);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles([XFile(file.path)], text: filename);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao preparar download: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _download(context),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        constraints: const BoxConstraints(maxWidth: 420),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: s.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: AppIcon(_icon, size: 22, color: s.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+                  const SizedBox(height: 2),
+                  Text(_label, style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            AppIcon('download', size: 20, color: s.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
@@ -2975,6 +3302,8 @@ class _AssistantBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              ..._extractVisualResults(text, s),
+              ..._extractDocumentResults(text, s),
               if (thinking != null && thinking!.isNotEmpty)
                 _ThinkingHistoryCollapsible(
                   s: s,
@@ -2983,7 +3312,7 @@ class _AssistantBubble extends StatelessWidget {
                 ),
               if (text.isNotEmpty)
                 RichAiText(
-                  text: text,
+                  text: text.replaceAll(_kVisualResultRe, '').replaceAll(_kDocumentResultRe, '').trim(),
                   s: s,
                   widgetsEnabled: widgetsEnabled,
                   onEnableWidgets: onEnableWidgets,
