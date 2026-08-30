@@ -36,6 +36,7 @@
 //   • Mais linguagens no syntax highlighting
 //   • Tabelas com alinhamento por coluna
 //   • Detalhes colapsáveis <details> e blocos de definição melhorados
+//   • Correção do erro de tipo em _AiTable (columnWidths)
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -69,12 +70,10 @@ const Map<String, String> kGreekLetters = {
 };
 
 const Map<String, String> kMathSymbols = {
-  // Operadores binários
   r'\times': '×', r'\div': '÷', r'\pm': '±', r'\mp': '∓',
   r'\cdot': '·', r'\ast': '∗', r'\star': '⋆', r'\circ': '∘',
   r'\bullet': '•', r'\oplus': '⊕', r'\otimes': '⊗', r'\ominus': '⊖',
   r'\odot': '⊙', r'\oslash': '⊘', r'\uplus': '⊎',
-  // Relações
   r'\leq': '≤', r'\le': '≤', r'\geq': '≥', r'\ge': '≥',
   r'\neq': '≠', r'\ne': '≠', r'\approx': '≈', r'\equiv': '≡',
   r'\sim': '∼', r'\simeq': '≃', r'\cong': '≅', r'\propto': '∝',
@@ -83,7 +82,6 @@ const Map<String, String> kMathSymbols = {
   r'\supset': '⊃', r'\supseteq': '⊇', r'\in': '∈', r'\notin': '∉',
   r'\ni': '∋', r'\not\ni': '∌', r'\mid': '∣', r'\nmid': '∤',
   r'\parallel': '∥', r'\nparallel': '∦', r'\perp': '⊥',
-  // Setas
   r'\rightarrow': '→', r'\to': '→', r'\leftarrow': '←',
   r'\leftrightarrow': '↔', r'\Rightarrow': '⇒', r'\Leftarrow': '⇐',
   r'\Leftrightarrow': '⇔', r'\mapsto': '↦', r'\uparrow': '↑',
@@ -95,44 +93,34 @@ const Map<String, String> kMathSymbols = {
   r'\hookleftarrow': '↩', r'\rightharpoonup': '⇀',
   r'\rightharpoondown': '⇁', r'\leftharpoonup': '↼',
   r'\leftharpoondown': '↽',
-  // Lógica
   r'\forall': '∀', r'\exists': '∃', r'\nexists': '∄',
   r'\neg': '¬', r'\lnot': '¬', r'\land': '∧', r'\wedge': '∧',
   r'\lor': '∨', r'\vee': '∨', r'\top': '⊤', r'\bot': '⊥',
-  // Conjuntos
   r'\emptyset': '∅', r'\varnothing': '∅', r'\cup': '∪', r'\cap': '∩',
   r'\setminus': '∖', r'\complement': '∁',
-  // Análise
   r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇', r'\hbar': 'ℏ',
   r'\ell': 'ℓ', r'\imath': 'ı', r'\jmath': 'ȷ',
-  // Integrais e somatórios
   r'\int': '∫', r'\iint': '∬', r'\iiint': '∭', r'\oint': '∮',
   r'\sum': '∑', r'\prod': '∏', r'\coprod': '∐',
-  // Misc
   r'\angle': '∠', r'\measuredangle': '∡', r'\sphericalangle': '∢',
   r'\degree': '°', r'\prime': '′', r'\backprime': '‵',
   r'\therefore': '∴', r'\because': '∵', r'\cdots': '⋯',
   r'\ldots': '…', r'\vdots': '⋮', r'\ddots': '⋱', r'\iddots': '⋰',
   r'\implies': '⟹', r'\impliedby': '⟸', r'\iff': '⟺',
-  // Conjuntos numéricos
   r'\mathbb{R}': 'ℝ', r'\mathbb{N}': 'ℕ', r'\mathbb{Z}': 'ℤ',
   r'\mathbb{Q}': 'ℚ', r'\mathbb{C}': 'ℂ', r'\mathbb{H}': 'ℍ',
   r'\mathbb{O}': '𝕆',
-  // Delimitadores
   r'\lvert': '|', r'\rvert': '|', r'\lVert': '‖', r'\rVert': '‖',
   r'\langle': '⟨', r'\rangle': '⟩', r'\lceil': '⌈', r'\rceil': '⌉',
   r'\lfloor': '⌊', r'\rfloor': '⌋', r'\lbrace': '{', r'\rbrace': '}',
-  // Acentos e marcas
   r'\hat': '', r'\bar': '', r'\vec': '', r'\dot': '', r'\ddot': '',
   r'\tilde': '', r'\overline': '', r'\underline': '', r'\boxed': '',
-  // Outros
   r'\square': '□', r'\blacksquare': '■', r'\triangle': '△',
   r'\bigtriangleup': '△', r'\bigtriangledown': '▽', r'\lozenge': '◊',
   r'\diamond': '◆', r'\clubsuit': '♣', r'\diamondsuit': '♦',
   r'\heartsuit': '♥', r'\spadesuit': '♠',
 };
 
-// Mapas para comandos LaTeX que envolvem formatação e não apenas substituição
 const Set<String> kMathFormattingCommands = {
   r'\text', r'\mathrm', r'\mathbf', r'\mathit', r'\mathsf', r'\mathtt',
   r'\mathcal', r'\mathbb', r'\mathfrak', r'\mathscr', r'\operatorname',
@@ -176,18 +164,7 @@ String? _toSubscriptUnicode(String s) {
   return buf.toString();
 }
 
-// ══════════════════════════════════════════════════════════════
-// EMOJI SHORTCODES — ESVAZIADO por pedido explícito do utilizador
-// (odeia emojis). A tabela fica vazia em vez de removida para não
-// quebrar nenhuma outra parte do código que ainda a referencie —
-// o loop que a consome simplesmente não encontra nada para trocar.
-// ══════════════════════════════════════════════════════════════
-
 const Map<String, String> kEmojiShortcodes = {};
-
-// ══════════════════════════════════════════════════════════════
-// PARSER DE EXPRESSÕES MATEMÁTICAS (LaTeX-like)
-// ══════════════════════════════════════════════════════════════
 
 sealed class _MathAtom {}
 
@@ -242,8 +219,6 @@ class _MathArrow extends _MathAtom {
   _MathArrow(this.direction, this.content);
 }
 
-// Novos átomos para binômios, overbrace/underbrace, overset/underset,
-// somatório/produto com limites, etc.
 class _MathBinom extends _MathAtom {
   final String top;
   final String bottom;
@@ -262,15 +237,8 @@ class _MathUnderbrace extends _MathAtom {
   _MathUnderbrace(this.content, {this.annotation});
 }
 
-class _MathStack extends _MathAtom {
-  final String over;
-  final String under;
-  final String content;
-  _MathStack(this.over, this.under, this.content);
-}
-
 class _MathXArrow extends _MathAtom {
-  final String direction; // "left" | "right" | "leftright"
+  final String direction;
   final String content;
   final String label;
   _MathXArrow(this.direction, this.content, this.label);
@@ -362,82 +330,66 @@ String _resolveFormattingCommands(String expr) {
     RegExp(r'\\text\{([^{}]+)\}'),
     (m) => '\u0002TXT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathrm\{([^{}]+)\}'),
     (m) => '\u0002TXT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathbf\{([^{}]+)\}'),
     (m) => '\u0002BF{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathit\{([^{}]+)\}'),
     (m) => '\u0002IT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathsf\{([^{}]+)\}'),
     (m) => '\u0002SF{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathtt\{([^{}]+)\}'),
     (m) => '\u0002TT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathcal\{([^{}]+)\}'),
     (m) => '\u0002IT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathbb\{([^{}]+)\}'),
     (m) => '\u0002BF{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathfrak\{([^{}]+)\}'),
     (m) => '\u0002IT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\mathscr\{([^{}]+)\}'),
     (m) => '\u0002IT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\operatorname\{([^{}]+)\}'),
     (m) => '\u0002TXT{${m.group(1)}}\u0002',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\overrightarrow\{([^{}]+)\}'),
     (m) => '\u0003OVER{${m.group(1)}}\u0003',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\overleftarrow\{([^{}]+)\}'),
     (m) => '\u0003UNDER{${m.group(1)}}\u0003',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\overline\{([^{}]+)\}'),
     (m) => '\u0004OVERLINE{${m.group(1)}}\u0004',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\underline\{([^{}]+)\}'),
     (m) => '\u0004UNDERLINE{${m.group(1)}}\u0004',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\boxed\{([^{}]+)\}'),
     (m) => '\u0005BOXED{${m.group(1)}}\u0005',
   );
-
   result = result.replaceAllMapped(
     RegExp(r'\\color\{([^{}]+)\}\{([^{}]+)\}'),
     (m) => '\u0006COLOR{${m.group(1)}}{${m.group(2)}}\u0006',
@@ -454,14 +406,10 @@ String _resolveFormattingCommands(String expr) {
     );
   }
 
-  // \not — coloca uma barra por cima do caractere seguinte
   result = result.replaceAllMapped(
     RegExp(r'\\not\s*(\S)'),
     (m) => '\u0008NOT{${m.group(1)}}\u0008',
   );
-
-  // \limits pode aparecer após \sum, \prod, \int, etc.
-  // Vamos tratar mais adiante no parser combinado.
 
   return result;
 }
@@ -570,7 +518,7 @@ List<_MathAtom> _parsePlainMathText(String text) {
   final atoms = <_MathAtom>[];
 
   final pattern = RegExp(
-    r'\u0002(?:TXT|BF|IT|SF|TT)\{([^{}]+)\}\u0002'
+    r'\u0002(?:TXT|BF|IT|SF|TT)\{([^{}]+)\}\u0002',
   );
   int last = 0;
   for (final m in pattern.allMatches(text)) {
@@ -607,10 +555,6 @@ List<_MathAtom> _parsePlainMathText(String text) {
   }
   return atoms;
 }
-
-// ══════════════════════════════════════════════════════════════
-// RENDERIZAÇÃO DE ÁTOMOS MATEMÁTICOS
-// ══════════════════════════════════════════════════════════════
 
 List<InlineSpan> _renderMathTextWithMarkers(String text, TextStyle baseStyle) {
   final spans = <InlineSpan>[];
@@ -776,10 +720,7 @@ class MathInline extends StatelessWidget {
             children: [
               if (annotation != null)
                 Text(annotation, style: baseStyle.copyWith(fontSize: baseFontSize * 0.7)),
-              Transform.scale(
-                scaleY: -1,
-                child: Text('⏞', style: baseStyle.copyWith(fontSize: baseFontSize * 1.2)),
-              ),
+              Text('⏞', style: baseStyle.copyWith(fontSize: baseFontSize * 1.2)),
               Text(content, style: baseStyle),
             ],
           ));
@@ -801,7 +742,7 @@ class MathInline extends StatelessWidget {
               children: [
                 Text(label.isEmpty
                     ? (direction == 'left' ? '⟵' : '⟶')
-                    : '${direction == 'left' ? '' : ''}$label${direction == 'right' ? '' : ''}',
+                    : label,
                   style: baseStyle.copyWith(fontSize: baseFontSize * 0.75)),
                 Text(content, style: baseStyle),
               ],
@@ -970,16 +911,6 @@ class MathInline extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// EXTRAÇÃO DE BLOCOS DE MATEMÁTICA ($$...$$) DO TEXTO CORRIDO
-// ══════════════════════════════════════════════════════════════
-
-class MathBlockParseResult {
-  final String textWithMarkers;
-  final List<String> blocks;
-  const MathBlockParseResult({required this.textWithMarkers, required this.blocks});
-}
-
 MathBlockParseResult _extractMathBlocks(String raw) {
   final blocks = <String>[];
   final pattern = RegExp(r'\$\$([\s\S]+?)\$\$');
@@ -991,9 +922,11 @@ MathBlockParseResult _extractMathBlocks(String raw) {
   return MathBlockParseResult(textWithMarkers: text, blocks: blocks);
 }
 
-// ══════════════════════════════════════════════════════════════
-// RICH AI TEXT
-// ══════════════════════════════════════════════════════════════
+class MathBlockParseResult {
+  final String textWithMarkers;
+  final List<String> blocks;
+  const MathBlockParseResult({required this.textWithMarkers, required this.blocks});
+}
 
 class RichAiText extends StatelessWidget {
   final String text;
@@ -1015,7 +948,6 @@ class RichAiText extends StatelessWidget {
     final widgetParse = parseAiWidgetBlocks(text);
 
     if (widgetParse.blocks.isEmpty) {
-      // Sem widgets: apenas texto markdown normal
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1023,7 +955,6 @@ class RichAiText extends StatelessWidget {
       );
     }
 
-    // Com widgets (ativos ou não, não mostramos mais a sugestão)
     final markerRe = RegExp(r'\u0000WB(\d+)\u0000');
     final children = <Widget>[];
     int last = 0;
@@ -1053,10 +984,6 @@ class RichAiText extends StatelessWidget {
     );
   }
 }
-
-// ══════════════════════════════════════════════════════════════
-// PARSER DE BLOCOS ESTRUTURAIS
-// ══════════════════════════════════════════════════════════════
 
 class _RichTextBlockParser {
   static List<Widget> parse(String raw, AppColorScheme s) {
@@ -1095,7 +1022,6 @@ class _RichTextBlockParser {
     final widgets = <Widget>[];
     int i = 0;
     List<List<String>>? tableRows;
-    List<TableColumnWidth>? tableColWidths;
     List<TextAlign>? tableAlignments;
 
     void flushTable() {
@@ -1106,12 +1032,10 @@ class _RichTextBlockParser {
             rows: tableRows!,
             s: s,
             alignments: tableAlignments,
-            columnWidths: tableColWidths,
           ),
         ));
       }
       tableRows = null;
-      tableColWidths = null;
       tableAlignments = null;
     }
 
@@ -1121,10 +1045,6 @@ class _RichTextBlockParser {
       final line = lines[i];
       final trimmed = line.trim();
 
-      // ─────────────────────────────────────────────────────────
-      // Linhas vazias: preservam separação entre blocos, mas sem
-      // criar espaços excessivos no resultado final.
-      // ─────────────────────────────────────────────────────────
       if (trimmed.isEmpty) {
         flushTable();
         if (widgets.isNotEmpty && widgets.last is! SizedBox) {
@@ -1134,9 +1054,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // DETALHES COLAPSÁVEIS <details> ... </details>
-      // ─────────────────────────────────────────────────────────
       if (RegExp(r'^<details>\s*$').hasMatch(trimmed) ||
           trimmed.startsWith('<details>')) {
         flushTable();
@@ -1151,9 +1068,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // TÍTULOS ATX: # até ######
-      // ─────────────────────────────────────────────────────────
       final headerMatch = RegExp(r'^\s*(#{1,6})\s+(.*?)(?:\s+#+)?$').firstMatch(line);
       if (headerMatch != null) {
         flushTable();
@@ -1182,9 +1096,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // TÍTULOS SETEXT: texto seguido por === / ---
-      // ─────────────────────────────────────────────────────────
       if (i + 1 < lines.length && trimmed.isNotEmpty) {
         final next = lines[i + 1].trim();
         final isH1 = RegExp(r'^={3,}$').hasMatch(next);
@@ -1209,9 +1120,6 @@ class _RichTextBlockParser {
         }
       }
 
-      // ─────────────────────────────────────────────────────────
-      // SEPARADOR HORIZONTAL
-      // ─────────────────────────────────────────────────────────
       if (RegExp(r'^\s*([-*_])(?:\s*\1){2,}\s*$').hasMatch(line)) {
         flushTable();
         widgets.add(const Padding(
@@ -1222,13 +1130,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // TABELA MARKDOWN
-      // Aceita | a | b | e ignora a linha separadora de alinhamento.
-      // Agora lê também alinhamento (:---, :---:, ---:) e largura
-      // relativa (min-width via markdown não é suportado, mas podemos
-      // inferir largura pelo conteúdo).
-      // ─────────────────────────────────────────────────────────
       final tableCandidate = _splitTableRow(trimmed);
       if (tableCandidate != null) {
         final nextRow = i + 1 < lines.length ? _splitTableRow(lines[i + 1].trim()) : null;
@@ -1238,7 +1139,6 @@ class _RichTextBlockParser {
             tableRows ??= [];
             tableRows!.add(tableCandidate);
             tableAlignments = _parseTableAlignments(nextRow!);
-            tableColWidths = _inferColumnWidths([tableCandidate, ...(tableRows!.sublist(1))]);
             i += 2;
           } else if (!_isTableSeparatorRow(tableCandidate)) {
             tableRows ??= [];
@@ -1252,9 +1152,6 @@ class _RichTextBlockParser {
       }
       if (tableRows != null) flushTable();
 
-      // ─────────────────────────────────────────────────────────
-      // BLOCO DE CÓDIGO CERCADO: ``` ou ~~~
-      // ─────────────────────────────────────────────────────────
       if (isFence(trimmed)) {
         final fence = RegExp(r'^(```+|~~~+)').firstMatch(trimmed)!;
         final marker = fence.group(1)!;
@@ -1279,9 +1176,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // BLOCO DE CÓDIGO INDENTADO (4+ espaços / tab)
-      // ─────────────────────────────────────────────────────────
       if (RegExp(r'^(?: {4}|\t)').hasMatch(line)) {
         final codeLines = <String>[];
         while (i < lines.length) {
@@ -1307,9 +1201,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // BLOCKQUOTE + ADMONITIONS
-      // ─────────────────────────────────────────────────────────
       if (trimmed.startsWith('>')) {
         final quoteLines = <String>[];
         String? admonitionType;
@@ -1378,10 +1269,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // LISTAS: tarefa, marcadores e listas numeradas.
-      // A indentação é respeitada para listas aninhadas.
-      // ─────────────────────────────────────────────────────────
       final listMatch = RegExp(
         r'^(\s*)([-+*]|\d+[.)]|[a-zA-Z][.)])\s+(?:\[([ xX])\]\s+)?(.*)$',
       ).firstMatch(line);
@@ -1463,9 +1350,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // LINHA DE DEFINITION LIST: Termo / : descrição
-      // ─────────────────────────────────────────────────────────
       if (i + 1 < lines.length && trimmed.isNotEmpty && lines[i + 1].trimLeft().startsWith(':')) {
         flushTable();
         final term = trimmed;
@@ -1492,10 +1376,6 @@ class _RichTextBlockParser {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────
-      // LINHAS NORMAIS / HARD BREAKS
-      // Dois espaços no fim ou backslash → quebra explícita.
-      // ─────────────────────────────────────────────────────────
       final hardBreak = RegExp(r'(?: {2,}|\\)$').hasMatch(line);
       final content = hardBreak
           ? line.replaceFirst(RegExp(r'(?: {2,}|\\)$'), '')
@@ -1512,7 +1392,6 @@ class _RichTextBlockParser {
   }
 
   static Widget _buildDetailsBlock(String content, AppColorScheme s) {
-    // Extrai o sumário <summary>Texto</summary> se existir
     String summary = 'Detalhes';
     var body = content;
     final summaryMatch = RegExp(r'<summary>(.*?)</summary>', dotAll: true).firstMatch(content);
@@ -1590,13 +1469,6 @@ class _RichTextBlockParser {
     return alignments;
   }
 
-  static List<TableColumnWidth>? _inferColumnWidths(List<List<String>> rows) {
-    if (rows.isEmpty) return null;
-    final numCols = rows.first.length;
-    final widths = List<TableColumnWidth>.filled(numCols, const IntrinsicColumnWidth());
-    return widths;
-  }
-
   static String _admonitionLabel(String type) => switch (type) {
         'NOTE' => 'Nota',
         'TIP' => 'Dica',
@@ -1618,12 +1490,10 @@ class _RichTextBlockParser {
     final processed = _normalizeInlineMarkdown(raw);
     final spans = <InlineSpan>[];
 
-    // O parser usa um tokenizer único, do mais específico para o mais
-    // simples. Isso evita que **negrito** seja capturado como *itálico*.
     final pattern = RegExp(
       r'(\$\$[^$\n]+?\$\$)|'
       r'(\$[^$\n]+?\$)|'
-      r'(!?\[[^\]\n]+\]\([^\)\n]+(?:\s+["\'][^"\']*["\'])?\))|'
+      r"(!?\[[^\]\n]+\]\([^\)\n]+(?:\s+["'][^"']*["'])?\))|"
       r'(\*\*\*[^*\n]+?\*\*\*)|'
       r'(\*\*[^*\n]+?\*\*|__[^_\n]+?__)|'
       r'(~~[^~\n]+?~~)|'
@@ -1820,20 +1690,15 @@ class _RichTextBlockParser {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// TABELA — implementação única com alinhamento por coluna
-// ══════════════════════════════════════════════════════════════
-
 class _AiTable extends StatelessWidget {
   final List<List<String>> rows;
   final AppColorScheme s;
   final List<TextAlign>? alignments;
-  final List<TableColumnWidth>? columnWidths;
+
   const _AiTable({
     required this.rows,
     required this.s,
     this.alignments,
-    this.columnWidths,
   });
 
   @override
@@ -1849,22 +1714,24 @@ class _AiTable extends StatelessWidget {
         child: Table(
           border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
           defaultColumnWidth: const IntrinsicColumnWidth(),
-          columnWidths: columnWidths,
           children: [
             TableRow(
               decoration: BoxDecoration(color: s.hover),
               children: header
-                  .map((c) => Padding(
+                  .asMap()
+                  .entries
+                  .map((e) => Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                         child: Align(
-                          alignment: _alignmentFor(0, header.indexOf(c), alignments),
+                          alignment: _alignmentFor(e.key, alignments),
                           child: RichText(
                             text: TextSpan(
                               style: TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w700,
                                   color: s.onSurface),
-                              children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 13.5),
+                              children: _RichTextBlockParser.inlineSpans(
+                                  e.value, s, fontSize: 13.5),
                             ),
                           ),
                         ),
@@ -1876,14 +1743,15 @@ class _AiTable extends StatelessWidget {
                 children: row
                     .asMap()
                     .entries
-                    .map((entry) => Padding(
+                    .map((e) => Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                           child: Align(
-                            alignment: _alignmentFor(body.indexOf(row) + 1, entry.key, alignments),
+                            alignment: _alignmentFor(e.key, alignments),
                             child: RichText(
                               text: TextSpan(
                                 style: TextStyle(fontSize: 13.5, color: s.onSurface),
-                                children: _RichTextBlockParser.inlineSpans(entry.value, s, fontSize: 13.5),
+                                children: _RichTextBlockParser.inlineSpans(
+                                    e.value, s, fontSize: 13.5),
                               ),
                             ),
                           ),
@@ -1896,7 +1764,7 @@ class _AiTable extends StatelessWidget {
     );
   }
 
-  Alignment _alignmentFor(int rowIndex, int colIndex, List<TextAlign>? alignments) {
+  Alignment _alignmentFor(int colIndex, List<TextAlign>? alignments) {
     if (alignments != null && colIndex < alignments.length) {
       switch (alignments[colIndex]) {
         case TextAlign.center: return Alignment.center;
@@ -1923,16 +1791,6 @@ Widget buildAiTableFromWidgetJson(Map<String, dynamic> json, AppColorScheme s) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// AI CODE BLOCK — MAIS CORES: paleta ampliada de syntax
-// highlighting. Cada categoria de token tem cor própria e
-// distinta (tags, atributos, strings, comentários, keywords,
-// números, funções, tipos, constantes, operadores, self/this,
-// decorators, built-ins) para um resultado visualmente mais rico
-// do que a versão anterior, mantendo o texto de prosa fora dos
-// blocos de código monocromático (isso não foi tocado).
-// ══════════════════════════════════════════════════════════════
-
 class _TokenPattern {
   final RegExp regex;
   final Color? color;
@@ -1942,27 +1800,24 @@ class _TokenPattern {
   const _TokenPattern(this.regex, {this.color, this.fontStyle, this.fontWeight});
 }
 
-// Paleta ampliada — mais matizes distintos por categoria de token,
-// inspirada em temas ricos (One Dark Pro / Dracula / Night Owl),
-// mas com mais subdivisões do que a paleta anterior tinha.
-const Color _tokTag = Color(0xFFFF6BB3);        // tags HTML/XML
-const Color _tokAttr = Color(0xFF9CDCFE);       // atributos HTML
-const Color _tokString = Color(0xFFE3B341);     // strings
-const Color _tokStringEscape = Color(0xFFFFD866); // escapes dentro de strings
-const Color _tokComment = Color(0xFF6A737D);    // comentários
-const Color _tokDoctype = Color(0xFF6CC7F5);    // <!DOCTYPE>
-const Color _tokPunct = Color(0xFF9198A1);      // pontuação/parênteses
-const Color _tokKeyword = Color(0xFFFF7B93);    // palavras-chave de controlo
-const Color _tokKeywordImport = Color(0xFFFF9E64); // import/export/from
-const Color _tokNumber = Color(0xFF79C0FF);     // números
-const Color _tokFunction = Color(0xFFDCBDFB);   // nomes de função
-const Color _tokType = Color(0xFFFFB454);       // tipos/classes
-const Color _tokConstant = Color(0xFF56C7FF);   // true/false/null
-const Color _tokOperator = Color(0xFFF97BE0);   // operadores (+, -, =>, etc.)
-const Color _tokSelf = Color(0xFFE06C75);       // self/this
-const Color _tokDecorator = Color(0xFF9ED072);  // decorators/annotations
-const Color _tokBuiltin = Color(0xFF6FE3C4);    // funções nativas (print, len, etc.)
-const Color _tokProperty = Color(0xFF7EE7FC);   // propriedades de objeto (obj.prop)
+const Color _tokTag = Color(0xFFFF6BB3);
+const Color _tokAttr = Color(0xFF9CDCFE);
+const Color _tokString = Color(0xFFE3B341);
+const Color _tokStringEscape = Color(0xFFFFD866);
+const Color _tokComment = Color(0xFF6A737D);
+const Color _tokDoctype = Color(0xFF6CC7F5);
+const Color _tokPunct = Color(0xFF9198A1);
+const Color _tokKeyword = Color(0xFFFF7B93);
+const Color _tokKeywordImport = Color(0xFFFF9E64);
+const Color _tokNumber = Color(0xFF79C0FF);
+const Color _tokFunction = Color(0xFFDCBDFB);
+const Color _tokType = Color(0xFFFFB454);
+const Color _tokConstant = Color(0xFF56C7FF);
+const Color _tokOperator = Color(0xFFF97BE0);
+const Color _tokSelf = Color(0xFFE06C75);
+const Color _tokDecorator = Color(0xFF9ED072);
+const Color _tokBuiltin = Color(0xFF6FE3C4);
+const Color _tokProperty = Color(0xFF7EE7FC);
 
 class AiCodeBlock extends StatefulWidget {
   final String code;
@@ -2161,7 +2016,6 @@ List<TextSpan> _highlightCode(String code, String language, TextStyle baseStyle)
 }
 
 List<TextSpan> _highlightHtml(String code, TextStyle baseStyle) {
-  // Se contém <style>, trata CSS dentro
   final styleBlockPattern = RegExp(r'<style[^>]*>([\s\S]*?)</style>', caseSensitive: false);
   if (styleBlockPattern.hasMatch(code)) {
     return _highlightHtmlWithCss(code, baseStyle);
@@ -2676,17 +2530,6 @@ List<_TokenPattern> _patternsForLanguage(String language) {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// TELA DE PREVIEW — código / pré-visualização com tabs
-// ══════════════════════════════════════════════════════════════
-//
-// Header escuro fixo no topo com curvatura côncava nos cantos de
-// baixo (morde o card claro que vem a seguir), mesmo princípio
-// visual invertido do card convexo. Tabs "Código" / "Pré-visualizar"
-// no mesmo padrão pill/thumb-deslizante do _ThemeSegmentedControl
-// (Aparência, em settings.dart). Botão de partilha usa share1.svg.
-// ══════════════════════════════════════════════════════════════
-
 class AiCodePreviewScreen extends StatefulWidget {
   final String code;
   final String language;
@@ -2723,7 +2566,6 @@ class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Header escuro: X · tabs · share ──
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
               child: Row(
@@ -2747,8 +2589,6 @@ class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
                 ],
               ),
             ),
-            // ── Card claro: cantos convexos em cima, encaixando na
-            // curvatura côncava do header acima ──
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -2772,8 +2612,6 @@ class _AiCodePreviewScreenState extends State<AiCodePreviewScreen> {
   }
 }
 
-// ── Curvatura côncava sob o header: um clipper que "morde" os
-// cantos inferiores para dentro, em vez de arredondá-los para fora ──
 class _ConcaveBottomClipper extends CustomClipper<Path> {
   final double radius;
   const _ConcaveBottomClipper(this.radius);
@@ -2801,8 +2639,6 @@ class _ConcaveBottomClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
-// ── Tabs "Código" / "Pré-visualizar", mesmo padrão pill do
-// _ThemeSegmentedControl em settings.dart ──
 class _PreviewTabSwitch extends StatelessWidget {
   final _PreviewTab value;
   final ValueChanged<_PreviewTab> onChanged;
@@ -2909,8 +2745,6 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
   }
 }
 
-// ── Tab "Código": reaproveita o highlighter existente
-// (_highlightCode), mas em fundo claro para bater com o card ──
 class _CodeTabView extends StatelessWidget {
   final String code;
   final String language;
@@ -2938,7 +2772,6 @@ class _CodeTabView extends StatelessWidget {
   }
 }
 
-// ── Tab "Pré-visualizar": o WebView, exatamente como antes ──
 class _PreviewTabView extends StatelessWidget {
   final String code;
   const _PreviewTabView({required this.code});

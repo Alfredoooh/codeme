@@ -537,7 +537,7 @@ class _OpenAppButtonState extends State<_OpenAppButton> {
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOut,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
