@@ -12,7 +12,6 @@ import 'api_service.dart';
 import 'chat_search.dart';
 import 'app_sheet.dart';
 import 'sheets.dart';
-import 'library_screen.dart';
 import 'scheduled_tasks_screen.dart';
 import 'all_apps_screen.dart';
 import 'apps/app_types.dart';
@@ -282,14 +281,6 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  void _openLibrary(BuildContext context) {
-    HapticFeedback.lightImpact();
-    _closeDrawer();
-    Navigator.of(context).push(_FadePageRoute(
-      builder: (_) => const LibraryScreen(),
-    ));
-  }
-
   void _openScheduledTasks(BuildContext context) {
     HapticFeedback.lightImpact();
     _closeDrawer();
@@ -445,12 +436,6 @@ class _AppDrawerState extends State<AppDrawer> {
           assetName: 'plugins',
           label: 'Apps e plugins',
           onTap: () => _openAllApps(context),
-        ),
-        _MenuOptionTile(
-          s: s,
-          assetName: 'library',
-          label: 'Biblioteca',
-          onTap: () => _openLibrary(context),
         ),
         _MenuOptionTile(
           s: s,
@@ -766,7 +751,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: Container(
           width: _buttonSize, height: _buttonSize,
           alignment: Alignment.center,
@@ -857,7 +842,7 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 110),
           width: widget.size, height: widget.size,
@@ -1222,7 +1207,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
       child: AnimatedScale(
         scale: _p ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
           alignment: Alignment.center,
@@ -1350,7 +1335,7 @@ class _NewChatPillState extends State<_NewChatPill> {
       child: AnimatedScale(
         scale: _p ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: IntrinsicWidth(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),

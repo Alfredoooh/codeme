@@ -1388,7 +1388,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
       child: AnimatedScale(
         scale: _p ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1491,7 +1491,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
       child: AnimatedScale(
         scale: _p ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
           alignment: Alignment.center,

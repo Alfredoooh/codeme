@@ -4,13 +4,80 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../sheets.dart';
 import '../app_sheet.dart';
 import '../auth_service.dart';
+import '../exportservice.dart';
 import 'app_types.dart';
+
+const Set<String> _kEditorSvgIcons = {
+  'align_center',
+  'align_left',
+  'align_right',
+  'bold',
+  'brush',
+  'bullet_point',
+  'capital_letter',
+  'chart',
+  'edit_text',
+  'eraser',
+  'font',
+  'font-2',
+  'font_size',
+  'hyperlink',
+  'image',
+  'indent_decrease',
+  'indent_increase',
+  'justify',
+  'paste',
+  'pencil_holder',
+  'quote',
+  'resize',
+  'spacing_height',
+  'spacing_width',
+  'spellcheck',
+  'subscript',
+  'superscript',
+  'text_color',
+  'underline',
+
+};
+
+const Map<String, String> _kEditorIconAliases = {
+  'align_justify': 'justify',
+  'bullet': 'bullet_point',
+  'link': 'hyperlink',
+  'palette': 'text_color',
+  'highlight': 'brush',
+  'text': 'edit_text',
+};
+
+class _EditorIcon extends StatelessWidget {
+  final String asset;
+  final double size;
+  final Color color;
+  const _EditorIcon(this.asset, {required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final rawName = asset.endsWith('.svg') ? asset.substring(0, asset.length - 4) : asset;
+    final key = _kEditorIconAliases[rawName] ?? rawName;
+    final fileName = '$key.svg';
+    if (_kEditorSvgIcons.contains(key)) {
+      return SvgPicture.asset(
+        'assets/icons/editor/$fileName',
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
+    return AppIcon(fileName, size: size, color: color);
+  }
+}
 
 Future<T?> _showAppPopupMenu<T>(
   BuildContext context,
@@ -188,6 +255,34 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
     if (ctrl != null) _injectCanvas(ctrl, content);
   }
 
+  Future<void> _downloadCurrentDocument() async {
+    final content = await _getCurrentContent();
+    if (content.trim().isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível obter o conteúdo atual.')),
+      );
+      return;
+    }
+    try {
+      final item = LocalCanvasItem(
+        id: 'export-pptx',
+        kind: LocalCanvasKind.slide,
+        title: _documentTitle,
+        content: content,
+      );
+      final bytes = await ExportService.export(item: item, format: 'pptx');
+      final safeTitle = _documentTitle.trim().isEmpty
+          ? 'documento'
+          : _documentTitle.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_').trim();
+      await ExportService.shareBytes(bytes, filename: '$safeTitle.pptx');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível descarregar apresentação PowerPoint: ${e.toString()}')),
+      );
+    }
+  }
+
+
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
     final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
@@ -245,6 +340,7 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
         PopupMenuItem(value: 3, child: _buildPopupItem('image', 'Inserir imagem', false)),
         PopupMenuItem(value: 4, child: _buildPopupItem('chart', 'Inserir gráfico', false)),
         PopupMenuItem(value: 5, child: _buildPopupItem('sparkles', 'Editar com IA', false)),
+        PopupMenuItem(value: 6, child: _buildPopupItem('download', 'Descarregar documento', false)),
       ],
     );
     if (result == 1) _runJs("editorApi.addSlide()");
@@ -252,6 +348,7 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
     else if (result == 3) _onInsertImage();
     else if (result == 4) _onInsertChart();
     else if (result == 5) _openAiEditModal();
+    else if (result == 6) _downloadCurrentDocument();
   }
 
   Widget _buildPopupItem(String assetName, String label, bool destructive) {
@@ -265,7 +362,7 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
       ),
       child: Row(
         children: [
-          AppIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
+          _EditorIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
           const SizedBox(width: 10),
           Text(label, style: TextStyle(fontSize: 14, color: destructive ? s.error : s.onSurface)),
         ],
@@ -414,8 +511,8 @@ class _ScreenHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo),
-          _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo),
+          _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo, withContainer: false),
+          _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo, withContainer: false),
           const SizedBox(width: 8),
           _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu, anchorKey: menuKey),
         ]),
@@ -429,11 +526,13 @@ class _HeaderIconButton extends StatelessWidget {
   final String assetName;
   final VoidCallback onTap;
   final GlobalKey? anchorKey;
+  final bool withContainer;
   const _HeaderIconButton({
     required this.s,
     required this.assetName,
     required this.onTap,
     this.anchorKey,
+    this.withContainer = true,
   });
 
   @override
@@ -445,8 +544,10 @@ class _HeaderIconButton extends StatelessWidget {
       child: Container(
         width: 40, height: 40,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow),
-        child: AppIcon(assetName, size: 20, color: s.onSurface),
+        decoration: withContainer
+            ? BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow)
+            : null,
+        child: _EditorIcon(assetName, size: 20, color: s.onSurface),
       ),
     );
   }
@@ -541,7 +642,7 @@ class _ToolbarButton extends StatelessWidget {
       child: Container(
         width: 40, height: 40,
         alignment: Alignment.center,
-        child: AppIcon(assetName, size: 20, color: s.onSurface),
+        child: _EditorIcon(assetName, size: 20, color: s.onSurface),
       ),
     );
   }

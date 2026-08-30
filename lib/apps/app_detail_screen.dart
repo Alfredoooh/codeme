@@ -500,7 +500,7 @@ class _FeedbackRowState extends State<_FeedbackRow> {
                 ),
               ),
             ),
-            Icon(CupertinoIcons.chevron_right, size: 17, color: s.onSurfaceVariant),
+            AppIcon('arrow_right', size: 17, color: s.onSurfaceVariant),
           ],
         ),
       ),
@@ -537,7 +537,7 @@ class _OpenAppButtonState extends State<_OpenAppButton> {
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOutCubic,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),

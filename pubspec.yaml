@@ -43,6 +43,7 @@ flutter:
   assets:
     - assets/apps/apps.json
     - assets/icons/outline/
+    - assets/icons/editor/
     - assets/fonts/
     - assets/images/logo.svg
     - assets/images/background.png

@@ -256,7 +256,7 @@ class _AppRowState extends State<_AppRow>
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
                   child: Icon(
-                    CupertinoIcons.chevron_right,
+                    AppIcon('arrow_right', size: 16, color: s.onSurfaceVariant),
                     size: 16,
                     color: s.onSurfaceVariant,
                   ),

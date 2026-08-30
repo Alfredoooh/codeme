@@ -10,7 +10,6 @@
 // o teclado.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
@@ -207,7 +206,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
       );
     }
 
-    return CupertinoScrollbar(
+    return Scrollbar(
       key: const ValueKey('results'),
       thickness: 3,
       thicknessWhileDragging: 5.5,

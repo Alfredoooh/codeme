@@ -2,8 +2,14 @@
 // FILE: lib/richtext.dart
 // ══════════════════════════════════════════════════════════════
 //
-// Parser de rich text — suporta:
-//   • Markdown (negrito, itálico, riscado, código inline, links)
+// Parser de rich text — suporta uma gama ampla de Markdown e sintaxe
+// de apresentação usada pelas respostas da IA:
+//   • Títulos ATX (#..######) e Setext (= / -)
+//   • Negrito, itálico, negrito+itálico, riscado, destaque textual
+//   • Código inline e blocos cercados por ``` / ~~~ / indentação
+//   • Links, URLs, imagens como texto alternativo e quebras explícitas
+//   • Listas não ordenadas, ordenadas, alfabetadas e checklists aninhados
+//   • Blockquotes, alertas/admonitions e listas de definições
 //   • Tabelas markdown e widgets de tabela
 //   • Blocos de código com card completo (MANTÉM cor — syntax
 //     highlighting nunca foi removido, só o texto normal em prosa
@@ -831,9 +837,10 @@ class RichAiText extends StatelessWidget {
 
 class _RichTextBlockParser {
   static List<Widget> parse(String raw, AppColorScheme s) {
-    final mathExtract = _extractMathBlocks(raw);
+    final normalized = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final mathExtract = _extractMathBlocks(normalized);
     if (mathExtract.blocks.isEmpty) {
-      return _parseStructural(raw, s);
+      return _parseStructural(normalized, s);
     }
 
     final markerRe = RegExp(r'\u0000MB(\d+)\u0000');
@@ -846,7 +853,10 @@ class _RichTextBlockParser {
       }
       final idx = int.parse(m.group(1)!);
       if (idx < mathExtract.blocks.length) {
-        widgets.add(MathInline(expression: mathExtract.blocks[idx], s: s, block: true));
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: MathInline(expression: mathExtract.blocks[idx], s: s, block: true),
+        ));
       }
       last = m.end;
     }
@@ -866,59 +876,56 @@ class _RichTextBlockParser {
     void flushTable() {
       if (tableRows != null && tableRows!.isNotEmpty) {
         widgets.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           child: _AiTable(rows: tableRows!, s: s),
         ));
       }
       tableRows = null;
     }
 
+    bool isFence(String value) => RegExp(r'^\s*(```+|~~~+)').hasMatch(value);
+
     while (i < lines.length) {
       final line = lines[i];
       final trimmed = line.trim();
 
-      if (RegExp(r'^(-{3,}|\*{3,}|_{3,})$').hasMatch(trimmed)) {
+      // ─────────────────────────────────────────────────────────
+      // Linhas vazias: preservam separação entre blocos, mas sem
+      // criar espaços excessivos no resultado final.
+      // ─────────────────────────────────────────────────────────
+      if (trimmed.isEmpty) {
         flushTable();
-        widgets.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.5)),
-        ));
-        i++;
-        continue;
-      }
-
-      if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.contains('|', 1)) {
-        final isSeparator = RegExp(r'^\|[\s\-:|]+\|$').hasMatch(trimmed);
-        if (!isSeparator) {
-          final cells = trimmed
-              .substring(1, trimmed.length - 1)
-              .split('|')
-              .map((c) => c.trim())
-              .toList();
-          tableRows ??= [];
-          tableRows!.add(cells);
+        if (widgets.isNotEmpty && widgets.last is! SizedBox) {
+          widgets.add(const SizedBox(height: 5));
         }
         i++;
         continue;
-      } else if (tableRows != null) {
-        flushTable();
       }
 
-      if (trimmed.isEmpty) {
-        widgets.add(const SizedBox(height: 6));
-        i++;
-        continue;
-      }
-
-      final headerMatch = RegExp(r'^(#{1,4})\s+(.*)$').firstMatch(trimmed);
+      // ─────────────────────────────────────────────────────────
+      // TÍTULOS ATX: # até ######
+      // ─────────────────────────────────────────────────────────
+      final headerMatch = RegExp(r'^\s*(#{1,6})\s+(.*?)(?:\s+#+)?$').firstMatch(line);
       if (headerMatch != null) {
+        flushTable();
         final level = headerMatch.group(1)!.length;
-        final content = headerMatch.group(2)!;
+        final content = headerMatch.group(2)!.trim();
         widgets.add(Padding(
-          padding: EdgeInsets.only(top: i == 0 ? 0 : 8, bottom: 4),
+          padding: EdgeInsets.only(
+            top: widgets.isEmpty ? 0 : (level <= 2 ? 11 : 7),
+            bottom: level <= 2 ? 6 : 4,
+          ),
           child: _formattedText(
-            content, s,
-            fontSize: level == 1 ? 18 : level == 2 ? 16.5 : 15,
+            content,
+            s,
+            fontSize: switch (level) {
+              1 => 22,
+              2 => 19,
+              3 => 17.5,
+              4 => 16.5,
+              5 => 15.75,
+              _ => 15.25,
+            },
             fontWeight: FontWeight.w700,
           ),
         ));
@@ -927,12 +934,129 @@ class _RichTextBlockParser {
       }
 
       // ─────────────────────────────────────────────────────────
-      // BLOCO DE CITAÇÃO (blockquote) — mantém estilo original,
-      // apenas adiciona o rótulo do admonition em cima, sem ícone,
-      // sem cor de fundo.
+      // TÍTULOS SETEXT: texto seguido por === / ---
+      // ─────────────────────────────────────────────────────────
+      if (i + 1 < lines.length && trimmed.isNotEmpty) {
+        final next = lines[i + 1].trim();
+        final isH1 = RegExp(r'^={3,}$').hasMatch(next);
+        final isH2 = RegExp(r'^-{3,}$').hasMatch(next);
+        if ((isH1 || isH2) &&
+            !trimmed.startsWith('-') &&
+            !trimmed.startsWith('*') &&
+            !trimmed.startsWith('+') &&
+            !trimmed.startsWith('>')) {
+          flushTable();
+          widgets.add(Padding(
+            padding: EdgeInsets.only(top: widgets.isEmpty ? 0 : 10, bottom: 5),
+            child: _formattedText(
+              trimmed,
+              s,
+              fontSize: isH1 ? 21 : 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ));
+          i += 2;
+          continue;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // SEPARADOR HORIZONTAL
+      // ─────────────────────────────────────────────────────────
+      if (RegExp(r'^\s*([-*_])(?:\s*\1){2,}\s*$').hasMatch(line)) {
+        flushTable();
+        widgets.add(const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Divider(height: 1, thickness: 1),
+        ));
+        i++;
+        continue;
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // TABELA MARKDOWN
+      // Aceita | a | b | e ignora a linha separadora de alinhamento.
+      // ─────────────────────────────────────────────────────────
+      final tableCandidate = _splitTableRow(trimmed);
+      if (tableCandidate != null) {
+        final nextRow = i + 1 < lines.length ? _splitTableRow(lines[i + 1].trim()) : null;
+        final looksLikeHeader = nextRow != null && _isTableSeparatorRow(nextRow);
+        if (looksLikeHeader || tableRows != null) {
+          if (looksLikeHeader) {
+            tableRows ??= [];
+            tableRows!.add(tableCandidate);
+            i += 2;
+          } else if (!_isTableSeparatorRow(tableCandidate)) {
+            tableRows ??= [];
+            tableRows!.add(tableCandidate);
+            i++;
+          } else {
+            i++;
+          }
+          continue;
+        }
+      }
+      if (tableRows != null) flushTable();
+
+      // ─────────────────────────────────────────────────────────
+      // BLOCO DE CÓDIGO CERCADO: ``` ou ~~~
+      // ─────────────────────────────────────────────────────────
+      if (isFence(trimmed)) {
+        final fence = RegExp(r'^(```+|~~~+)').firstMatch(trimmed)!;
+        final marker = fence.group(1)!;
+        final info = trimmed.substring(fence.end).trim();
+        final codeLines = <String>[];
+        i++;
+        while (i < lines.length) {
+          final candidate = lines[i].trimLeft();
+          if (candidate.startsWith(marker)) break;
+          codeLines.add(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++;
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: AiCodeBlock(
+            code: codeLines.join('\n'),
+            language: info.isEmpty ? 'text' : info.split(RegExp(r'\s+')).first,
+            s: s,
+          ),
+        ));
+        continue;
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // BLOCO DE CÓDIGO INDENTADO (4+ espaços / tab)
+      // ─────────────────────────────────────────────────────────
+      if (RegExp(r'^(?: {4}|\t)').hasMatch(line)) {
+        final codeLines = <String>[];
+        while (i < lines.length) {
+          final current = lines[i];
+          if (current.trim().isEmpty) {
+            codeLines.add('');
+            i++;
+            continue;
+          }
+          if (!RegExp(r'^(?: {4}|\t)').hasMatch(current)) break;
+          codeLines.add(current.startsWith('\t')
+              ? current.substring(1)
+              : current.substring(current.length >= 4 ? 4 : current.length));
+          i++;
+        }
+        while (codeLines.isNotEmpty && codeLines.last.isEmpty) {
+          codeLines.removeLast();
+        }
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: AiCodeBlock(code: codeLines.join('\n'), language: 'text', s: s),
+        ));
+        continue;
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // BLOCKQUOTE + ADMONITIONS
       // ─────────────────────────────────────────────────────────
       if (trimmed.startsWith('>')) {
-        flushTable();
         final quoteLines = <String>[];
         String? admonitionType;
         bool firstLine = true;
@@ -942,44 +1066,42 @@ class _RichTextBlockParser {
           if (!currentTrimmed.startsWith('>')) break;
 
           var content = currentTrimmed.replaceFirst(RegExp(r'^>\s?'), '');
-
           if (firstLine) {
-            final tagMatch = RegExp(r'^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*').firstMatch(content);
+            final tagMatch = RegExp(
+              r'^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|SUCCESS|QUESTION)\]\s*',
+              caseSensitive: false,
+            ).firstMatch(content);
             if (tagMatch != null) {
-              admonitionType = tagMatch.group(1);
+              admonitionType = tagMatch.group(1)!.toUpperCase();
               content = content.substring(tagMatch.end);
             }
             firstLine = false;
           }
-
-          if (content.trim().isNotEmpty || quoteLines.isNotEmpty) {
-            quoteLines.add(content);
-          }
+          quoteLines.add(content);
           i++;
         }
 
         final quoteText = quoteLines.join('\n').trim();
-
-        if (admonitionType != null) {
-          final label = _admonitionLabel(admonitionType);
-          widgets.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 3,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: s.outline,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+        final label = admonitionType == null ? null : _admonitionLabel(admonitionType!);
+        widgets.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 3,
+                  margin: const EdgeInsets.only(right: 9),
+                  decoration: BoxDecoration(
+                    color: s.outline,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (label != null) ...[
                         Text(
                           label,
                           style: TextStyle(
@@ -990,139 +1112,143 @@ class _RichTextBlockParser {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        _formattedText(quoteText, s),
                       ],
-                    ),
+                      _formattedText(quoteText, s),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
+          ),
+        ));
+        continue;
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // LISTAS: tarefa, marcadores e listas numeradas.
+      // A indentação é respeitada para listas aninhadas.
+      // ─────────────────────────────────────────────────────────
+      final listMatch = RegExp(
+        r'^(\s*)([-+*]|\d+[.)]|[a-zA-Z][.)])\s+(?:\[([ xX])\]\s+)?(.*)$',
+      ).firstMatch(line);
+      if (listMatch != null) {
+        flushTable();
+        final rendered = <Widget>[];
+
+        while (i < lines.length) {
+          final current = lines[i];
+          final match = RegExp(
+            r'^(\s*)([-+*]|\d+[.)]|[a-zA-Z][.)])\s+(?:\[([ xX])\]\s+)?(.*)$',
+          ).firstMatch(current);
+          if (match == null) break;
+
+          final indent = match.group(1)!.replaceAll('\t', '    ').length;
+          final marker = match.group(2)!;
+          final checked = match.group(3);
+          final content = match.group(4)!;
+          final left = (indent ~/ 2) * 16.0;
+          final isOrdered = RegExp(r'^(?:\d+[.)]|[a-zA-Z][.)])$').hasMatch(marker);
+          final markerText = isOrdered ? marker : null;
+
+          rendered.add(Padding(
+            padding: EdgeInsets.only(left: left, bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: checked != null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: AppIcon(
+                            checked.toLowerCase() == 'x'
+                                ? 'check_box.svg'
+                                : 'check_box_outline_blank.svg',
+                            size: 16,
+                            color: checked.toLowerCase() == 'x'
+                                ? s.primary
+                                : s.onSurfaceVariant,
+                          ),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: markerText == null
+                              ? Container(
+                                  width: 5,
+                                  height: 5,
+                                  margin: const EdgeInsets.only(top: 7, left: 4),
+                                  decoration: BoxDecoration(
+                                    color: s.onSurfaceVariant,
+                                    shape: BoxShape.circle,
+                                  ),
+                                )
+                              : Text(
+                                  markerText,
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    color: s.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                ),
+                Expanded(
+                  child: _formattedText(
+                    content,
+                    s,
+                    fontWeight: checked?.toLowerCase() == 'x' ? FontWeight.normal : null,
+                  ),
+                ),
+              ],
             ),
           ));
-        } else {
-          widgets.add(
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    width: 3,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: s.outline,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Expanded(child: _formattedText(quoteText, s)),
-                ],
-              ),
-            ),
-          );
-        }
-        continue;
-      }
-
-      final indentMatch = RegExp(r'^(\s*)').firstMatch(line)!;
-      final indentLevel = (indentMatch.group(1)!.length / 2).floor().clamp(0, 4);
-
-      final checkMatch = RegExp(r'^([\-\*])\s+\[([ xX])\]\s+(.*)$').firstMatch(trimmed);
-      if (checkMatch != null) {
-        final done = checkMatch.group(2)!.toLowerCase() == 'x';
-        widgets.add(Padding(
-          padding: EdgeInsets.only(bottom: 4, left: indentLevel * 16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2, right: 8),
-                child: AppIcon(
-                  done ? 'check_box.svg' : 'check_box_outline_blank.svg',
-                  size: 16,
-                  color: done ? s.primary : s.onSurfaceVariant,
-                ),
-              ),
-              Expanded(
-                child: _formattedText(
-                  checkMatch.group(3)!, s,
-                  fontWeight: done ? FontWeight.normal : null,
-                ),
-              ),
-            ],
-          ),
-        ));
-        i++;
-        continue;
-      }
-
-      final bulletMatch = RegExp(r'^[\-\*]\s+(.*)$').firstMatch(trimmed);
-      if (bulletMatch != null) {
-        widgets.add(Padding(
-          padding: EdgeInsets.only(bottom: 4, left: indentLevel * 16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2, right: 8),
-                child: Container(
-                  width: 5, height: 5,
-                  margin: const EdgeInsets.only(top: 6),
-                  decoration: BoxDecoration(color: s.onSurfaceVariant, shape: BoxShape.circle),
-                ),
-              ),
-              Expanded(child: _formattedText(bulletMatch.group(1)!, s)),
-            ],
-          ),
-        ));
-        i++;
-        continue;
-      }
-
-      final numberedMatch = RegExp(r'^(\d+)\.\s+(.*)$').firstMatch(trimmed);
-      if (numberedMatch != null) {
-        widgets.add(Padding(
-          padding: EdgeInsets.only(bottom: 4, left: indentLevel * 16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 22,
-                child: Text('${numberedMatch.group(1)}.',
-                    style: TextStyle(
-                        fontSize: 15.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ),
-              Expanded(child: _formattedText(numberedMatch.group(2)!, s)),
-            ],
-          ),
-        ));
-        i++;
-        continue;
-      }
-
-      if (trimmed.startsWith('```')) {
-        final lang = trimmed.substring(3).trim();
-        final codeLines = <String>[];
-        i++;
-        while (i < lines.length && !lines[i].trim().startsWith('```')) {
-          codeLines.add(lines[i]);
           i++;
         }
-        if (i < lines.length) i++;
 
-        final codeContent = codeLines.join('\n');
+        widgets.addAll(rendered);
+        continue;
+      }
 
+      // ─────────────────────────────────────────────────────────
+      // LINHA DE DEFINITION LIST: Termo / : descrição
+      // ─────────────────────────────────────────────────────────
+      if (i + 1 < lines.length && trimmed.isNotEmpty && lines[i + 1].trimLeft().startsWith(':')) {
+        flushTable();
+        final term = trimmed;
+        i++;
+        final defs = <String>[];
+        while (i < lines.length && lines[i].trimLeft().startsWith(':')) {
+          defs.add(lines[i].trimLeft().substring(1).trim());
+          i++;
+        }
         widgets.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: AiCodeBlock(
-            code: codeContent,
-            language: lang.isEmpty ? 'text' : lang,
-            s: s,
+          padding: const EdgeInsets.only(bottom: 7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _formattedText(term, s, fontWeight: FontWeight.w700),
+              for (final def in defs)
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 2),
+                  child: _formattedText(def, s),
+                ),
+            ],
           ),
         ));
         continue;
       }
 
+      // ─────────────────────────────────────────────────────────
+      // LINHAS NORMAIS / HARD BREAKS
+      // Dois espaços no fim ou backslash → quebra explícita.
+      // ─────────────────────────────────────────────────────────
+      final hardBreak = RegExp(r'(?: {2,}|\\)$').hasMatch(line);
+      final content = hardBreak
+          ? line.replaceFirst(RegExp(r'(?: {2,}|\\)$'), '')
+          : trimmed;
       widgets.add(Padding(
         padding: const EdgeInsets.only(bottom: 4),
-        child: _formattedText(trimmed, s),
+        child: _formattedText(content, s, forceLineBreak: hardBreak),
       ));
       i++;
     }
@@ -1131,88 +1257,215 @@ class _RichTextBlockParser {
     return widgets;
   }
 
+  static List<String>? _splitTableRow(String line) {
+    if (!line.contains('|')) return null;
+    final value = line.trim();
+    if (!(value.startsWith('|') || value.endsWith('|'))) return null;
+
+    var body = value;
+    if (body.startsWith('|')) body = body.substring(1);
+    if (body.endsWith('|')) body = body.substring(0, body.length - 1);
+
+    final cells = <String>[];
+    final current = StringBuffer();
+    bool escaped = false;
+    for (final char in body.split('')) {
+      if (escaped) {
+        current.write(char);
+        escaped = false;
+      } else if (char == '\\') {
+        escaped = true;
+      } else if (char == '|') {
+        cells.add(current.toString().trim());
+        current.clear();
+      } else {
+        current.write(char);
+      }
+    }
+    if (escaped) current.write('\\');
+    cells.add(current.toString().trim());
+    return cells;
+  }
+
+  static bool _isTableSeparatorRow(List<String> row) {
+    if (row.isEmpty) return false;
+    return row.every((cell) => RegExp(r'^:?-{3,}:?$').hasMatch(cell.trim()));
+  }
+
   static String _admonitionLabel(String type) => switch (type) {
         'NOTE' => 'Nota',
         'TIP' => 'Dica',
         'IMPORTANT' => 'Importante',
         'WARNING' => 'Aviso',
         'CAUTION' => 'Cuidado',
+        'INFO' => 'Informação',
+        'SUCCESS' => 'Sucesso',
+        'QUESTION' => 'Questão',
         _ => 'Nota',
       };
 
-  static List<InlineSpan> inlineSpans(String raw, AppColorScheme s, {double fontSize = 15.5}) {
-    final linkColor = s.onSurface;
-
-    var processed = raw;
-    kEmojiShortcodes.forEach((code, emoji) {
-      if (processed.contains(code)) {
-        processed = processed.replaceAll(code, emoji);
-      }
-    });
-
+  static List<InlineSpan> inlineSpans(
+    String raw,
+    AppColorScheme s, {
+    double fontSize = 15.5,
+    bool forceLineBreak = false,
+  }) {
+    final processed = _normalizeInlineMarkdown(raw);
     final spans = <InlineSpan>[];
+
+    // O parser usa um tokenizer único, do mais específico para o mais
+    // simples. Isso evita que **negrito** seja capturado como *itálico*.
     final pattern = RegExp(
-      r'(\$[^$\n]+?\$)|(\*\*\*.+?\*\*\*)|(\*\*.+?\*\*)|(__.+?__)|(~~.+?~~)|(\*[^\*\n]+?\*)|(_[^_\n]+?_)|(`[^`\n]+?`)|(\[([^\]]+)\]\(([^)]+)\))',
+      r'(\$\$[^$\n]+?\$\$)|'
+      r'(\$[^$\n]+?\$)|'
+      r'(!?\[[^\]\n]+\]\([^\)\n]+(?:\s+["\'][^"\']*["\'])?\))|'
+      r'(\*\*\*[^*\n]+?\*\*\*)|'
+      r'(\*\*[^*\n]+?\*\*|__[^_\n]+?__)|'
+      r'(~~[^~\n]+?~~)|'
+      r'(\*[^*\n]+?\*|_[^_\n]+?_)|'
+      r'(==[^=\n]+?==)|'
+      r'(```[^`\n]*```)|'
+      r'(`[^`\n]+?`)|'
+      r'(\^\([^\)\n]+\)|\^\w+)|'
+      r'(\~\([^\)\n]+\)|\~\w+)|'
+      r'(https?://[^\s<>]+)|'
+      r'(<br\s*/?>)|'
+      r'(\\\\)$',
+      multiLine: true,
     );
+
     int last = 0;
     for (final m in pattern.allMatches(processed)) {
       if (m.start > last) {
-        spans.add(TextSpan(text: processed.substring(last, m.start)));
+        spans.add(TextSpan(text: _unescapeInline(processed.substring(last, m.start))));
       }
-      final token = m.group(0)!;
 
-      if (token.startsWith(r'$')) {
+      final token = m.group(0)!;
+      if (token.startsWith('$$') && token.endsWith('$$')) {
+        final expr = token.substring(2, token.length - 2);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: MathInline(expression: expr, s: s, block: false),
+        ));
+      } else if (token.startsWith(r'$')) {
         final expr = token.substring(1, token.length - 1);
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: MathInline(expression: expr, s: s, block: false),
         ));
+      } else if (token.startsWith('![')) {
+        // Imagens markdown são mantidas como texto alternativo quando o
+        // rich text não possui um loader de imagens próprio.
+        final match = RegExp(r'^!\[([^\]]*)\]\(([^)]+)\)').firstMatch(token);
+        if (match != null) {
+          spans.add(TextSpan(text: match.group(1)!.isEmpty ? 'imagem' : match.group(1)!));
+        }
       } else if (token.startsWith('[')) {
-        spans.add(TextSpan(
-          text: m.group(10)!,
-          style: TextStyle(
-            color: linkColor,
-            decoration: TextDecoration.underline,
-            decorationColor: linkColor.withOpacity(0.5),
-          ),
-        ));
+        final match = RegExp(r'^\[([^\]]+)\]\(([^)]+)\)').firstMatch(token);
+        if (match != null) {
+          final label = match.group(1)!;
+          final url = match.group(2)!;
+          spans.add(TextSpan(
+            text: label,
+            style: const TextStyle(decoration: TextDecoration.underline),
+            recognizer: null,
+            semanticsLabel: '$label — $url',
+          ));
+        }
       } else if (token.startsWith('***')) {
         spans.add(TextSpan(
           text: token.substring(3, token.length - 3),
           style: const TextStyle(fontWeight: FontWeight.w700, fontStyle: FontStyle.italic),
         ));
-      } else if (token.startsWith('~~')) {
-        spans.add(TextSpan(
-          text: token.substring(2, token.length - 2),
-          style: const TextStyle(decoration: TextDecoration.lineThrough),
-        ));
       } else if (token.startsWith('**') || token.startsWith('__')) {
         spans.add(TextSpan(
-          text: token.substring(2, token.length - 2),
+          text: _unescapeInline(token.substring(2, token.length - 2)),
           style: const TextStyle(fontWeight: FontWeight.w700),
+        ));
+      } else if (token.startsWith('~~')) {
+        spans.add(TextSpan(
+          text: _unescapeInline(token.substring(2, token.length - 2)),
+          style: const TextStyle(decoration: TextDecoration.lineThrough),
+        ));
+      } else if (token.startsWith('==')) {
+        spans.add(TextSpan(text: token.substring(2, token.length - 2)));
+      } else if (token.startsWith('```')) {
+        spans.add(TextSpan(
+          text: token.substring(3, token.length - 3),
+          style: const TextStyle(fontFamily: 'monospace'),
         ));
       } else if (token.startsWith('`')) {
         spans.add(TextSpan(
-          text: token.substring(1, token.length - 1),
-          style: TextStyle(
-            fontFamily: 'monospace',
-            backgroundColor: s.hover,
-            fontSize: fontSize - 1,
+          text: _unescapeInline(token.substring(1, token.length - 1)),
+          style: TextStyle(fontFamily: 'monospace', backgroundColor: s.hover, fontSize: fontSize - 1),
+        ));
+      } else if (token.startsWith('^')) {
+        final value = token.startsWith('^(')
+            ? token.substring(2, token.length - 1)
+            : token.substring(1);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.top,
+          child: Transform.translate(
+            offset: Offset(0, -fontSize * 0.35),
+            child: Text(value, style: TextStyle(fontSize: fontSize * 0.7, height: 1.0)),
           ),
         ));
-      } else {
+      } else if (token.startsWith('~')) {
+        final value = token.startsWith('~(')
+            ? token.substring(2, token.length - 1)
+            : token.substring(1);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.bottom,
+          child: Transform.translate(
+            offset: Offset(0, fontSize * 0.12),
+            child: Text(value, style: TextStyle(fontSize: fontSize * 0.7, height: 1.0)),
+          ),
+        ));
+      } else if (token.startsWith('http://') || token.startsWith('https://')) {
         spans.add(TextSpan(
-          text: token.substring(1, token.length - 1),
+          text: token,
+          style: const TextStyle(decoration: TextDecoration.underline),
+          semanticsLabel: token,
+        ));
+      } else if (token.startsWith('<br')) {
+        spans.add(const TextSpan(text: '\n'));
+      } else if (token == r'\\') {
+        spans.add(const TextSpan(text: '\n'));
+      } else if (token.startsWith('*') || token.startsWith('_')) {
+        spans.add(TextSpan(
+          text: _unescapeInline(token.substring(1, token.length - 1)),
           style: const TextStyle(fontStyle: FontStyle.italic),
         ));
       }
       last = m.end;
     }
-    if (last < processed.length) spans.add(TextSpan(text: processed.substring(last)));
+
+    if (last < processed.length) {
+      spans.add(TextSpan(text: _unescapeInline(processed.substring(last))));
+    }
+    if (forceLineBreak) spans.add(const TextSpan(text: '\n'));
     return spans;
   }
 
-  static Widget _formattedText(String raw, AppColorScheme s, {double fontSize = 15.5, FontWeight? fontWeight}) {
+  static String _normalizeInlineMarkdown(String value) {
+    var result = value.replaceAll('\u200B', '');
+    kEmojiShortcodes.forEach((code, replacement) {
+      result = result.replaceAll(code, replacement);
+    });
+    return result;
+  }
+
+  static String _unescapeInline(String value) {
+    return value.replaceAllMapped(RegExp(r'\\([\\`*_[\]{}()#+.!|>~-])'), (m) => m.group(1)!);
+  }
+
+  static Widget _formattedText(
+    String raw,
+    AppColorScheme s, {
+    double fontSize = 15.5,
+    FontWeight? fontWeight,
+    bool forceLineBreak = false,
+  }) {
     return SelectableText.rich(
       TextSpan(
         style: TextStyle(
@@ -1221,7 +1474,12 @@ class _RichTextBlockParser {
           fontWeight: fontWeight ?? FontWeight.normal,
           height: 1.45,
         ),
-        children: inlineSpans(raw, s, fontSize: fontSize),
+        children: inlineSpans(
+          raw,
+          s,
+          fontSize: fontSize,
+          forceLineBreak: forceLineBreak,
+        ),
       ),
     );
   }
