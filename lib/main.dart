@@ -13,6 +13,7 @@ import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
 import 'authscreens.dart';
+import 'library_screen.dart';
 import 'apps/app_types.dart';
 import 'apps/registry/app_registry.dart';
 import 'apps/docs.dart';               // necessário para o RootShell
@@ -158,6 +159,12 @@ class _RootShellState extends State<RootShell>
         .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
   }
 
+  void _openLibrary() {
+    _closeDrawer();
+    Navigator.of(context)
+        .push(CupertinoPageRoute(builder: (_) => const LibraryScreen()));
+  }
+
   void _onMessageSent() {
     if (!_hasMessages) setState(() => _hasMessages = true);
   }
@@ -218,8 +225,8 @@ class _RootShellState extends State<RootShell>
         top: 0,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+          switchInCurve: kCupertinoOut,
+          switchOutCurve: kCupertinoIn,
           transitionBuilder: (child, anim) =>
               FadeTransition(opacity: anim, child: child),
           child: KeyedSubtree(key: const ValueKey('ai'), child: _buildTab()),
@@ -237,6 +244,7 @@ class _RootShellState extends State<RootShell>
               onMenu: _toggleDrawer,
               transparent: true,
               headerBackground: s.pageBackground,
+              leadingExtra: _LibraryButton(s: s, onTap: _openLibrary),
               trailing: AiConversationMenuButton(
                 s: s,
                 hasMessages: _hasMessages,
@@ -363,6 +371,40 @@ class _RootShellState extends State<RootShell>
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LibraryButton extends StatefulWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+  const _LibraryButton({required this.s, required this.onTap});
+  @override
+  State<_LibraryButton> createState() => _LibraryButtonState();
+}
+
+class _LibraryButtonState extends State<_LibraryButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: widget.s.cardBackground,
+          shape: BoxShape.circle,
+          boxShadow: widget.s.cardShadow,
+        ),
+        child: AppIcon('library', size: 18, color: widget.s.onSurface),
       ),
     );
   }

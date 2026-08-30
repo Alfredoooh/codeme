@@ -95,7 +95,7 @@ class _AuthLogoFallback extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.85, end: 1.0),
       duration: const Duration(milliseconds: 900),
-      curve: Curves.easeOutCubic,
+      curve: kCupertino,
       builder: (context, value, child) => Opacity(
         opacity: value.clamp(0.0, 1.0),
         child: Transform.scale(scale: value, child: child),

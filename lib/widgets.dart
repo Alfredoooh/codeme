@@ -119,7 +119,7 @@ class AppSwitch extends StatelessWidget {
         onTap: () => onChanged(!value),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          curve: kCupertinoOut,
+          curve: Curves.easeOutCubic,
           width: 46,
           height: 26,
           padding: const EdgeInsets.all(3),

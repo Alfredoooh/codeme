@@ -24,7 +24,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -1210,7 +1209,7 @@ class _AiMarketWidgetState extends State<AiMarketWidget> with SingleTickerProvid
 
   Future<void> _openMarketSelector() async {
     final result = await Navigator.of(context).push<_MarketPair>(
-      CupertinoPageRoute(
+      MaterialPageRoute(
         builder: (_) => _MarketSelectorScreen(s: widget.s, currentKey: _currentPair.key),
       ),
     );
@@ -1753,7 +1752,7 @@ class _MarketSelectorScreenState extends State<_MarketSelectorScreen> {
                           active: active,
                           onTap: () async {
                             final confirmed = await Navigator.of(context).push<bool>(
-                              CupertinoPageRoute(
+                              MaterialPageRoute(
                                 builder: (_) => _MarketPairDetailScreen(s: widget.s, pair: pair),
                               ),
                             );
@@ -2069,7 +2068,7 @@ class _AiCalendarWidgetState extends State<AiCalendarWidget> {
 
   Future<void> _openNewEventScreen() async {
     final result = await Navigator.of(context).push<({String name, String time, String color})>(
-      CupertinoPageRoute(
+      MaterialPageRoute(
         builder: (_) => _NewEventScreen(s: widget.s, dateKey: _selectedKey),
       ),
     );
@@ -2492,7 +2491,7 @@ class _AiMapWidgetState extends State<AiMapWidget> with SingleTickerProviderStat
 
   Future<void> _openLocationPicker() async {
     final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
-      CupertinoPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
+      MaterialPageRoute(builder: (_) => _LocationPickerScreen(s: widget.s)),
     );
     if (result != null) {
       setState(() {
@@ -2813,7 +2812,7 @@ class _LocationPickerScreenState extends State<_LocationPickerScreen> {
 
   void _openCountry(String country) async {
     final result = await Navigator.of(context).push<({String name, double lat, double lng})>(
-      CupertinoPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
+      MaterialPageRoute(builder: (_) => _StatePickerScreen(s: widget.s, country: country)),
     );
     if (result != null && mounted) Navigator.of(context).pop(result);
   }

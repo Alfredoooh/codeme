@@ -28,6 +28,14 @@
 // sem qualquer pill de sugestão. Os parâmetros onEnableWidgets e
 // onSuggestionTap continuam presentes por compatibilidade, mas são
 // ignorados.
+//
+// NOVIDADES DESTA VERSÃO:
+//   • Mais símbolos e comandos matemáticos (binom, overbrace, etc.)
+//   • Suporte a \limits em somatório/produto
+//   • Markdown inline ampliado: ++sublinhado++, <sup>, <sub>, autolinks
+//   • Mais linguagens no syntax highlighting
+//   • Tabelas com alinhamento por coluna
+//   • Detalhes colapsáveis <details> e blocos de definição melhorados
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -234,6 +242,64 @@ class _MathArrow extends _MathAtom {
   _MathArrow(this.direction, this.content);
 }
 
+// Novos átomos para binômios, overbrace/underbrace, overset/underset,
+// somatório/produto com limites, etc.
+class _MathBinom extends _MathAtom {
+  final String top;
+  final String bottom;
+  _MathBinom(this.top, this.bottom);
+}
+
+class _MathOverbrace extends _MathAtom {
+  final String content;
+  final String? annotation;
+  _MathOverbrace(this.content, {this.annotation});
+}
+
+class _MathUnderbrace extends _MathAtom {
+  final String content;
+  final String? annotation;
+  _MathUnderbrace(this.content, {this.annotation});
+}
+
+class _MathStack extends _MathAtom {
+  final String over;
+  final String under;
+  final String content;
+  _MathStack(this.over, this.under, this.content);
+}
+
+class _MathXArrow extends _MathAtom {
+  final String direction; // "left" | "right" | "leftright"
+  final String content;
+  final String label;
+  _MathXArrow(this.direction, this.content, this.label);
+}
+
+class _MathOverset extends _MathAtom {
+  final String label;
+  final String content;
+  _MathOverset(this.label, this.content);
+}
+
+class _MathUnderset extends _MathAtom {
+  final String label;
+  final String content;
+  _MathUnderset(this.label, this.content);
+}
+
+class _MathLimits extends _MathAtom {
+  final String? sub;
+  final String? sup;
+  final String symbol;
+  _MathLimits(this.symbol, {this.sub, this.sup});
+}
+
+class _MathNot extends _MathAtom {
+  final String content;
+  _MathNot(this.content);
+}
+
 String _stripOuterBraces(String s) {
   s = s.trim();
   if (s.startsWith('{') && s.endsWith('}')) {
@@ -388,6 +454,15 @@ String _resolveFormattingCommands(String expr) {
     );
   }
 
+  // \not — coloca uma barra por cima do caractere seguinte
+  result = result.replaceAllMapped(
+    RegExp(r'\\not\s*(\S)'),
+    (m) => '\u0008NOT{${m.group(1)}}\u0008',
+  );
+
+  // \limits pode aparecer após \sum, \prod, \int, etc.
+  // Vamos tratar mais adiante no parser combinado.
+
   return result;
 }
 
@@ -400,11 +475,31 @@ List<_MathAtom> _parseMathExpression(String raw) {
   final combinedPattern = RegExp(
     r'\\frac\{([^{}]+)\}\{([^{}]+)\}'
     r'|\\sqrt(\[([^\]]+)\])?\{([^{}]+)\}'
+    r'|\\binom\{([^{}]+)\}\{([^{}]+)\}'
+    r'|\\overbrace\{([^{}]+)\}\^?\{?([^{}]*)\}?'
+    r'|\\underbrace\{([^{}]+)\}_?\{?([^{}]*)\}?'
+    r'|\\overset\{([^{}]+)\}\{([^{}]+)\}'
+    r'|\\underset\{([^{}]+)\}\{([^{}]+)\}'
+    r'|\\xrightarrow\s*(?:\[([^\]]*)\])?\{([^{}]+)\}'
+    r'|\\xleftarrow\s*(?:\[([^\]]*)\])?\{([^{}]+)\}'
+    r'|\\sum\\limits_\{([^{}]+)\}\^\{([^{}]+)\}'
+    r'|\\sum\\limits\^\{([^{}]+)\}_\{([^{}]+)\}'
+    r'|\\sum\\limits_\{([^{}]+)\}'
+    r'|\\sum\\limits\^\{([^{}]+)\}'
+    r'|\\prod\\limits_\{([^{}]+)\}\^\{([^{}]+)\}'
+    r'|\\prod\\limits\^\{([^{}]+)\}_\{([^{}]+)\}'
+    r'|\\prod\\limits_\{([^{}]+)\}'
+    r'|\\prod\\limits\^\{([^{}]+)\}'
+    r'|\\int\\limits_\{([^{}]+)\}\^\{([^{}]+)\}'
+    r'|\\int\\limits\^\{([^{}]+)\}_\{([^{}]+)\}'
+    r'|\\int\\limits_\{([^{}]+)\}'
+    r'|\\int\\limits\^\{([^{}]+)\}'
     r'|\u0004OVERLINE\{([^{}]+)\}\u0004'
     r'|\u0004UNDERLINE\{([^{}]+)\}\u0004'
     r'|\u0005BOXED\{([^{}]+)\}\u0005'
     r'|\u0006COLOR\{([^{}]+)\}\{([^{}]+)\}\u0006'
     r'|\u0007ACC\{([^{}]+)\}\{([^{}]+)\}\u0007'
+    r'|\u0008NOT\{([^{}]+)\}\u0008'
     r'|\u0003OVER\{([^{}]+)\}\u0003'
     r'|\u0003UNDER\{([^{}]+)\}\u0003',
   );
@@ -419,20 +514,48 @@ List<_MathAtom> _parseMathExpression(String raw) {
       atoms.add(_MathFraction(m.group(1)!, m.group(2)!));
     } else if (match.startsWith(r'\sqrt')) {
       atoms.add(_MathSqrt(m.group(5)!, index: m.group(4)));
+    } else if (match.startsWith(r'\binom')) {
+      atoms.add(_MathBinom(m.group(6)!, m.group(7)!));
+    } else if (match.startsWith(r'\overbrace')) {
+      atoms.add(_MathOverbrace(m.group(8)!, annotation: m.group(9)?.isEmpty ?? true ? null : m.group(9)));
+    } else if (match.startsWith(r'\underbrace')) {
+      atoms.add(_MathUnderbrace(m.group(10)!, annotation: m.group(11)?.isEmpty ?? true ? null : m.group(11)));
+    } else if (match.startsWith(r'\overset')) {
+      atoms.add(_MathOverset(m.group(12)!, m.group(13)!));
+    } else if (match.startsWith(r'\underset')) {
+      atoms.add(_MathUnderset(m.group(14)!, m.group(15)!));
+    } else if (match.startsWith(r'\xrightarrow')) {
+      atoms.add(_MathXArrow('right', m.group(16)!, m.group(17)!));
+    } else if (match.startsWith(r'\xleftarrow')) {
+      atoms.add(_MathXArrow('left', m.group(18)!, m.group(19)!));
+    } else if (match.startsWith(r'\sum')) {
+      final sub = m.group(20) ?? m.group(22) ?? m.group(24) ?? m.group(26);
+      final sup = m.group(21) ?? m.group(23) ?? m.group(25) ?? m.group(27);
+      atoms.add(_MathLimits('∑', sub: sub, sup: sup));
+    } else if (match.startsWith(r'\prod')) {
+      final sub = m.group(28) ?? m.group(30) ?? m.group(32) ?? m.group(34);
+      final sup = m.group(29) ?? m.group(31) ?? m.group(33) ?? m.group(35);
+      atoms.add(_MathLimits('∏', sub: sub, sup: sup));
+    } else if (match.startsWith(r'\int')) {
+      final sub = m.group(36) ?? m.group(38) ?? m.group(40) ?? m.group(42);
+      final sup = m.group(37) ?? m.group(39) ?? m.group(41) ?? m.group(43);
+      atoms.add(_MathLimits('∫', sub: sub, sup: sup));
     } else if (match.startsWith('\u0004OVERLINE')) {
-      atoms.add(_MathOverline(m.group(6)!));
+      atoms.add(_MathOverline(m.group(44)!));
     } else if (match.startsWith('\u0004UNDERLINE')) {
-      atoms.add(_MathUnderline(m.group(7)!));
+      atoms.add(_MathUnderline(m.group(45)!));
     } else if (match.startsWith('\u0005BOXED')) {
-      atoms.add(_MathBoxed(m.group(8)!));
+      atoms.add(_MathBoxed(m.group(46)!));
     } else if (match.startsWith('\u0006COLOR')) {
-      atoms.add(_MathColor(m.group(9)!, m.group(10)!));
+      atoms.add(_MathColor(m.group(47)!, m.group(48)!));
     } else if (match.startsWith('\u0007ACC')) {
-      atoms.add(_MathAccent(m.group(11)!, m.group(12)!));
+      atoms.add(_MathAccent(m.group(49)!, m.group(50)!));
+    } else if (match.startsWith('\u0008NOT')) {
+      atoms.add(_MathNot(m.group(51)!));
     } else if (match.startsWith('\u0003OVER')) {
-      atoms.add(_MathArrow('over', m.group(13)!));
+      atoms.add(_MathArrow('over', m.group(52)!));
     } else if (match.startsWith('\u0003UNDER')) {
-      atoms.add(_MathArrow('under', m.group(14)!));
+      atoms.add(_MathArrow('under', m.group(53)!));
     }
     last = m.end;
   }
@@ -628,6 +751,106 @@ class MathInline extends StatelessWidget {
           rowChildren.add(_buildAccent(accent, content, baseStyle));
         case _MathArrow(:final direction, :final content):
           rowChildren.add(_buildArrow(direction, content, baseStyle));
+        case _MathBinom(:final top, :final bottom):
+          rowChildren.add(Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text('(', style: baseStyle.copyWith(fontSize: baseFontSize * 1.2)),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(top, style: baseStyle.copyWith(fontSize: baseFontSize * 0.82)),
+                    Text(bottom, style: baseStyle.copyWith(fontSize: baseFontSize * 0.82)),
+                  ],
+                ),
+                Text(')', style: baseStyle.copyWith(fontSize: baseFontSize * 1.2)),
+              ],
+            ),
+          ));
+        case _MathOverbrace(:final content, :final annotation):
+          rowChildren.add(Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (annotation != null)
+                Text(annotation, style: baseStyle.copyWith(fontSize: baseFontSize * 0.7)),
+              Transform.scale(
+                scaleY: -1,
+                child: Text('⏞', style: baseStyle.copyWith(fontSize: baseFontSize * 1.2)),
+              ),
+              Text(content, style: baseStyle),
+            ],
+          ));
+        case _MathUnderbrace(:final content, :final annotation):
+          rowChildren.add(Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(content, style: baseStyle),
+              Text('⏟', style: baseStyle.copyWith(fontSize: baseFontSize * 1.2)),
+              if (annotation != null)
+                Text(annotation, style: baseStyle.copyWith(fontSize: baseFontSize * 0.7)),
+            ],
+          ));
+        case _MathXArrow(:final direction, :final content, :final label):
+          rowChildren.add(Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label.isEmpty
+                    ? (direction == 'left' ? '⟵' : '⟶')
+                    : '${direction == 'left' ? '' : ''}$label${direction == 'right' ? '' : ''}',
+                  style: baseStyle.copyWith(fontSize: baseFontSize * 0.75)),
+                Text(content, style: baseStyle),
+              ],
+            ),
+          ));
+        case _MathOverset(:final label, :final content):
+          rowChildren.add(Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: baseStyle.copyWith(fontSize: baseFontSize * 0.7)),
+              Text(content, style: baseStyle),
+            ],
+          ));
+        case _MathUnderset(:final label, :final content):
+          rowChildren.add(Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(content, style: baseStyle),
+              Text(label, style: baseStyle.copyWith(fontSize: baseFontSize * 0.7)),
+            ],
+          ));
+        case _MathLimits(:final symbol, :final sub, :final sup):
+          rowChildren.add(Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (sup != null)
+                Text(sup, style: baseStyle.copyWith(fontSize: baseFontSize * 0.65)),
+              Text(symbol, style: baseStyle.copyWith(fontSize: baseFontSize * 1.3)),
+              if (sub != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 1),
+                  child: Text(sub, style: baseStyle.copyWith(fontSize: baseFontSize * 0.65)),
+                ),
+            ],
+          ));
+        case _MathNot(:final content):
+          rowChildren.add(Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(content, style: baseStyle),
+              Container(
+                width: content.length * baseFontSize * 0.5,
+                height: 1.2,
+                color: s.onSurface,
+                transform: Matrix4.skewY(-0.3),
+              ),
+            ],
+          ));
       }
     }
 
@@ -872,15 +1095,24 @@ class _RichTextBlockParser {
     final widgets = <Widget>[];
     int i = 0;
     List<List<String>>? tableRows;
+    List<TableColumnWidth>? tableColWidths;
+    List<TextAlign>? tableAlignments;
 
     void flushTable() {
       if (tableRows != null && tableRows!.isNotEmpty) {
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
-          child: _AiTable(rows: tableRows!, s: s),
+          child: _AiTable(
+            rows: tableRows!,
+            s: s,
+            alignments: tableAlignments,
+            columnWidths: tableColWidths,
+          ),
         ));
       }
       tableRows = null;
+      tableColWidths = null;
+      tableAlignments = null;
     }
 
     bool isFence(String value) => RegExp(r'^\s*(```+|~~~+)').hasMatch(value);
@@ -899,6 +1131,23 @@ class _RichTextBlockParser {
           widgets.add(const SizedBox(height: 5));
         }
         i++;
+        continue;
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // DETALHES COLAPSÁVEIS <details> ... </details>
+      // ─────────────────────────────────────────────────────────
+      if (RegExp(r'^<details>\s*$').hasMatch(trimmed) ||
+          trimmed.startsWith('<details>')) {
+        flushTable();
+        final detailLines = <String>[];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('</details>')) {
+          detailLines.add(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++;
+        widgets.add(_buildDetailsBlock(detailLines.join('\n'), s));
         continue;
       }
 
@@ -976,6 +1225,9 @@ class _RichTextBlockParser {
       // ─────────────────────────────────────────────────────────
       // TABELA MARKDOWN
       // Aceita | a | b | e ignora a linha separadora de alinhamento.
+      // Agora lê também alinhamento (:---, :---:, ---:) e largura
+      // relativa (min-width via markdown não é suportado, mas podemos
+      // inferir largura pelo conteúdo).
       // ─────────────────────────────────────────────────────────
       final tableCandidate = _splitTableRow(trimmed);
       if (tableCandidate != null) {
@@ -985,6 +1237,8 @@ class _RichTextBlockParser {
           if (looksLikeHeader) {
             tableRows ??= [];
             tableRows!.add(tableCandidate);
+            tableAlignments = _parseTableAlignments(nextRow!);
+            tableColWidths = _inferColumnWidths([tableCandidate, ...(tableRows!.sublist(1))]);
             i += 2;
           } else if (!_isTableSeparatorRow(tableCandidate)) {
             tableRows ??= [];
@@ -1257,6 +1511,35 @@ class _RichTextBlockParser {
     return widgets;
   }
 
+  static Widget _buildDetailsBlock(String content, AppColorScheme s) {
+    // Extrai o sumário <summary>Texto</summary> se existir
+    String summary = 'Detalhes';
+    var body = content;
+    final summaryMatch = RegExp(r'<summary>(.*?)</summary>', dotAll: true).firstMatch(content);
+    if (summaryMatch != null) {
+      summary = summaryMatch.group(1)!.trim();
+      body = content.replaceRange(summaryMatch.start, summaryMatch.end, '').trim();
+    }
+    return Theme(
+      data: ThemeData.light(useMaterial3: true),
+      child: ExpansionTile(
+        title: Text(summary, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface)),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        iconColor: s.onSurfaceVariant,
+        collapsedIconColor: s.onSurfaceVariant,
+        backgroundColor: Colors.transparent,
+        collapsedBackgroundColor: Colors.transparent,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _formattedText(body, s),
+          ),
+        ],
+      ),
+    );
+  }
+
   static List<String>? _splitTableRow(String line) {
     if (!line.contains('|')) return null;
     final value = line.trim();
@@ -1292,6 +1575,28 @@ class _RichTextBlockParser {
     return row.every((cell) => RegExp(r'^:?-{3,}:?$').hasMatch(cell.trim()));
   }
 
+  static List<TextAlign>? _parseTableAlignments(List<String> separatorRow) {
+    final alignments = <TextAlign>[];
+    for (final cell in separatorRow) {
+      final t = cell.trim();
+      if (t.startsWith(':') && t.endsWith(':')) {
+        alignments.add(TextAlign.center);
+      } else if (t.endsWith(':')) {
+        alignments.add(TextAlign.right);
+      } else {
+        alignments.add(TextAlign.left);
+      }
+    }
+    return alignments;
+  }
+
+  static List<TableColumnWidth>? _inferColumnWidths(List<List<String>> rows) {
+    if (rows.isEmpty) return null;
+    final numCols = rows.first.length;
+    final widths = List<TableColumnWidth>.filled(numCols, const IntrinsicColumnWidth());
+    return widths;
+  }
+
   static String _admonitionLabel(String type) => switch (type) {
         'NOTE' => 'Nota',
         'TIP' => 'Dica',
@@ -1324,13 +1629,17 @@ class _RichTextBlockParser {
       r'(~~[^~\n]+?~~)|'
       r'(\*[^*\n]+?\*|_[^_\n]+?_)|'
       r'(==[^=\n]+?==)|'
+      r'(\+\+[^+\n]+?\+\+)|'
+      r'(<sup>[^<]+</sup>)|'
+      r'(<sub>[^<]+</sub>)|'
       r'(```[^`\n]*```)|'
       r'(`[^`\n]+?`)|'
       r'(\^\([^\)\n]+\)|\^\w+)|'
       r'(\~\([^\)\n]+\)|\~\w+)|'
       r'(https?://[^\s<>]+)|'
+      r'(?<=\s|^)([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?=\s|$)|'
       r'(<br\s*/?>)|'
-      r'(\\\\)$',
+      r'(\\)$',
       multiLine: true,
     );
 
@@ -1354,8 +1663,6 @@ class _RichTextBlockParser {
           child: MathInline(expression: expr, s: s, block: false),
         ));
       } else if (token.startsWith('![')) {
-        // Imagens markdown são mantidas como texto alternativo quando o
-        // rich text não possui um loader de imagens próprio.
         final match = RegExp(r'^!\[([^\]]*)\]\(([^)]+)\)').firstMatch(token);
         if (match != null) {
           spans.add(TextSpan(text: match.group(1)!.isEmpty ? 'imagem' : match.group(1)!));
@@ -1389,6 +1696,29 @@ class _RichTextBlockParser {
         ));
       } else if (token.startsWith('==')) {
         spans.add(TextSpan(text: token.substring(2, token.length - 2)));
+      } else if (token.startsWith('++')) {
+        spans.add(TextSpan(
+          text: token.substring(2, token.length - 2),
+          style: const TextStyle(decoration: TextDecoration.underline),
+        ));
+      } else if (token.startsWith('<sup>')) {
+        final value = token.substring(5, token.length - 6);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.top,
+          child: Transform.translate(
+            offset: Offset(0, -fontSize * 0.35),
+            child: Text(value, style: TextStyle(fontSize: fontSize * 0.7, height: 1.0)),
+          ),
+        ));
+      } else if (token.startsWith('<sub>')) {
+        final value = token.substring(5, token.length - 6);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.bottom,
+          child: Transform.translate(
+            offset: Offset(0, fontSize * 0.12),
+            child: Text(value, style: TextStyle(fontSize: fontSize * 0.7, height: 1.0)),
+          ),
+        ));
       } else if (token.startsWith('```')) {
         spans.add(TextSpan(
           text: token.substring(3, token.length - 3),
@@ -1435,6 +1765,11 @@ class _RichTextBlockParser {
         spans.add(TextSpan(
           text: _unescapeInline(token.substring(1, token.length - 1)),
           style: const TextStyle(fontStyle: FontStyle.italic),
+        ));
+      } else if (token.contains('@')) {
+        spans.add(TextSpan(
+          text: token,
+          style: const TextStyle(decoration: TextDecoration.underline),
         ));
       }
       last = m.end;
@@ -1486,13 +1821,20 @@ class _RichTextBlockParser {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TABELA — implementação única
+// TABELA — implementação única com alinhamento por coluna
 // ══════════════════════════════════════════════════════════════
 
 class _AiTable extends StatelessWidget {
   final List<List<String>> rows;
   final AppColorScheme s;
-  const _AiTable({required this.rows, required this.s});
+  final List<TextAlign>? alignments;
+  final List<TableColumnWidth>? columnWidths;
+  const _AiTable({
+    required this.rows,
+    required this.s,
+    this.alignments,
+    this.columnWidths,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1507,19 +1849,23 @@ class _AiTable extends StatelessWidget {
         child: Table(
           border: TableBorder.all(color: s.outline.withOpacity(0.4), width: 0.7),
           defaultColumnWidth: const IntrinsicColumnWidth(),
+          columnWidths: columnWidths,
           children: [
             TableRow(
               decoration: BoxDecoration(color: s.hover),
               children: header
                   .map((c) => Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: s.onSurface),
-                            children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 13.5),
+                        child: Align(
+                          alignment: _alignmentFor(0, header.indexOf(c), alignments),
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: s.onSurface),
+                              children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 13.5),
+                            ),
                           ),
                         ),
                       ))
@@ -1528,12 +1874,17 @@ class _AiTable extends StatelessWidget {
             for (final row in body)
               TableRow(
                 children: row
-                    .map((c) => Padding(
+                    .asMap()
+                    .entries
+                    .map((entry) => Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(fontSize: 13.5, color: s.onSurface),
-                              children: _RichTextBlockParser.inlineSpans(c, s, fontSize: 13.5),
+                          child: Align(
+                            alignment: _alignmentFor(body.indexOf(row) + 1, entry.key, alignments),
+                            child: RichText(
+                              text: TextSpan(
+                                style: TextStyle(fontSize: 13.5, color: s.onSurface),
+                                children: _RichTextBlockParser.inlineSpans(entry.value, s, fontSize: 13.5),
+                              ),
                             ),
                           ),
                         ))
@@ -1543,6 +1894,17 @@ class _AiTable extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Alignment _alignmentFor(int rowIndex, int colIndex, List<TextAlign>? alignments) {
+    if (alignments != null && colIndex < alignments.length) {
+      switch (alignments[colIndex]) {
+        case TextAlign.center: return Alignment.center;
+        case TextAlign.right: return Alignment.centerRight;
+        default: return Alignment.centerLeft;
+      }
+    }
+    return Alignment.centerLeft;
   }
 }
 
@@ -1799,6 +2161,12 @@ List<TextSpan> _highlightCode(String code, String language, TextStyle baseStyle)
 }
 
 List<TextSpan> _highlightHtml(String code, TextStyle baseStyle) {
+  // Se contém <style>, trata CSS dentro
+  final styleBlockPattern = RegExp(r'<style[^>]*>([\s\S]*?)</style>', caseSensitive: false);
+  if (styleBlockPattern.hasMatch(code)) {
+    return _highlightHtmlWithCss(code, baseStyle);
+  }
+
   final lines = code.split('\n');
   final spans = <TextSpan>[];
 
@@ -1807,6 +2175,41 @@ List<TextSpan> _highlightHtml(String code, TextStyle baseStyle) {
     spans.addAll(_highlightHtmlLine(lines[i], baseStyle));
   }
 
+  return spans;
+}
+
+List<TextSpan> _highlightHtmlWithCss(String code, TextStyle baseStyle) {
+  final spans = <TextSpan>[];
+  int last = 0;
+  final cssPattern = RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false);
+  for (final m in cssPattern.allMatches(code)) {
+    if (m.start > last) {
+      spans.addAll(_highlightHtmlLine(code.substring(last, m.start), baseStyle));
+    }
+    final cssContent = code.substring(m.start, m.end);
+    final cssInnerMatch = RegExp(r'<style[^>]*>([\s\S]*?)</style>', caseSensitive: false).firstMatch(cssContent);
+    if (cssInnerMatch != null) {
+      spans.add(TextSpan(
+        text: '<style>',
+        style: baseStyle.copyWith(color: _tokTag, fontWeight: FontWeight.w600),
+      ));
+      final cssLines = cssInnerMatch.group(1)!.split('\n');
+      for (final line in cssLines) {
+        spans.addAll(_highlightLineGeneric(line, _patternsForLanguage('css'), baseStyle));
+        spans.add(TextSpan(text: '\n', style: baseStyle));
+      }
+      spans.add(TextSpan(
+        text: '</style>',
+        style: baseStyle.copyWith(color: _tokTag, fontWeight: FontWeight.w600),
+      ));
+    } else {
+      spans.add(TextSpan(text: cssContent, style: baseStyle));
+    }
+    last = m.end;
+  }
+  if (last < code.length) {
+    spans.addAll(_highlightHtmlLine(code.substring(last), baseStyle));
+  }
   return spans;
 }
 
@@ -2087,6 +2490,176 @@ List<_TokenPattern> _patternsForLanguage(String language) {
         _TokenPattern(RegExp(r'^\s{0,3}#{1,6}\s.*$'), color: _tokType),
         _TokenPattern(RegExp(r'^\s{0,3}>.*$'), color: _tokComment),
         _TokenPattern(RegExp(r'`[^`]+`'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'go':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'`[^`]*`'), color: _tokString),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:func|package|import|return|if|else|for|range|go|defer|select|case|default|break|continue|switch|type|struct|interface|map|chan|var|const|nil|true|false)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:string|int|float64|bool|byte|rune|error|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:fmt|len|cap|print|println|append|copy|make|new)\b'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'==|!=|<=|>=|:=|\+\+|--|[+\-*/%=<>!&|^~]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'rust':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'#\[[^\]]+\]'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:fn|let|mut|const|static|if|else|for|while|loop|match|return|impl|trait|struct|enum|pub|use|mod|self|super|crate|where|async|await)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:u8|u16|u32|u64|usize|i8|i16|i32|i64|isize|f32|f64|bool|String|Vec|Option|Result|Box|HashMap)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:println|print|format|vec|panic|assert|Some|None|Ok|Err)\b'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|::|\+\+|--|[+\-*/%=<>!&|^~]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'kotlin':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:fun|val|var|class|object|interface|enum|data|sealed|if|else|for|while|do|return|when|in|is|as|new|this|super|companion|init|constructor)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:String|Int|Double|Boolean|Float|Long|Short|Byte|Char|Unit|Any|List|Map|Set)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:print|println|require|assert|run|let|apply|also|with)\b'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\?\?|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'swift':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:func|var|let|class|struct|enum|protocol|extension|if|else|for|while|repeat|return|guard|switch|case|default|break|continue|import|init|self|super|where|as|is|try|catch|throw)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:String|Int|Double|Bool|Float|Character|Array|Dictionary|Set|Optional|Any)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:print|assert|map|filter|reduce|first|last|append|count)\b'), color: _tokBuiltin),
+        _TokenPattern(RegExp(r'\b(?:true|false|nil)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'c':
+    case 'cpp':
+    case 'c++':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:int|float|double|char|void|bool|auto|long|short|unsigned|signed|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|goto|typedef|struct|union|enum|static|const|volatile|extern|inline|sizeof|new|delete|this|class|namespace|using|template|typename)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null|NULL|nullptr)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'csharp':
+    case 'cs':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:int|long|short|byte|float|double|decimal|char|string|bool|void|object|var|dynamic)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|goto|class|struct|enum|interface|namespace|using|public|private|protected|internal|static|readonly|const|virtual|override|abstract|sealed|async|await|try|catch|finally|throw|new|this|base|is|as|in|out|ref)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'java':
+      return [
+        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:int|long|short|byte|float|double|char|boolean|void|String|Object)\b'), color: _tokType, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|class|interface|enum|package|import|public|private|protected|static|final|abstract|synchronized|transient|volatile|try|catch|finally|throw|new|this|super|extends|implements|instanceof)\b'), color: _tokKeyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'json':
+      return [
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'[{}[\]\,:]'), color: _tokPunct),
+      ];
+
+    case 'yaml':
+    case 'yml':
+      return [
+        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'[:\-]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'toml':
+      return [
+        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
+        _TokenPattern(RegExp(r'\[\[?.*?\]\]?'), color: _tokType),
+        _TokenPattern(RegExp(r'='), color: _tokOperator),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+      ];
+
+    case 'ini':
+      return [
+        _TokenPattern(RegExp(r'#[^\n]*|;[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
+        _TokenPattern(RegExp(r'\[([^\]]+)\]'), color: _tokType),
+        _TokenPattern(RegExp(r'='), color: _tokOperator),
         _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
       ];
 

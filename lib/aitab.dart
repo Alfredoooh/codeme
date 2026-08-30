@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -102,14 +102,13 @@ correta — nunca precisas de explicar a notação, apenas escrevê-la.
 
 const String kAiWidgetsInstructions = '''
 Tens também acesso a widgets visuais interativos, que aparecem diretamente
-dentro da conversa (nunca em canvas), e a várias funções (tools) para pesquisar, criar documentos, converter ficheiros, etc. As tools disponíveis são: web_search, search_images, search_market, search_place, search_calendar_date, create_pdf, create_docx, create_xlsx, create_pptx, generate_chart, generate_mindmap, csv_to_xlsx, json_transform, convert_document, html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx.
+dentro da conversa (nunca em canvas), e a várias funções (tools) para pesquisar, criar documentos, converter ficheiros, etc. As tools disponíveis são: web_search, search_images, search_market, search_place, search_calendar_date, get_weather, generate_chart, generate_mindmap, generate_qrcode, generate_barcode, generate_math, generate_table_image, generate_html_image, create_pdf, create_docx, create_xlsx, create_pptx, csv_to_xlsx, json_transform, convert_document, html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx.
 
 Para widgets de mercado, lugar e calendário, chama primeiro a tool correspondente, espera o resultado, e escreve o bloco widget com os dados reais.
 
-Quando usares web_search, no final da resposta escreve exatamente um bloco
-[[sources:url1,url2,url3,url4]] com os links das fontes mais relevantes que
-usaste (máximo 4), sem nenhum outro texto a acompanhar esse bloco. Não
-escrevas "Fontes:" nem mostres os links de outra forma.
+Quando usares web_search, no final da resposta escreve exatamente um bloco [[sources:url1,url2,url3]] com os links das fontes mais relevantes que usaste (máximo 4), sem nenhum outro texto a acompanhar esse bloco. Não escrevas "Fontes:" nem menciones os links de outra forma.
+
+Quando usares search_images, mostra as imagens diretamente no chat, sem as descrever em texto.
 
 Não uses widget_code — blocos de código normais já aparecem automaticamente
 formatados. Não uses widget_sheet — foi descontinuado (usa
@@ -131,10 +130,135 @@ resultados encontrados. Quando citares algo encontrado na pesquisa, sê claro
 sobre a fonte de forma natural no texto.
 ''';
 
+final RegExp _kVisualResultRe = RegExp(r'\[\[VISUAL:(.*?):(.*?)\]\]', dotAll: true);
+final RegExp _kDocumentResultRe = RegExp(r'\[\[DOCUMENT:(.*?):(.*?):(.*?)\]\]', dotAll: true);
+final RegExp _kSourcesRe = RegExp(r'\[\[sources:(.*?)\]\]');
+final RegExp _kImagesRe = RegExp(r'\[\[images:(.*?)\]\]', dotAll: true);
+
+class ShimmerText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+  final bool active;
+  const ShimmerText({super.key, required this.text, required this.style, this.active = true});
+
+  @override
+  State<ShimmerText> createState() => _ShimmerTextState();
+}
+
+class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+    if (widget.active) _c.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant ShimmerText old) {
+    super.didUpdateWidget(old);
+    if (widget.active != old.active) {
+      widget.active ? _c.repeat() : _c.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.active) return Text(widget.text, style: widget.style);
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            final shift = (_c.value * 2 - 1) * bounds.width;
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                widget.style.color!.withOpacity(0.35),
+                widget.style.color!,
+                widget.style.color!.withOpacity(0.35),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ).createShader(bounds.shift(Offset(shift, 0)));
+          },
+          blendMode: BlendMode.srcIn,
+          child: Text(widget.text, style: widget.style.copyWith(color: Colors.white)),
+        );
+      },
+    );
+  }
+}
+
+List<Widget> _extractVisualResults(String text, AppColorScheme s) {
+  final results = <Widget>[];
+  for (final m in _kVisualResultRe.allMatches(text)) {
+    results.add(_ToolResultImageCard(
+      s: s,
+      base64Png: m.group(1)!,
+      label: m.group(2)!,
+    ));
+  }
+  return results;
+}
+
+List<Widget> _extractDocumentResults(String text, AppColorScheme s) {
+  final results = <Widget>[];
+  for (final m in _kDocumentResultRe.allMatches(text)) {
+    results.add(_ToolResultDownloadCard(
+      s: s,
+      base64Data: m.group(1)!,
+      filename: m.group(2)!,
+      mimeType: m.group(3)!,
+    ));
+  }
+  return results;
+}
+
+List<Map<String, dynamic>> _extractImages(String text) {
+  final match = _kImagesRe.firstMatch(text);
+  if (match == null) return const [];
+  final raw = match.group(1)!;
+  final items = <Map<String, dynamic>>[];
+  for (final entry in raw.split(',')) {
+    final trimmed = entry.trim();
+    if (trimmed.isEmpty) continue;
+    final parts = trimmed.split('|');
+    final url = parts[0].trim();
+    if (url.isEmpty) continue;
+    items.add({
+      'imageUrl': url,
+      'title': parts.length > 1 ? parts[1].trim() : '',
+    });
+  }
+  return items;
+}
+
+List<String> _extractSources(String text) {
+  final match = _kSourcesRe.firstMatch(text);
+  if (match == null) return const [];
+  return match.group(1)!
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+}
+
 String cleanAiText(String raw) {
   return raw
       .replaceAll(_kExplicitCanvasRe, '')
       .replaceAll(_kThinkingRe, '')
+      .replaceAll(_kVisualResultRe, '')
+      .replaceAll(_kDocumentResultRe, '')
+      .replaceAll(_kSourcesRe, '')
+      .replaceAll(_kImagesRe, '')
       .trim();
 }
 
@@ -702,34 +826,18 @@ class SimpleCanvasCard extends StatelessWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
   final VoidCallback onTap;
-  final ValueChanged<LocalCanvasItem>? onShare;
-  final ValueChanged<LocalCanvasItem>? onDownload;
 
   const SimpleCanvasCard({
     super.key,
     required this.s,
     required this.item,
     required this.onTap,
-    this.onShare,
-    this.onDownload,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      onLongPress: () {
-        final box = context.findRenderObject() as RenderBox;
-        final offset = box.localToGlobal(Offset.zero);
-        showCanvasActionsPopup(
-          context,
-          s,
-          anchorOffset: offset,
-          anchorSize: box.size,
-          onShare: () => onShare?.call(item),
-          onDownload: () => onDownload?.call(item),
-        );
-      },
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -908,6 +1016,7 @@ String _labelForToolName(String toolName) => switch (toolName) {
       'search_calendar_date' => 'A interpretar data...',
       'get_weather'          => 'A obter clima...',
       'generate_chart'       => 'A gerar gráfico...',
+      'generate_mindmap'     => 'A criar mapa mental...',
       'generate_qrcode'      => 'A gerar QR code...',
       'generate_barcode'     => 'A gerar código de barras...',
       'generate_math'        => 'A calcular...',
@@ -1185,85 +1294,6 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
   }
 }
 
-class ShimmerText extends StatefulWidget {
-  final String text;
-  final TextStyle style;
-  final bool active;
-
-  const ShimmerText({
-    super.key,
-    required this.text,
-    required this.style,
-    this.active = true,
-  });
-
-  @override
-  State<ShimmerText> createState() => _ShimmerTextState();
-}
-
-class _ShimmerTextState extends State<ShimmerText>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    if (widget.active) _controller.repeat();
-  }
-
-  @override
-  void didUpdateWidget(covariant ShimmerText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active != oldWidget.active) {
-      if (widget.active) {
-        _controller.repeat();
-      } else {
-        _controller.stop();
-        _controller.value = 0;
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.active) {
-      return Text(widget.text, style: widget.style);
-    }
-
-    final baseColor = widget.style.color ?? Theme.of(context).colorScheme.onSurface;
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) => ShaderMask(
-        shaderCallback: (bounds) {
-          final shift = (_controller.value * 2 - 1) * bounds.width;
-          return LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              baseColor.withOpacity(0.35),
-              baseColor,
-              baseColor.withOpacity(0.35),
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ).createShader(bounds.shift(Offset(shift, 0)));
-        },
-        blendMode: BlendMode.srcIn,
-        child: Text(widget.text, style: widget.style.copyWith(color: Colors.white)),
-      ),
-    );
-  }
-}
-
 class _StreamingMarkdownCard extends StatelessWidget {
   final AppColorScheme s;
   final String label;
@@ -1314,8 +1344,6 @@ class _CanvasProgressCard extends StatelessWidget {
   final ValueNotifier<bool> doneNotifier;
   final LocalCanvasItem? Function() finalItem;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
-  final ValueChanged<LocalCanvasItem>? onShareCanvas;
-  final ValueChanged<LocalCanvasItem>? onDownloadCanvas;
 
   const _CanvasProgressCard({
     required this.s,
@@ -1325,8 +1353,6 @@ class _CanvasProgressCard extends StatelessWidget {
     required this.doneNotifier,
     required this.finalItem,
     required this.onOpenCanvas,
-    this.onShareCanvas,
-    this.onDownloadCanvas,
   });
 
   @override
@@ -1343,21 +1369,6 @@ class _CanvasProgressCard extends StatelessWidget {
               content: item!.content,
               onOpen: () => onOpenCanvas(item!),
             ),
-            onLongPress: () {
-              final box = context.findRenderObject() as RenderBox;
-              showCanvasActionsPopup(
-                context,
-                s,
-                anchorOffset: box.localToGlobal(Offset.zero),
-                anchorSize: box.size,
-                onShare: () {
-                  if (item != null) onShareCanvas?.call(item!);
-                },
-                onDownload: () {
-                  if (item != null) onDownloadCanvas?.call(item!);
-                },
-              );
-            },
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 6),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1414,19 +1425,6 @@ class _CanvasProgressCard extends StatelessWidget {
             finalItem: finalItem,
             onOpenCanvas: onOpenCanvas,
           ),
-          onLongPress: () {
-            final box = context.findRenderObject() as RenderBox;
-            final currentItem = finalItem();
-            if (currentItem == null) return;
-            showCanvasActionsPopup(
-              context,
-              s,
-              anchorOffset: box.localToGlobal(Offset.zero),
-              anchorSize: box.size,
-              onShare: () => onShareCanvas?.call(currentItem),
-              onDownload: () => onDownloadCanvas?.call(currentItem),
-            );
-          },
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 6),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1448,11 +1446,10 @@ class _CanvasProgressCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      ShimmerText(
+                        text: title,
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+                        active: true,
                       ),
                       const SizedBox(height: 2),
                       ShimmerText(
@@ -2100,9 +2097,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   static const Set<String> _kVisualTools = {
-    'generate_chart', 'generate_qrcode', 'generate_barcode',
+    'generate_chart', 'generate_mindmap', 'generate_qrcode', 'generate_barcode',
     'generate_math', 'generate_table_image', 'generate_html_image',
-    'generate_mindmap', 'get_weather',
+    'get_weather',
   };
 
   static const Set<String> _kDocumentTools = {
@@ -2110,75 +2107,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     'csv_to_xlsx', 'convert_document',
     'html_to_docx', 'html_to_pdf', 'html_to_xlsx', 'html_to_pptx',
   };
-
-  Future<Map<String, dynamic>?> _exportCanvasItem(LocalCanvasItem item) async {
-    final token = authController.token;
-    if (token == null) return null;
-
-    final toolName = switch (item.kind.editorType) {
-      EditorType.docs => 'html_to_docx',
-      EditorType.sheets => 'html_to_xlsx',
-      EditorType.slides => 'html_to_pptx',
-    };
-
-    final input = <String, dynamic>{
-      'html_content': item.content,
-      if (toolName == 'html_to_xlsx') 'sheet_name': item.title,
-      if (toolName != 'html_to_xlsx') 'title': item.title,
-    };
-
-    try {
-      return await ToolsApiService.executeTool(
-        token: token,
-        name: toolName,
-        input: input,
-      );
-    } catch (e) {
-      debugPrint('Erro ao exportar canvas: $e');
-      return null;
-    }
-  }
-
-  Future<void> _downloadCanvasItem(LocalCanvasItem item) async {
-    final result = await _exportCanvasItem(item);
-    final base64Data = result?['content_base64']?.toString();
-    if (base64Data == null || base64Data.isEmpty) return;
-
-    final filename = result?['filename']?.toString() ?? '${item.title}.bin';
-    try {
-      final bytes = base64Decode(base64Data);
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$filename');
-      await file.writeAsBytes(bytes);
-      await Share.shareXFiles([
-        XFile(file.path, mimeType: result?['mime_type']?.toString()),
-      ], text: filename);
-    } catch (e) {
-      debugPrint('Erro ao descarregar canvas: $e');
-    }
-  }
-
-  Future<void> _shareCanvasItem(LocalCanvasItem item) async {
-    final result = await _exportCanvasItem(item);
-    final base64Data = result?['content_base64']?.toString();
-    if (base64Data == null || base64Data.isEmpty) {
-      await Share.share(item.content, subject: item.title);
-      return;
-    }
-
-    final filename = result?['filename']?.toString() ?? '${item.title}.bin';
-    try {
-      final bytes = base64Decode(base64Data);
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$filename');
-      await file.writeAsBytes(bytes);
-      await Share.shareXFiles([
-        XFile(file.path, mimeType: result?['mime_type']?.toString()),
-      ], text: item.title);
-    } catch (e) {
-      debugPrint('Erro ao partilhar canvas: $e');
-    }
-  }
 
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
     if (calls.isEmpty) return;
@@ -2194,31 +2122,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final toolResultMsgs = <ChatMessage>[];
     final visualResults = <_VisualToolResult>[];
     final documentResults = <_DocumentToolResult>[];
-    final imageSearchResults = <_ImageSearchToolResult>[];
 
     for (final call in calls) {
       final resultJson = await _executeToolCall(call);
-
-      if (call.name == 'search_images') {
-        final images = resultJson['images'];
-        if (images is List) {
-          final normalized = images
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .where((item) => (item['imageUrl']?.toString() ?? '').isNotEmpty)
-              .toList();
-          if (normalized.isNotEmpty) {
-            imageSearchResults.add(_ImageSearchToolResult(images: normalized));
-            toolResultMsgs.add(ChatMessage(
-              role: 'tool',
-              content: jsonEncode({'success': true, 'rendered': true, 'tool': call.name}),
-              toolCallId: call.id,
-              name: call.name,
-            ));
-            continue;
-          }
-        }
-      }
 
       if (_kVisualTools.contains(call.name)) {
         final base64Png = resultJson['content_base64']?.toString();
@@ -2290,9 +2196,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           }
           for (final d in documentResults) {
             extras.add('[[DOCUMENT:${d.base64Data}:${d.filename}:${d.mimeType}]]');
-          }
-          for (final img in imageSearchResults) {
-            extras.add('[[IMAGE_SEARCH:${jsonEncode(img.images)}]]');
           }
           if (extras.isNotEmpty) {
             _msgs.add(ChatMessage(role: 'assistant', content: extras.join('\n')));
@@ -2974,8 +2877,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                       onEnableWidgets: () => setWidgetsEnabled(true),
                                       onSuggestionTap: sendSuggestedMessage,
                                       onOpenCanvas: _onOpenCanvas,
-                                      onShareCanvas: _shareCanvasItem,
-                                      onDownloadCanvas: _downloadCanvasItem,
                                       openCanvasContentNotifier: _openCanvasContentNotifier,
                                       openCanvasDoneNotifier: _openCanvasDoneNotifier,
                                       openCanvasFinalItem: () => _openCanvasFinalItem,
@@ -3005,8 +2906,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                     thinking: thinkScan.thinking,
                                     canvases: msgCanvases,
                                     onOpenCanvas: _onOpenCanvas,
-                                    onShareCanvas: _shareCanvasItem,
-                                    onDownloadCanvas: _downloadCanvasItem,
                                     onThumbUp: () => _onAssistantThumbUp(i),
                                     onThumbDown: () => _onAssistantThumbDown(i),
                                     onCopy: () => _onAssistantCopy(i),
@@ -3297,194 +3196,6 @@ class _DocumentToolResult {
   });
 }
 
-class _ImageSearchToolResult {
-  final List<Map<String, dynamic>> images;
-  const _ImageSearchToolResult({required this.images});
-}
-
-final RegExp _kSourcesRe = RegExp(r'\[\[sources:(.*?)\]\]', dotAll: true);
-final RegExp _kImageSearchRe = RegExp(r'\[\[IMAGE_SEARCH:(.*?)\]\]', dotAll: true);
-
-List<String> extractSources(String text) {
-  final match = _kSourcesRe.firstMatch(text);
-  if (match == null) return const [];
-  return match.group(1)!
-      .split(',')
-      .map((value) => value.trim())
-      .where((value) => value.isNotEmpty)
-      .take(4)
-      .toList();
-}
-
-String stripSourcesBlock(String text) => text.replaceAll(_kSourcesRe, '').trim();
-
-List<Map<String, dynamic>> _extractImageSearchData(String text) {
-  final out = <Map<String, dynamic>>[];
-  for (final match in _kImageSearchRe.allMatches(text)) {
-    try {
-      final decoded = jsonDecode(match.group(1)!);
-      if (decoded is List) {
-        for (final item in decoded) {
-          if (item is Map) out.add(Map<String, dynamic>.from(item));
-        }
-      }
-    } catch (_) {}
-  }
-  return out;
-}
-
-String stripImageSearchBlock(String text) => text.replaceAll(_kImageSearchRe, '').trim();
-
-class SourcesRow extends StatelessWidget {
-  final AppColorScheme s;
-  final List<String> urls;
-
-  const SourcesRow({super.key, required this.s, required this.urls});
-
-  String _domain(String url) {
-    try {
-      return Uri.parse(url).host.replaceFirst('www.', '');
-    } catch (_) {
-      return url;
-    }
-  }
-
-  String _faviconUrl(String url) =>
-      'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
-
-  @override
-  Widget build(BuildContext context) {
-    if (urls.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 22,
-            width: 22.0 + (urls.length - 1) * 14.0,
-            child: Stack(
-              children: [
-                for (var i = 0; i < urls.length; i++)
-                  Positioned(
-                    left: i * 14.0,
-                    child: ClipOval(
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        color: s.cardBackground,
-                        child: Image.network(
-                          _faviconUrl(urls[i]),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: s.hover),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Fontes',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: s.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ImageSearchCarousel extends StatelessWidget {
-  final AppColorScheme s;
-  final List<Map<String, dynamic>> images;
-
-  const ImageSearchCarousel({super.key, required this.s, required this.images});
-
-  @override
-  Widget build(BuildContext context) {
-    if (images.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 160,
-      child: ScrollConfiguration(
-        behavior: const _ElasticScrollBehavior(),
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          itemCount: images.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
-          itemBuilder: (_, index) {
-            final url = images[index]['imageUrl']?.toString() ?? '';
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Image.network(
-                url,
-                width: 160,
-                height: 160,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 160,
-                  height: 160,
-                  color: s.hover,
-                  alignment: Alignment.center,
-                  child: AppIcon('image', size: 24, color: s.onSurfaceVariant),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _ElasticScrollBehavior extends ScrollBehavior {
-  const _ElasticScrollBehavior();
-
-  @override
-  ScrollPhysics getScrollPhysics(BuildContext context) =>
-      const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
-
-  @override
-  Widget buildOverscrollIndicator(
-    BuildContext context,
-    Widget child,
-    ScrollableDetails details,
-  ) => child;
-}
-
-final RegExp _kVisualResultRe = RegExp(r'\[\[VISUAL:(.*?):(.*?)\]\]', dotAll: true);
-final RegExp _kDocumentResultRe = RegExp(r'\[\[DOCUMENT:(.*?):(.*?):(.*?)\]\]', dotAll: true);
-
-List<Widget> _extractVisualResults(String text, AppColorScheme s) {
-  final results = <Widget>[];
-  for (final m in _kVisualResultRe.allMatches(text)) {
-    results.add(_ToolResultImageCard(
-      s: s,
-      base64Png: m.group(1)!,
-      label: m.group(2)!,
-    ));
-  }
-  return results;
-}
-
-List<Widget> _extractDocumentResults(String text, AppColorScheme s) {
-  final results = <Widget>[];
-  for (final m in _kDocumentResultRe.allMatches(text)) {
-    results.add(_ToolResultDownloadCard(
-      s: s,
-      base64Data: m.group(1)!,
-      filename: m.group(2)!,
-      mimeType: m.group(3)!,
-    ));
-  }
-  return results;
-}
-
 class _ToolResultImageCard extends StatelessWidget {
   final AppColorScheme s;
   final String base64Png;
@@ -3508,7 +3219,6 @@ class _ToolResultImageCard extends StatelessWidget {
           color: s.pageBackground,
           borderRadius: BorderRadius.zero,
         ),
-        clipBehavior: Clip.none,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -3664,54 +3374,255 @@ class _ToolResultDownloadCard extends StatelessWidget {
   }
 }
 
-void showCanvasActionsPopup(
-  BuildContext context,
-  AppColorScheme s, {
-  required Offset anchorOffset,
-  required Size anchorSize,
-  required VoidCallback onShare,
-  required VoidCallback onDownload,
-}) async {
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final screenSize = overlayBox.size;
+class ImageSearchCarousel extends StatelessWidget {
+  final AppColorScheme s;
+  final List<Map<String, dynamic>> images;
+  const ImageSearchCarousel({required this.s, required this.images});
 
-  final position = RelativeRect.fromLTRB(
-    anchorOffset.dx,
-    anchorOffset.dy,
-    screenSize.width - (anchorOffset.dx + anchorSize.width),
-    screenSize.height - (anchorOffset.dy + anchorSize.height),
-  );
-
-  final result = await showMenu<int>(
-    context: context,
-    position: position,
-    color: s.floatingSurface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: s.outline.withOpacity(0.25)),
-    ),
-    items: [
-      PopupMenuItem<int>(
-        value: 0,
-        padding: EdgeInsets.zero,
-        child: _buildMessageMenuItem(s, 'share1', 'Partilhar'),
+  @override
+  Widget build(BuildContext context) {
+    if (images.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SizedBox(
+        height: 160,
+        child: ScrollConfiguration(
+          behavior: const _ElasticScrollBehavior(),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            itemCount: images.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (_, i) {
+              final img = images[i];
+              final url = img['imageUrl']?.toString() ?? '';
+              final title = img['title']?.toString() ?? '';
+              return GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => _ImageSearchFullscreenScreen(
+                    images: images,
+                    initialIndex: i,
+                  ),
+                )),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.network(
+                    url,
+                    width: 160,
+                    height: 160,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 160,
+                      height: 160,
+                      color: s.hover,
+                      child: Icon(Icons.image_not_supported_outlined, color: s.onSurfaceVariant),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
-      PopupMenuItem<int>(
-        value: 1,
-        padding: EdgeInsets.zero,
-        child: _buildMessageMenuItem(s, 'download', 'Descarregar'),
-      ),
-    ],
-  );
+    );
+  }
+}
 
-  switch (result) {
-    case 0:
-      onShare();
-      break;
-    case 1:
-      onDownload();
-      break;
+class _ElasticScrollBehavior extends ScrollBehavior {
+  const _ElasticScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+  }
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
+}
+
+class _ImageSearchFullscreenScreen extends StatefulWidget {
+  final List<Map<String, dynamic>> images;
+  final int initialIndex;
+  const _ImageSearchFullscreenScreen({required this.images, required this.initialIndex});
+
+  @override
+  State<_ImageSearchFullscreenScreen> createState() => _ImageSearchFullscreenScreenState();
+}
+
+class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScreen> {
+  late final PageController _pageCtrl;
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+    _pageCtrl = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    final currentTitle = widget.images[_current]['title']?.toString() ?? '';
+    return Scaffold(
+      backgroundColor: s.pageBackground,
+      appBar: AppBar(
+        backgroundColor: s.pageBackground,
+        elevation: 0,
+        foregroundColor: s.onSurface,
+        title: Text(
+          currentTitle.isEmpty ? '${_current + 1}/${widget.images.length}' : currentTitle,
+          style: TextStyle(fontSize: 15, color: s.onSurface),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      body: PageView.builder(
+        controller: _pageCtrl,
+        itemCount: widget.images.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (_, i) {
+          final url = widget.images[i]['imageUrl']?.toString() ?? '';
+          return Center(
+            child: InteractiveViewer(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(Icons.image_not_supported_outlined, color: s.onSurfaceVariant, size: 48),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class SourcesRow extends StatelessWidget {
+  final AppColorScheme s;
+  final List<String> urls;
+  const SourcesRow({required this.s, required this.urls});
+
+  String _domain(String url) {
+    try {
+      return Uri.parse(url).host.replaceFirst('www.', '');
+    } catch (_) {
+      return url;
+    }
+  }
+
+  String _faviconUrl(String url) => 'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
+
+  void _openSourcesModal(BuildContext context) {
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      title: 'Fontes',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: SheetOptionsGroup(
+          s: s,
+          options: urls.map((url) {
+            return _SourceRow(s: s, url: url, domain: _domain(url), faviconUrl: _faviconUrl(url));
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (urls.isEmpty) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () => _openSourcesModal(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 20,
+              width: 20.0 + (urls.length - 1).clamp(0, 3) * 12.0,
+              child: Stack(
+                children: [
+                  for (int i = 0; i < urls.length.clamp(0, 4); i++)
+                    Positioned(
+                      left: i * 12.0,
+                      child: ClipOval(
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          color: s.cardBackground,
+                          child: Image.network(
+                            _faviconUrl(urls[i]),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(color: s.hover),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text('Fontes', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: s.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceRow extends StatelessWidget {
+  final AppColorScheme s;
+  final String url;
+  final String domain;
+  final String faviconUrl;
+  const _SourceRow({required this.s, required this.url, required this.domain, required this.faviconUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            ClipOval(
+              child: Container(
+                width: 28,
+                height: 28,
+                color: s.hover,
+                child: Image.network(
+                  faviconUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.public, size: 14, color: s.onSurfaceVariant),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(domain, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+                  Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -3721,8 +3632,6 @@ class _AssistantBubble extends StatelessWidget {
   final String? thinking;
   final List<LocalCanvasItem> canvases;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
-  final ValueChanged<LocalCanvasItem>? onShareCanvas;
-  final ValueChanged<LocalCanvasItem>? onDownloadCanvas;
   final VoidCallback onThumbUp;
   final VoidCallback onThumbDown;
   final VoidCallback onCopy;
@@ -3736,8 +3645,6 @@ class _AssistantBubble extends StatelessWidget {
     this.thinking,
     required this.canvases,
     required this.onOpenCanvas,
-    this.onShareCanvas,
-    this.onDownloadCanvas,
     required this.onThumbUp,
     required this.onThumbDown,
     required this.onCopy,
@@ -3756,34 +3663,31 @@ class _AssistantBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_extractImageSearchData(text).isNotEmpty)
-                ImageSearchCarousel(s: s, images: _extractImageSearchData(text)),
-              ..._extractVisualResults(stripImageSearchBlock(text), s),
-              ..._extractDocumentResults(stripImageSearchBlock(text), s),
+              ..._extractVisualResults(text, s),
+              ..._extractDocumentResults(text, s),
+              ImageSearchCarousel(s: s, images: _extractImages(text)),
               if (thinking != null && thinking!.isNotEmpty)
                 _ThinkingHistoryCollapsible(
                   s: s,
                   thinking: thinking!,
                   widgetsEnabled: widgetsEnabled,
                 ),
-              if (stripSourcesBlock(stripImageSearchBlock(text.replaceAll(_kVisualResultRe, '').replaceAll(_kDocumentResultRe, ''))).isNotEmpty)
+              if (text.isNotEmpty)
                 RichAiText(
-                  text: stripSourcesBlock(stripImageSearchBlock(text.replaceAll(_kVisualResultRe, '').replaceAll(_kDocumentResultRe, ''))),
+                  text: text
+                      .replaceAll(_kVisualResultRe, '')
+                      .replaceAll(_kDocumentResultRe, '')
+                      .replaceAll(_kSourcesRe, '')
+                      .replaceAll(_kImagesRe, '')
+                      .trim(),
                   s: s,
                   widgetsEnabled: widgetsEnabled,
                   onEnableWidgets: onEnableWidgets,
                   onSuggestionTap: onSuggestionTap,
                 ),
-              SourcesRow(s: s, urls: extractSources(text)),
               for (final item in canvases) ...[
                 const SizedBox(height: 8),
-                SimpleCanvasCard(
-                  s: s,
-                  item: item,
-                  onTap: () => onOpenCanvas(item),
-                  onShare: onShareCanvas,
-                  onDownload: onDownloadCanvas,
-                ),
+                SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
               ],
               const SizedBox(height: 6),
               _AssistantActionBar(
@@ -3792,6 +3696,7 @@ class _AssistantBubble extends StatelessWidget {
                 onThumbDown: onThumbDown,
                 onCopy: onCopy,
                 onRefresh: onRefresh,
+                sources: _extractSources(text),
               ),
             ],
           ),
@@ -3882,17 +3787,18 @@ class _AssistantActionBar extends StatelessWidget {
   final VoidCallback onThumbDown;
   final VoidCallback onCopy;
   final VoidCallback onRefresh;
+  final List<String> sources;
   const _AssistantActionBar({
     required this.s,
     required this.onThumbUp,
     required this.onThumbDown,
     required this.onCopy,
     required this.onRefresh,
+    this.sources = const [],
   });
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           _AssistantActionIcon(s: s, assetName: 'thumbs_up', onTap: onThumbUp),
           const SizedBox(width: 4),
@@ -3901,6 +3807,10 @@ class _AssistantActionBar extends StatelessWidget {
           _AssistantActionIcon(s: s, assetName: 'copy', onTap: onCopy),
           const SizedBox(width: 4),
           _AssistantActionIcon(s: s, assetName: 'refresh', onTap: onRefresh),
+          if (sources.isNotEmpty) ...[
+            const Spacer(),
+            SourcesRow(s: s, urls: sources),
+          ],
         ],
       );
 }
@@ -3957,8 +3867,6 @@ class _StreamingBubble extends StatefulWidget {
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
-  final ValueChanged<LocalCanvasItem>? onShareCanvas;
-  final ValueChanged<LocalCanvasItem>? onDownloadCanvas;
   final ValueNotifier<String> openCanvasContentNotifier;
   final ValueNotifier<bool> openCanvasDoneNotifier;
   final LocalCanvasItem? Function() openCanvasFinalItem;
@@ -3974,8 +3882,6 @@ class _StreamingBubble extends StatefulWidget {
     required this.onEnableWidgets,
     required this.onSuggestionTap,
     required this.onOpenCanvas,
-    this.onShareCanvas,
-    this.onDownloadCanvas,
     required this.openCanvasContentNotifier,
     required this.openCanvasDoneNotifier,
     required this.openCanvasFinalItem,
@@ -4030,8 +3936,6 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
               doneNotifier: widget.openCanvasDoneNotifier,
               finalItem: widget.openCanvasFinalItem,
               onOpenCanvas: widget.onOpenCanvas,
-              onShareCanvas: widget.onShareCanvas,
-              onDownloadCanvas: widget.onDownloadCanvas,
             ),
           ));
         case _StreamWidgetBlock(:final label, :final block):
@@ -4057,10 +3961,7 @@ class _StreamingBubbleState extends State<_StreamingBubble> {
 
     if (widget.activeToolCallLabel != null) {
       anyContent = true;
-      children.add(_ToolCallProgressCard(
-        s: s,
-        label: widget.activeToolCallLabel!,
-      ));
+      children.add(_ToolCallProgressCard(s: s, label: widget.activeToolCallLabel!));
     }
 
     if (!anyContent && thinking == null) {
@@ -4147,9 +4048,10 @@ class _ThinkingCollapsible extends StatelessWidget {
             ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant, active: true),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                'Pensando...',
+              child: ShimmerText(
+                text: 'Pensando...',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
+                active: true,
               ),
             ),
             AppIcon('arrow_right', size: 14, color: s.onSurfaceVariant),
