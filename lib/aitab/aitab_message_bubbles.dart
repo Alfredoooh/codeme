@@ -1,13 +1,11 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_message_bubbles.dart
-// Bolhas de mensagem (utilizador, assistente, streaming), carrossel
-// de imagens de pesquisa, fontes, e cards de resultado de tool
-// (imagem visual e download de documento).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -23,9 +21,9 @@ import 'aitab_models.dart';
 import 'aitab_widgets_shared.dart';
 import 'aitab_progress_cards.dart';
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // BOLHA DO UTILIZADOR
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class UserBubble extends StatelessWidget {
   final AppColorScheme s;
@@ -85,9 +83,9 @@ class UserBubble extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // CARDS DE RESULTADO DE TOOL
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class ToolResultImageCard extends StatefulWidget {
   final AppColorScheme s;
@@ -134,25 +132,11 @@ class _ToolResultImageCardState extends State<ToolResultImageCard> {
     final bytes = _cachedBytes;
     if (bytes == null) return;
     Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.transparent,
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
-        pageBuilder: (_, anim, __) => _FullscreenImageScreen(
+      CupertinoPageRoute(
+        builder: (_) => _FullscreenImageScreen(
           bytes: bytes,
           label: widget.label,
         ),
-        transitionsBuilder: (_, anim, __, child) {
-  final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-  return FadeTransition(
-    opacity: curved,
-    child: ScaleTransition(
-      scale: Tween(begin: 0.9, end: 1.0).animate(curved),
-      child: child,
-    ),
-  );
-},
       ),
     );
   }
@@ -214,100 +198,98 @@ class _FullscreenImageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return _FullscreenImageLayout(
-      s: s,
-      child: Image.memory(bytes, fit: BoxFit.contain),
-      title: label,
-    );
-  }
-}
-
-class _FullscreenImageLayout extends StatelessWidget {
-  final AppColorScheme s;
-  final Widget child;
-  final String? title;
-
-  const _FullscreenImageLayout({
-    required this.s,
-    required this.child,
-    this.title,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    return GestureDetector(
-      onTap: () => Navigator.pop(context),
-      child: Container(
-        color: Colors.black.withOpacity(0.85),
-        alignment: Alignment.center,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Center(
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Conteúdo central
+              Center(
                 child: InteractiveViewer(
-                  child: child,
+                  child: Image.memory(bytes, fit: BoxFit.contain),
                 ),
               ),
-            ),
-            Positioned(
-              top: topInset + 12,
-              left: 12,
-              child: _CircularCloseButton(
-                s: s,
-                onTap: () => Navigator.pop(context),
-              ),
-            ),
-            if (title != null && title!.isNotEmpty)
+              // Appbar custom (igual ao settings)
               Positioned(
-                bottom: bottomInset + 16,
+                top: 0,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
                     ),
-                    child: Text(
-                      title!,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                  ),
+                  child: Row(
+                    children: [
+                      _CircularBackButton(
+                        s: s,
+                        onTap: () => Navigator.pop(context),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: s.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _CircularCloseButton extends StatelessWidget {
+class _CircularBackButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
+  const _CircularBackButton({required this.s, required this.onTap});
+  @override
+  State<_CircularBackButton> createState() => _CircularBackButtonState();
+}
 
-  const _CircularCloseButton({required this.s, required this.onTap});
-
+class _CircularBackButtonState extends State<_CircularBackButton> {
+  bool _p = false;
   @override
   Widget build(BuildContext context) {
+    final s = widget.s;
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          shape: BoxShape.circle,
-        ),
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        width: 36,
+        height: 36,
         alignment: Alignment.center,
-        child: AppIcon('close', color: Colors.white, size: 20),
+        decoration: BoxDecoration(
+          color: _p ? s.pressed : s.cardBackground,
+          shape: BoxShape.circle,
+          boxShadow: s.cardShadow,
+        ),
+        child: AppIcon('back', color: s.onSurface, size: 18),
       ),
     );
   }
@@ -406,9 +388,9 @@ class ToolResultDownloadCard extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // CARROSSEL DE IMAGENS DE PESQUISA
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class ImageSearchCarousel extends StatefulWidget {
   final AppColorScheme s;
@@ -438,25 +420,11 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
     if (visibleImages.isEmpty) return;
 
     Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.transparent,
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
-        pageBuilder: (_, anim, __) => _ImageSearchFullscreenScreen(
+      CupertinoPageRoute(
+        builder: (_) => _ImageSearchFullscreenScreen(
           images: visibleImages,
           initialIndex: initialIndex,
         ),
-        transitionsBuilder: (_, anim, __, child) {
-  final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-  return FadeTransition(
-    opacity: curved,
-    child: ScaleTransition(
-      scale: Tween(begin: 0.9, end: 1.0).animate(curved),
-      child: child,
-    ),
-  );
-},
       ),
     );
   }
@@ -564,76 +532,90 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final topInset = MediaQuery.of(context).padding.top;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    return GestureDetector(
-      onTap: () => Navigator.pop(context),
-      child: Container(
-        color: Colors.black.withOpacity(0.85),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: PageView.builder(
-                controller: _pageCtrl,
-                itemCount: widget.images.length,
-                onPageChanged: (i) => setState(() => _current = i),
-                itemBuilder: (_, i) {
-                  final url = widget.images[i]['imageUrl']?.toString() ?? '';
-                  return Center(
-                    child: InteractiveViewer(
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Colors.white,
-                          size: 48,
+    final currentTitle = widget.images[_current]['title']?.toString() ?? '${_current + 1}/${widget.images.length}';
+
+    return Material(
+      type: MaterialType.transparency,
+      child: ColoredBox(
+        color: s.pageBackground,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Galeria de imagens
+              Positioned.fill(
+                child: PageView.builder(
+                  controller: _pageCtrl,
+                  itemCount: widget.images.length,
+                  onPageChanged: (i) => setState(() => _current = i),
+                  itemBuilder: (_, i) {
+                    final url = widget.images[i]['imageUrl']?.toString() ?? '';
+                    return Center(
+                      child: InteractiveViewer(
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.image_not_supported_outlined,
+                            color: s.onSurfaceVariant,
+                            size: 48,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-            Positioned(
-              top: topInset + 12,
-              left: 12,
-              child: _CircularCloseButton(
-                s: s,
-                onTap: () => Navigator.pop(context),
-              ),
-            ),
-            Positioned(
-              bottom: bottomInset + 16,
-              left: 0,
-              right: 0,
-              child: Center(
+              // Appbar custom (igual ao settings)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    widget.images[_current]['title']?.toString() ?? '${_current + 1}/${widget.images.length}',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        s.pageBackground,
+                        s.pageBackground.withOpacity(0.0),
+                      ],
                     ),
+                  ),
+                  child: Row(
+                    children: [
+                      _CircularBackButton(
+                        s: s,
+                        onTap: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          currentTitle,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: s.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // FONTES (web_search)
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class SourcesRow extends StatelessWidget {
   final AppColorScheme s;
@@ -757,9 +739,9 @@ class _SourceRow extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // BOLHA DO ASSISTENTE (já finalizada)
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class AssistantBubble extends StatelessWidget {
   final AppColorScheme s;
@@ -995,9 +977,9 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // BOLHA DE STREAMING (em construção)
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
@@ -1249,9 +1231,9 @@ class _ThinkingCollapsible extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 // ESTADOS ESPECIAIS DA LISTA
-// ══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
 
 class IncognitoState extends StatelessWidget {
   const IncognitoState({super.key});
