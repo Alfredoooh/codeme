@@ -403,15 +403,45 @@ class StreamGenericOpenBlock extends StreamElement {
   StreamGenericOpenBlock(this.label);
 }
 
+class StreamVisualResult extends StreamElement {
+  final String base64Png;
+  final String label;
+  StreamVisualResult({required this.base64Png, required this.label});
+}
+
+class StreamDocumentResult extends StreamElement {
+  final String base64Data;
+  final String filename;
+  final String mimeType;
+  StreamDocumentResult({required this.base64Data, required this.filename, required this.mimeType});
+}
+
+class StreamImagesResult extends StreamElement {
+  final List<Map<String, dynamic>> images;
+  StreamImagesResult(this.images);
+}
+
 class OpenBlockInfo {
   final String label;
   const OpenBlockInfo(this.label);
 }
 
 List<StreamElement> parseStreamingContent(String raw, String Function() idGen) {
+  final visuals = extractVisualResults(raw);
+  final documents = extractDocumentResults(raw);
+  final imagesRaw = extractImages(raw);
+
   final canvasScan = markCanvasItems(raw, idGen);
   final widgetParse = parseAiWidgetBlocks(canvasScan.textWithMarkers);
   var remaining = widgetParse.textWithMarkers;
+
+  // Remove os marcadores VISUAL/DOCUMENT/images do texto residual —
+  // já foram extraídos acima e vão virar os seus próprios StreamElement,
+  // não devem sobrar como texto nem ser descartados em silêncio.
+  remaining = remaining
+      .replaceAll(kVisualResultRe, '')
+      .replaceAll(kDocumentResultRe, '')
+      .replaceAll(kImagesRe, '');
 
   final openStart = findOpenBlockStart(remaining);
   if (openStart != -1) {
@@ -423,6 +453,21 @@ List<StreamElement> parseStreamingContent(String raw, String Function() idGen) {
   final markerMatches = combinedMarkerRe.allMatches(remaining).toList();
 
   final elements = <StreamElement>[];
+
+  // Cards locais primeiro (imagens, documentos, visuais) — são
+  // resultado direto de tool call já resolvida, não dependem de o
+  // texto do modelo estar completo, por isso podem aparecer assim
+  // que o marcador surgir no stream, antes do resto do texto.
+  for (final v in visuals) {
+    elements.add(StreamVisualResult(base64Png: v.base64Png, label: v.label));
+  }
+  for (final d in documents) {
+    elements.add(StreamDocumentResult(base64Data: d.base64Data, filename: d.filename, mimeType: d.mimeType));
+  }
+  if (imagesRaw.isNotEmpty) {
+    elements.add(StreamImagesResult(imagesRaw));
+  }
+
   for (int i = 0; i < parts.length; i++) {
     if (parts[i].isNotEmpty) {
       elements.add(StreamText(parts[i]));

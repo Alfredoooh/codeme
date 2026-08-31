@@ -886,6 +886,24 @@ class _StreamingBubbleState extends State<StreamingBubble> {
               doneNotifier: widget.openWidgetDoneNotifier,
             ),
           ));
+        case StreamVisualResult(:final base64Png, :final label):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: ToolResultImageCard(s: s, base64Png: base64Png, label: label),
+          ));
+        case StreamDocumentResult(:final base64Data, :final filename, :final mimeType):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: ToolResultDownloadCard(s: s, base64Data: base64Data, filename: filename, mimeType: mimeType),
+          ));
+        case StreamImagesResult(:final images):
+          anyContent = true;
+          children.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: ImageSearchCarousel(s: s, images: images),
+          ));
         case StreamGenericOpenBlock(:final label):
           anyContent = true;
           children.add(Padding(
