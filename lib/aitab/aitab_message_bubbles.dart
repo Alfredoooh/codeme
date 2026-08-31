@@ -143,16 +143,16 @@ class _ToolResultImageCardState extends State<ToolResultImageCard> {
           bytes: bytes,
           label: widget.label,
         ),
-        transitionsBuilder: (_, anim, _, child) {
-          final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: Tween(begin: 0.9, end: 1.0).animate(curved),
-              child: child,
-            ),
-          );
-        },
+        transitionsBuilder: (_, anim, __, child) {
+  final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+  return FadeTransition(
+    opacity: curved,
+    child: ScaleTransition(
+      scale: Tween(begin: 0.9, end: 1.0).animate(curved),
+      child: child,
+    ),
+  );
+},
       ),
     );
   }
@@ -447,16 +447,16 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
           images: visibleImages,
           initialIndex: initialIndex,
         ),
-        transitionsBuilder: (_, anim, _, child) {
-          final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: Tween(begin: 0.9, end: 1.0).animate(curved),
-              child: child,
-            ),
-          );
-        },
+        transitionsBuilder: (_, anim, __, child) {
+  final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+  return FadeTransition(
+    opacity: curved,
+    child: ScaleTransition(
+      scale: Tween(begin: 0.9, end: 1.0).animate(curved),
+      child: child,
+    ),
+  );
+},
       ),
     );
   }
