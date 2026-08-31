@@ -89,7 +89,7 @@ class UserBubble extends StatelessWidget {
 // CARDS DE RESULTADO DE TOOL
 // ══════════════════════════════════════════════════════════════
 
-class ToolResultImageCard extends StatelessWidget {
+class ToolResultImageCard extends StatefulWidget {
   final AppColorScheme s;
   final String base64Png;
   final String label;
@@ -102,10 +102,67 @@ class ToolResultImageCard extends StatelessWidget {
   });
 
   @override
+  State<ToolResultImageCard> createState() => _ToolResultImageCardState();
+}
+
+class _ToolResultImageCardState extends State<ToolResultImageCard> {
+  Uint8List? _cachedBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _decode();
+  }
+
+  @override
+  void didUpdateWidget(covariant ToolResultImageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.base64Png != widget.base64Png) {
+      _decode();
+    }
+  }
+
+  void _decode() {
+    try {
+      _cachedBytes = base64Decode(widget.base64Png);
+    } catch (_) {
+      _cachedBytes = null;
+    }
+  }
+
+  void _openFullscreen(BuildContext context) {
+    final bytes = _cachedBytes;
+    if (bytes == null) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+        pageBuilder: (_, anim, __) => _FullscreenImageScreen(
+          bytes: bytes,
+          label: widget.label,
+        ),
+        transitionsBuilder: (_, anim, _, child) {
+          final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween(begin: 0.9, end: 1.0).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bytes = base64Decode(base64Png);
+    final s = widget.s;
+    final bytes = _cachedBytes;
     return GestureDetector(
-      onTap: () => _openFullscreen(context, bytes, label),
+      onTap: () => _openFullscreen(context),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         constraints: const BoxConstraints(maxWidth: 420),
@@ -116,14 +173,25 @@ class ToolResultImageCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Image.memory(bytes, fit: BoxFit.contain),
+            if (bytes != null)
+              Image.memory(bytes, fit: BoxFit.contain)
+            else
+              Container(
+                height: 160,
+                color: s.hover,
+                alignment: Alignment.center,
+                child: Text(
+                  'Imagem inválida',
+                  style: TextStyle(color: s.onSurfaceVariant, fontSize: 12),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
-                      label,
+                      widget.label,
                       style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -136,12 +204,6 @@ class ToolResultImageCard extends StatelessWidget {
       ),
     );
   }
-
-  void _openFullscreen(BuildContext context, Uint8List bytes, String label) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => _FullscreenImageScreen(bytes: bytes, label: label),
-    ));
-  }
 }
 
 class _FullscreenImageScreen extends StatelessWidget {
@@ -152,51 +214,100 @@ class _FullscreenImageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final topInset = MediaQuery.of(context).padding.top;
+    return _FullscreenImageLayout(
+      s: s,
+      child: Image.memory(bytes, fit: BoxFit.contain),
+      title: label,
+    );
+  }
+}
 
-    return Container(
-      color: s.pageBackground,
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(8, topInset + 8, 16, 8),
-            child: Row(
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    alignment: Alignment.center,
-                    child: AppIcon('arrow_left', color: s.onSurface, size: 20),
-                  ),
+class _FullscreenImageLayout extends StatelessWidget {
+  final AppColorScheme s;
+  final Widget child;
+  final String? title;
+
+  const _FullscreenImageLayout({
+    required this.s,
+    required this.child,
+    this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return GestureDetector(
+      onTap: () => Navigator.pop(context),
+      child: Container(
+        color: Colors.black.withOpacity(0.85),
+        alignment: Alignment.center,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Center(
+                child: InteractiveViewer(
+                  child: child,
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  icon: AppIcon('share1', color: s.onSurface, size: 20),
-                  onPressed: () async {
-                    final dir = await getTemporaryDirectory();
-                    final file = File('${dir.path}/imagem.png');
-                    await file.writeAsBytes(bytes);
-                    await Share.shareXFiles([XFile(file.path)]);
-                  },
-                ),
-              ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Center(child: InteractiveViewer(child: Image.memory(bytes))),
-          ),
-        ],
+            Positioned(
+              top: topInset + 12,
+              left: 12,
+              child: _CircularCloseButton(
+                s: s,
+                onTap: () => Navigator.pop(context),
+              ),
+            ),
+            if (title != null && title!.isNotEmpty)
+              Positioned(
+                bottom: bottomInset + 16,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      title!,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CircularCloseButton extends StatelessWidget {
+  final AppColorScheme s;
+  final VoidCallback onTap;
+
+  const _CircularCloseButton({required this.s, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: AppIcon('close', color: Colors.white, size: 20),
       ),
     );
   }
@@ -318,6 +429,38 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
     });
   }
 
+  void _openFullscreen(BuildContext context, int initialIndex) {
+    final visibleImages = widget.images.where((img) {
+      final url = img['imageUrl']?.toString() ?? '';
+      return url.isNotEmpty && !_failedUrls.contains(url);
+    }).toList();
+
+    if (visibleImages.isEmpty) return;
+
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+        pageBuilder: (_, anim, __) => _ImageSearchFullscreenScreen(
+          images: visibleImages,
+          initialIndex: initialIndex,
+        ),
+        transitionsBuilder: (_, anim, _, child) {
+          final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween(begin: 0.9, end: 1.0).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -343,12 +486,7 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
               final url = img['imageUrl']?.toString() ?? '';
               return GestureDetector(
                 key: ValueKey(url),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => _ImageSearchFullscreenScreen(
-                    images: visibleImages,
-                    initialIndex: i,
-                  ),
-                )),
+                onTap: () => _openFullscreen(context, i),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: Image.network(
@@ -425,59 +563,69 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final currentTitle = widget.images[_current]['title']?.toString() ?? '';
     final topInset = MediaQuery.of(context).padding.top;
-
-    return Container(
-      color: s.pageBackground,
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(8, topInset + 8, 16, 8),
-            child: Row(
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    alignment: Alignment.center,
-                    child: AppIcon('arrow_left', color: s.onSurface, size: 20),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    currentTitle.isEmpty ? '${_current + 1}/${widget.images.length}' : currentTitle,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return GestureDetector(
+      onTap: () => Navigator.pop(context),
+      child: Container(
+        color: Colors.black.withOpacity(0.85),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: PageView.builder(
+                controller: _pageCtrl,
+                itemCount: widget.images.length,
+                onPageChanged: (i) => setState(() => _current = i),
+                itemBuilder: (_, i) {
+                  final url = widget.images[i]['imageUrl']?.toString() ?? '';
+                  return Center(
+                    child: InteractiveViewer(
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.image_not_supported_outlined,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-          Expanded(
-            child: PageView.builder(
-              controller: _pageCtrl,
-              itemCount: widget.images.length,
-              onPageChanged: (i) => setState(() => _current = i),
-              itemBuilder: (_, i) {
-                final url = widget.images[i]['imageUrl']?.toString() ?? '';
-                return Center(
-                  child: InteractiveViewer(
-                    child: Image.network(
-                      url,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(Icons.image_not_supported_outlined, color: s.onSurfaceVariant, size: 48),
+            Positioned(
+              top: topInset + 12,
+              left: 12,
+              child: _CircularCloseButton(
+                s: s,
+                onTap: () => Navigator.pop(context),
+              ),
+            ),
+            Positioned(
+              bottom: bottomInset + 16,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    widget.images[_current]['title']?.toString() ?? '${_current + 1}/${widget.images.length}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -949,22 +1097,42 @@ class _StreamingBubbleState extends State<StreamingBubble> {
           ));
         case StreamVisualResult(:final base64Png, :final label):
           anyContent = true;
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: ToolResultImageCard(s: s, base64Png: base64Png, label: label),
-          ));
+          children.add(
+            Padding(
+              key: ValueKey('visual_${base64Png.hashCode}'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: ToolResultImageCard(
+                key: ValueKey('tool_image_${base64Png.hashCode}'),
+                s: s,
+                base64Png: base64Png,
+                label: label,
+              ),
+            ),
+          );
         case StreamDocumentResult(:final base64Data, :final filename, :final mimeType):
           anyContent = true;
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: ToolResultDownloadCard(s: s, base64Data: base64Data, filename: filename, mimeType: mimeType),
-          ));
+          children.add(
+            Padding(
+              key: ValueKey('doc_${base64Data.hashCode}'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: ToolResultDownloadCard(
+                key: ValueKey('download_${base64Data.hashCode}'),
+                s: s,
+                base64Data: base64Data,
+                filename: filename,
+                mimeType: mimeType,
+              ),
+            ),
+          );
         case StreamImagesResult(:final images):
           anyContent = true;
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: ImageSearchCarousel(s: s, images: images),
-          ));
+          children.add(
+            Padding(
+              key: ValueKey('images_${images.map((e) => e['imageUrl']?.toString() ?? '').join('|')}'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: ImageSearchCarousel(s: s, images: images),
+            ),
+          );
         case StreamGenericOpenBlock(:final label):
           anyContent = true;
           children.add(Padding(
@@ -996,19 +1164,7 @@ class _StreamingBubbleState extends State<StreamingBubble> {
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final child in children)
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (widget, animation) => FadeTransition(
-                  opacity: animation,
-                  child: widget,
-                ),
-                child: child,
-              ),
-          ],
+          children: children,
         ),
       ),
     );
