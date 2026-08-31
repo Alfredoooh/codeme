@@ -143,8 +143,16 @@ class _RootShellState extends State<RootShell>
 
   final GlobalKey<AiTabState> _aiTabKey = GlobalKey<AiTabState>();
 
-  void _openDrawer()  => _drawerCtrl.animateTo(1.0, curve: _drawerCurve);
-  void _closeDrawer() => _drawerCtrl.animateTo(0.0, curve: _drawerCurve);
+  void _openDrawer() {
+    FocusScope.of(context).unfocus();
+    _drawerCtrl.animateTo(1.0, curve: _drawerCurve);
+  }
+
+  // Retorna um Future que só resolve quando a animação de fecho termina,
+  // para quem precisar de encadear navegação depois do drawer fechar.
+  Future<void> _closeDrawer() =>
+      _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+
   void _toggleDrawer() => _drawerOpen ? _closeDrawer() : _openDrawer();
 
   @override
@@ -304,6 +312,7 @@ class _RootShellState extends State<RootShell>
               ),
             ),
 
+            // Overlay escuro — agora com tap-to-close e drag-to-close.
             AnimatedBuilder(
               animation: _drawerCtrl,
               builder: (_, __) {
@@ -311,8 +320,33 @@ class _RootShellState extends State<RootShell>
                 return Positioned.fill(
                   child: IgnorePointer(
                     ignoring: t < 0.01,
-                    child: Container(
-                      color: Colors.black.withOpacity(0.3 * t),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _closeDrawer,
+                      onHorizontalDragStart: (_) {
+                        _drawerCtrl.stop();
+                      },
+                      onHorizontalDragUpdate: (d) {
+                        final delta = d.delta.dx / _drawerWidth;
+                        _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+                      },
+                      onHorizontalDragEnd: (d) {
+                        final velocity = d.velocity.pixelsPerSecond.dx;
+                        if (velocity.abs() > 300) {
+                          if (velocity > 0) {
+                            _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                          } else {
+                            _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                          }
+                        } else if (_drawerCtrl.value > 0.5) {
+                          _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                        } else {
+                          _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                        }
+                      },
+                      child: Container(
+                        color: Colors.black.withOpacity(0.3 * t),
+                      ),
                     ),
                   ),
                 );
@@ -356,7 +390,7 @@ class _RootShellState extends State<RootShell>
                       animation: _AiTabHeaderRefresh.of(context),
                       builder: (_, __) => AppDrawer(
                         s: s,
-                        onClose: _closeDrawer,
+                        onCloseAnimated: _closeDrawer,
                         onSettings: _openSettings,
                         onOpenConversation: _onOpenConversation,
                         onNewChat: () =>
