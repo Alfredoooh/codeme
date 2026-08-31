@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'colors.dart';
 import 'widgets.dart';
 import 'drawermenu.dart';
-import 'aitab.dart';
+import 'aitab/aitab.dart';
 import 'settingsscreen.dart';
 import 'sheets.dart';
 import 'auth_service.dart';
@@ -244,7 +244,6 @@ class _RootShellState extends State<RootShell>
               onMenu: _toggleDrawer,
               transparent: true,
               headerBackground: s.pageBackground,
-              leadingExtra: _LibraryButton(s: s, onTap: _openLibrary),
               trailing: AiConversationMenuButton(
                 s: s,
                 hasMessages: _hasMessages,
