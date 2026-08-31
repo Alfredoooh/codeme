@@ -1046,7 +1046,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                   final msgCanvases = _canvasesForMessage(msg.content);
                                   item = AssistantBubble(
                                     s: s,
-                                    text: cleanAiText(thinkScan.cleanText),
+                                    text: thinkScan.cleanText,
                                     thinking: thinkScan.thinking,
                                     canvases: msgCanvases,
                                     onOpenCanvas: _onOpenCanvas,
