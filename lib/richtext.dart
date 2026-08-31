@@ -37,6 +37,12 @@
 //   • Tabelas com alinhamento por coluna
 //   • Detalhes colapsáveis <details> e blocos de definição melhorados
 //   • Correção do erro de tipo em _AiTable (columnWidths)
+//   • CORREÇÃO: regex de link/imagem não fechava a raw string
+//     prematuramente (delimitador " colidindo com aspas internas);
+//     agora usa \x22 dentro da classe de caracteres para representar
+//     a aspas dupla sem conflitar com o delimitador da string.
+//   • CORREÇÃO: literal '$$' dentro de string não-raw escapado como
+//     '\$\$' para não ser interpretado como interpolação.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -1493,7 +1499,7 @@ class _RichTextBlockParser {
     final pattern = RegExp(
       r'(\$\$[^$\n]+?\$\$)|'
       r'(\$[^$\n]+?\$)|'
-      r"(!?\[[^\]\n]+\]\([^\)\n]+(?:\s+["'][^"']*["'])?\))|"
+      r'(!?\[[^\]\n]+\]\([^\)\n]+(?:\s+[\x22\x27][^\x22\x27]*[\x22\x27])?\))|'
       r'(\*\*\*[^*\n]+?\*\*\*)|'
       r'(\*\*[^*\n]+?\*\*|__[^_\n]+?__)|'
       r'(~~[^~\n]+?~~)|'
@@ -1520,7 +1526,7 @@ class _RichTextBlockParser {
       }
 
       final token = m.group(0)!;
-      if (token.startsWith('$$') && token.endsWith('$$')) {
+      if (token.startsWith('\$\$') && token.endsWith('\$\$')) {
         final expr = token.substring(2, token.length - 2);
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,

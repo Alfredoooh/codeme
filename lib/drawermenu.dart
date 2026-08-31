@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/drawermenu.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -766,7 +769,7 @@ class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOut,
         child: Container(
           width: _buttonSize, height: _buttonSize,
           alignment: Alignment.center,
@@ -857,7 +860,7 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOut,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 110),
           width: widget.size, height: widget.size,
@@ -1222,7 +1225,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
       child: AnimatedScale(
         scale: _p ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOut,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
           alignment: Alignment.center,
@@ -1350,7 +1353,7 @@ class _NewChatPillState extends State<_NewChatPill> {
       child: AnimatedScale(
         scale: _p ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 110),
-        curve: kCupertinoOut,
+        curve: Curves.easeOut,
         child: IntrinsicWidth(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),

@@ -225,8 +225,8 @@ class _RootShellState extends State<RootShell>
         top: 0,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
-          switchInCurve: kCupertinoOut,
-          switchOutCurve: kCupertinoIn,
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
           transitionBuilder: (child, anim) =>
               FadeTransition(opacity: anim, child: child),
           child: KeyedSubtree(key: const ValueKey('ai'), child: _buildTab()),
