@@ -72,7 +72,9 @@ class ConversationItem {
       preview: preview,
       pinned: j['pinned'] == true,
       archived: j['archived'] == true,
-      updatedAt: (j['updatedAt'] is num) ? (j['updatedAt'] as num).toInt() : 0,
+      updatedAt: (j['updatedAt'] is num)
+          ? (j['updatedAt'] as num).toInt()
+          : 0,
     );
   }
 }
@@ -89,16 +91,23 @@ class ConversationsController extends ChangeNotifier {
   Future<void> load() async {
     final token = authController.token;
     if (token == null) return;
+
     loading = true;
     error = null;
     notifyListeners();
+
     try {
       final raw = await ConversationsApiService.list(token);
-      items = raw.map((j) => ConversationItem.fromJson(j)).toList();
+
+      items = raw
+          .map((j) => ConversationItem.fromJson(j))
+          .toList();
+
       _sortByRecency();
     } catch (_) {
       error = 'Não foi possível carregar as conversas';
     }
+
     loading = false;
     notifyListeners();
   }
@@ -106,40 +115,74 @@ class ConversationsController extends ChangeNotifier {
   Future<void> togglePin(String id, bool pinned) async {
     final token = authController.token;
     if (token == null) return;
+
     final idx = items.indexWhere((c) => c.id == id);
     if (idx == -1) return;
+
     final old = items[idx];
+
     items[idx] = ConversationItem(
-      id: old.id, title: old.title, preview: old.preview,
-      pinned: pinned, archived: old.archived, updatedAt: old.updatedAt,
+      id: old.id,
+      title: old.title,
+      preview: old.preview,
+      pinned: pinned,
+      archived: old.archived,
+      updatedAt: old.updatedAt,
     );
+
     _sortByRecency();
     notifyListeners();
-    await ConversationsApiService.pin(token, id, pinned);
+
+    await ConversationsApiService.pin(
+      token,
+      id,
+      pinned,
+    );
   }
 
-  Future<void> rename(String id, String newTitle) async {
+  Future<void> rename(
+    String id,
+    String newTitle,
+  ) async {
     final token = authController.token;
     if (token == null) return;
+
     final idx = items.indexWhere((c) => c.id == id);
     if (idx == -1) return;
+
     final old = items[idx];
+
     items[idx] = ConversationItem(
-      id: old.id, title: newTitle, preview: old.preview,
-      pinned: old.pinned, archived: old.archived, updatedAt: old.updatedAt,
+      id: old.id,
+      title: newTitle,
+      preview: old.preview,
+      pinned: old.pinned,
+      archived: old.archived,
+      updatedAt: old.updatedAt,
     );
+
     _sortByRecency();
     notifyListeners();
-    await ConversationsApiService.rename(token, id, newTitle);
+
+    await ConversationsApiService.rename(
+      token,
+      id,
+      newTitle,
+    );
   }
 
   Future<void> delete(String id) async {
     final token = authController.token;
     if (token == null) return;
+
     items.removeWhere((c) => c.id == id);
     _sortByRecency();
     notifyListeners();
-    await ConversationsApiService.delete(token, id);
+
+    await ConversationsApiService.delete(
+      token,
+      id,
+    );
   }
 
   void upsertLocal(ConversationItem item) {
@@ -158,7 +201,8 @@ class ConversationsController extends ChangeNotifier {
   }
 }
 
-final ConversationsController conversationsController = ConversationsController();
+final ConversationsController conversationsController =
+    ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
 // DRAWER
@@ -190,26 +234,31 @@ class _AppDrawerState extends State<AppDrawer> {
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
 
-  // ── Estado do pull-to-refresh Apple-style ──────────────────
-  double _pullDistance = 0.0;
-  bool _refreshTriggered = false;
-  bool _refreshInProgress = false;
-
-  static const double _pullTriggerDistance = 72.0;
-  static const double _maxPullDistance = 110.0;
-
   @override
   void initState() {
     super.initState();
-    conversationsController.addListener(_onConvsChanged);
-    authController.addListener(_onAuthChanged);
+
+    conversationsController.addListener(
+      _onConvsChanged,
+    );
+
+    authController.addListener(
+      _onAuthChanged,
+    );
+
     _syncConversations();
   }
 
   @override
   void dispose() {
-    conversationsController.removeListener(_onConvsChanged);
-    authController.removeListener(_onAuthChanged);
+    conversationsController.removeListener(
+      _onConvsChanged,
+    );
+
+    authController.removeListener(
+      _onAuthChanged,
+    );
+
     super.dispose();
   }
 
@@ -220,7 +269,9 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _onAuthChanged() {
     if (!mounted) return;
+
     _syncConversations();
+
     setState(() {});
   }
 
@@ -233,173 +284,174 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   // Fecha o drawer suavemente e só então executa a navegação.
-  Future<void> _closeThenRun(VoidCallback navigate) async {
+  Future<void> _closeThenRun(
+    VoidCallback navigate,
+  ) async {
     await widget.onCloseAnimated();
+
     if (!mounted) return;
+
     navigate();
   }
 
   void _handleNewChat() {
     HapticFeedback.lightImpact();
+
     widget.onNewChat?.call();
+
     widget.onCloseAnimated();
   }
 
   void _openSearch(BuildContext context) {
     HapticFeedback.lightImpact();
+
     _closeThenRun(() {
-      Navigator.of(context).push(_FadePageRoute(
-        builder: (_) => ChatSearchScreen(
-          s: widget.s,
-          onOpenConversation: (id) {
-            widget.onOpenConversation?.call(id);
-          },
+      Navigator.of(context).push(
+        _FadePageRoute(
+          builder: (_) => ChatSearchScreen(
+            s: widget.s,
+            onOpenConversation: (id) {
+              widget.onOpenConversation?.call(id);
+            },
+          ),
         ),
-      ));
+      );
     });
   }
 
-  void _openConversation(ConversationItem item) {
+  void _openConversation(
+    ConversationItem item,
+  ) {
     widget.onOpenConversation?.call(item.id);
     widget.onCloseAnimated();
   }
 
-  void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
+  void _openConvPopupAt(
+    BuildContext context,
+    Offset globalPos,
+    ConversationItem item,
+  ) {
     HapticFeedback.lightImpact();
+
     showConversationOptionsPopupAt(
       context,
       widget.s,
       position: globalPos,
       item: item,
       onOpen: () => _openConversation(item),
-      onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
-      onRename: () => _openRenamePopup(context, item),
-      onDelete: () => _confirmDeletePopup(context, item),
+      onTogglePin: () =>
+          conversationsController.togglePin(
+            item.id,
+            !item.pinned,
+          ),
+      onRename: () =>
+          _openRenamePopup(context, item),
+      onDelete: () =>
+          _confirmDeletePopup(context, item),
     );
   }
 
-  void _openRenamePopup(BuildContext context, ConversationItem item) {
+  void _openRenamePopup(
+    BuildContext context,
+    ConversationItem item,
+  ) {
     showRenameSheet(
       context,
       widget.s,
       currentTitle: item.title,
-      onConfirm: (newTitle) => conversationsController.rename(item.id, newTitle),
+      onConfirm: (newTitle) =>
+          conversationsController.rename(
+            item.id,
+            newTitle,
+          ),
     );
   }
 
-  void _confirmDeletePopup(BuildContext context, ConversationItem item) {
+  void _confirmDeletePopup(
+    BuildContext context,
+    ConversationItem item,
+  ) {
     showCraftBottomSheet(
       context: context,
       s: widget.s,
-      child: Builder(builder: (sheetContext) => _DeleteConversationSheet(
-        s: widget.s,
-        title: item.title,
-        onConfirm: () {
-          Navigator.pop(sheetContext);
-          conversationsController.delete(item.id);
-        },
-      )),
+      child: Builder(
+        builder: (sheetContext) =>
+            _DeleteConversationSheet(
+          s: widget.s,
+          title: item.title,
+          onConfirm: () {
+            Navigator.pop(sheetContext);
+
+            conversationsController.delete(
+              item.id,
+            );
+          },
+        ),
+      ),
     );
   }
 
   void _openLibrary(BuildContext context) {
     HapticFeedback.lightImpact();
+
     _closeThenRun(() {
-      Navigator.of(context).push(_FadePageRoute(
-        builder: (_) => const LibraryScreen(),
-      ));
+      Navigator.of(context).push(
+        _FadePageRoute(
+          builder: (_) => const LibraryScreen(),
+        ),
+      );
     });
   }
 
-  void _openScheduledTasks(BuildContext context) {
+  void _openScheduledTasks(
+    BuildContext context,
+  ) {
     HapticFeedback.lightImpact();
+
     _closeThenRun(() {
-      Navigator.of(context).push(_FadePageRoute(
-        builder: (_) => const ScheduledTasksScreen(),
-      ));
+      Navigator.of(context).push(
+        _FadePageRoute(
+          builder: (_) =>
+              const ScheduledTasksScreen(),
+        ),
+      );
     });
   }
 
   void _openAllApps(BuildContext context) {
     HapticFeedback.lightImpact();
+
     _closeThenRun(() {
-      Navigator.of(context).push(CupertinoPageRoute(
-        builder: (_) => const AllAppsScreen(),
-      ));
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) =>
+              const AllAppsScreen(),
+        ),
+      );
     });
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // PULL-TO-REFRESH APPLE STYLE
-  // ══════════════════════════════════════════════════════════════
-
-  bool _onScrollNotification(ScrollNotification notif) {
-    // Enquanto o refresh estiver realmente a decorrer,
-    // mantemos o conteúdo na posição Apple e ignoramos novos gestos.
-    if (_refreshInProgress) return false;
-
-    if (notif is OverscrollNotification &&
-        notif.metrics.pixels <= notif.metrics.minScrollExtent) {
-      if (notif.overscroll < 0) {
-        setState(() {
-          _pullDistance = (_pullDistance - notif.overscroll)
-              .clamp(0.0, _maxPullDistance);
-        });
-      }
-    } else if (notif is ScrollUpdateNotification &&
-        notif.metrics.pixels < notif.metrics.minScrollExtent) {
-      setState(() {
-        _pullDistance = (notif.metrics.minScrollExtent - notif.metrics.pixels)
-            .clamp(0.0, _maxPullDistance);
-      });
-    } else if (notif is ScrollEndNotification) {
-      if (_pullDistance >= _pullTriggerDistance && !_refreshTriggered) {
-        _refreshTriggered = true;
-        _refreshInProgress = true;
-
-        // Fixa o conteúdo numa posição semelhante ao "resting point"
-        // do pull-to-refresh do iOS.
-        setState(() {
-          _pullDistance = _pullTriggerDistance;
-        });
-
-        // Pequena vibração ao ultrapassar o threshold.
-        HapticFeedback.lightImpact();
-
-        conversationsController.load().whenComplete(() {
-          if (!mounted) return;
-
-          // Só aqui, depois de terminar o loader/API,
-          // permitimos que o conteúdo volte para cima.
-          setState(() {
-            _pullDistance = 0.0;
-            _refreshTriggered = false;
-            _refreshInProgress = false;
-          });
-        });
-      } else if (!_refreshTriggered && !_refreshInProgress) {
-        setState(() {
-          _pullDistance = 0.0;
-        });
-      }
-    }
-
-    return false;
-  }
-
-  void _closeDrawerAnimated() => widget.onCloseAnimated();
+  void _closeDrawerAnimated() =>
+      widget.onCloseAnimated();
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
-    final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
-    final screenWidth = MediaQuery.of(context).size.width;
 
-    final bool showRefreshIndicator =
-        _pullDistance > 4 ||
-        _refreshInProgress ||
-        conversationsController.loading;
+    final pinned = conversationsController.items
+        .where(
+          (c) => c.pinned && !c.archived,
+        )
+        .toList();
+
+    final others = conversationsController.items
+        .where(
+          (c) => !c.pinned && !c.archived,
+        )
+        .toList();
+
+    final screenWidth =
+        MediaQuery.of(context).size.width;
 
     return SizedBox(
       width: screenWidth * 0.75,
@@ -408,149 +460,171 @@ class _AppDrawerState extends State<AppDrawer> {
         child: SafeArea(
           child: Stack(
             children: [
+              // ═════════════════════════════════════════════════
+              // CONTEÚDO
+              // ═════════════════════════════════════════════════
+
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 48),
+
                   Expanded(
-                    child: _buildConversationsPage(
+                    child:
+                        _buildConversationsPage(
                       context,
                       s,
                       pinned,
                       others,
                     ),
                   ),
+
                   const SizedBox(height: 112),
                 ],
               ),
 
-              // ═══════════════════════════════════════════════════
-              // APPLE REFRESH INDICATOR
-              // ═══════════════════════════════════════════════════
-
-              Positioned(
-                top: 48,
-                left: 0,
-                right: 0,
-                child: IgnorePointer(
-                  child: Center(
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 120),
-                      curve: Curves.easeOut,
-                      opacity: showRefreshIndicator ? 1.0 : 0.0,
-                      child: SizedBox(
-                        height: 38,
-                        child: Center(
-                          child: _AppleRefreshIndicator(
-                            pullDistance: _pullDistance,
-                            triggerDistance: _pullTriggerDistance,
-                            refreshing:
-                                _refreshInProgress ||
-                                conversationsController.loading,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ═══════════════════════════════════════════════════
+              // ═════════════════════════════════════════════════
               // APPBAR — TRANSPARÊNCIA PROGRESSIVA
-              // ═══════════════════════════════════════════════════
+              // ═════════════════════════════════════════════════
 
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    20,
+                    6,
+                    12,
+                    10,
+                  ),
+                  decoration:
+                      BoxDecoration(
+                    gradient:
+                        LinearGradient(
+                      begin:
+                          Alignment.topCenter,
+                      end:
+                          Alignment.bottomCenter,
                       stops: const [
                         0.0,
-                        0.32,
-                        0.68,
+                        0.30,
+                        0.65,
                         1.0,
                       ],
                       colors: [
-                        s.pageBackground.withOpacity(0.96),
-                        s.pageBackground.withOpacity(0.82),
-                        s.pageBackground.withOpacity(0.42),
-                        s.pageBackground.withOpacity(0.0),
+                        s.pageBackground
+                            .withOpacity(.96),
+                        s.pageBackground
+                            .withOpacity(.82),
+                        s.pageBackground
+                            .withOpacity(.42),
+                        s.pageBackground
+                            .withOpacity(0.0),
                       ],
                     ),
                   ),
                   child: Row(
                     children: [
                       Expanded(
-                        child: SelectionContainer.disabled(
+                        child:
+                            SelectionContainer.disabled(
                           child: Text(
                             'Nexa',
-                            style: const TextStyle(
+                            style:
+                                const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                            ).copyWith(color: s.onSurface),
+                              fontWeight:
+                                  FontWeight.w600,
+                            ).copyWith(
+                              color: s.onSurface,
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+
+                      const SizedBox(
+                        width: 12,
+                      ),
+
                       _CircleIconButton(
                         s: s,
                         assetName: 'search',
                         size: 40,
                         iconSize: 18,
-                        onTap: () => _openSearch(context),
+                        onTap: () =>
+                            _openSearch(
+                          context,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
 
-              // ═══════════════════════════════════════════════════
+              // ═════════════════════════════════════════════════
               // BOTTOM BAR — TRANSPARÊNCIA PROGRESSIVA
-              // ═══════════════════════════════════════════════════
+              // ═════════════════════════════════════════════════
 
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    16,
+                    24,
+                    16,
+                    12,
+                  ),
+                  decoration:
+                      BoxDecoration(
+                    gradient:
+                        LinearGradient(
+                      begin:
+                          Alignment.bottomCenter,
+                      end:
+                          Alignment.topCenter,
                       stops: const [
                         0.0,
-                        0.32,
-                        0.68,
+                        0.30,
+                        0.65,
                         1.0,
                       ],
                       colors: [
-                        s.pageBackground.withOpacity(0.96),
-                        s.pageBackground.withOpacity(0.82),
-                        s.pageBackground.withOpacity(0.42),
-                        s.pageBackground.withOpacity(0.0),
+                        s.pageBackground
+                            .withOpacity(.96),
+                        s.pageBackground
+                            .withOpacity(.82),
+                        s.pageBackground
+                            .withOpacity(.42),
+                        s.pageBackground
+                            .withOpacity(0.0),
                       ],
                     ),
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.center,
                     children: [
                       _NewChatPill(
                         s: s,
-                        onTap: widget.onNewChat != null
-                            ? _handleNewChat
-                            : null,
+                        onTap:
+                            widget.onNewChat != null
+                                ? _handleNewChat
+                                : null,
                       ),
+
                       const Spacer(),
+
                       _AvatarCircleButton(
                         s: s,
-                        onTap: widget.onSettings,
+                        onTap:
+                            widget.onSettings,
                       ),
                     ],
                   ),
@@ -562,6 +636,10 @@ class _AppDrawerState extends State<AppDrawer> {
       ),
     );
   }
+
+  // ══════════════════════════════════════════════════════════════
+  // CONVERSATIONS PAGE
+  // ══════════════════════════════════════════════════════════════
 
   Widget _buildConversationsPage(
     BuildContext context,
@@ -587,7 +665,10 @@ class _AppDrawerState extends State<AppDrawer> {
         conversationsController.items.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 24,
+          ),
           child: Text(
             conversationsController.error!,
             textAlign: TextAlign.center,
@@ -602,6 +683,10 @@ class _AppDrawerState extends State<AppDrawer> {
 
     final sections = <Widget>[];
 
+    // ═══════════════════════════════════════════════════════════
+    // MENU PRINCIPAL
+    // ═══════════════════════════════════════════════════════════
+
     sections.add(
       _LooseRows(
         s: s,
@@ -610,35 +695,46 @@ class _AppDrawerState extends State<AppDrawer> {
             s: s,
             assetName: 'plugins',
             label: 'Apps e plugins',
-            onTap: () => _openAllApps(context),
+            onTap: () =>
+                _openAllApps(context),
           ),
           _MenuOptionTile(
             s: s,
             assetName: 'library',
             label: 'Biblioteca',
-            onTap: () => _openLibrary(context),
+            onTap: () =>
+                _openLibrary(context),
           ),
           _MenuOptionTile(
             s: s,
             assetName: 'clock',
             label: 'Tarefas agendadas',
-            onTap: () => _openScheduledTasks(context),
+            onTap: () =>
+                _openScheduledTasks(context),
           ),
         ],
       ),
     );
 
+    // ═══════════════════════════════════════════════════════════
+    // SEM CONVERSAS
+    // ═══════════════════════════════════════════════════════════
+
     if (conversationsController.items.isEmpty &&
         !conversationsController.loading) {
       sections.add(
         Padding(
-          padding: const EdgeInsets.only(top: 24),
+          padding:
+              const EdgeInsets.only(
+            top: 24,
+          ),
           child: Center(
             child: Text(
               'Sem conversas ainda',
               style: TextStyle(
                 fontSize: 14,
-                color: s.onSurfaceVariant,
+                color:
+                    s.onSurfaceVariant,
               ),
             ),
           ),
@@ -646,15 +742,23 @@ class _AppDrawerState extends State<AppDrawer> {
       );
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // CONVERSAS FIXADAS
+    // ═══════════════════════════════════════════════════════════
+
     if (pinned.isNotEmpty) {
       sections.add(
         _ConversationGroupHeader(
           s: s,
           label: 'Conversas fixadas',
-          expanded: _pinnedExpanded,
-          onTap: () => setState(
-            () => _pinnedExpanded = !_pinnedExpanded,
-          ),
+          expanded:
+              _pinnedExpanded,
+          onTap: () {
+            setState(() {
+              _pinnedExpanded =
+                  !_pinnedExpanded;
+            });
+          },
         ),
       );
 
@@ -667,11 +771,18 @@ class _AppDrawerState extends State<AppDrawer> {
                 _ConvTile(
                   s: s,
                   item: item,
-                  active:
-                      item.id == widget.activeConversationId,
-                  onTap: () => _openConversation(item),
+                  active: item.id ==
+                      widget.activeConversationId,
+                  onTap: () =>
+                      _openConversation(
+                    item,
+                  ),
                   onOptionsAt: (pos) =>
-                      _openConvPopupAt(context, pos, item),
+                      _openConvPopupAt(
+                    context,
+                    pos,
+                    item,
+                  ),
                 ),
             ],
           ),
@@ -679,15 +790,22 @@ class _AppDrawerState extends State<AppDrawer> {
       }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // TODAS AS CONVERSAS
+    // ═══════════════════════════════════════════════════════════
+
     if (others.isNotEmpty) {
       sections.add(
         _ConversationGroupHeader(
           s: s,
           label: 'Todas as conversas',
           expanded: _allExpanded,
-          onTap: () => setState(
-            () => _allExpanded = !_allExpanded,
-          ),
+          onTap: () {
+            setState(() {
+              _allExpanded =
+                  !_allExpanded;
+            });
+          },
         ),
       );
 
@@ -700,11 +818,18 @@ class _AppDrawerState extends State<AppDrawer> {
                 _ConvTile(
                   s: s,
                   item: item,
-                  active:
-                      item.id == widget.activeConversationId,
-                  onTap: () => _openConversation(item),
+                  active: item.id ==
+                      widget.activeConversationId,
+                  onTap: () =>
+                      _openConversation(
+                    item,
+                  ),
                   onOptionsAt: (pos) =>
-                      _openConvPopupAt(context, pos, item),
+                      _openConvPopupAt(
+                    context,
+                    pos,
+                    item,
+                  ),
                 ),
             ],
           ),
@@ -712,121 +837,225 @@ class _AppDrawerState extends State<AppDrawer> {
       }
     }
 
-    // ═════════════════════════════════════════════════════════════
-    // APPLE CONTENT OFFSET
+    // ═══════════════════════════════════════════════════════════
+    // REFRESH REAL DO CUPERTINO
     //
-    // O conteúdo fica deslocado enquanto o utilizador puxa.
-    // Depois que o refresh dispara, fica FIXO no resting point
-    // até a API terminar.
-    // ═════════════════════════════════════════════════════════════
+    // O próprio sliver controla:
+    //
+    // PUXAR
+    //   ↓
+    // CONTEÚDO DESCE
+    //   ↓
+    // INDICADOR ACOMPANHA O GESTO
+    //   ↓
+    // ATINGIU O LIMITE
+    //   ↓
+    // REFRESH
+    //   ↓
+    // `load()` TERMINA
+    //   ↓
+    // CONTEÚDO SOBE NOVAMENTE
+    // ═══════════════════════════════════════════════════════════
 
-    final double contentOffset = _refreshInProgress
-        ? _pullTriggerDistance
-        : _pullDistance;
-
-    return NotificationListener<ScrollNotification>(
-      onNotification: _onScrollNotification,
-      child: AnimatedContainer(
-        duration: _refreshInProgress
-            ? Duration.zero
-            : const Duration(milliseconds: 420),
-        curve: Curves.easeOutCubic,
-        transform: Matrix4.translationValues(
-          0,
-          contentOffset,
-          0,
-        ),
-        child: ListView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
-          ),
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-          children: sections,
-        ),
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
       ),
+      slivers: [
+        CupertinoSliverRefreshControl(
+          refreshTriggerPullDistance: 94.0,
+          refreshIndicatorExtent: 68.0,
+          onRefresh: () async {
+            // Nunca tenta iniciar dois refreshes ao mesmo tempo.
+            if (conversationsController.loading) {
+              return;
+            }
+
+            // IMPORTANTE:
+            // o Future só termina depois do carregamento da API.
+            //
+            // O CupertinoSliverRefreshControl mantém
+            // o conteúdo deslocado enquanto este Future
+            // estiver pendente.
+            await conversationsController.load();
+          },
+          builder: (
+            BuildContext context,
+            RefreshIndicatorMode mode,
+            double pulledExtent,
+            double refreshTriggerPullDistance,
+            double refreshIndicatorExtent,
+          ) {
+            return _AppleSliverRefreshIndicator(
+              s: s,
+              mode: mode,
+              pulledExtent: pulledExtent,
+              refreshTriggerPullDistance:
+                  refreshTriggerPullDistance,
+              refreshIndicatorExtent:
+                  refreshIndicatorExtent,
+            );
+          },
+        ),
+
+        SliverPadding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            4,
+            0,
+            4,
+            8,
+          ),
+          sliver: SliverList(
+            delegate:
+                SliverChildListDelegate(
+              sections,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// APPLE REFRESH INDICATOR
+// APPLE-STYLE PULL INDICATOR
 // ══════════════════════════════════════════════════════════════
 
-class _AppleRefreshIndicator extends StatelessWidget {
-  final double pullDistance;
-  final double triggerDistance;
-  final bool refreshing;
+class _AppleSliverRefreshIndicator
+    extends StatelessWidget {
+  final AppColorScheme s;
+  final RefreshIndicatorMode mode;
+  final double pulledExtent;
+  final double refreshTriggerPullDistance;
+  final double refreshIndicatorExtent;
 
-  const _AppleRefreshIndicator({
-    required this.pullDistance,
-    required this.triggerDistance,
-    required this.refreshing,
+  const _AppleSliverRefreshIndicator({
+    required this.s,
+    required this.mode,
+    required this.pulledExtent,
+    required this.refreshTriggerPullDistance,
+    required this.refreshIndicatorExtent,
   });
 
   @override
   Widget build(BuildContext context) {
-    final double progress =
-        (pullDistance / triggerDistance).clamp(0.0, 1.0);
+    final bool refreshing =
+        mode == RefreshIndicatorMode.refresh ||
+        mode == RefreshIndicatorMode.done;
 
-    if (refreshing) {
-      return const CupertinoActivityIndicator(
-        radius: 11,
-      );
-    }
+    final double progress =
+        (pulledExtent /
+                refreshTriggerPullDistance)
+            .clamp(0.0, 1.0);
+
+    final double visibleProgress =
+        mode == RefreshIndicatorMode.armed
+            ? 1.0
+            : progress;
+
+    final double scale =
+        .55 + (visibleProgress * .45);
+
+    final double opacity =
+        (progress * 1.35)
+            .clamp(0.0, 1.0);
 
     return SizedBox(
-      width: 23,
-      height: 23,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size.square(23),
-            painter: _AppleRefreshPainter(
-              progress: progress,
+      height: refreshIndicatorExtent,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding:
+              const EdgeInsets.only(
+            bottom: 13,
+          ),
+          child: AnimatedOpacity(
+            duration:
+                const Duration(
+              milliseconds: 100,
+            ),
+            opacity: refreshing
+                ? 1.0
+                : opacity,
+            child: AnimatedScale(
+              duration:
+                  const Duration(
+                milliseconds: 100,
+              ),
+              scale: refreshing
+                  ? 1.0
+                  : scale,
+              child: refreshing
+                  ? CupertinoActivityIndicator(
+                      radius: 10,
+                      color:
+                          s.onSurfaceVariant,
+                    )
+                  : SizedBox(
+                      width: 23,
+                      height: 23,
+                      child: CustomPaint(
+                        painter:
+                            _ApplePullPainter(
+                          progress:
+                              visibleProgress,
+                          color:
+                              s.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
             ),
           ),
-          Opacity(
-            opacity: progress.clamp(0.0, 0.25),
-            child: const Icon(
-              CupertinoIcons.arrow_down,
-              size: 10,
-              color: CupertinoColors.systemGrey,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _AppleRefreshPainter extends CustomPainter {
-  final double progress;
+// ══════════════════════════════════════════════════════════════
+// PAINTER DO INDICADOR DURANTE O GESTO
+// ══════════════════════════════════════════════════════════════
 
-  const _AppleRefreshPainter({
+class _ApplePullPainter
+    extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _ApplePullPainter({
     required this.progress,
+    required this.color,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(
+    Canvas canvas,
+    Size size,
+  ) {
     final center = Offset(
       size.width / 2,
       size.height / 2,
     );
 
-    final radius = (size.width / 2) - 2.5;
+    final radius =
+        (size.width / 2) - 2.5;
 
     final trackPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.3
-      ..strokeCap = StrokeCap.round
-      ..color = CupertinoColors.systemGrey.withOpacity(0.20);
+      ..style =
+          PaintingStyle.stroke
+      ..strokeWidth = 2.25
+      ..strokeCap =
+          StrokeCap.round
+      ..color =
+          color.withOpacity(.18);
 
     final progressPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round
-      ..color = CupertinoColors.systemGrey;
+      ..style =
+          PaintingStyle.stroke
+      ..strokeWidth = 2.45
+      ..strokeCap =
+          StrokeCap.round
+      ..color = color;
 
     canvas.drawCircle(
       center,
@@ -834,9 +1063,15 @@ class _AppleRefreshPainter extends CustomPainter {
       trackPaint,
     );
 
-    if (progress <= 0) return;
+    if (progress <= 0) {
+      return;
+    }
 
-    const startAngle = -1.57079632679;
+    const double startAngle =
+        -1.57079632679;
+
+    final double sweepAngle =
+        6.28318530718 * progress;
 
     canvas.drawArc(
       Rect.fromCircle(
@@ -844,21 +1079,157 @@ class _AppleRefreshPainter extends CustomPainter {
         radius: radius,
       ),
       startAngle,
-      6.28318530718 * progress,
+      sweepAngle,
       false,
       progressPaint,
     );
+
+    // Pequena seta que aparece progressivamente
+    // no final do arco, dando a sensação do
+    // indicador do gesto do iOS.
+
+    if (progress > .08) {
+      final double angle =
+          startAngle + sweepAngle;
+
+      final double arrowRadius =
+          radius;
+
+      final Offset arrowCenter =
+          Offset(
+        center.dx +
+            arrowRadius *
+                MathHelper.cos(angle),
+        center.dy +
+            arrowRadius *
+                MathHelper.sin(angle),
+      );
+
+      final arrowPaint = Paint()
+        ..style =
+            PaintingStyle.stroke
+        ..strokeWidth = 2.1
+        ..strokeCap =
+            StrokeCap.round
+        ..strokeJoin =
+            StrokeJoin.round
+        ..color = color;
+
+      const double arrowSize = 3.5;
+
+      final Offset p1 = Offset(
+        arrowCenter.dx -
+            arrowSize *
+                MathHelper.cos(
+                  angle - 0.75,
+                ),
+        arrowCenter.dy -
+            arrowSize *
+                MathHelper.sin(
+                  angle - 0.75,
+                ),
+      );
+
+      final Offset p2 = Offset(
+        arrowCenter.dx,
+        arrowCenter.dy,
+      );
+
+      final Offset p3 = Offset(
+        arrowCenter.dx -
+            arrowSize *
+                MathHelper.cos(
+                  angle + 0.75,
+                ),
+        arrowCenter.dy -
+            arrowSize *
+                MathHelper.sin(
+                  angle + 0.75,
+                ),
+      );
+
+      final path = Path()
+        ..moveTo(p1.dx, p1.dy)
+        ..lineTo(p2.dx, p2.dy)
+        ..lineTo(p3.dx, p3.dy);
+
+      canvas.drawPath(
+        path,
+        arrowPaint,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _AppleRefreshPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+  bool shouldRepaint(
+    covariant _ApplePullPainter oldDelegate,
+  ) {
+    return oldDelegate.progress !=
+            progress ||
+        oldDelegate.color != color;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPER MATEMÁTICO
+// ══════════════════════════════════════════════════════════════
+
+class MathHelper {
+  static double cos(double value) =>
+      _Cos.cos(value);
+
+  static double sin(double value) =>
+      _Sin.sin(value);
+}
+
+class _Cos {
+  static double cos(double value) {
+    return _TaylorMath.cos(value);
+  }
+}
+
+class _Sin {
+  static double sin(double value) {
+    return _TaylorMath.sin(value);
+  }
+}
+
+class _TaylorMath {
+  static double cos(double x) {
+    double term = 1.0;
+    double sum = 1.0;
+
+    for (int i = 1; i <= 8; i++) {
+      term *=
+          -(x * x) /
+          ((2 * i - 1) * (2 * i));
+
+      sum += term;
+    }
+
+    return sum;
+  }
+
+  static double sin(double x) {
+    double term = x;
+    double sum = x;
+
+    for (int i = 1; i <= 8; i++) {
+      term *=
+          -(x * x) /
+          ((2 * i) * (2 * i + 1));
+
+      sum += term;
+    }
+
+    return sum;
   }
 }
 
 // ── Opção de menu (Apps e plugins / Biblioteca / Tarefas agendadas) ──
 
-class _MenuOptionTile extends StatefulWidget {
+class _MenuOptionTile
+    extends StatefulWidget {
   final AppColorScheme s;
   final String assetName;
   final String label;
@@ -872,35 +1243,49 @@ class _MenuOptionTile extends StatefulWidget {
   });
 
   @override
-  State<_MenuOptionTile> createState() => _MenuOptionTileState();
+  State<_MenuOptionTile> createState() =>
+      _MenuOptionTileState();
 }
 
-class _MenuOptionTileState extends State<_MenuOptionTile> {
+class _MenuOptionTileState
+    extends State<_MenuOptionTile> {
   bool _h = false;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final s = widget.s;
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _h = true),
-      onTapCancel: () => setState(() => _h = false),
-      onTapUp: (_) => setState(() => _h = false),
+      behavior:
+          HitTestBehavior.opaque,
+      onTapDown: (_) =>
+          setState(() => _h = true),
+      onTapCancel: () =>
+          setState(() => _h = false),
+      onTapUp: (_) =>
+          setState(() => _h = false),
       onTap: () {
         HapticFeedback.lightImpact();
         widget.onTap();
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(
+        margin:
+            const EdgeInsets.symmetric(
           horizontal: 8,
           vertical: 2,
         ),
-        decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+        decoration:
+            BoxDecoration(
+          color: _h
+              ? s.hover
+              : Colors.transparent,
+          borderRadius:
+              BorderRadius.circular(14),
         ),
-        padding: const EdgeInsets.symmetric(
+        padding:
+            const EdgeInsets.symmetric(
           horizontal: 10,
           vertical: 12,
         ),
@@ -913,16 +1298,19 @@ class _MenuOptionTileState extends State<_MenuOptionTile> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: SelectionContainer.disabled(
+              child:
+                  SelectionContainer.disabled(
                 child: Text(
                   widget.label,
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w500,
+                    fontWeight:
+                        FontWeight.w500,
                     color: s.onSurface,
                   ),
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  overflow:
+                      TextOverflow.ellipsis,
                 ),
               ),
             ),
@@ -935,7 +1323,8 @@ class _MenuOptionTileState extends State<_MenuOptionTile> {
 
 // ── Cabeçalho de grupo expansível ─────────────────────────────
 
-class _ConversationGroupHeader extends StatelessWidget {
+class _ConversationGroupHeader
+    extends StatelessWidget {
   final AppColorScheme s;
   final String label;
   final bool expanded;
@@ -951,38 +1340,51 @@ class _ConversationGroupHeader extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: interactive ? onTap : null,
+      behavior:
+          HitTestBehavior.opaque,
+      onTap:
+          interactive ? onTap : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
+        padding:
+            const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 10,
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             SelectionContainer.disabled(
               child: Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight:
+                      FontWeight.w600,
                   letterSpacing: 0.4,
-                  color: s.onSurfaceVariant,
+                  color:
+                      s.onSurfaceVariant,
                 ),
               ),
             ),
             if (interactive) ...[
               const SizedBox(width: 8),
               AnimatedRotation(
-                turns: expanded ? 0.5 : 0,
-                duration: const Duration(milliseconds: 200),
+                turns:
+                    expanded ? 0.5 : 0,
+                duration:
+                    const Duration(
+                  milliseconds: 200,
+                ),
                 child: AppIcon(
                   'chevron_down',
                   size: 14,
-                  color: s.onSurfaceVariant,
+                  color:
+                      s.onSurfaceVariant,
                 ),
               ),
             ],
@@ -995,7 +1397,8 @@ class _ConversationGroupHeader extends StatelessWidget {
 
 // ── Avatar circular com anel ────────────────────────────────
 
-class _AvatarCircleButton extends StatefulWidget {
+class _AvatarCircleButton
+    extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
 
@@ -1017,17 +1420,28 @@ class _AvatarCircleButtonState
   static const double _ringWidth = 3;
   static const double _fontSize = 17;
 
-  Uint8List? _decodeAvatar(String raw) {
-    if (raw.startsWith('http://') ||
-        raw.startsWith('https://')) {
+  Uint8List? _decodeAvatar(
+    String raw,
+  ) {
+    if (raw.startsWith(
+          'http://',
+        ) ||
+        raw.startsWith(
+          'https://',
+        )) {
       return null;
     }
 
     try {
-      final commaIdx = raw.indexOf(',');
+      final commaIdx =
+          raw.indexOf(',');
+
       final b64 =
-          raw.startsWith('data:') && commaIdx != -1
-              ? raw.substring(commaIdx + 1)
+          raw.startsWith('data:') &&
+                  commaIdx != -1
+              ? raw.substring(
+                  commaIdx + 1,
+                )
               : raw;
 
       return base64Decode(b64);
@@ -1047,49 +1461,65 @@ class _AvatarCircleButtonState
       initial,
       style: TextStyle(
         color: s.onPrimary,
-        fontWeight: FontWeight.w700,
+        fontWeight:
+            FontWeight.w700,
         fontSize: fontSize,
       ),
     );
 
-    if (avatar == null || avatar.isEmpty) {
+    if (avatar == null ||
+        avatar.isEmpty) {
       return Container(
         color: s.primary,
-        alignment: Alignment.center,
+        alignment:
+            Alignment.center,
         child: fallback,
       );
     }
 
-    if (avatar.startsWith('http://') ||
-        avatar.startsWith('https://')) {
+    if (avatar.startsWith(
+          'http://',
+        ) ||
+        avatar.startsWith(
+          'https://',
+        )) {
       return Image.network(
         avatar,
         width: size,
         height: size,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => Container(
+        errorBuilder:
+            (_, __, ___) =>
+                Container(
           color: s.primary,
-          alignment: Alignment.center,
+          alignment:
+              Alignment.center,
           child: fallback,
         ),
-        loadingBuilder: (_, child, progress) =>
-            progress == null
-                ? child
-                : Container(
-                    color: s.primary,
-                    alignment: Alignment.center,
-                    child: fallback,
-                  ),
+        loadingBuilder:
+            (_, child, progress) =>
+                progress == null
+                    ? child
+                    : Container(
+                        color:
+                            s.primary,
+                        alignment:
+                            Alignment.center,
+                        child:
+                            fallback,
+                      ),
       );
     }
 
-    final bytes = _decodeAvatar(avatar);
+    final bytes =
+        _decodeAvatar(avatar);
 
     if (bytes == null) {
       return Container(
         color: s.primary,
-        alignment: Alignment.center,
+        alignment:
+            Alignment.center,
         child: fallback,
       );
     }
@@ -1100,61 +1530,91 @@ class _AvatarCircleButtonState
       height: size,
       fit: BoxFit.cover,
       gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => Container(
+      errorBuilder:
+          (_, __, ___) =>
+              Container(
         color: s.primary,
-        alignment: Alignment.center,
+        alignment:
+            Alignment.center,
         child: fallback,
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final s = widget.s;
-    final user = authController.user;
-    final name = user?.name ?? 'Utilizador';
-    final avatar = user?.avatar;
+    final user =
+        authController.user;
+
+    final name =
+        user?.name ?? 'Utilizador';
+
+    final avatar =
+        user?.avatar;
+
     final initial =
-        name.isNotEmpty ? name[0].toUpperCase() : 'U';
+        name.isNotEmpty
+            ? name[0].toUpperCase()
+            : 'U';
 
     final innerSize =
-        _buttonSize - (_ringWidth * 2) - 2;
+        _buttonSize -
+        (_ringWidth * 2) -
+        2;
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _p = true),
-      onTapCancel: () => setState(() => _p = false),
-      onTapUp: (_) => setState(() => _p = false),
+      behavior:
+          HitTestBehavior.opaque,
+      onTapDown: (_) =>
+          setState(() => _p = true),
+      onTapCancel: () =>
+          setState(() => _p = false),
+      onTapUp: (_) =>
+          setState(() => _p = false),
       onTap: () {
-        HapticFeedback.lightImpact();
+        HapticFeedback
+            .lightImpact();
         widget.onTap();
       },
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
-        duration: const Duration(milliseconds: 110),
+        duration:
+            const Duration(
+          milliseconds: 110,
+        ),
         curve: Curves.easeOut,
         child: Container(
           width: _buttonSize,
           height: _buttonSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
+          alignment:
+              Alignment.center,
+          decoration:
+              BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: _p ? s.hover : s.outline,
+              color: _p
+                  ? s.hover
+                  : s.outline,
               width: _ringWidth,
             ),
-            boxShadow: s.cardShadow,
+            boxShadow:
+                s.cardShadow,
           ),
           child: ClipOval(
             child: SizedBox(
               width: innerSize,
               height: innerSize,
-              child: _buildAvatarContent(
+              child:
+                  _buildAvatarContent(
                 s,
                 avatar,
                 initial,
                 size: innerSize,
-                fontSize: _fontSize,
+                fontSize:
+                    _fontSize,
               ),
             ),
           ),
@@ -1166,7 +1626,8 @@ class _AvatarCircleButtonState
 
 // ── Rota de transição por fade ────────────────────────────────
 
-class _FadePageRoute<T> extends PageRouteBuilder<T> {
+class _FadePageRoute<T>
+    extends PageRouteBuilder<T> {
   final WidgetBuilder builder;
 
   _FadePageRoute({
@@ -1174,16 +1635,28 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
   }) : super(
           opaque: true,
           transitionDuration:
-              const Duration(milliseconds: 240),
+              const Duration(
+            milliseconds: 240,
+          ),
           reverseTransitionDuration:
-              const Duration(milliseconds: 200),
-          pageBuilder:
-              (context, animation, secondaryAnimation) =>
-                  builder(context),
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) {
+              const Duration(
+            milliseconds: 200,
+          ),
+          pageBuilder: (
+            context,
+            animation,
+            secondaryAnimation,
+          ) =>
+              builder(context),
+          transitionsBuilder: (
+            context,
+            animation,
+            secondaryAnimation,
+            child,
+          ) {
             return FadeTransition(
-              opacity: CurvedAnimation(
+              opacity:
+                  CurvedAnimation(
                 parent: animation,
                 curve: Curves.easeOut,
               ),
@@ -1195,7 +1668,8 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
 
 // ── Botão circular genérico ───────────────────────────────────
 
-class _CircleIconButton extends StatefulWidget {
+class _CircleIconButton
+    extends StatefulWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback? onTap;
@@ -1224,51 +1698,79 @@ class _CircleIconButtonState
   bool _p = false;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final s = widget.s;
 
-    final backgroundColor = widget.filled
-        ? s.primary
-        : _p
-            ? s.pressed
-            : s.cardBackground;
+    final backgroundColor =
+        widget.filled
+            ? s.primary
+            : _p
+                ? s.pressed
+                : s.cardBackground;
 
     final iconColor =
-        widget.filled ? s.onPrimary : s.onSurface;
+        widget.filled
+            ? s.onPrimary
+            : s.onSurface;
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior:
+          HitTestBehavior.opaque,
       onTapDown: (d) {
-        setState(() => _p = true);
-        widget.onTapDown?.call(d.globalPosition);
+        setState(
+          () => _p = true,
+        );
+
+        widget.onTapDown
+            ?.call(
+          d.globalPosition,
+        );
       },
       onTapCancel: () =>
-          setState(() => _p = false),
+          setState(
+            () => _p = false,
+          ),
       onTapUp: (_) {
-        setState(() => _p = false);
+        setState(
+          () => _p = false,
+        );
+
         widget.onTap?.call();
       },
       child: AnimatedScale(
         scale: _p ? 0.92 : 1.0,
         duration:
-            const Duration(milliseconds: 110),
+            const Duration(
+          milliseconds: 110,
+        ),
         curve: Curves.easeOut,
         child: AnimatedContainer(
           duration:
-              const Duration(milliseconds: 110),
+              const Duration(
+            milliseconds: 110,
+          ),
           width: widget.size,
           height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            shape: BoxShape.circle,
+          alignment:
+              Alignment.center,
+          decoration:
+              BoxDecoration(
+            color:
+                backgroundColor,
+            shape:
+                BoxShape.circle,
             boxShadow:
-                widget.filled ? null : s.cardShadow,
+                widget.filled
+                    ? null
+                    : s.cardShadow,
           ),
           child: AppIcon(
             widget.assetName,
             color: iconColor,
-            size: widget.iconSize,
+            size:
+                widget.iconSize,
           ),
         ),
       ),
@@ -1278,7 +1780,8 @@ class _CircleIconButtonState
 
 // ── Grupo de linhas soltas ────────────────────────────────────
 
-class _LooseRows extends StatelessWidget {
+class _LooseRows
+    extends StatelessWidget {
   final AppColorScheme s;
   final List<Widget> children;
 
@@ -1288,7 +1791,9 @@ class _LooseRows extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Column(
       children: children,
     );
@@ -1297,12 +1802,14 @@ class _LooseRows extends StatelessWidget {
 
 // ── Conversa individual ───────────────────────────────────────
 
-class _ConvTile extends StatefulWidget {
+class _ConvTile
+    extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool active;
   final VoidCallback onTap;
-  final ValueChanged<Offset> onOptionsAt;
+  final ValueChanged<Offset>
+      onOptionsAt;
 
   const _ConvTile({
     required this.s,
@@ -1313,10 +1820,12 @@ class _ConvTile extends StatefulWidget {
   });
 
   @override
-  State<_ConvTile> createState() => _ConvTileState();
+  State<_ConvTile> createState() =>
+      _ConvTileState();
 }
 
-class _ConvTileState extends State<_ConvTile> {
+class _ConvTileState
+    extends State<_ConvTile> {
   bool _h = false;
 
   void _handleTap() {
@@ -1325,13 +1834,18 @@ class _ConvTileState extends State<_ConvTile> {
   }
 
   void _handleLongPressStart(
-      LongPressStartDetails d) {
+    LongPressStartDetails d,
+  ) {
     HapticFeedback.lightImpact();
-    widget.onOptionsAt(d.globalPosition);
+    widget.onOptionsAt(
+      d.globalPosition,
+    );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final s = widget.s;
 
     final Color bg;
@@ -1339,7 +1853,9 @@ class _ConvTileState extends State<_ConvTile> {
     if (widget.active) {
       bg = s.isDark
           ? s.hover
-          : s.primary.withOpacity(0.1);
+          : s.primary.withOpacity(
+              0.1,
+            );
     } else if (_h) {
       bg = s.hover;
     } else {
@@ -1347,40 +1863,55 @@ class _ConvTileState extends State<_ConvTile> {
     }
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior:
+          HitTestBehavior.opaque,
       onTapDown: (_) =>
-          setState(() => _h = true),
+          setState(
+            () => _h = true,
+          ),
       onTapCancel: () =>
-          setState(() => _h = false),
+          setState(
+            () => _h = false,
+          ),
       onTapUp: (_) =>
-          setState(() => _h = false),
+          setState(
+            () => _h = false,
+          ),
       onTap: _handleTap,
-      onLongPressStart: _handleLongPressStart,
+      onLongPressStart:
+          _handleLongPressStart,
       child: Container(
-        margin: const EdgeInsets.symmetric(
+        margin:
+            const EdgeInsets.symmetric(
           horizontal: 8,
           vertical: 2,
         ),
-        decoration: BoxDecoration(
+        decoration:
+            BoxDecoration(
           color: bg,
           borderRadius:
-              BorderRadius.circular(14),
+              BorderRadius.circular(
+            14,
+          ),
         ),
-        padding: const EdgeInsets.symmetric(
+        padding:
+            const EdgeInsets.symmetric(
           horizontal: 10,
           vertical: 12,
         ),
         child: Row(
           children: [
             Expanded(
-              child: SelectionContainer.disabled(
+              child:
+                  SelectionContainer.disabled(
                 child: Text(
                   widget.item.title,
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: widget.active
-                        ? FontWeight.w600
-                        : FontWeight.w400,
+                    fontWeight:
+                        widget.active
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                     color: widget.active
                         ? s.navLabelActive
                         : s.onSurface,
@@ -1410,38 +1941,51 @@ void showConversationOptionsPopupAt(
   required VoidCallback onRename,
   required VoidCallback onDelete,
 }) async {
-  final overlayState = Overlay.of(context);
+  final overlayState =
+      Overlay.of(context);
+
   final overlayBox =
-      overlayState.context.findRenderObject()
+      overlayState.context
+              .findRenderObject()
           as RenderBox;
-  final screenSize = overlayBox.size;
+
+  final screenSize =
+      overlayBox.size;
 
   final RelativeRect menuPosition =
       RelativeRect.fromLTRB(
     position.dx,
     position.dy,
-    screenSize.width - position.dx,
-    screenSize.height - position.dy,
+    screenSize.width -
+        position.dx,
+    screenSize.height -
+        position.dy,
   );
 
   final result =
-      await showMenu<_ConversationPopupAction>(
+      await showMenu<
+          _ConversationPopupAction>(
     context: context,
     position: menuPosition,
-    color: s.cardBackground,
-    shape: RoundedRectangleBorder(
+    color:
+        s.cardBackground,
+    shape:
+        RoundedRectangleBorder(
       borderRadius:
-          BorderRadius.circular(22),
+          BorderRadius.circular(
+        22,
+      ),
       side: BorderSide(
-        color:
-            s.outline.withOpacity(0.25),
+        color: s.outline
+            .withOpacity(.25),
         width: 1.0,
       ),
     ),
     items: [
       PopupMenuItem(
         value:
-            _ConversationPopupAction.open,
+            _ConversationPopupAction
+                .open,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
@@ -1451,7 +1995,8 @@ void showConversationOptionsPopupAt(
       ),
       PopupMenuItem(
         value:
-            _ConversationPopupAction.togglePin,
+            _ConversationPopupAction
+                .togglePin,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
@@ -1465,7 +2010,8 @@ void showConversationOptionsPopupAt(
       ),
       PopupMenuItem(
         value:
-            _ConversationPopupAction.rename,
+            _ConversationPopupAction
+                .rename,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
@@ -1475,7 +2021,8 @@ void showConversationOptionsPopupAt(
       ),
       PopupMenuItem(
         value:
-            _ConversationPopupAction.delete,
+            _ConversationPopupAction
+                .delete,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
@@ -1493,12 +2040,15 @@ void showConversationOptionsPopupAt(
     case _ConversationPopupAction.open:
       onOpen();
       break;
+
     case _ConversationPopupAction.togglePin:
       onTogglePin();
       break;
+
     case _ConversationPopupAction.rename:
       onRename();
       break;
+
     case _ConversationPopupAction.delete:
       onDelete();
       break;
@@ -1512,21 +2062,29 @@ Widget _buildPopupItem(
   bool destructive = false,
 }) {
   final color =
-      destructive ? s.error : s.onSurface;
+      destructive
+          ? s.error
+          : s.onSurface;
 
   return Container(
-    margin: const EdgeInsets.symmetric(
+    margin:
+        const EdgeInsets.symmetric(
       horizontal: 6,
       vertical: 1,
     ),
-    padding: const EdgeInsets.symmetric(
+    padding:
+        const EdgeInsets.symmetric(
       horizontal: 12,
       vertical: 10,
     ),
-    decoration: BoxDecoration(
+    decoration:
+        BoxDecoration(
       borderRadius:
-          BorderRadius.circular(999),
-      color: Colors.transparent,
+          BorderRadius.circular(
+        999,
+      ),
+      color:
+          Colors.transparent,
     ),
     child: Row(
       children: [
@@ -1537,13 +2095,15 @@ Widget _buildPopupItem(
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: SelectionContainer.disabled(
+          child:
+              SelectionContainer.disabled(
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 14,
                 color: color,
-                fontWeight: FontWeight.w500,
+                fontWeight:
+                    FontWeight.w500,
               ),
             ),
           ),
@@ -1570,42 +2130,56 @@ void showAccountOptionsPopupAt(
   required VoidCallback onOpenSettings,
   required VoidCallback onLogout,
 }) async {
-  final overlayState = Overlay.of(context);
+  final overlayState =
+      Overlay.of(context);
+
   final overlayBox =
-      overlayState.context.findRenderObject()
+      overlayState.context
+              .findRenderObject()
           as RenderBox;
-  final screenSize = overlayBox.size;
+
+  final screenSize =
+      overlayBox.size;
 
   final RelativeRect menuPosition =
       RelativeRect.fromLTRB(
     position.dx,
     position.dy,
-    screenSize.width - position.dx,
-    screenSize.height - position.dy,
+    screenSize.width -
+        position.dx,
+    screenSize.height -
+        position.dy,
   );
 
   final result =
       await showMenu<_AccountPopupAction>(
     context: context,
     position: menuPosition,
-    color: s.cardBackground,
-    shape: RoundedRectangleBorder(
+    color:
+        s.cardBackground,
+    shape:
+        RoundedRectangleBorder(
       borderRadius:
-          BorderRadius.circular(22),
+          BorderRadius.circular(
+        22,
+      ),
       side: BorderSide(
-        color:
-            s.outline.withOpacity(0.25),
+        color: s.outline
+            .withOpacity(.25),
         width: 1.0,
       ),
     ),
     items: [
       PopupMenuItem(
         value:
-            _AccountPopupAction.toggleTheme,
+            _AccountPopupAction
+                .toggleTheme,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
-          s.isDark ? 'sun' : 'moon',
+          s.isDark
+              ? 'sun'
+              : 'moon',
           s.isDark
               ? 'Modo claro'
               : 'Modo escuro',
@@ -1613,7 +2187,8 @@ void showAccountOptionsPopupAt(
       ),
       PopupMenuItem(
         value:
-            _AccountPopupAction.openSettings,
+            _AccountPopupAction
+                .openSettings,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
@@ -1623,7 +2198,8 @@ void showAccountOptionsPopupAt(
       ),
       PopupMenuItem(
         value:
-            _AccountPopupAction.logout,
+            _AccountPopupAction
+                .logout,
         padding: EdgeInsets.zero,
         child: _buildPopupItem(
           s,
@@ -1638,12 +2214,16 @@ void showAccountOptionsPopupAt(
   if (result == null) return;
 
   switch (result) {
-    case _AccountPopupAction.toggleTheme:
+    case _AccountPopupAction
+          .toggleTheme:
       onToggleTheme();
       break;
-    case _AccountPopupAction.openSettings:
+
+    case _AccountPopupAction
+          .openSettings:
       onOpenSettings();
       break;
+
     case _AccountPopupAction.logout:
       onLogout();
       break;
@@ -1671,26 +2251,32 @@ class _DeleteConversationSheet
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding:
+          const EdgeInsets.fromLTRB(
         20,
         12,
         20,
         20,
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize:
+            MainAxisSize.min,
         children: [
           SelectionContainer.disabled(
             child: Text(
               'Eliminar "$title"?',
-              textAlign: TextAlign.center,
+              textAlign:
+                  TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight:
                     FontWeight.w500,
-                color: s.onSurface,
+                color:
+                    s.onSurface,
               ),
             ),
           ),
@@ -1698,21 +2284,26 @@ class _DeleteConversationSheet
           Row(
             children: [
               Expanded(
-                child: _SheetActionButton(
+                child:
+                    _SheetActionButton(
                   s: s,
                   label: 'Cancelar',
                   filled: false,
                   onTap: () =>
-                      Navigator.pop(context),
+                      Navigator.pop(
+                    context,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _SheetActionButton(
+                child:
+                    _SheetActionButton(
                   s: s,
                   label: 'Eliminar',
                   filled: true,
-                  onTap: onConfirm,
+                  onTap:
+                      onConfirm,
                 ),
               ),
             ],
@@ -1747,17 +2338,26 @@ class _SheetActionButtonState
   bool _p = false;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final s = widget.s;
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior:
+          HitTestBehavior.opaque,
       onTapDown: (_) =>
-          setState(() => _p = true),
+          setState(
+            () => _p = true,
+          ),
       onTapCancel: () =>
-          setState(() => _p = false),
+          setState(
+            () => _p = false,
+          ),
       onTapUp: (_) =>
-          setState(() => _p = false),
+          setState(
+            () => _p = false,
+          ),
       onTap: () {
         HapticFeedback.lightImpact();
         widget.onTap();
@@ -1765,22 +2365,29 @@ class _SheetActionButtonState
       child: AnimatedScale(
         scale: _p ? 0.96 : 1.0,
         duration:
-            const Duration(milliseconds: 110),
+            const Duration(
+          milliseconds: 110,
+        ),
         curve: Curves.easeOut,
         child: Container(
           padding:
               const EdgeInsets.symmetric(
             vertical: 13,
           ),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
+          alignment:
+              Alignment.center,
+          decoration:
+              BoxDecoration(
             color: widget.filled
                 ? s.error
                 : s.hover,
             borderRadius:
-                BorderRadius.circular(999),
+                BorderRadius.circular(
+              999,
+            ),
           ),
-          child: SelectionContainer.disabled(
+          child:
+              SelectionContainer.disabled(
             child: Text(
               widget.label,
               style: TextStyle(
@@ -1805,9 +2412,12 @@ Future<void> showRenameSheet(
   BuildContext context,
   AppColorScheme s, {
   required String currentTitle,
-  required ValueChanged<String> onConfirm,
-  String title = 'Renomear conversa',
-  String hint = 'Título da conversa',
+  required ValueChanged<String>
+      onConfirm,
+  String title =
+      'Renomear conversa',
+  String hint =
+      'Título da conversa',
 }) {
   final ctrl =
       TextEditingController(
@@ -1818,12 +2428,13 @@ Future<void> showRenameSheet(
     context: context,
     s: s,
     child: Builder(
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom:
-              MediaQuery.of(ctx)
-                  .viewInsets
-                  .bottom,
+      builder: (ctx) =>
+          Padding(
+        padding:
+            EdgeInsets.only(
+          bottom: MediaQuery.of(
+            ctx,
+          ).viewInsets.bottom,
         ),
         child: Padding(
           padding:
@@ -1842,38 +2453,47 @@ Future<void> showRenameSheet(
               SelectionContainer.disabled(
                 child: Text(
                   title,
-                  style: TextStyle(
+                  style:
+                      TextStyle(
                     fontSize: 15,
                     fontWeight:
                         FontWeight.w600,
-                    color: s.onSurface,
+                    color:
+                        s.onSurface,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(
+                height: 12,
+              ),
               TextField(
                 controller: ctrl,
                 autofocus: true,
                 style: TextStyle(
                   fontSize: 15,
-                  color: s.onSurface,
+                  color:
+                      s.onSurface,
                 ),
                 decoration:
                     InputDecoration(
                   isDense: true,
                   hintText: hint,
-                  hintStyle: TextStyle(
+                  hintStyle:
+                      TextStyle(
                     fontSize: 14,
                     color:
                         s.onSurfaceVariant,
                   ),
                   filled: true,
-                  fillColor: s.hover,
+                  fillColor:
+                      s.hover,
                   border:
                       OutlineInputBorder(
                     borderRadius:
                         BorderRadius
-                            .circular(12),
+                            .circular(
+                      12,
+                    ),
                     borderSide:
                         BorderSide.none,
                   ),
@@ -1884,22 +2504,33 @@ Future<void> showRenameSheet(
                     vertical: 12,
                   ),
                 ),
-                onSubmitted: (v) {
+                onSubmitted:
+                    (v) {
                   Navigator.pop(ctx);
-                  onConfirm(v.trim());
+                  onConfirm(
+                    v.trim(),
+                  );
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(
+                height: 16,
+              ),
               GestureDetector(
                 onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.pop(ctx);
+                  HapticFeedback
+                      .lightImpact();
+
+                  Navigator.pop(
+                    ctx,
+                  );
+
                   onConfirm(
                     ctrl.text.trim(),
                   );
                 },
                 child: Container(
-                  width: double.infinity,
+                  width:
+                      double.infinity,
                   padding:
                       const EdgeInsets
                           .symmetric(
@@ -1909,7 +2540,8 @@ Future<void> showRenameSheet(
                       Alignment.center,
                   decoration:
                       BoxDecoration(
-                    color: s.primary,
+                    color:
+                        s.primary,
                     borderRadius:
                         BorderRadius
                             .circular(
@@ -1921,10 +2553,13 @@ Future<void> showRenameSheet(
                           .disabled(
                     child: Text(
                       'Confirmar',
-                      style: TextStyle(
-                        fontSize: 15,
+                      style:
+                          TextStyle(
+                        fontSize:
+                            15,
                         fontWeight:
-                            FontWeight.w600,
+                            FontWeight
+                                .w600,
                         color:
                             s.onPrimary,
                       ),
@@ -1962,18 +2597,26 @@ class _NewChatPillState
   bool _p = false;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final s = widget.s;
 
     return GestureDetector(
       behavior:
           HitTestBehavior.opaque,
       onTapDown: (_) =>
-          setState(() => _p = true),
+          setState(
+            () => _p = true,
+          ),
       onTapCancel: () =>
-          setState(() => _p = false),
+          setState(
+            () => _p = false,
+          ),
       onTapUp: (_) =>
-          setState(() => _p = false),
+          setState(
+            () => _p = false,
+          ),
       onTap: () {
         HapticFeedback.lightImpact();
         widget.onTap?.call();
@@ -1981,22 +2624,30 @@ class _NewChatPillState
       child: AnimatedScale(
         scale: _p ? 0.98 : 1.0,
         duration:
-            const Duration(milliseconds: 110),
+            const Duration(
+          milliseconds: 110,
+        ),
         curve: Curves.easeOut,
         child: IntrinsicWidth(
           child: AnimatedContainer(
             duration:
-                const Duration(milliseconds: 120),
+                const Duration(
+              milliseconds: 120,
+            ),
             height: 52,
-            decoration: BoxDecoration(
+            decoration:
+                BoxDecoration(
               color: s.primary,
               borderRadius:
-                  BorderRadius.circular(999),
+                  BorderRadius.circular(
+                999,
+              ),
               boxShadow:
                   s.cardShadow,
             ),
             padding:
-                const EdgeInsets.symmetric(
+                const EdgeInsets
+                    .symmetric(
               horizontal: 18,
             ),
             child: Row(
@@ -2005,18 +2656,25 @@ class _NewChatPillState
               children: [
                 const AppIcon(
                   'new_chat',
-                  color: Colors.white,
+                  color:
+                      Colors.white,
                   size: 18,
                 ),
-                const SizedBox(width: 8),
-                const SelectionContainer.disabled(
+                const SizedBox(
+                  width: 8,
+                ),
+                const SelectionContainer
+                    .disabled(
                   child: Text(
                     'Conversar',
-                    style: TextStyle(
+                    style:
+                        TextStyle(
                       fontSize: 15,
                       fontWeight:
-                          FontWeight.w600,
-                      color: Colors.white,
+                          FontWeight
+                              .w600,
+                      color:
+                          Colors.white,
                     ),
                   ),
                 ),
