@@ -9,6 +9,8 @@
 // que separa resultados locais (visual/document/images) de
 // passthrough, e SEMPRE volta a chamar o modelo depois de resultados
 // locais — nunca mais fecha a mensagem só com o cartão, sem texto.
+// Adicionalmente, os cartões locais agora são injetados diretamente
+// no streaming notifier, eliminando a bolha intermédia prematura.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -91,6 +93,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   String? _activeToolCallLabel;
   String? _activeToolCallName;
+  String  _pendingLocalMarkers = '';
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
@@ -196,6 +199,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _openWidgetDoneNotifier.value = false;
     _activeToolCallLabel = null;
     _activeToolCallName = null;
+    _pendingLocalMarkers = '';
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
     _notifyHeader();
@@ -271,6 +275,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   /// UI já sabe renderizar) do passthrough (vai para o modelo).
   /// Independentemente da mistura, SEMPRE volta a chamar o modelo no
   /// fim — nunca fecha a mensagem só com cartões, sem nenhum texto.
+  /// Os cartões locais são injetados diretamente no streaming
+  /// notifier, para aparecerem imediatamente dentro da MESMA bolha
+  /// de streaming que continuará com o texto do modelo.
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
     if (calls.isEmpty) return;
     setState(() {
@@ -289,18 +296,20 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
     if (!mounted) return;
 
-    // Mostra os cartões locais imediatamente na conversa (como uma
-    // mensagem assistant intermédia), antes de esperar pela segunda
-    // resposta do modelo — feedback visual instantâneo.
+    // Em vez de adicionar uma mensagem assistant intermédia própria
+    // (o que criava uma bolha extra com a sua própria barra de ações
+    // antes da resposta terminar), injetamos os marcadores locais
+    // diretamente no notifier de streaming. Isto faz os cartões
+    // aparecerem de imediato dentro da MESMA bolha que vai continuar
+    // a crescer com o texto do modelo — uma única bolha, uma única
+    // barra de ações, no fim.
     final localMarkersText = buildLocalResultMarkersText(outcome);
     setState(() {
       _activeToolCallLabel = null;
       _activeToolCallName = null;
-      if (localMarkersText.isNotEmpty) {
-        _msgs.add(ChatMessage(role: 'assistant', content: localMarkersText));
-      }
     });
     if (localMarkersText.isNotEmpty) {
+      _streamingTextNotifier.value = localMarkersText;
       _scrollToEnd();
     }
 
@@ -310,6 +319,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _sending = false;
         _msgs.add(const ChatMessage(role: 'assistant', content: 'Sessão expirada. Volta a iniciar sessão.'));
       });
+      _streamingTextNotifier.value = '';
+      _pendingLocalMarkers = '';
       return;
     }
 
@@ -317,13 +328,19 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     // histórico — mesmo quando todos os resultados já foram
     // renderizados localmente, para o modelo poder comentar/explicar
     // o que acabou de ser gerado (ex: interpretar um gráfico).
+    // Já não excluímos nenhuma mensagem local de _msgs, porque
+    // nenhuma foi adicionada — os marcadores vivem apenas no notifier
+    // de streaming até à finalização.
     final historyWithToolResults = [
-      ..._msgs.length > 0 && localMarkersText.isNotEmpty
-          ? _msgs.sublist(0, _msgs.length - 1) // exclui a msg local que acabámos de adicionar
-          : _msgs,
+      ..._msgs,
       assistantToolCallMsg,
       ...outcome.toolResultMessages,
     ];
+
+    // Guardamos os marcadores locais para os juntar ao texto final
+    // do modelo quando o stream terminar (ChatDoneEvent) — ver
+    // _handleStreamEvent, onde _pendingLocalMarkers é consumido.
+    _pendingLocalMarkers = localMarkersText;
 
     _streamSub?.cancel();
     _streamSub = AiApiService.streamChat(
@@ -386,6 +403,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _openWidgetDoneNotifier.value = false;
     _activeToolCallLabel = null;
     _activeToolCallName = null;
+    _pendingLocalMarkers = '';
     if (isFirst) {
       widget.onFirstMessage();
       widget.onHasMessagesChanged?.call(true);
@@ -436,7 +454,16 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _handleToolCalls(calls, isFirst, originalUserText);
         break;
       case ChatDoneEvent(fullText: final fullText):
-        final finalText = fullText.isNotEmpty ? fullText : _streamingTextNotifier.value;
+        final modelText = fullText.isNotEmpty ? fullText : _streamingTextNotifier.value;
+        // Junta os marcadores locais (cartões de imagem/documento/visual
+        // já resolvidos por processToolCalls) com o texto que o modelo
+        // escreveu a seguir — para ficarem numa ÚNICA mensagem final,
+        // com uma única bolha e uma única barra de ações no fim.
+        final finalText = _pendingLocalMarkers.isNotEmpty
+            ? '$_pendingLocalMarkers\n$modelText'
+            : modelText;
+        _pendingLocalMarkers = '';
+
         final scan = markCanvasItems(finalText, _nextCanvasId);
         final thinkingText = _streamingThinkNotifier.value != null ? cleanAiText(_streamingThinkNotifier.value!) : '';
         final bodyWithCanvasBlocks = resolveCanvasMarkersToBlocks(scan.textWithMarkers, scan.items);
@@ -488,6 +515,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         });
         _streamingTextNotifier.value = '';
         _streamingThinkNotifier.value = null;
+        _pendingLocalMarkers = '';
         _scrollToEnd();
         break;
       case ChatCreditsExhaustedEvent():
@@ -501,6 +529,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         });
         _streamingTextNotifier.value = '';
         _streamingThinkNotifier.value = null;
+        _pendingLocalMarkers = '';
         _scrollToEnd();
         authController.refreshBalance();
         break;
@@ -517,6 +546,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     });
     _streamingTextNotifier.value = '';
     _streamingThinkNotifier.value = null;
+    _pendingLocalMarkers = '';
     _scrollToEnd();
   }
 
@@ -542,6 +572,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     });
     _streamingTextNotifier.value = '';
     _streamingThinkNotifier.value = null;
+    _pendingLocalMarkers = '';
     _notifyHeader();
     _persistConversation();
   }
@@ -774,6 +805,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _openWidgetDoneNotifier.value = false;
         _activeToolCallLabel = null;
         _activeToolCallName = null;
+        _pendingLocalMarkers = '';
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -797,6 +829,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _openWidgetDoneNotifier.value = false;
         _activeToolCallLabel = null;
         _activeToolCallName = null;
+        _pendingLocalMarkers = '';
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -838,6 +871,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _openWidgetDoneNotifier.value = false;
         _activeToolCallLabel = null;
         _activeToolCallName = null;
+        _pendingLocalMarkers = '';
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;

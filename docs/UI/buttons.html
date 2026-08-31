@@ -1,326 +1,293 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Botões</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      background: #111;
-      min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      padding: 40px 20px 80px;
-      display: flex;
-      justify-content: center;
-    }
-
-    .page {
-      width: 100%;
-      max-width: 380px;
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
-    }
-
-    .group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .group-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: #4a4a4a;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      padding: 0 2px;
-    }
-
-    .row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    /* ---------- Base ---------- */
-    .btn {
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.1px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
-      white-space: nowrap;
-      font-family: inherit;
-    }
-
-    .btn:active { transform: scale(0.96); }
-
-    /* ---------- Tamanhos ---------- */
-    .btn-lg { padding: 15px 22px; border-radius: 50px; font-size: 15px; }
-    .btn-md { padding: 11px 18px; border-radius: 50px; }
-    .btn-sm { padding: 8px 14px; border-radius: 50px; font-size: 12.5px; }
-
-    .btn-icon-only {
-      width: 42px;
-      height: 42px;
-      padding: 0;
-      border-radius: 50%;
-      flex-shrink: 0;
-      font-size: 14px;
-    }
-    .btn-icon-only.btn-sm { width: 34px; height: 34px; font-size: 12px; }
-    .btn-icon-only.btn-lg { width: 50px; height: 50px; font-size: 16px; }
-
-    .btn-full { width: 100%; }
-
-    /* ---------- Primary (azul) ---------- */
-    .btn-primary {
-      background: #2e8bc9;
-      color: #fff;
-    }
-    .btn-primary:hover  { background: #3695d4; }
-    .btn-primary:active { background: #1f6a9e; }
-
-    /* ---------- Destructive (vermelho) ---------- */
-    .btn-danger {
-      background: #e05e5e;
-      color: #fff;
-    }
-    .btn-danger:hover  { background: #e77070; }
-    .btn-danger:active { background: #b34545; }
-
-    /* ---------- Success ---------- */
-    .btn-success {
-      background: #4ec994;
-      color: #0d1f16;
-    }
-    .btn-success:hover  { background: #5cd5a1; }
-    .btn-success:active { background: #3fb682; }
-
-    /* ---------- Warning ---------- */
-    .btn-warning {
-      background: #f0a500;
-      color: #1f1600;
-    }
-    .btn-warning:hover  { background: #ffb318; }
-    .btn-warning:active { background: #d69300; }
-
-    /* ---------- Secondary (cinza sólido) ---------- */
-    .btn-secondary {
-      background: #232323;
-      color: #fff;
-    }
-    .btn-secondary:hover  { background: #2c2c2c; }
-    .btn-secondary:active { background: #333; }
-
-    /* ---------- Ghost (transparente) ---------- */
-    .btn-ghost {
-      background: transparent;
-      color: #999;
-    }
-    .btn-ghost:hover  { background: #1e1e1e; color: #fff; }
-    .btn-ghost:active { background: #272727; }
-
-    /* ---------- Outline ---------- */
-    .btn-outline {
-      background: transparent;
-      color: #4fa3d8;
-      box-shadow: inset 0 0 0 1.5px #2e6f96;
-    }
-    .btn-outline:hover  { background: rgba(46,139,201,0.1); box-shadow: inset 0 0 0 1.5px #2e8bc9; }
-    .btn-outline:active { background: rgba(46,139,201,0.18); }
-
-    .btn-outline-danger {
-      background: transparent;
-      color: #e08080;
-      box-shadow: inset 0 0 0 1.5px #96403f;
-    }
-    .btn-outline-danger:hover  { background: rgba(224,94,94,0.1); box-shadow: inset 0 0 0 1.5px #e05e5e; }
-
-    /* ---------- Tint (fundo suave da cor) ---------- */
-    .btn-tint-blue {
-      background: rgba(46,139,201,0.15);
-      color: #6db4e6;
-    }
-    .btn-tint-blue:hover { background: rgba(46,139,201,0.24); }
-
-    .btn-tint-red {
-      background: rgba(224,94,94,0.15);
-      color: #ef9797;
-    }
-    .btn-tint-red:hover { background: rgba(224,94,94,0.24); }
-
-    /* ---------- Disabled ---------- */
-    .btn-disabled,
-    .btn:disabled {
-      opacity: 0.32;
-      pointer-events: none;
-    }
-
-    /* ---------- Loading ---------- */
-    .btn-loading {
-      color: transparent !important;
-      position: relative;
-      pointer-events: none;
-    }
-    .btn-loading::after {
-      content: '';
-      position: absolute;
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255,255,255,0.35);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ---------- Segmented control ---------- */
-    .segmented {
-      display: flex;
-      background: #1a1a1a;
-      border-radius: 50px;
-      padding: 4px;
-      gap: 2px;
-      width: fit-content;
-    }
-    .segmented .seg {
-      border: none;
-      background: transparent;
-      color: #777;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 9px 16px;
-      border-radius: 50px;
-      cursor: pointer;
-      transition: background-color 0.15s ease, color 0.15s ease;
-      font-family: inherit;
-    }
-    .segmented .seg.active {
-      background: #2e8bc9;
-      color: #fff;
-    }
-
-    /* ---------- Split action ---------- */
-    .split-actions {
-      display: flex;
-      align-items: center;
-      background: #1a1a1a;
-      border-radius: 50px;
-      padding: 5px;
-      gap: 6px;
-    }
-    .split-actions .btn { flex: 1; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teste de Tools — Worker</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0d0d0d;
+    color: #eee;
+    margin: 0;
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  h2 { font-size: 14px; color: #999; margin-top: 24px; margin-bottom: 8px; }
+  input, select, textarea, button {
+    width: 100%;
+    padding: 10px;
+    margin: 4px 0;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #eee;
+    font-size: 14px;
+  }
+  textarea { min-height: 60px; font-family: monospace; }
+  button {
+    background: #6F5AF6;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  button:disabled { opacity: 0.5; }
+  #status {
+    font-size: 12px;
+    color: #999;
+    margin: 8px 0;
+    white-space: pre-wrap;
+  }
+  #rawOutput {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 12px;
+  }
+  #renderOutput { margin-top: 16px; }
+  #renderOutput img { max-width: 100%; border-radius: 8px; margin: 4px 0; display: block; }
+  .card {
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    background: #1a1a1a;
+  }
+  .ok { color: #4ade80; }
+  .err { color: #f87171; }
+  .imgRow { display: flex; gap: 8px; overflow-x: auto; }
+  .imgRow img { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+  a.dl { color: #6F5AF6; word-break: break-all; }
+</style>
 </head>
 <body>
-  <div class="page">
 
-    <div class="group">
-      <div class="group-label">Primary</div>
-      <div class="row">
-        <button class="btn btn-primary btn-md btn-full">
-          <i class="fa-solid fa-plus"></i> Novo evento
-        </button>
-      </div>
-      <div class="row">
-        <button class="btn btn-primary btn-sm">Pequeno</button>
-        <button class="btn btn-primary btn-md">Médio</button>
-        <button class="btn btn-primary btn-lg">Grande</button>
-      </div>
-    </div>
+<h1>Teste de Tools — Worker</h1>
+<div id="status">Não autenticado</div>
 
-    <div class="group">
-      <div class="group-label">Destructive</div>
-      <div class="row">
-        <button class="btn btn-danger btn-md">
-          <i class="fa-solid fa-trash"></i> Eliminar
-        </button>
-        <button class="btn btn-outline-danger btn-md">Cancelar assinatura</button>
-      </div>
-    </div>
+<h2>1. Login</h2>
+<input id="apiBase" value="https://ipc.alfredopjonas.workers.dev" placeholder="API base">
+<input id="email" placeholder="email">
+<input id="password" type="password" placeholder="password">
+<button onclick="doLogin()">Entrar</button>
 
-    <div class="group">
-      <div class="group-label">Status</div>
-      <div class="row">
-        <button class="btn btn-success btn-sm">
-          <i class="fa-solid fa-check"></i> Aprovado
-        </button>
-        <button class="btn btn-warning btn-sm">
-          <i class="fa-solid fa-triangle-exclamation"></i> Pendente
-        </button>
-      </div>
-    </div>
+<h2>2. Escolher tool</h2>
+<select id="toolName" onchange="updateInputHint()">
+  <option value="web_search">web_search</option>
+  <option value="search_images" selected>search_images</option>
+  <option value="search_market">search_market</option>
+  <option value="search_place">search_place</option>
+  <option value="search_calendar_date">search_calendar_date</option>
+  <option value="get_weather">get_weather</option>
+  <option value="generate_chart">generate_chart</option>
+  <option value="generate_mindmap">generate_mindmap</option>
+  <option value="generate_qrcode">generate_qrcode</option>
+  <option value="generate_barcode">generate_barcode</option>
+  <option value="generate_math">generate_math</option>
+  <option value="generate_table_image">generate_table_image</option>
+  <option value="create_pdf">create_pdf</option>
+  <option value="create_docx">create_docx</option>
+  <option value="create_xlsx">create_xlsx</option>
+  <option value="create_pptx">create_pptx</option>
+</select>
+<div id="inputHint" style="font-size:11px;color:#777;margin-bottom:4px;"></div>
+<textarea id="toolInput">{"query":"Cristiano Ronaldo"}</textarea>
+<button id="runBtn" onclick="runTool()" disabled>Executar tool</button>
 
-    <div class="group">
-      <div class="group-label">Secondary / Ghost / Outline</div>
-      <div class="row">
-        <button class="btn btn-secondary btn-md">Secundário</button>
-        <button class="btn btn-ghost btn-md">Ghost</button>
-        <button class="btn btn-outline btn-md">Outline azul</button>
-      </div>
-    </div>
+<div id="renderOutput"></div>
+<div id="rawOutput"></div>
 
-    <div class="group">
-      <div class="group-label">Tint</div>
-      <div class="row">
-        <button class="btn btn-tint-blue btn-md">
-          <i class="fa-solid fa-bell"></i> Notificar
-        </button>
-        <button class="btn btn-tint-red btn-md">
-          <i class="fa-solid fa-flag"></i> Reportar
-        </button>
-      </div>
-    </div>
+<script>
+let TOKEN = null;
 
-    <div class="group">
-      <div class="group-label">Icon only</div>
-      <div class="row">
-        <button class="btn btn-primary btn-icon-only btn-sm"><i class="fa-solid fa-plus"></i></button>
-        <button class="btn btn-secondary btn-icon-only btn-md"><i class="fa-solid fa-ellipsis"></i></button>
-        <button class="btn btn-danger btn-icon-only btn-md"><i class="fa-solid fa-xmark"></i></button>
-        <button class="btn btn-ghost btn-icon-only btn-lg"><i class="fa-solid fa-share-nodes"></i></button>
-      </div>
-    </div>
+const PRESETS = {
+  web_search: '{"query":"resultado do jogo de ontem"}',
+  search_images: '{"query":"Cristiano Ronaldo"}',
+  search_market: '{"query":"bitcoin"}',
+  search_place: '{"query":"Torre Eiffel"}',
+  search_calendar_date: '{"query":"amanhã"}',
+  get_weather: '{"city":"Lisboa"}',
+  generate_chart: '{"chart_type":"bar","title":"Teste","labels":["Jan","Fev","Mar"],"datasets":[{"label":"Vendas","data":[10,20,15]}]}',
+  generate_mindmap: '{"root":{"label":"Raiz","children":[{"label":"Filho A"},{"label":"Filho B"}]}}',
+  generate_qrcode: '{"content":"https://exemplo.com","size":300}',
+  generate_barcode: '{"content":"123456789012","format":"code128"}',
+  generate_math: '{"expression":"2^10"}',
+  generate_table_image: '{"title":"Tabela Teste","headers":["Nome","Idade"],"rows":[["Ana","30"],["Bruno","25"]]}',
+  create_pdf: '{"title":"Documento Teste","html_content":"<h1>Titulo</h1><p>Paragrafo de teste.</p><ul><li>Item 1</li><li>Item 2</li></ul>"}',
+  create_docx: '{"title":"Documento Teste","html_content":"<h1>Titulo</h1><p>Paragrafo de teste.</p>"}',
+  create_xlsx: '{"sheet_name":"Dados","headers":["Nome","Idade"],"rows":[["Ana","30"],["Bruno","25"]]}',
+  create_pptx: '{"title":"Apresentacao Teste","slides":[{"heading":"Slide 1","bullets":["Ponto A","Ponto B"]}]}',
+};
 
-    <div class="group">
-      <div class="group-label">Disabled / Loading</div>
-      <div class="row">
-        <button class="btn btn-primary btn-md btn-disabled">Indisponível</button>
-        <button class="btn btn-primary btn-md btn-loading">A carregar</button>
-      </div>
-    </div>
+function updateInputHint() {
+  const name = document.getElementById('toolName').value;
+  document.getElementById('toolInput').value = PRESETS[name] || '{}';
+  document.getElementById('inputHint').textContent = 'Preset carregado — edita se quiseres';
+}
+updateInputHint();
 
-    <div class="group">
-      <div class="group-label">Segmented control</div>
-      <div class="segmented">
-        <button class="seg active">Dia</button>
-        <button class="seg">Semana</button>
-        <button class="seg">Mês</button>
-      </div>
-    </div>
+function setStatus(text, cls) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = cls || '';
+}
 
-    <div class="group">
-      <div class="group-label">Split action</div>
-      <div class="split-actions">
-        <button class="btn btn-danger btn-md">Eliminar</button>
-        <button class="btn btn-primary btn-md">Cancelar</button>
-      </div>
-    </div>
+async function doLogin() {
+  const base = document.getElementById('apiBase').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  setStatus('A autenticar...');
+  try {
+    const res = await fetch(`${base}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (!data.token) throw new Error('Login respondeu sem campo "token": ' + JSON.stringify(data));
+    TOKEN = data.token;
+    setStatus('✓ Autenticado. Token guardado em memória.', 'ok');
+    document.getElementById('runBtn').disabled = false;
+  } catch (e) {
+    setStatus('✗ Erro no login: ' + e.message, 'err');
+    document.getElementById('runBtn').disabled = true;
+  }
+}
 
-  </div>
+async function runTool() {
+  const base = document.getElementById('apiBase').value.trim();
+  const name = document.getElementById('toolName').value;
+  let input;
+  try {
+    input = JSON.parse(document.getElementById('toolInput').value);
+  } catch (e) {
+    setStatus('✗ JSON de input inválido: ' + e.message, 'err');
+    return;
+  }
+
+  document.getElementById('renderOutput').innerHTML = '';
+  document.getElementById('rawOutput').textContent = '';
+  setStatus(`A executar "${name}"...`);
+  const startTime = performance.now();
+
+  try {
+    const res = await fetch(`${base}/tools/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${TOKEN}`,
+      },
+      body: JSON.stringify({ name, input }),
+    });
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    const data = await res.json();
+
+    if (!res.ok) {
+      setStatus(`✗ HTTP ${res.status} após ${elapsed}s`, 'err');
+      document.getElementById('rawOutput').textContent = JSON.stringify(data, null, 2);
+      return;
+    }
+
+    setStatus(`✓ Resposta recebida em ${elapsed}s. Vê abaixo o JSON bruto e a renderização.`, 'ok');
+    document.getElementById('rawOutput').textContent = JSON.stringify(data, null, 2);
+
+    renderResult(name, data);
+  } catch (e) {
+    setStatus('✗ Erro de rede/fetch: ' + e.message, 'err');
+  }
+}
+
+function renderResult(toolName, data) {
+  const out = document.getElementById('renderOutput');
+  out.innerHTML = '';
+
+  // O worker devolve { tool_name, result }. Extraímos result tal
+  // como o app Flutter faz em ToolsApiService.executeTool.
+  const result = data.result !== undefined ? data.result : data;
+
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  if (result === null || result === undefined) {
+    card.innerHTML = '<span class="err">result veio null/undefined — nada para renderizar.</span>';
+    out.appendChild(card);
+    return;
+  }
+
+  if (result.found === false) {
+    card.innerHTML = `<span class="err">found: false</span><br>reason: ${escapeHtml(result.reason || '(sem reason)')}`;
+    out.appendChild(card);
+    return;
+  }
+
+  // search_images — testa exatamente a chave que buildImagesMarker usa: images[].imageUrl
+  if (toolName === 'search_images') {
+    if (!Array.isArray(result.images) || result.images.length === 0) {
+      card.innerHTML = '<span class="err">Sem campo "images" (array) ou array vazio. O app espera exatamente result.images[].imageUrl</span>';
+    } else {
+      const row = document.createElement('div');
+      row.className = 'imgRow';
+      result.images.forEach(img => {
+        if (!img.imageUrl) return;
+        const im = document.createElement('img');
+        im.src = img.imageUrl;
+        im.title = img.title || '';
+        im.onerror = () => { im.style.border = '2px solid #f87171'; im.alt = 'FALHOU AO CARREGAR'; };
+        row.appendChild(im);
+      });
+      card.appendChild(document.createTextNode(`${result.images.length} imagens encontradas:`));
+      card.appendChild(row);
+    }
+    out.appendChild(card);
+    return;
+  }
+
+  // tools visuais/documento — testa exatamente a chave que o app lê: content_base64
+  const hasBase64 = typeof result.content_base64 === 'string' && result.content_base64.length > 0;
+  if (!hasBase64) {
+    card.innerHTML = '<span class="err">Sem campo "content_base64" (string não-vazia). O app procura exatamente result.content_base64 — sem isto, nenhum card aparece no Flutter.</span>';
+    out.appendChild(card);
+    return;
+  }
+
+  const mime = result.mime_type || 'application/octet-stream';
+  const isImage = mime.startsWith('image/');
+
+  if (isImage) {
+    const img = document.createElement('img');
+    img.src = `data:${mime};base64,${result.content_base64}`;
+    card.appendChild(document.createTextNode('content_base64 presente e é imagem — renderizado abaixo:'));
+    card.appendChild(img);
+  } else {
+    const link = document.createElement('a');
+    link.className = 'dl';
+    link.href = `data:${mime};base64,${result.content_base64}`;
+    link.download = result.filename || 'ficheiro';
+    link.textContent = `⬇ ${result.filename || 'download'} (${mime})`;
+    card.appendChild(document.createTextNode('content_base64 presente — documento pronto:'));
+    card.appendChild(document.createElement('br'));
+    card.appendChild(link);
+  }
+  out.appendChild(card);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
 </body>
 </html>
