@@ -166,7 +166,7 @@ final ConversationsController conversationsController = ConversationsController(
 
 class AppDrawer extends StatefulWidget {
   final AppColorScheme s;
-  final VoidCallback onClose;
+  final Future<void> Function() onCloseAnimated;
   final VoidCallback onSettings;
   final ValueChanged<String>? onOpenConversation;
   final VoidCallback? onNewChat;
@@ -175,7 +175,7 @@ class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
     required this.s,
-    required this.onClose,
+    required this.onCloseAnimated,
     required this.onSettings,
     this.onOpenConversation,
     this.onNewChat,
@@ -189,6 +189,12 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer> {
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
+
+  // ── Estado do pull-to-refresh customizado ─────────────────
+  double _pullDistance = 0.0;
+  bool _refreshTriggered = false;
+  static const double _pullTriggerDistance = 72.0;
+  static const double _maxPullDistance = 110.0;
 
   @override
   void initState() {
@@ -221,30 +227,36 @@ class _AppDrawerState extends State<AppDrawer> {
     }
   }
 
-  void _closeDrawer() => widget.onClose();
+  // Fecha o drawer suavemente e só então executa a navegação.
+  Future<void> _closeThenRun(VoidCallback navigate) async {
+    await widget.onCloseAnimated();
+    if (!mounted) return;
+    navigate();
+  }
 
   void _handleNewChat() {
     HapticFeedback.lightImpact();
     widget.onNewChat?.call();
-    _closeDrawer();
+    widget.onCloseAnimated();
   }
 
   void _openSearch(BuildContext context) {
     HapticFeedback.lightImpact();
-    _closeDrawer();
-    Navigator.of(context).push(_FadePageRoute(
-      builder: (_) => ChatSearchScreen(
-        s: widget.s,
-        onOpenConversation: (id) {
-          widget.onOpenConversation?.call(id);
-        },
-      ),
-    ));
+    _closeThenRun(() {
+      Navigator.of(context).push(_FadePageRoute(
+        builder: (_) => ChatSearchScreen(
+          s: widget.s,
+          onOpenConversation: (id) {
+            widget.onOpenConversation?.call(id);
+          },
+        ),
+      ));
+    });
   }
 
   void _openConversation(ConversationItem item) {
     widget.onOpenConversation?.call(item.id);
-    _closeDrawer();
+    widget.onCloseAnimated();
   }
 
   void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
@@ -287,27 +299,68 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _openLibrary(BuildContext context) {
     HapticFeedback.lightImpact();
-    _closeDrawer();
-    Navigator.of(context).push(_FadePageRoute(
-      builder: (_) => const LibraryScreen(),
-    ));
+    _closeThenRun(() {
+      Navigator.of(context).push(_FadePageRoute(
+        builder: (_) => const LibraryScreen(),
+      ));
+    });
   }
 
   void _openScheduledTasks(BuildContext context) {
     HapticFeedback.lightImpact();
-    _closeDrawer();
-    Navigator.of(context).push(_FadePageRoute(
-      builder: (_) => const ScheduledTasksScreen(),
-    ));
+    _closeThenRun(() {
+      Navigator.of(context).push(_FadePageRoute(
+        builder: (_) => const ScheduledTasksScreen(),
+      ));
+    });
   }
 
   void _openAllApps(BuildContext context) {
     HapticFeedback.lightImpact();
-    _closeDrawer();
-    Navigator.of(context).push(CupertinoPageRoute(
-      builder: (_) => const AllAppsScreen(),
-    ));
+    _closeThenRun(() {
+      Navigator.of(context).push(CupertinoPageRoute(
+        builder: (_) => const AllAppsScreen(),
+      ));
+    });
   }
+
+  // ── Pull-to-refresh manual ────────────────────────────────
+
+  bool _onScrollNotification(ScrollNotification notif) {
+    if (conversationsController.loading) return false;
+
+    if (notif is OverscrollNotification &&
+        notif.metrics.pixels <= notif.metrics.minScrollExtent) {
+      if (notif.overscroll < 0) {
+        setState(() {
+          _pullDistance = (_pullDistance - notif.overscroll)
+              .clamp(0.0, _maxPullDistance);
+        });
+      }
+    } else if (notif is ScrollUpdateNotification &&
+        notif.metrics.pixels < notif.metrics.minScrollExtent) {
+      setState(() {
+        _pullDistance = (notif.metrics.minScrollExtent - notif.metrics.pixels)
+            .clamp(0.0, _maxPullDistance);
+      });
+    } else if (notif is ScrollEndNotification) {
+      if (_pullDistance >= _pullTriggerDistance && !_refreshTriggered) {
+        _refreshTriggered = true;
+        conversationsController.load().whenComplete(() {
+          if (!mounted) return;
+          setState(() {
+            _pullDistance = 0.0;
+            _refreshTriggered = false;
+          });
+        });
+      } else if (!_refreshTriggered) {
+        setState(() => _pullDistance = 0.0);
+      }
+    }
+    return false;
+  }
+
+  void _closeDrawerAnimated() => widget.onCloseAnimated();
 
   @override
   Widget build(BuildContext context) {
@@ -331,6 +384,35 @@ class _AppDrawerState extends State<AppDrawer> {
                 ),
                 const SizedBox(height: 112),
               ],
+            ),
+
+            // Loader de pull-to-refresh, ancorado logo abaixo do header
+            Positioned(
+              top: 48, left: 0, right: 0,
+              child: IgnorePointer(
+                child: Center(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: (_pullDistance > 4 || conversationsController.loading) ? 1.0 : 0.0,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: Transform.scale(
+                        scale: conversationsController.loading
+                            ? 1.0
+                            : (_pullDistance / _pullTriggerDistance).clamp(0.0, 1.0),
+                        child: SizedBox(
+                          width: 24, height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            strokeCap: StrokeCap.round,
+                            valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
 
             Positioned(
@@ -524,16 +606,21 @@ class _AppDrawerState extends State<AppDrawer> {
       }
     }
 
-    return RefreshIndicator(
-      color: s.primary,
-      backgroundColor: s.cardBackground,
-      strokeWidth: 2.2,
-      edgeOffset: 8,
-      onRefresh: () => conversationsController.load(),
-      child: Scrollbar(
-        thumbVisibility: false,
+    // Desloca o conteúdo para baixo enquanto o pull/loader está ativo.
+    final double contentOffset = conversationsController.loading
+        ? (_pullTriggerDistance * 0.55)
+        : (_pullDistance * 0.55);
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotification,
+      child: AnimatedContainer(
+        duration: conversationsController.loading
+            ? Duration.zero
+            : const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, contentOffset, 0),
         child: ListView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          physics: const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
           children: sections,
         ),
