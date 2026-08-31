@@ -152,26 +152,52 @@ class _FullscreenImageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return Scaffold(
-      backgroundColor: s.pageBackground,
-      appBar: AppBar(
-        backgroundColor: s.pageBackground,
-        elevation: 0,
-        foregroundColor: s.onSurface,
-        title: Text(label, style: TextStyle(fontSize: 15, color: s.onSurface)),
-        actions: [
-          IconButton(
-            icon: AppIcon('share1', color: s.onSurface, size: 20),
-            onPressed: () async {
-              final dir = await getTemporaryDirectory();
-              final file = File('${dir.path}/imagem.png');
-              await file.writeAsBytes(bytes);
-              await Share.shareXFiles([XFile(file.path)]);
-            },
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      color: s.pageBackground,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(8, topInset + 8, 16, 8),
+            child: Row(
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    child: AppIcon('arrow_left', color: s.onSurface, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: AppIcon('share1', color: s.onSurface, size: 20),
+                  onPressed: () async {
+                    final dir = await getTemporaryDirectory();
+                    final file = File('${dir.path}/imagem.png');
+                    await file.writeAsBytes(bytes);
+                    await Share.shareXFiles([XFile(file.path)]);
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Center(child: InteractiveViewer(child: Image.memory(bytes))),
           ),
         ],
       ),
-      body: Center(child: InteractiveViewer(child: Image.memory(bytes))),
     );
   }
 }
@@ -273,14 +299,34 @@ class ToolResultDownloadCard extends StatelessWidget {
 // CARROSSEL DE IMAGENS DE PESQUISA
 // ══════════════════════════════════════════════════════════════
 
-class ImageSearchCarousel extends StatelessWidget {
+class ImageSearchCarousel extends StatefulWidget {
   final AppColorScheme s;
   final List<Map<String, dynamic>> images;
   const ImageSearchCarousel({super.key, required this.s, required this.images});
 
   @override
+  State<ImageSearchCarousel> createState() => _ImageSearchCarouselState();
+}
+
+class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
+  final Set<String> _failedUrls = {};
+
+  void _markFailed(String url) {
+    if (_failedUrls.contains(url)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _failedUrls.add(url));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (images.isEmpty) return const SizedBox.shrink();
+    final s = widget.s;
+    final visibleImages = widget.images.where((img) {
+      final url = img['imageUrl']?.toString() ?? '';
+      return url.isNotEmpty && !_failedUrls.contains(url);
+    }).toList();
+
+    if (visibleImages.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: SizedBox(
@@ -290,15 +336,16 @@ class ImageSearchCarousel extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(vertical: 4),
-            itemCount: images.length,
+            itemCount: visibleImages.length,
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (_, i) {
-              final img = images[i];
+              final img = visibleImages[i];
               final url = img['imageUrl']?.toString() ?? '';
               return GestureDetector(
+                key: ValueKey(url),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => _ImageSearchFullscreenScreen(
-                    images: images,
+                    images: visibleImages,
                     initialIndex: i,
                   ),
                 )),
@@ -306,35 +353,24 @@ class ImageSearchCarousel extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   child: Image.network(
                     url,
+                    key: ValueKey(url),
                     width: 160,
                     height: 160,
                     fit: BoxFit.cover,
-                    loadingBuilder: (_, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        width: 160,
-                        height: 160,
-                        color: s.hover,
-                        alignment: Alignment.center,
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
-                            value: progress.expectedTotalBytes != null
-                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                : null,
-                          ),
-                        ),
+                    gaplessPlayback: true,
+                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        child: child,
                       );
                     },
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 160,
-                      height: 160,
-                      color: s.hover,
-                      child: Icon(Icons.image_not_supported_outlined, color: s.onSurfaceVariant),
-                    ),
+                    errorBuilder: (_, __, ___) {
+                      _markFailed(url);
+                      return const SizedBox(width: 160, height: 160);
+                    },
                   ),
                 ),
               );
@@ -390,35 +426,58 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final currentTitle = widget.images[_current]['title']?.toString() ?? '';
-    return Scaffold(
-      backgroundColor: s.pageBackground,
-      appBar: AppBar(
-        backgroundColor: s.pageBackground,
-        elevation: 0,
-        foregroundColor: s.onSurface,
-        title: Text(
-          currentTitle.isEmpty ? '${_current + 1}/${widget.images.length}' : currentTitle,
-          style: TextStyle(fontSize: 15, color: s.onSurface),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      body: PageView.builder(
-        controller: _pageCtrl,
-        itemCount: widget.images.length,
-        onPageChanged: (i) => setState(() => _current = i),
-        itemBuilder: (_, i) {
-          final url = widget.images[i]['imageUrl']?.toString() ?? '';
-          return Center(
-            child: InteractiveViewer(
-              child: Image.network(
-                url,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(Icons.image_not_supported_outlined, color: s.onSurfaceVariant, size: 48),
-              ),
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      color: s.pageBackground,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(8, topInset + 8, 16, 8),
+            child: Row(
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    child: AppIcon('arrow_left', color: s.onSurface, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    currentTitle.isEmpty ? '${_current + 1}/${widget.images.length}' : currentTitle,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          );
-        },
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageCtrl,
+              itemCount: widget.images.length,
+              onPageChanged: (i) => setState(() => _current = i),
+              itemBuilder: (_, i) {
+                final url = widget.images[i]['imageUrl']?.toString() ?? '';
+                return Center(
+                  child: InteractiveViewer(
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(Icons.image_not_supported_outlined, color: s.onSurfaceVariant, size: 48),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -486,7 +545,8 @@ class SourcesRow extends StatelessWidget {
                           child: Image.network(
                             _faviconUrl(urls[i]),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(color: s.hover),
+                            gaplessPlayback: true,
+                            errorBuilder: (_, __, ___) => Icon(Icons.public, size: 11, color: s.onSurfaceVariant),
                           ),
                         ),
                       ),
@@ -527,6 +587,7 @@ class _SourceRow extends StatelessWidget {
                 child: Image.network(
                   faviconUrl,
                   fit: BoxFit.cover,
+                  gaplessPlayback: true,
                   errorBuilder: (_, __, ___) => Icon(Icons.public, size: 14, color: s.onSurfaceVariant),
                 ),
               ),
@@ -935,7 +996,19 @@ class _StreamingBubbleState extends State<StreamingBubble> {
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: children,
+          children: [
+            for (final child in children)
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (widget, animation) => FadeTransition(
+                  opacity: animation,
+                  child: widget,
+                ),
+                child: child,
+              ),
+          ],
         ),
       ),
     );

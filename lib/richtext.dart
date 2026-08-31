@@ -43,6 +43,8 @@
 //     a aspas dupla sem conflitar com o delimitador da string.
 //   • CORREÇÃO: literal '$$' dentro de string não-raw escapado como
 //     '\$\$' para não ser interpretado como interpolação.
+//   • CORREÇÃO: flash cinza em tabelas durante streaming evitado
+//     ao não processar linhas incompletas e adicionar fundo explícito.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -1034,10 +1036,13 @@ class _RichTextBlockParser {
       if (tableRows != null && tableRows!.isNotEmpty) {
         widgets.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
-          child: _AiTable(
-            rows: tableRows!,
-            s: s,
-            alignments: tableAlignments,
+          child: Container(
+            color: s.pageBackground,
+            child: _AiTable(
+              rows: tableRows!,
+              s: s,
+              alignments: tableAlignments,
+            ),
           ),
         ));
       }
@@ -1137,10 +1142,21 @@ class _RichTextBlockParser {
       }
 
       final tableCandidate = _splitTableRow(trimmed);
+      final isLastLine = i == lines.length - 1;
       if (tableCandidate != null) {
         final nextRow = i + 1 < lines.length ? _splitTableRow(lines[i + 1].trim()) : null;
         final looksLikeHeader = nextRow != null && _isTableSeparatorRow(nextRow);
         if (looksLikeHeader || tableRows != null) {
+          // Se esta é a última linha do texto recebido até agora e ainda
+          // não fecha com '|' no fim, a linha pode estar a meio de chegar
+          // via streaming — não adiciona à tabela ainda, para não forçar
+          // o Table a rebuilder incompleto (o que expõe o fundo por trás
+          // durante um frame, criando o flash cinza).
+          final rowIncomplete = isLastLine && !trimmed.endsWith('|');
+          if (rowIncomplete) {
+            i++;
+            continue;
+          }
           if (looksLikeHeader) {
             tableRows ??= [];
             tableRows!.add(tableCandidate);

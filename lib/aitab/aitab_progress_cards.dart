@@ -6,6 +6,8 @@
 // CORREÇÃO: _ToolCallProgressCard agora usa ToolIcon (SVG por-tool
 // com fallback) em vez do ícone fixo 'tools', e o texto está
 // explicitamente alinhado à esquerda dentro do Expanded.
+// AJUSTE VISUAL: ícones e textos de progresso sem azul e sem bold
+// excessivo.
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -46,8 +48,8 @@ class StreamingMarkdownCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            NexaLoaderLogo(size: 28, tintColor: s.primary),
-            const SizedBox(width: 8),
+            NexaLoaderLogo(size: 18, tintColor: s.onSurfaceVariant),
+            const SizedBox(width: 6),
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
@@ -55,7 +57,7 @@ class StreamingMarkdownCard extends StatelessWidget {
                   text: label,
                   style: TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                     color: s.onSurfaceVariant,
                   ),
                   active: true,
@@ -130,7 +132,7 @@ class CanvasProgressCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                             color: s.onSurface,
                           ),
                         ),
@@ -182,7 +184,7 @@ class CanvasProgressCard extends StatelessWidget {
                     children: [
                       ShimmerText(
                         text: title,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface),
                         active: true,
                       ),
                       const SizedBox(height: 2),
@@ -247,14 +249,14 @@ class WidgetProgressCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                NexaLoaderLogo(size: 32, tintColor: s.primary),
-                const SizedBox(width: 12),
+                NexaLoaderLogo(size: 20, tintColor: s.onSurfaceVariant),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: ShimmerText(
                       text: label,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface),
                       active: true,
                     ),
                   ),
@@ -300,21 +302,21 @@ class ToolCallProgressCard extends StatelessWidget {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                s.primary.withOpacity(0.3),
-                s.primary,
-                s.primary.withOpacity(0.3),
+                s.onSurfaceVariant.withOpacity(0.3),
+                s.onSurfaceVariant,
+                s.onSurfaceVariant.withOpacity(0.3),
               ],
               stops: const [0.0, 0.5, 1.0],
             ).createShader(bounds),
-            child: ToolIcon(toolName: toolName, size: 24, color: Colors.white),
+            child: ToolIcon(toolName: toolName, size: 16, color: Colors.white),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: ShimmerText(
                 text: label,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: s.onSurface),
                 active: true,
               ),
             ),
@@ -393,7 +395,7 @@ class _CanvasStreamingModalContent extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: s.onSurface),
                   ),
                 ),
               ],
@@ -481,7 +483,7 @@ Future<void> showCanvasPreviewModal(
               Icon(
                 Icons.description,
                 size: 28,
-                color: s.primary,
+                color: s.onSurfaceVariant,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -489,7 +491,7 @@ Future<void> showCanvasPreviewModal(
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: s.onSurface),
                 ),
               ),
             ],
@@ -562,11 +564,11 @@ Future<void> showWidgetStreamingModal(
         children: [
           Row(
             children: [
-              NexaLoaderLogo(size: 28, tintColor: s.primary),
+              NexaLoaderLogo(size: 20, tintColor: s.onSurfaceVariant),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(title,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: s.onSurface)),
               ),
             ],
           ),

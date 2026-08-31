@@ -1,29 +1,33 @@
-meu pedido de correções 
+este foi o meu pedido
+Agora já está exibindo mas quero que para imagens que não apresentam nada somente erro então quero que eles nunca sejam exibidos e também a tela que exibe a visualização completa tem erro de usar muito material ao invés de ser uma tela custom com o design do meu app porra
 
-Vê só o popup é somente uma sombra ao invés de mostrar o conteúdo ele está somente uma sombra porra e já agora eu não pedi usar cupertino icons nem fonte do IOS é somente a navegação texto mantém o do app sistema e também use SVGs porque eu tenho SVGs de check e back etc...
+Também fui muito claro o texto de criar etc etc está muito grosso bold e também não quero ícones em azul porra mas sim com a cor do texto e os ícone não podem ser assjm tão grandes mas proporcionais ao texto e também não podem ser assim tão afastados dos textos de gerações etc etc
 
-Quero qhe o tal popup tenha bordas mais curvas mas mantem esse estilo de entrada e já agora ao clicar em maps ele gem realmente que usar o maps do google e já agora a foda do mercado tem simplesmente que cartegar tudo apartir da internet moedas bandeiras valores tudo apartir da internet de apis e links públicos eu não quero nada simulado porra quero tudo em tempo real e também a porra dos ícones das criptomoedas não estão alarecendo nada e já agora quero que o título da tela nunca esteja centralizado mas no lado esquerdo assim como nos apps android e já agora o botão de seleção para o popup aparecer tem que ser botão com cor primária
+E também tem ainda um problema dos resultados de tools desparecer e aparecer rápido cada vez que eu estou interagindo com o ecrã por isso quero que tudo seja mais e mais suave e também os favicons quando é feito uma pesquisa não estão aparecendo realmente apenas está aparecendo os containers deles e também o modal de tais fontes está mal está usando material ao invés de custom design do meu próprio app, comece a corrigir tudo agora mesmo porra
 
-Organize tudo quero tudo bem organizado para os widgets calendário e widget market quero que aquele ecrã que exibe o gráfico e calendário os dias quero que eles tenham fundo semelhante ao que está no conatiner onde os botões ficam aquele é bem melhor, esse atual é feio
+No richtext ou algum lugar está sempre mostrando ecrã cinza quando está apresentando tabela ou algum coisa de estilização está sempre fazendo a tela ficar cinza e depois voltar ao normal
 
-resposta da ia
 
-Vi as duas imagens — o popup realmente só está a renderizar a sombra do `PopupMenuButton` sem o conteúdo, os ícones de cripto não carregam (a URL do CoinGecko que assumi estava errada, confirma-se), as bandeiras fiat também não aparecem por completo, e o título "Mercado" está centralizado quando você quer alinhado à esquerda. Vou resolver tudo isto.
+este foi a resposta incompleta do Claude 
 
-Antes de reescrever, três coisas que preciso confirmar porque mudam a arquitetura de verdade, não são detalhes:
+Beleza, são bastante coisas separadas. Antes de sair mexendo em tudo, deixa eu mapear cada uma pro arquivo/trecho certo, porque misturar correções sem confirmar onde cada uma vive é como esse projeto ficou quebrado da primeira vez. Vou investigar cada ponto na ordem que você listou.
 
-**1. Google Maps real precisa da sua API key.** Você disse "tem realmente que usar o maps do google" — isso significa o pacote `google_maps_flutter`, que exige uma **API key do Google Cloud** configurada em `AndroidManifest.xml` (Android) e `AppDelegate.swift`/`Info.plist` (iOS). Eu não tenho essa key nem acesso aos ficheiros nativos do seu projeto para configurar isso. Vou implementar o `GoogleMap` widget corretamente no Dart, mas **sem a key configurada nativamente ele não vai renderizar** — só vai mostrar tela cinza com o log de erro do Google. Precisa confirmar que já tem a key configurada nativamente, ou me dizer se ainda não tem, para eu deixar isso documentado como próximo passo em vez de fingir que "só funciona".
+Achei — a linha 332-336 é o problema exato: quando uma imagem falha (`errorBuilder`), o código desenha um placeholder cinza com um ícone de "sem imagem" **em vez de simplesmente ocultar** o item. Você pediu que essas nunca sejam exibidas. Isso é `Image.network` construindo diretamente no `itemBuilder` do `ListView.separated` — pra ocultar de verdade sem simplesmente deixar um buraco vazio (que quebraria o `separatorBuilder`), preciso filtrar a lista de imagens **antes** de renderizar, testando cada URL previamente, ou usar um widget stateful que colapsa a própria célula quando falha. A segunda abordagem é mais robusta porque não depende de pré-carregar tudo antes de mostrar nada.
 
-**2. "Tudo em tempo real, nada simulado" no mercado — isto inclui os preços do gráfico.** Até agora o gráfico usava `math.Random` com seed determinístico (dados falsos mas consistentes). Se quer **tudo real**, isso significa trocar para uma API de preços real (ex: CoinGecko `/simple/price` para cripto, e uma API de câmbio tipo `exchangerate-api.com` ou `frankfurter.app` para forex) — o que muda a estrutura de `_generateSeries` para ser assíncrona (`Future`), com loading states, tratamento de rate-limit (a API gratuita da CoinGecko tem limite de chamadas por minuto), e cache para não estourar esse limite toda vez que o widget reconstrói. Confirma que quer isto — API real com todas essas implicações de loading/erro/rate-limit — e não só os preços atuais (sem histórico simulado)?
+Agora achei três coisas de uma vez: (1) confirmei a "tela de visualização completa com Material" — `_ImageSearchFullscreenScreen` usa `Scaffold` + `AppBar` puros do Flutter Material, sem nenhuma customização visual do app; (2) confirmei o "favicon não aparece, só o container" — `SourcesRow` usa `Image.network(_faviconUrl(...))` sem `loadingBuilder`, então **enquanto carrega** o `Container` fica vazio/cinza (`s.cardBackground`/`s.hover`), e se falhar cai no ícone genérico; a URL do favicon (`google.com/s2/favicons`) pode estar sendo bloqueada, lenta, ou simplesmente sem tempo de carregar antes do frame renderizar; (3) confirmei que `_openSourcesModal` usa `showCraftBottomSheet` (que é o sistema custom do app, isso já está certo) mas dentro dele, `_SourceRow`, embora não use Material diretamente, também tem o mesmo bug de favicon sem loading state.
 
-**3. SVGs de check/back/etc que você tem.** Você disse "eu tenho SVGs de check e back etc" — preciso saber **onde** estão esses SVGs no seu projeto (nomes de ficheiro, pasta `assets/`, se já estão registados no `pubspec.yaml`, e se o seu `AppIcon` já os suporta por chave tipo `AppIcon('check')` ou é outro widget). Sem isso não sei se `AppIcon('check')` já resolve para o seu SVG ou se preciso de outra chamada.
+Agora preciso investigar o `ChatInput`/`ToolCallProgressCard` (onde fica o texto "criar/gerar..." em negrito e os ícones azuis grandes), e o `richtext.dart` (a tela cinza ao renderizar tabela). Vou olhar `ToolCallProgressCard` primeiro, já que é onde aparece o texto de progresso da tool call.
 
-Enquanto confirma isso, os pontos que **não** têm ambiguidade eu já vou resolver de qualquer forma, porque são bugs claros ou pedidos diretos:
-- Popup: vou trocar `showMenu` (que estava a falhar) por um `OverlayEntry` custom com fundo sólido e bordas mais arredondadas.
-- Título alinhado à esquerda em todas as telas (`CupertinoNavigationBar` centraliza por padrão — vou trocar para `AppBar` do Material, que permite `centerTitle: false`, ou forçar `leading`/`title` manual no Cupertino).
-- Nenhuma fonte/ícone iOS — remover qualquer `Cupertino...Icon` que tenha entrado sem querer, manter só `AppIcon`.
-- Botão do popup com cor primária.
-- Fundo dos previews (calendário/gráfico) igualado ao `actionsBg` do container de botões.
-- Corrigir URLs de ícones cripto (a rota `/1/small/` que assumi antes estava errada — vou usar o endpoint de metadata da CoinGecko que devolve a URL de imagem correta por moeda, e bandeiras via `flagcdn.com` que é confiável).
+Achei os três problemas exatos que você descreveu, todos nesse único widget:
 
-Pode confirmar os 3 pontos (Google Maps key, real-time completo incluindo gráfico, localização dos seus SVGs)?
+1. **Ícone azul**: `s.primary` no gradiente do `ShaderMask` — `s.primary` é a cor de destaque do app (provavelmente azul/roxo), não a cor do texto (`s.onSurface`)
+2. **Ícone grande e afastado**: `size: 24` + `SizedBox(width: 12)` de espaçamento
+3. **Texto bold**: `fontWeight: FontWeight.w600` no `ShimmerText`
+
+Vou também checar `WidgetProgressCard` e `CanvasProgressCard`, porque provavelmente têm o mesmo padrão repetido (você mencionou "criar etc etc" no plural, sugerindo mais de um card com esse problema).
+
+É um padrão sistemático no arquivo inteiro — todos os cards de progresso (`CanvasProgressCard`, `WidgetProgressCard`, `ToolCallProgressCard`, e mais) repetem: ícone em `s.primary`, tamanhos 24-32, negrito `w600`/`w700`. Vou ver o arquivo inteiro pra corrigir tudo de uma vez, sistematicamente, em vez de patch por patch.
+
+Boas notícias — nesses modais expandidos (linhas 355+), o padrão `s.primary`/negrito forte é mais aceitável, porque são telas de destaque/confirmação (título de modal, botão "Abrir"), não texto corrido de "gerando/criando" na conversa. Vou focar a correção nos **cards inline da conversa**, que é onde você realmente sente o peso visual: `StreamingMarkdownCard`, `CanvasProgressCard` (estado "a gerar"), `WidgetProgressCard` (estado "a gerar"), `ToolCallProgressCard`. Deixo os modais de confirmação como estão, porque destacar a cor de ação ali é convenção normal de UI (botão primário), diferente do problema que você descreveu.
+
+Vou ver a parte truncada de `WidgetProgressCard` antes de aplicar tudo.
