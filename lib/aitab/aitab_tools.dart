@@ -20,6 +20,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../colors.dart';
 import '../api_service.dart';
 import '../auth_service.dart';
+import '../aiwidgets.dart';
 import 'aitab_models.dart';
 
 // ══════════════════════════════════════════════════════════════

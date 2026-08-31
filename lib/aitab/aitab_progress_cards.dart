@@ -17,6 +17,7 @@ import '../apps/docs.dart';
 import '../apps/sheets_app.dart';
 import '../apps/slides_app.dart';
 import '../app_sheet.dart';
+import '../aiwidgets.dart';
 import 'aitab_models.dart';
 import 'aitab_widgets_shared.dart';
 import 'aitab_tools.dart';

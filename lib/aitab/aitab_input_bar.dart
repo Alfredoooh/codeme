@@ -13,6 +13,7 @@ import '../widgets/animated_canvas_icon.dart';
 import '../app_sheet.dart';
 import '../apps/app_types.dart';
 import '../apps/registry/app_registry.dart';
+import '../sheets.dart';
 import 'aitab_models.dart';
 import 'aitab_widgets_shared.dart';
 
