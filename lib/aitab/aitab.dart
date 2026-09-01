@@ -14,6 +14,14 @@
 // CORREÇÃO: os cards de progresso das tools mantêm-se visíveis
 // até ao primeiro token de resposta do modelo (não desaparecem
 // prematuramente).
+//
+// CORREÇÃO NESTA VERSÃO: alinhado com aitab_input_bar.dart —
+// removido _openAttachedFilesSheet (showAttachedFilesSheet não
+// existe mais; os anexos flutuantes já são renderizados pelo
+// próprio ChatInput via attachedFiles/onRemoveFile). Adicionado
+// anchorKey na chamada de showAttachMenuSheet. ChatInput agora
+// recebe attachedFiles (lista) + onRemoveFile em vez de
+// attachedFilesCount + onOpenAttachedFiles.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -705,15 +713,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     setState(() => _attachedFiles.removeWhere((f) => f.id == id));
   }
 
-  void _openAttachedFilesSheet() {
-    showAttachedFilesSheet(
-      context,
-      AppTheme.of(context),
-      files: _attachedFiles,
-      onRemove: _onRemoveAttachedFile,
-    );
-  }
-
   void _onToolSelected(EditorType t) => setState(() => _attachedTool = t);
   void _onClearTool() => setState(() => _attachedTool = null);
 
@@ -755,6 +754,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     showAttachMenuSheet(
       context,
       AppTheme.of(context),
+      anchorKey: _attachButtonKey,
       currentModel: _model,
       webSearchEnabled: _webSearchEnabled,
       widgetsEnabled: _widgetsEnabled,
@@ -1093,14 +1093,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     ctrl: _ctrl,
                     focusNode: _inputFocus,
                     attachedTool: _attachedTool,
-                    attachedFilesCount: _attachedFiles.length,
+                    attachedFiles: _attachedFiles,
                     incognito: _incognito,
                     sending: _sending,
                     attachButtonKey: _attachButtonKey,
                     onSend: _send,
                     onPause: _pauseGeneration,
                     onAttach: _openAttachSheet,
-                    onOpenAttachedFiles: _openAttachedFilesSheet,
+                    onRemoveFile: _onRemoveAttachedFile,
                   ),
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
