@@ -161,126 +161,6 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// PULL-TO-REFRESH — anel cônico translúcido, replica o HTML de referência
-// ══════════════════════════════════════════════════════════════
-
-// Pinta o mesmo anel do CSS:
-// conic-gradient(from 0deg, #111 0deg, #777 90deg, #ddd 180deg, transparent 260deg, #111 360deg)
-// com um "buraco" no meio (equivalente ao ::after com inset:3px e fundo sólido).
-class _ConicRingPainter extends CustomPainter {
-  final double rotationTurns; // 0..1, gira continuamente
-  final Color solidColor;     // #111 equivalente
-  final Color midColor;       // #777 equivalente
-  final Color lightColor;     // #ddd equivalente
-  final double strokeWidth;
-
-  _ConicRingPainter({
-    required this.rotationTurns,
-    required this.solidColor,
-    required this.midColor,
-    required this.lightColor,
-    this.strokeWidth = 3.0,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.width / 2;
-
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final gradient = SweepGradient(
-      startAngle: 0,
-      endAngle: 6.28318530718, // 2*pi
-      transform: GradientRotation(rotationTurns * 6.28318530718),
-      colors: [
-        solidColor,
-        midColor,
-        lightColor,
-        lightColor.withOpacity(0.0), // transparent em 260deg
-        solidColor,
-      ],
-      stops: const [0.0, 0.25, 0.5, 0.7222, 1.0], // 0/90/180/260/360 sobre 360
-    );
-
-    final paint = Paint()
-      ..shader = gradient.createShader(rect)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawCircle(center, radius - strokeWidth / 2, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConicRingPainter oldDelegate) =>
-      oldDelegate.rotationTurns != rotationTurns ||
-      oldDelegate.solidColor != solidColor ||
-      oldDelegate.midColor != midColor ||
-      oldDelegate.lightColor != lightColor ||
-      oldDelegate.strokeWidth != strokeWidth;
-}
-
-class GradientRingLoader extends StatefulWidget {
-  final double size;
-  final double opacity;
-  final double scale;
-  final Color solidColor;
-  final Color midColor;
-  final Color lightColor;
-
-  const GradientRingLoader({
-    super.key,
-    required this.size,
-    required this.opacity,
-    required this.scale,
-    required this.solidColor,
-    required this.midColor,
-    required this.lightColor,
-  });
-
-  @override
-  State<GradientRingLoader> createState() => _GradientRingLoaderState();
-}
-
-class _GradientRingLoaderState extends State<GradientRingLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _spinCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 750), // .75s linear infinite, igual ao HTML
-  )..repeat();
-
-  @override
-  void dispose() {
-    _spinCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: widget.opacity.clamp(0.0, 1.0),
-      child: Transform.scale(
-        scale: widget.scale,
-        child: AnimatedBuilder(
-          animation: _spinCtrl,
-          builder: (_, __) => CustomPaint(
-            size: Size.square(widget.size),
-            painter: _ConicRingPainter(
-              rotationTurns: _spinCtrl.value,
-              solidColor: widget.solidColor,
-              midColor: widget.midColor,
-              lightColor: widget.lightColor,
-              strokeWidth: widget.size * 0.11, // proporcional ao inset:3px de 27px
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // DRAWER
 // ══════════════════════════════════════════════════════════════
 
@@ -306,24 +186,9 @@ class AppDrawer extends StatefulWidget {
   State<AppDrawer> createState() => _AppDrawerState();
 }
 
-class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMixin {
+class _AppDrawerState extends State<AppDrawer> {
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
-
-  // ── Pull-to-refresh: réplica 1:1 da física do HTML de referência ──
-  static const double _trigger = 78.0;
-  static const double _maxPull = 125.0;
-  static const double _indicatorHeight = 82.0;
-
-  double _pull = 0.0;       // posição atual do puxão em px (equivalente à var `pull` do JS)
-  double _dragStartY = 0.0;
-  bool _dragging = false;
-  bool _refreshing = false;
-
-  // Controller que conduz as animações de settle/reset com o mesmo
-  // easing cúbico do HTML: 1 - (1-t)^3
-  late final AnimationController _settleCtrl = AnimationController(vsync: this);
-  Animation<double>? _settleAnim;
 
   @override
   void initState() {
@@ -337,7 +202,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
   void dispose() {
     conversationsController.removeListener(_onConvsChanged);
     authController.removeListener(_onAuthChanged);
-    _settleCtrl.dispose();
     super.dispose();
   }
 
@@ -453,75 +317,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
     });
   }
 
-  // ── Física do pull: idêntica ao touchmove do HTML ──────────
-
-  void _renderPull(double value) {
-    setState(() => _pull = value);
-  }
-
-  void _onDragStart(DragStartDetails d, ScrollController scrollCtrl) {
-    if (_refreshing) return;
-    if (scrollCtrl.hasClients && scrollCtrl.offset > 0) return;
-    _dragging = true;
-    _dragStartY = d.globalPosition.dy;
-    _settleCtrl.stop();
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (!_dragging || _refreshing) return;
-
-    final distance = d.globalPosition.dy - _dragStartY;
-
-    if (distance <= 0) {
-      _renderPull(0);
-      return;
-    }
-
-    // Curva de resistência exata do HTML:
-    // distance < trigger ? distance*.72 : trigger*.72 + (distance-trigger)*.32
-    final value = (distance < _trigger
-            ? distance * 0.72
-            : _trigger * 0.72 + (distance - _trigger) * 0.32)
-        .clamp(0.0, _maxPull);
-
-    _renderPull(value);
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    if (!_dragging || _refreshing) return;
-    _dragging = false;
-
-    if (_pull >= _trigger) {
-      _startRefresh();
-    } else {
-      _animateTo(0.0, duration: const Duration(milliseconds: 300));
-    }
-  }
-
-  // Easing cúbico 1-(1-t)^3, igual ao animate()/reset() do HTML.
-  void _animateTo(double target, {required Duration duration, VoidCallback? onDone}) {
-    _settleCtrl.stop();
-    _settleCtrl.duration = duration;
-    _settleAnim = Tween<double>(begin: _pull, end: target).animate(
-      CurvedAnimation(parent: _settleCtrl, curve: Curves.easeOutCubic),
-    )..addListener(() {
-        if (mounted) setState(() => _pull = _settleAnim!.value);
-      });
-    _settleCtrl.forward(from: 0).whenComplete(() => onDone?.call());
-  }
-
-  Future<void> _startRefresh() async {
-    _refreshing = true;
-    _animateTo(_trigger, duration: const Duration(milliseconds: 220));
-
-    await conversationsController.load();
-    if (!mounted) return;
-
-    _animateTo(0.0, duration: const Duration(milliseconds: 400), onDone: () {
-      _refreshing = false;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -542,35 +337,10 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                 Expanded(
                   child: _buildConversationsPage(context, s, pinned, others),
                 ),
-                const SizedBox(height: 112),
+                // Reduzido de 112 -> 88 para acompanhar a bottom bar mais baixa.
+                const SizedBox(height: 88),
               ],
             ),
-
-            // Progressão real da opacidade/escala igual ao render() do HTML:
-            // loader.opacity = min(progress*1.4, 1); loader.scale = .5 + progress*.5
-            Builder(builder: (_) {
-              final progress = (_pull / _trigger).clamp(0.0, 1.0);
-              return Positioned(
-                top: 48, left: 0, right: 0,
-                height: _indicatorHeight,
-                child: IgnorePointer(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 17),
-                      child: GradientRingLoader(
-                        size: 27,
-                        opacity: (progress * 1.4).clamp(0.0, 1.0),
-                        scale: 0.5 + progress * 0.5,
-                        solidColor: s.onSurface,
-                        midColor: s.onSurfaceVariant,
-                        lightColor: s.outline,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
 
             Positioned(
               top: 0, left: 0, right: 0,
@@ -580,9 +350,6 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    // Curva não-linear (mais opaco perto da borda, dissolve rápido
-                    // perto do fim) — padrão comum em headers iOS/Android, em vez
-                    // de um degradê reto de dois pontos.
                     stops: const [0.0, 0.45, 0.75, 1.0],
                     colors: [
                       s.pageBackground,
@@ -622,7 +389,9 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
             Positioned(
               left: 0, right: 0, bottom: 0,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+                // top: 24 -> 12: essa margem extra era o que empurrava a
+                // bottom bar para cima e a fazia "parecer" mais alta.
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
@@ -665,10 +434,9 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
       return Center(
         child: SizedBox(
           width: 24, height: 24,
-          child: CircularProgressIndicator(
-            strokeWidth: 3,
-            strokeCap: StrokeCap.round,
-            valueColor: AlwaysStoppedAnimation(s.onSurfaceVariant),
+          child: CupertinoActivityIndicator(
+            radius: 12,
+            color: s.onSurfaceVariant,
           ),
         ),
       );
@@ -772,66 +540,46 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
       }
     }
 
-    // O ScrollController é criado aqui porque _onDragStart precisa
-    // consultar scrollCtrl.offset (equivalente a scroll.scrollTop no HTML)
-    // para só iniciar o pull quando já está no topo da lista.
-    return _PullDetectorScope(
-      onDragStart: _onDragStart,
-      onDragUpdate: _onDragUpdate,
-      onDragEnd: _onDragEnd,
-      builder: (scrollCtrl) => Transform.translate(
-        // content.style.transform = translate3d(0,value,0) — 1:1, sem
-        // animação implícita própria; quem anima é o _settleCtrl.
-        offset: Offset(0, _pull),
-        child: ListView(
-          controller: scrollCtrl,
-          physics: const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-          children: sections,
+    // Pull-to-refresh nativo Cupertino (CustomScrollView + Sliver),
+    // com o CupertinoActivityIndicator pintado nas cores do tema
+    // via builder — substitui toda a física manual anterior.
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      slivers: [
+        CupertinoSliverRefreshControl(
+          onRefresh: () => conversationsController.load(),
+          builder: (
+            BuildContext context,
+            RefreshIndicatorMode refreshState,
+            double pulledExtent,
+            double refreshTriggerPullDistance,
+            double refreshIndicatorExtent,
+          ) {
+            final double progress =
+                (pulledExtent / refreshTriggerPullDistance).clamp(0.0, 1.0);
+            final bool spinning =
+                refreshState == RefreshIndicatorMode.armed ||
+                refreshState == RefreshIndicatorMode.refresh;
+
+            return Center(
+              child: Opacity(
+                opacity: progress,
+                child: CupertinoActivityIndicator(
+                  radius: 12,
+                  color: s.onSurfaceVariant,
+                  animating: spinning,
+                ),
+              ),
+            );
+          },
         ),
-      ),
-    );
-  }
-}
-
-// Isola o ScrollController + os três gestos de drag (start/update/end)
-// num único widget para que _onDragStart consiga ler scrollCtrl.offset,
-// exatamente como o HTML lê scroll.scrollTop antes de decidir se o pull
-// deve começar.
-class _PullDetectorScope extends StatefulWidget {
-  final void Function(DragStartDetails, ScrollController) onDragStart;
-  final void Function(DragUpdateDetails) onDragUpdate;
-  final void Function(DragEndDetails) onDragEnd;
-  final Widget Function(ScrollController) builder;
-
-  const _PullDetectorScope({
-    required this.onDragStart,
-    required this.onDragUpdate,
-    required this.onDragEnd,
-    required this.builder,
-  });
-
-  @override
-  State<_PullDetectorScope> createState() => _PullDetectorScopeState();
-}
-
-class _PullDetectorScopeState extends State<_PullDetectorScope> {
-  final ScrollController _scrollCtrl = ScrollController();
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onVerticalDragStart: (d) => widget.onDragStart(d, _scrollCtrl),
-      onVerticalDragUpdate: widget.onDragUpdate,
-      onVerticalDragEnd: widget.onDragEnd,
-      child: widget.builder(_scrollCtrl),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(sections),
+          ),
+        ),
+      ],
     );
   }
 }
