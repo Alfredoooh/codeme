@@ -3,6 +3,17 @@
 // A barra de input do chat, pills de anexo, e todos os sheets
 // acionados a partir dela (voz, opções de IA, apps, canvas,
 // ficheiros anexados, seleção de texto).
+//
+// ATUALIZAÇÃO NESTA VERSÃO:
+// 1) _FloatingAttachmentChip deixou de renderizar preview de
+//    imagem inline — mostra sempre nome + ícone close_circle,
+//    igual a qualquer outro tipo de ficheiro. O toque no chip
+//    (fora do botão de remover) abre a visualização em ecrã
+//    inteiro, tanto para imagens como para outros ficheiros.
+// 2) showAttachMenuSheet agora usa a mesma lógica de popup
+//    ancorado (crescimento a partir do botão, scale+fade) já
+//    usada — trazida da mesma família de _AnchoredPopupRoute que
+//    já existia neste ficheiro, sem depender de nada do main.dart.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -319,8 +330,10 @@ class _AttachedToolPill extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // ANEXOS FLUTUANTES — ficam por cima do bottombar (não dentro
-// dele), cada um mostra nome com reticências, ícone close_circle
-// para remover, e toque em imagem abre em ecrã inteiro.
+// dele). Cada chip mostra SOMENTE nome + ícone close_circle, para
+// qualquer tipo de ficheiro (imagem ou não) — nunca renderiza a
+// imagem em si dentro do chip. O toque no chip (fora do botão de
+// remover) abre a visualização em ecrã inteiro.
 // ══════════════════════════════════════════════════════════════
 
 class _FloatingAttachmentsRow extends StatelessWidget {
@@ -336,7 +349,7 @@ class _FloatingAttachmentsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 64,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: files.length,
@@ -364,14 +377,13 @@ class _FloatingAttachmentChip extends StatelessWidget {
   bool get _isImage => file.mimeType.startsWith('image/');
 
   void _openFullScreen(BuildContext context) {
-    if (!_isImage) return;
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black.withOpacity(0.92),
         pageBuilder: (_, anim, __) => FadeTransition(
           opacity: anim,
-          child: _FullScreenImageView(file: file),
+          child: _FullScreenFileView(file: file, isImage: _isImage),
         ),
       ),
     );
@@ -379,98 +391,67 @@ class _FloatingAttachmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 148,
-      height: 56,
-      decoration: BoxDecoration(
-        color: s.isDark ? s.cardBackground : s.floatingSurface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(s.isDark ? 0.24 : 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          GestureDetector(
-            onTap: () => _openFullScreen(context),
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.all(7),
-              child: Row(
-                children: [
-                  if (_isImage)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        file.bytes,
-                        width: 42, height: 42,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 42, height: 42,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: s.primaryContainer.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: AppIcon('paperclip',
-                          color: s.onPrimaryContainer, size: 18),
-                    ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      file.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
+    return GestureDetector(
+      onTap: () => _openFullScreen(context),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.only(left: 14, right: 8),
+        decoration: BoxDecoration(
+          color: s.isDark ? const Color(0xFF262626) : const Color(0xFF262626),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(s.isDark ? 0.24 : 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: Text(
+                file.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
               ),
             ),
-          ),
-          Positioned(
-            top: -6,
-            right: -6,
-            child: GestureDetector(
+            const SizedBox(width: 8),
+            GestureDetector(
               onTap: onRemove,
               child: Container(
-                width: 20, height: 20,
+                width: 26, height: 26,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: s.isDark ? s.cardBackground : Colors.white,
+                  color: Colors.white.withOpacity(0.16),
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
                 ),
-                child: AppIcon('close_circle', size: 20, color: s.error),
+                child: const Icon(Icons.close, size: 15, color: Colors.white),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _FullScreenImageView extends StatelessWidget {
+/// Visualização em ecrã inteiro de um anexo. Para imagens, mostra
+/// a imagem com zoom/pan. Para outros ficheiros, mostra um cartão
+/// com o ícone do tipo e o nome — nunca tenta renderizar preview
+/// de binários não suportados.
+class _FullScreenFileView extends StatelessWidget {
   final AttachedFile file;
-  const _FullScreenImageView({required this.file});
+  final bool isImage;
+  const _FullScreenFileView({required this.file, required this.isImage});
 
   @override
   Widget build(BuildContext context) {
@@ -482,11 +463,42 @@ class _FullScreenImageView extends StatelessWidget {
           child: Stack(
             children: [
               Center(
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4,
-                  child: Image.memory(file.bytes, fit: BoxFit.contain),
-                ),
+                child: isImage
+                    ? InteractiveViewer(
+                        minScale: 0.8,
+                        maxScale: 4,
+                        child: Image.memory(file.bytes, fit: BoxFit.contain),
+                      )
+                    : GestureDetector(
+                        onTap: () {}, // evita fechar ao tocar no cartão
+                        child: Container(
+                          width: 220,
+                          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.insert_drive_file,
+                                  size: 48, color: Colors.white70),
+                              const SizedBox(height: 14),
+                              Text(
+                                file.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
               ),
               Positioned(
                 top: 8,
@@ -504,22 +516,23 @@ class _FullScreenImageView extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 20,
-                child: Text(
-                  file.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+              if (isImage)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 20,
+                  child: Text(
+                    file.name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -828,7 +841,9 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 
 // ══════════════════════════════════════════════════════════════
 // MENU POPUP: "+" — ancorado ao botão, cresce a partir dele com
-// animação suave de scale + fade, cantos bem curvos.
+// animação suave de scale + fade, cantos bem curvos. Esta é a
+// MESMA lógica de popup ancorado (_AnchoredPopupRoute) usada em
+// todo o resto da app para o botão de opções.
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachMenuPageKind { root, modelSelect }
