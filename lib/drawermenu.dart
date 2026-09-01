@@ -1676,3 +1676,4 @@ class _NewChatPillState extends State<_NewChatPill> {
       ),
     );
   }
+}
