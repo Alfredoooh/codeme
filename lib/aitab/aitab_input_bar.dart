@@ -26,14 +26,14 @@ class ChatInput extends StatelessWidget {
   final TextEditingController ctrl;
   final FocusNode focusNode;
   final EditorType? attachedTool;
-  final int attachedFilesCount;
+  final List<AttachedFile> attachedFiles;
   final bool incognito;
   final bool sending;
   final GlobalKey attachButtonKey;
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
-  final VoidCallback onOpenAttachedFiles;
+  final ValueChanged<String> onRemoveFile;
 
   const ChatInput({
     super.key,
@@ -41,14 +41,14 @@ class ChatInput extends StatelessWidget {
     required this.ctrl,
     required this.focusNode,
     required this.attachedTool,
-    required this.attachedFilesCount,
+    required this.attachedFiles,
     required this.incognito,
     required this.sending,
     required this.attachButtonKey,
     required this.onSend,
     required this.onPause,
     required this.onAttach,
-    required this.onOpenAttachedFiles,
+    required this.onRemoveFile,
   });
 
   @override
@@ -70,63 +70,80 @@ class ChatInput extends StatelessWidget {
       animation: Listenable.merge([ctrl, focusNode]),
       builder: (context, _) {
         final hasText = ctrl.text.trim().isNotEmpty;
-        final expanded = hasText || focusNode.hasFocus;
 
-        return _ChatInputShell(
-          s: s,
-          expanded: expanded,
-          hasText: hasText,
-          incognito: incognito,
-          sending: sending,
-          floatingShadow: floatingShadow,
-          attachedTool: attachedTool,
-          attachedFilesCount: attachedFilesCount,
-          attachButtonKey: attachButtonKey,
-          ctrl: ctrl,
-          focusNode: focusNode,
-          onSend: onSend,
-          onPause: onPause,
-          onAttach: onAttach,
-          onOpenAttachedFiles: onOpenAttachedFiles,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Anexos flutuam por cima do bottombar, não dentro dele.
+            if (attachedFiles.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _FloatingAttachmentsRow(
+                  s: s,
+                  files: attachedFiles,
+                  onRemove: onRemoveFile,
+                ),
+              ),
+            _ChatInputShell(
+              s: s,
+              hasText: hasText,
+              incognito: incognito,
+              sending: sending,
+              floatingShadow: floatingShadow,
+              attachedTool: attachedTool,
+              attachButtonKey: attachButtonKey,
+              ctrl: ctrl,
+              focusNode: focusNode,
+              onSend: onSend,
+              onPause: onPause,
+              onAttach: onAttach,
+            ),
+          ],
         );
       },
     );
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// SHELL DO INPUT — cresce progressivamente com o texto, com
+// altura máxima definida (não expande tudo de uma vez ao focar).
+// ══════════════════════════════════════════════════════════════
+
 class _ChatInputShell extends StatelessWidget {
   final AppColorScheme s;
-  final bool expanded;
   final bool hasText;
   final bool incognito;
   final bool sending;
   final List<BoxShadow> floatingShadow;
   final EditorType? attachedTool;
-  final int attachedFilesCount;
   final GlobalKey attachButtonKey;
   final TextEditingController ctrl;
   final FocusNode focusNode;
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
-  final VoidCallback onOpenAttachedFiles;
+
+  // Altura máxima do bottombar antes de o texto passar a fazer
+  // scroll internamente. Ajusta este valor se quiseres mais/menos
+  // linhas visíveis antes do limite.
+  static const double _maxInputHeight = 168.0;
+  static const double _minInputHeight = 52.0;
 
   const _ChatInputShell({
     required this.s,
-    required this.expanded,
     required this.hasText,
     required this.incognito,
     required this.sending,
     required this.floatingShadow,
     required this.attachedTool,
-    required this.attachedFilesCount,
     required this.attachButtonKey,
     required this.ctrl,
     required this.focusNode,
     required this.onSend,
     required this.onPause,
     required this.onAttach,
-    required this.onOpenAttachedFiles,
   });
 
   Widget _sendButton() {
@@ -171,11 +188,13 @@ class _ChatInputShell extends StatelessWidget {
     );
   }
 
-  Widget _textField({required int minLines, required int maxLines}) {
+  Widget _textField() {
     return TextField(
       controller: ctrl,
       focusNode: focusNode,
-      minLines: minLines, maxLines: maxLines,
+      minLines: 1,
+      maxLines: null,
+      keyboardType: TextInputType.multiline,
       textCapitalization: TextCapitalization.sentences,
       style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15).copyWith(color: s.onSurface),
       cursorColor: s.primary,
@@ -190,64 +209,47 @@ class _ChatInputShell extends StatelessWidget {
     );
   }
 
-  Widget _attachmentPills() {
-    if (attachedTool == null && attachedFilesCount == 0) return const SizedBox.shrink();
+  Widget _toolPillRow() {
+    if (attachedTool == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-      child: Wrap(
-        spacing: 8, runSpacing: 8,
-        children: [
-          if (attachedTool != null)
-            _AttachedToolPill(s: s, type: attachedTool!, onClear: () {}),
-          if (attachedFilesCount > 0)
-            _AttachedFilesPill(
-                s: s, count: attachedFilesCount, onTap: onOpenAttachedFiles),
-        ],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _AttachedToolPill(s: s, type: attachedTool!, onClear: () {}),
       ),
     );
   }
 
-  Widget _compact() {
-    return Container(
-      key: const ValueKey('compact'),
-      height: 52,
-      padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+  @override
+  Widget build(BuildContext context) {
+    // O teclado abre imediatamente ao tocar (foco normal do
+    // TextField); o que aqui controlamos é só a altura visual do
+    // shell, que cresce com o conteúdo até _maxInputHeight e depois
+    // passa a fazer scroll interno do texto.
+    final content = Container(
+      constraints: const BoxConstraints(
+        minHeight: _minInputHeight,
+        maxHeight: _maxInputHeight,
+      ),
       decoration: BoxDecoration(
         color: s.isDark ? s.cardBackground : s.floatingSurface,
         borderRadius: BorderRadius.circular(26),
-        boxShadow: floatingShadow,
-      ),
-      child: Row(
-        children: [
-          _attachButton(),
-          Expanded(child: _textField(minLines: 1, maxLines: 1)),
-          const SizedBox(width: 4),
-          _sendButton(),
-          const SizedBox(width: 2),
-        ],
-      ),
-    );
-  }
-
-  Widget _expandedForm() {
-    return Container(
-      key: const ValueKey('expanded'),
-      decoration: BoxDecoration(
-        color: s.isDark ? s.cardBackground : s.floatingSurface,
-        borderRadius: BorderRadius.circular(20),
         boxShadow: floatingShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _attachmentPills(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: _textField(minLines: 1, maxLines: 6),
+          _toolPillRow(),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+              reverse: true,
+              child: _textField(),
+            ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 4, 12, 10),
+            padding: const EdgeInsets.fromLTRB(10, 0, 12, 8),
             child: Row(
               children: [
                 _attachButton(),
@@ -259,32 +261,20 @@ class _ChatInputShell extends StatelessWidget {
         ],
       ),
     );
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final content = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeIn,
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: SizeTransition(
-          sizeFactor: anim,
-          axisAlignment: -1.0,
-          child: child,
-        ),
-      ),
-      child: expanded ? _expandedForm() : _compact(),
+    final animated = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      child: content,
     );
 
     return incognito
         ? DashedRRectBorder(
             color: s.outline,
-            radius: expanded ? 20 : 26,
-            child: content,
+            radius: 26,
+            child: animated,
           )
-        : content;
+        : animated;
   }
 }
 
@@ -327,32 +317,211 @@ class _AttachedToolPill extends StatelessWidget {
       );
 }
 
-class _AttachedFilesPill extends StatelessWidget {
+// ══════════════════════════════════════════════════════════════
+// ANEXOS FLUTUANTES — ficam por cima do bottombar (não dentro
+// dele), cada um mostra nome com reticências, ícone close_circle
+// para remover, e toque em imagem abre em ecrã inteiro.
+// ══════════════════════════════════════════════════════════════
+
+class _FloatingAttachmentsRow extends StatelessWidget {
   final AppColorScheme s;
-  final int count;
-  final VoidCallback onTap;
-  const _AttachedFilesPill({required this.s, required this.count, required this.onTap});
+  final List<AttachedFile> files;
+  final ValueChanged<String> onRemove;
+  const _FloatingAttachmentsRow({
+    required this.s,
+    required this.files,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final bg = s.isDark ? s.hover : s.primary.withOpacity(0.12);
-    final fg = s.isDark ? s.onSurfaceVariant : s.primary;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
+    return SizedBox(
+      height: 64,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: files.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) => _FloatingAttachmentChip(
+          s: s,
+          file: files[i],
+          onRemove: () => onRemove(files[i].id),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon('paperclip', color: fg, size: 13),
-            const SizedBox(width: 4),
-            Text('$count anexo${count == 1 ? '' : 's'}',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
-          ],
+      ),
+    );
+  }
+}
+
+class _FloatingAttachmentChip extends StatelessWidget {
+  final AppColorScheme s;
+  final AttachedFile file;
+  final VoidCallback onRemove;
+  const _FloatingAttachmentChip({
+    required this.s,
+    required this.file,
+    required this.onRemove,
+  });
+
+  bool get _isImage => file.mimeType.startsWith('image/');
+
+  void _openFullScreen(BuildContext context) {
+    if (!_isImage) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.92),
+        pageBuilder: (_, anim, __) => FadeTransition(
+          opacity: anim,
+          child: _FullScreenImageView(file: file),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 148,
+      height: 56,
+      decoration: BoxDecoration(
+        color: s.isDark ? s.cardBackground : s.floatingSurface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(s.isDark ? 0.24 : 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          GestureDetector(
+            onTap: () => _openFullScreen(context),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(7),
+              child: Row(
+                children: [
+                  if (_isImage)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        file.bytes,
+                        width: 42, height: 42,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 42, height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: s.primaryContainer.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: AppIcon('paperclip',
+                          color: s.onPrimaryContainer, size: 18),
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      file.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: -6,
+            right: -6,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                width: 20, height: 20,
+                decoration: BoxDecoration(
+                  color: s.isDark ? s.cardBackground : Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.18),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: AppIcon('close_circle', size: 20, color: s.error),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FullScreenImageView extends StatelessWidget {
+  final AttachedFile file;
+  const _FullScreenImageView({required this.file});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Center(
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4,
+                  child: Image.memory(file.bytes, fit: BoxFit.contain),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 36, height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const AppIcon('close', color: Colors.white, size: 18),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 20,
+                child: Text(
+                  file.name,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -396,136 +565,6 @@ Future<void> showSelectTextSheet(
       ),
     )),
   );
-}
-
-// ══════════════════════════════════════════════════════════════
-// SHEET: FICHEIROS ANEXADOS
-// ══════════════════════════════════════════════════════════════
-
-Future<void> showAttachedFilesSheet(
-  BuildContext context,
-  AppColorScheme s, {
-  required List<AttachedFile> files,
-  required ValueChanged<String> onRemove,
-}) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: StatefulBuilder(
-      builder: (ctx, setModalState) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              AppIcon('attach', color: s.onSurface, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Anexos desta mensagem',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            if (files.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text('Sem anexos.',
-                      style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.7,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: files.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) {
-                    final f = files[i];
-                    return _AttachedFileRow(
-                      s: s,
-                      file: f,
-                      onRemove: () {
-                        onRemove(f.id);
-                        setModalState(() {});
-                        if (files.length <= 1) Navigator.pop(ctx);
-                      },
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _AttachedFileRow extends StatelessWidget {
-  final AppColorScheme s;
-  final AttachedFile file;
-  final VoidCallback onRemove;
-  const _AttachedFileRow({required this.s, required this.file, required this.onRemove});
-
-  String get _sizeLabel {
-    final kb = file.bytes.length / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
-    return '${(kb / 1024).toStringAsFixed(1)} MB';
-  }
-
-  bool get _isImage => file.mimeType.startsWith('image/');
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: s.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(children: [
-          if (_isImage)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.memory(file.bytes, width: 40, height: 40, fit: BoxFit.cover),
-            )
-          else
-            Container(
-              width: 40, height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.primaryContainer.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: AppIcon('paperclip',
-                  color: s.onPrimaryContainer, size: 18),
-            ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(file.name,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
-                Text(_sizeLabel, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: onRemove,
-            child: Container(
-              width: 28, height: 28,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: s.error.withOpacity(0.12), shape: BoxShape.circle),
-              child: AppIcon('close', color: s.error, size: 14),
-            ),
-          ),
-        ]),
-      );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -788,7 +827,8 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET UNIFICADO: "+" — anexar, plugins, modelo, canvas, apps
+// MENU POPUP: "+" — ancorado ao botão, cresce a partir dele com
+// animação suave de scale + fade, cantos bem curvos.
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachMenuPageKind { root, modelSelect }
@@ -796,6 +836,7 @@ enum _AttachMenuPageKind { root, modelSelect }
 Future<void> showAttachMenuSheet(
   BuildContext context,
   AppColorScheme s, {
+  required GlobalKey anchorKey,
   required AiModel currentModel,
   required bool webSearchEnabled,
   required bool widgetsEnabled,
@@ -807,23 +848,152 @@ Future<void> showAttachMenuSheet(
   required VoidCallback onPhotos,
   required VoidCallback onLocalFile,
 }) {
-  return showCraftBottomSheet<void>(
-    context: context,
-    s: s,
-    child: _AttachMenuSheetContent(
-      s: s,
-      currentModel: currentModel,
-      webSearchEnabled: webSearchEnabled,
-      widgetsEnabled: widgetsEnabled,
-      onModelSelected: onModelSelected,
-      onWebSearchChanged: onWebSearchChanged,
-      onWidgetsChanged: onWidgetsChanged,
-      onOpenCanvas: onOpenCanvas,
-      onCamera: onCamera,
-      onPhotos: onPhotos,
-      onLocalFile: onLocalFile,
+  final renderBox = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (renderBox == null) return Future.value();
+
+  final anchorPosition = renderBox.localToGlobal(Offset.zero);
+  final anchorSize = renderBox.size;
+  final screenSize = MediaQuery.of(context).size;
+
+  return Navigator.of(context, rootNavigator: true).push(
+    _AnchoredPopupRoute(
+      anchorTopLeft: anchorPosition,
+      anchorSize: anchorSize,
+      screenSize: screenSize,
+      builder: (ctx) => _AttachMenuSheetContent(
+        s: s,
+        currentModel: currentModel,
+        webSearchEnabled: webSearchEnabled,
+        widgetsEnabled: widgetsEnabled,
+        onModelSelected: onModelSelected,
+        onWebSearchChanged: onWebSearchChanged,
+        onWidgetsChanged: onWidgetsChanged,
+        onOpenCanvas: onOpenCanvas,
+        onCamera: onCamera,
+        onPhotos: onPhotos,
+        onLocalFile: onLocalFile,
+      ),
     ),
   );
+}
+
+/// Rota transparente que posiciona o menu ancorado ao botão de
+/// origem e anima crescimento (scale a partir do canto do botão)
+/// + fade, em vez de um bottom sheet a subir do fundo do ecrã.
+class _AnchoredPopupRoute extends PopupRoute<void> {
+  final Offset anchorTopLeft;
+  final Size anchorSize;
+  final Size screenSize;
+  final WidgetBuilder builder;
+
+  _AnchoredPopupRoute({
+    required this.anchorTopLeft,
+    required this.anchorSize,
+    required this.screenSize,
+    required this.builder,
+  });
+
+  @override
+  Color? get barrierColor => Colors.black.withOpacity(0.32);
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  String? get barrierLabel => 'Fechar menu';
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 240);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 180);
+
+  static const double _menuWidth = 300.0;
+  static const double _margin = 12.0;
+
+  @override
+  Widget buildPage(BuildContext context, Animation<double> animation,
+      Animation<double> secondaryAnimation) {
+    // Ancora o menu por cima do botão "+", alinhado à esquerda dele,
+    // com a base do menu assente logo acima do topo do botão.
+    final anchorCenterX = anchorTopLeft.dx + (anchorSize.width / 2);
+    double left = anchorTopLeft.dx - 4;
+    if (left + _menuWidth > screenSize.width - _margin) {
+      left = screenSize.width - _margin - _menuWidth;
+    }
+    if (left < _margin) left = _margin;
+
+    final bottomAnchor = screenSize.height - anchorTopLeft.dy + 10;
+    final alignmentX = ((anchorCenterX - left) / _menuWidth).clamp(0.0, 1.0);
+
+    return Stack(
+      children: [
+        Positioned(
+          left: left,
+          right: null,
+          bottom: bottomAnchor,
+          width: _menuWidth,
+          child: _AnimatedAnchoredMenu(
+            animation: animation,
+            growthAlignment: Alignment(alignmentX * 2 - 1, 1.0),
+            child: builder(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget buildTransitions(BuildContext context, Animation<double> animation,
+      Animation<double> secondaryAnimation, Widget child) {
+    // O crescimento animado já acontece dentro de buildPage via
+    // _AnimatedAnchoredMenu, para poder ancorar corretamente ao
+    // ponto do botão (Alignment dinâmico consoante a posição).
+    return child;
+  }
+}
+
+class _AnimatedAnchoredMenu extends StatelessWidget {
+  final Animation<double> animation;
+  final Alignment growthAlignment;
+  final Widget child;
+  const _AnimatedAnchoredMenu({
+    required this.animation,
+    required this.growthAlignment,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeIn,
+    );
+    final fade = CurvedAnimation(
+      parent: animation,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      reverseCurve: Curves.easeIn,
+    );
+
+    return Align(
+      alignment: growthAlignment,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.82, end: 1.0).animate(curved),
+        alignment: growthAlignment,
+        child: FadeTransition(
+          opacity: fade,
+          child: SafeArea(
+            top: false,
+            child: Material(
+              color: Colors.transparent,
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AttachMenuSheetContent extends StatefulWidget {
@@ -875,68 +1045,82 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, anim) {
-          final isModelPage = child.key == const ValueKey('model_page');
-          final beginOffset = isModelPage
-              ? const Offset(0.06, 0)
-              : const Offset(-0.06, 0);
-          return FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
-                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-        child: _page == _AttachMenuPageKind.root
-            ? _RootPage(
-                key: const ValueKey('root_page'),
-                s: s,
-                selectedModel: _selectedModel,
-                webSearchEnabled: _localWeb,
-                widgetsEnabled: _localWidgets,
-                onModelTap: _goToModelSelect,
-                onCanvasTap: () {
-                  Navigator.pop(context);
-                  widget.onOpenCanvas();
-                },
-                onWebSearchChanged: (v) {
-                  setState(() => _localWeb = v);
-                  widget.onWebSearchChanged(v);
-                },
-                onWidgetsChanged: (v) {
-                  setState(() => _localWidgets = v);
-                  widget.onWidgetsChanged(v);
-                },
-                onCamera: () {
-                  Navigator.pop(context);
-                  widget.onCamera();
-                },
-                onPhotos: () {
-                  Navigator.pop(context);
-                  widget.onPhotos();
-                },
-                onLocalFile: () {
-                  Navigator.pop(context);
-                  widget.onLocalFile();
-                },
-              )
-            : _ModelSelectPage(
-                key: const ValueKey('model_page'),
-                s: s,
-                selectedModel: _selectedModel,
-                onBack: _backToRoot,
-                onPick: _pickModel,
+    return Container(
+      decoration: BoxDecoration(
+        color: s.isDark ? s.cardBackground : s.floatingSurface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(s.isDark ? 0.36 : 0.16),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.bottomCenter,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, anim) {
+            final isModelPage = child.key == const ValueKey('model_page');
+            final beginOffset = isModelPage
+                ? const Offset(0.06, 0)
+                : const Offset(-0.06, 0);
+            return FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
+                    .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+                child: child,
               ),
+            );
+          },
+          child: _page == _AttachMenuPageKind.root
+              ? _RootPage(
+                  key: const ValueKey('root_page'),
+                  s: s,
+                  selectedModel: _selectedModel,
+                  webSearchEnabled: _localWeb,
+                  widgetsEnabled: _localWidgets,
+                  onModelTap: _goToModelSelect,
+                  onCanvasTap: () {
+                    Navigator.pop(context);
+                    widget.onOpenCanvas();
+                  },
+                  onWebSearchChanged: (v) {
+                    setState(() => _localWeb = v);
+                    widget.onWebSearchChanged(v);
+                  },
+                  onWidgetsChanged: (v) {
+                    setState(() => _localWidgets = v);
+                    widget.onWidgetsChanged(v);
+                  },
+                  onCamera: () {
+                    Navigator.pop(context);
+                    widget.onCamera();
+                  },
+                  onPhotos: () {
+                    Navigator.pop(context);
+                    widget.onPhotos();
+                  },
+                  onLocalFile: () {
+                    Navigator.pop(context);
+                    widget.onLocalFile();
+                  },
+                )
+              : _ModelSelectPage(
+                  key: const ValueKey('model_page'),
+                  s: s,
+                  selectedModel: _selectedModel,
+                  onBack: _backToRoot,
+                  onPick: _pickModel,
+                ),
+        ),
       ),
     );
   }
@@ -973,7 +1157,7 @@ class _RootPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -999,7 +1183,7 @@ class _RootPage extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           _PlainMenuRow(
             s: s,
             assetName: 'sliders',
