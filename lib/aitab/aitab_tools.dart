@@ -94,6 +94,7 @@ class ImagesToolResult {
 const Set<String> kVisualTools = {
   'generate_chart', 'generate_mindmap', 'generate_qrcode', 'generate_barcode',
   'generate_math', 'generate_table_image', 'generate_html_image',
+  'generate_function_plot', 'download_image_for_project',
   'get_weather',
 };
 
@@ -101,6 +102,7 @@ const Set<String> kDocumentTools = {
   'create_pdf', 'create_docx', 'create_xlsx', 'create_pptx',
   'csv_to_xlsx', 'convert_document',
   'html_to_docx', 'html_to_pdf', 'html_to_xlsx', 'html_to_pptx',
+  'create_project_zip',
 };
 
 const Set<String> kImageSearchTools = {'search_images'};

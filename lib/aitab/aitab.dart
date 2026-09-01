@@ -696,6 +696,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'xls': 'application/vnd.ms-excel',
       'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'zip': 'application/zip',
     };
     return map[ext] ?? 'application/octet-stream';
   }
@@ -1033,6 +1034,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                   item = UserBubble(
                                     s: s,
                                     text: msg.content,
+                                    attachments: msg.attachments,
                                     onEdit: () => _onBubbleEdit(i),
                                     onCopy: () => _onBubbleCopy(i),
                                     onDelete: () => _onBubbleDelete(i),

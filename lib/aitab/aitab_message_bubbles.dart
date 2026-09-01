@@ -28,6 +28,7 @@ import 'aitab_progress_cards.dart';
 class UserBubble extends StatelessWidget {
   final AppColorScheme s;
   final String text;
+  final List<Map<String, dynamic>>? attachments;
   final VoidCallback onEdit;
   final VoidCallback onCopy;
   final VoidCallback onDelete;
@@ -36,6 +37,7 @@ class UserBubble extends StatelessWidget {
     super.key,
     required this.s,
     required this.text,
+    this.attachments,
     required this.onEdit,
     required this.onCopy,
     required this.onDelete,
@@ -75,9 +77,73 @@ class UserBubble extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: s.cardShadow,
           ),
-          child: Text(text,
-              style: TextStyle(color: textColor, fontSize: 14)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (attachments != null && attachments!.isNotEmpty) ...[
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: attachments!
+                      .map((a) => _UserAttachmentChip(s: s, attachment: a))
+                      .toList(),
+                ),
+                if (text.isNotEmpty) const SizedBox(height: 8),
+              ],
+              if (text.isNotEmpty)
+                Text(text,
+                    style: TextStyle(color: textColor, fontSize: 14)),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _UserAttachmentChip extends StatelessWidget {
+  final AppColorScheme s;
+  final Map<String, dynamic> attachment;
+  const _UserAttachmentChip({required this.s, required this.attachment});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = attachment['name']?.toString() ?? 'anexo';
+    final mimeType = attachment['mimeType']?.toString() ?? '';
+    final isImage = mimeType.startsWith('image/');
+    final isPdf = mimeType == 'application/pdf';
+    final isZip = mimeType == 'application/zip';
+    final iconName = isImage
+        ? 'image'
+        : (isPdf
+            ? 'pdf'
+            : (isZip ? 'folder_upload' : 'paperclip'));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon(iconName, size: 12, color: Colors.white),
+          const SizedBox(width: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 100),
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 10.5,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -206,13 +272,11 @@ class _FullscreenImageScreen extends StatelessWidget {
         child: SafeArea(
           child: Stack(
             children: [
-              // Conteúdo central
               Center(
                 child: InteractiveViewer(
                   child: Image.memory(bytes, fit: BoxFit.contain),
                 ),
               ),
-              // Appbar custom (igual ao settings)
               Positioned(
                 top: 0,
                 left: 0,
@@ -315,6 +379,7 @@ class ToolResultDownloadCard extends StatelessWidget {
     if (lower.endsWith('.docx')) return 'doc';
     if (lower.endsWith('.xlsx')) return 'table';
     if (lower.endsWith('.pptx')) return 'stacks';
+    if (lower.endsWith('.zip')) return 'folder_upload';
     return 'doc';
   }
 
@@ -324,6 +389,7 @@ class ToolResultDownloadCard extends StatelessWidget {
     if (lower.endsWith('.docx')) return 'Documento Word';
     if (lower.endsWith('.xlsx')) return 'Folha de cálculo';
     if (lower.endsWith('.pptx')) return 'Apresentação';
+    if (lower.endsWith('.zip')) return 'Projeto ZIP';
     return 'Documento';
   }
 
@@ -541,7 +607,6 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
         child: SafeArea(
           child: Stack(
             children: [
-              // Galeria de imagens
               Positioned.fill(
                 child: PageView.builder(
                   controller: _pageCtrl,
@@ -565,7 +630,6 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
                   },
                 ),
               ),
-              // Appbar custom (igual ao settings)
               Positioned(
                 top: 0,
                 left: 0,
@@ -740,7 +804,7 @@ class _SourceRow extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
-// BOLHA DO ASSISTENTE (já finalizada)
+// BOLHA DO ASSISTENTE
 // ──────────────────────────────────────────────────────────────
 
 class AssistantBubble extends StatelessWidget {
@@ -978,7 +1042,7 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 }
 
 // ──────────────────────────────────────────────────────────────
-// BOLHA DE STREAMING (em construção)
+// BOLHA DE STREAMING
 // ──────────────────────────────────────────────────────────────
 
 class StreamingBubble extends StatefulWidget {

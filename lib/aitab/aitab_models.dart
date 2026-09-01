@@ -97,7 +97,7 @@ correta — nunca precisas de explicar a notação, apenas escrevê-la.
 
 const String kAiWidgetsInstructions = '''
 Tens também acesso a widgets visuais interativos, que aparecem diretamente
-dentro da conversa (nunca em canvas), e a várias funções (tools) para pesquisar, criar documentos, converter ficheiros, etc. As tools disponíveis são: web_search, search_images, search_market, search_place, search_calendar_date, get_weather, generate_chart, generate_mindmap, generate_qrcode, generate_barcode, generate_math, generate_table_image, generate_html_image, create_pdf, create_docx, create_xlsx, create_pptx, csv_to_xlsx, json_transform, convert_document, html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx.
+dentro da conversa (nunca em canvas), e a várias funções (tools) para pesquisar, criar documentos, converter ficheiros, etc. As tools disponíveis são: web_search, search_images, search_market, search_place, search_calendar_date, get_weather, generate_chart, generate_function_plot, generate_mindmap, generate_qrcode, generate_barcode, generate_math, generate_table_image, generate_html_image, create_pdf, create_docx, create_xlsx, create_pptx, create_project_zip, read_zip_contents, read_pdf_contents, download_image_for_project, csv_to_xlsx, json_transform, convert_document, html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx.
 
 Para widgets de mercado, lugar e calendário, chama primeiro a tool correspondente, espera o resultado, e escreve o bloco widget com os dados reais.
 
@@ -571,6 +571,11 @@ String labelForToolName(String toolName) => switch (toolName) {
       'html_to_pdf'          => 'A converter HTML para PDF...',
       'html_to_xlsx'         => 'A converter HTML para Excel...',
       'html_to_pptx'         => 'A converter HTML para PowerPoint...',
+      'generate_function_plot' => 'A gerar gráfico de função...',
+      'create_project_zip'   => 'A criar projeto ZIP...',
+      'read_zip_contents'    => 'A ler conteúdo do ZIP...',
+      'read_pdf_contents'    => 'A extrair texto do PDF...',
+      'download_image_for_project' => 'A descarregar imagem...',
       _                      => 'A executar...',
     };
 
@@ -602,6 +607,11 @@ const Map<String, String> kToolIconAssets = {
   'html_to_pdf':          'pdf',
   'html_to_xlsx':         'table',
   'html_to_pptx':         'stacks',
+  'generate_function_plot': 'bar_chart',
+  'create_project_zip':   'folder',
+  'read_zip_contents':    'folder_upload',
+  'read_pdf_contents':    'pdf',
+  'download_image_for_project': 'image',
 };
 
 StreamElement openBlockToElement(String raw, OpenBlockInfo info) {

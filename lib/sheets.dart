@@ -12,6 +12,10 @@ Future<T?> showCraftBottomSheet<T>({
   required AppColorScheme s,
   required Widget child,
   String? title,
+  // Raio do topo do sheet. Default 28 mantém o comportamento de
+  // todos os sheets existentes; showAttachMenuSheet passa um valor
+  // menor ("um pouquinho curvo", não o arredondamento padrão).
+  double borderRadius = 28,
 }) {
   return showModalBottomSheet<T>(
     context: context,
@@ -21,8 +25,8 @@ Future<T?> showCraftBottomSheet<T>({
     barrierColor: Colors.black.withOpacity(0.4),
     elevation: 0,
     showDragHandle: false,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(borderRadius)),
     ),
     builder: (ctx) => _SheetShell(
       s: s,

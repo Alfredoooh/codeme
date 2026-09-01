@@ -66,9 +66,6 @@ class ChatInput extends StatelessWidget {
       ),
     ];
 
-    // Dois estados fundem-se num só widget: "compacto" (vazio, sem foco)
-    // e "expandido" (com texto ou focado). AnimatedBuilder ouve tanto o
-    // texto quanto o foco para decidir qual layout desenhar.
     return AnimatedBuilder(
       animation: Listenable.merge([ctrl, focusNode]),
       builder: (context, _) {
@@ -133,10 +130,6 @@ class _ChatInputShell extends StatelessWidget {
   });
 
   Widget _sendButton() {
-    // Enviar é o único botão à direita agora — mic e sliders saíram de
-    // vez. Cor/opacidade obedecem hasText; toque só surte efeito com
-    // texto (o GestureDetector ainda existe para não trocar de posição
-    // quando o estado muda, mas onTap é null quando vazio).
     final active = hasText && !sending;
     return GestureDetector(
       onTap: sending ? onPause : (hasText ? onSend : null),
@@ -214,7 +207,6 @@ class _ChatInputShell extends StatelessWidget {
     );
   }
 
-  // ── Estado compacto: uma linha só, pill baixa e bem curva ──────
   Widget _compact() {
     return Container(
       key: const ValueKey('compact'),
@@ -222,7 +214,7 @@ class _ChatInputShell extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
       decoration: BoxDecoration(
         color: s.isDark ? s.cardBackground : s.floatingSurface,
-        borderRadius: BorderRadius.circular(26), // metade da altura = pill total
+        borderRadius: BorderRadius.circular(26),
         boxShadow: floatingShadow,
       ),
       child: Row(
@@ -237,7 +229,6 @@ class _ChatInputShell extends StatelessWidget {
     );
   }
 
-  // ── Estado expandido: formato alto original, sem sliders/mic ───
   Widget _expandedForm() {
     return Container(
       key: const ValueKey('expanded'),
@@ -660,9 +651,6 @@ class _CanvasCardState extends State<_CanvasCard> {
 
 // ══════════════════════════════════════════════════════════════
 // SHEET: GRAVAÇÃO DE VOZ
-// (mantido — a entrada para ele deixou de estar no ChatInput, mas o
-// sheet em si continua disponível para quem quiser acioná-lo, ex.
-// dentro do novo modal unificado, se um dia precisares reativar voz)
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -801,10 +789,6 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 
 // ══════════════════════════════════════════════════════════════
 // SHEET UNIFICADO: "+" — anexar, plugins, modelo, canvas, apps
-// Substitui showAiOptionsSheet e o antigo showAppsConnectSheet
-// como pontos de entrada separados. Duas páginas internas:
-// _AttachMenuPage (raiz) <-> _ModelSelectPage (sub-tela "Modelo"),
-// trocadas por AnimatedSwitcher sem fechar o sheet.
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachMenuPageKind { root, modelSelect }
@@ -826,9 +810,6 @@ Future<void> showAttachMenuSheet(
   return showCraftBottomSheet<void>(
     context: context,
     s: s,
-    // Curva reduzida — "um pouquinho curvo", não o arredondamento
-    // pronunciado que showCraftBottomSheet usa por padrão nos outros
-    // sheets deste ficheiro.
     borderRadiusOverride: 18,
     child: _AttachMenuSheetContent(
       s: s,
@@ -904,9 +885,6 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeIn,
         transitionBuilder: (child, anim) {
-          // Entrada da sub-página desliza da direita; saída (voltar)
-          // desliza de volta — dá a sensação de navegação real "dentro"
-          // do modal, sem nunca fechar o showCraftBottomSheet.
           final isModelPage = child.key == const ValueKey('model_page');
           final beginOffset = isModelPage
               ? const Offset(0.06, 0)
@@ -965,8 +943,6 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
   }
 }
 
-// ── Página raiz: 3 cards horizontais + lista sem card ─────────
-
 class _RootPage extends StatelessWidget {
   final AppColorScheme s;
   final AiModel selectedModel;
@@ -1003,7 +979,6 @@ class _RootPage extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 3 cards horizontais — curvos, mesma linha, iguais na largura.
           Row(
             children: [
               Expanded(
@@ -1026,8 +1001,6 @@ class _RootPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          // Lista sem card — só cor de fundo própria por linha, igual
-          // ao estilo de "Plugins"/"Habilidades" da imagem de referência.
           _PlainMenuRow(
             s: s,
             assetName: 'sliders',
@@ -1194,8 +1167,6 @@ class _PlainSwitchRow extends StatelessWidget {
   }
 }
 
-// ── Sub-página: seleção de modelo, com botão voltar ────────────
-
 class _ModelSelectPage extends StatelessWidget {
   final AppColorScheme s;
   final AiModel selectedModel;
@@ -1302,7 +1273,6 @@ class _ModelOptionRow extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // SHEET: APPS CONECTADOS
-// (mantido standalone — não foi mencionado como parte do novo modal)
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAppsConnectSheet(

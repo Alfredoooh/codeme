@@ -772,10 +772,6 @@ class AiApiService {
       }
       if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
         final bodyStr = await streamed.stream.bytesToString();
-        // Se mandámos `tools` e o Worker rejeitou por causa disso,
-        // desativa para as próximas chamadas desta sessão de app —
-        // a chamada seguinte (sem tools) tende a funcionar normalmente
-        // em vez de falhar sempre.
         if (sendTools && (streamed.statusCode == 400 || streamed.statusCode == 422)) {
           ToolCallingSupport.markUnsupported();
         }
@@ -790,9 +786,6 @@ class AiApiService {
 
       String pending = '';
       String fullText = '';
-      // Tool calls chegam fragmentados por índice ao longo de vários
-      // chunks SSE (ex: chunk 1 traz o nome, chunks seguintes trazem
-      // pedaços dos argumentos). Acumulamos por índice até ao fim.
       final Map<int, ({String? id, String name, StringBuffer args})> pendingToolCalls = {};
 
       List<ToolCall> finalizeToolCalls() {
@@ -1025,8 +1018,6 @@ class ToolsApiService {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw ApiException(data['error']?.toString() ?? 'Erro ao executar tool', statusCode: res.statusCode);
     }
-    // O servidor devolve { tool_name: "...", result: { ... } }
-    // Extrai apenas o result para uniformizar com as tools locais.
     if (data is Map && data.containsKey('result')) {
       final result = data['result'];
       if (result is Map<String, dynamic>) return result;
@@ -1109,11 +1100,11 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'generate_chart',
-    description: 'Gera um gráfico visual como PNG base64. Suporta line, bar, pie, doughnut, radar, polarArea. Aceita múltiplos datasets. Devolve content_base64 com PNG — exibe diretamente no chat.',
+    description: 'Gera um gráfico visual como PNG base64. Suporta line, bar, pie, doughnut, radar, polarArea, scatter, bubble. Aceita múltiplos datasets. Devolve content_base64 com PNG — exibe diretamente no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'chart_type': {'type': 'string', 'enum': ['line', 'bar', 'pie', 'doughnut', 'radar', 'polarArea']},
+        'chart_type': {'type': 'string', 'enum': ['line', 'bar', 'pie', 'doughnut', 'radar', 'polarArea', 'scatter', 'bubble']},
         'title': {'type': 'string'},
         'labels': {'type': 'array', 'items': {'type': 'string'}},
         'datasets': {
@@ -1129,6 +1120,38 @@ const List<ToolDefinition> kAllTools = [
         },
       },
       'required': ['chart_type', 'labels', 'datasets'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_function_plot',
+    description: 'Gera o gráfico REAL de uma função matemática (parábolas, senos, cúbicas, raiz, exponenciais) avaliando a expressão ponto a ponto num intervalo e desenhando com eixos, grelha e marcação de zero. Usa esta tool em vez de generate_math sempre que o pedido for "gráfico de uma função", "parábola", "esboça y = ...", etc. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'expression': {'type': 'string', 'description': 'Expressão em função de x, ex: "x^2 - 4*x + 3", "sin(x)", "sqrt(x)"'},
+        'x_min': {'type': 'number', 'description': 'Default -10'},
+        'x_max': {'type': 'number', 'description': 'Default 10'},
+        'title': {'type': 'string'},
+        'highlight_roots': {'type': 'boolean', 'description': 'Se true, marca visualmente onde a função cruza y=0 (raízes aproximadas)'},
+      },
+      'required': ['expression'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_mindmap',
+    description: 'Gera um mapa mental hierárquico de alta qualidade como PNG base64: layout automático sem sobreposição, fundo branco, cores por nível, ligações curvas suaves, texto sempre bem enquadrado dentro do nó (nunca cortado). Usa estrutura de nó raiz com filhos aninhados até 4 níveis. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'root': {
+          'type': 'object',
+          'properties': {
+            'label': {'type': 'string'},
+            'children': {'type': 'array', 'items': {'type': 'object'}},
+          },
+        },
+      },
+      'required': ['root'],
     },
   ),
   ToolDefinition(
@@ -1202,24 +1225,43 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'create_pdf',
-    description: 'Gera um PDF a partir de HTML rico. Devolve content_base64 e filename — mostra botão de download no chat.',
+    description: 'Gera um PDF a partir de HTML rico. Pode incluir imagens reais (via image_urls) e/ou um gráfico gerado (via embed_chart) diretamente dentro do PDF. Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
         'title': {'type': 'string'},
         'html_content': {'type': 'string'},
+        'image_urls': {'type': 'array', 'items': {'type': 'string'}, 'description': 'URLs de imagens da web para descarregar e incluir no PDF, na ordem dada'},
+        'embed_chart': {
+          'type': 'object',
+          'description': 'Opcional: gera um gráfico e insere-o no PDF. Mesma estrutura de generate_chart.',
+          'properties': {
+            'chart_type': {'type': 'string'},
+            'labels': {'type': 'array', 'items': {'type': 'string'}},
+            'datasets': {'type': 'array', 'items': {'type': 'object'}},
+          },
+        },
       },
       'required': ['title', 'html_content'],
     },
   ),
   ToolDefinition(
     name: 'create_docx',
-    description: 'Gera um Word (.docx) a partir de HTML. Devolve content_base64 e filename — mostra botão de download no chat.',
+    description: 'Gera um Word (.docx) a partir de HTML. Pode incluir imagens reais (via image_urls) e/ou um gráfico gerado (via embed_chart) diretamente dentro do documento. Devolve content_base64 e filename — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
         'title': {'type': 'string'},
         'html_content': {'type': 'string'},
+        'image_urls': {'type': 'array', 'items': {'type': 'string'}},
+        'embed_chart': {
+          'type': 'object',
+          'properties': {
+            'chart_type': {'type': 'string'},
+            'labels': {'type': 'array', 'items': {'type': 'string'}},
+            'datasets': {'type': 'array', 'items': {'type': 'object'}},
+          },
+        },
       },
       'required': ['title', 'html_content'],
     },
@@ -1256,6 +1298,72 @@ const List<ToolDefinition> kAllTools = [
         },
       },
       'required': ['title', 'slides'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_project_zip',
+    description: 'Cria um projeto completo como ficheiro ZIP, com estrutura de pastas e múltiplos ficheiros de código/texto de uma vez. Usa quando o utilizador pedir para gerar/criar um projeto inteiro (app, script, template) para download. Pode incluir imagens reais da web via image_urls_to_include. Devolve content_base64 e filename — mostra botão de download no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'project_name': {'type': 'string'},
+        'files': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'path': {'type': 'string', 'description': 'Caminho relativo dentro do zip, ex "lib/main.dart" ou "README.md"'},
+              'content': {'type': 'string'},
+            },
+            'required': ['path', 'content'],
+          },
+        },
+        'image_urls_to_include': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'url': {'type': 'string'},
+              'path': {'type': 'string', 'description': 'Caminho relativo dentro do zip para a imagem, ex "assets/logo.png"'},
+            },
+          },
+        },
+      },
+      'required': ['project_name', 'files'],
+    },
+  ),
+  ToolDefinition(
+    name: 'read_zip_contents',
+    description: 'Lê o conteúdo de um ficheiro .zip enviado pelo utilizador (código-fonte de um projeto, etc). Descompacta e devolve a árvore de ficheiros com o texto de cada ficheiro de código/texto, e as imagens em base64. Limite: 15MB, 100 ficheiros, 15000 caracteres por ficheiro de texto, até 10 imagens decodificadas.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'zip_base64': {'type': 'string', 'description': 'Conteúdo do .zip em base64'},
+      },
+      'required': ['zip_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'read_pdf_contents',
+    description: 'Extrai o texto de um PDF enviado pelo utilizador. Devolve o texto por página até um limite de 40 páginas (páginas seguintes são ignoradas e sinalizadas).',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'pdf_base64': {'type': 'string', 'description': 'Conteúdo do PDF em base64'},
+      },
+      'required': ['pdf_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'download_image_for_project',
+    description: 'Descarrega uma imagem real da web (por URL direto ou por pesquisa de termo) e devolve-a em base64 pronta para ser anexada a um projeto, documento ou ZIP. Usa quando o utilizador pedir para adicionar uma imagem real a um ficheiro/projeto que estás a criar. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query_or_url': {'type': 'string', 'description': 'URL direto da imagem OU um termo de pesquisa (nesse caso pesquisa e usa o primeiro resultado)'},
+        'target_filename': {'type': 'string', 'description': 'Nome sugerido para o ficheiro dentro do projeto, ex "logo.png"'},
+      },
+      'required': ['query_or_url'],
     },
   ),
   ToolDefinition(
