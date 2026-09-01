@@ -810,7 +810,6 @@ Future<void> showAttachMenuSheet(
   return showCraftBottomSheet<void>(
     context: context,
     s: s,
-    borderRadiusOverride: 18,
     child: _AttachMenuSheetContent(
       s: s,
       currentModel: currentModel,

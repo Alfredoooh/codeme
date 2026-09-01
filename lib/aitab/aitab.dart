@@ -752,7 +752,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _openAiOptionsSheet() {
-    showAiOptionsSheet(
+    showAttachMenuSheet(
       context,
       AppTheme.of(context),
       currentModel: _model,
@@ -762,7 +762,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       onWebSearchChanged: setWebSearchEnabled,
       onWidgetsChanged: setWidgetsEnabled,
       onOpenCanvas: _openCanvasPopup,
-      onOpenApps: _openAppsConnectSheet,
+      onCamera: _onOpenCamera,
+      onPhotos: _onAttachPhotos,
+      onLocalFile: _onAttachFiles,
     );
   }
 
@@ -1098,9 +1100,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     onSend: _send,
                     onPause: _pauseGeneration,
                     onAttach: _openAttachSheet,
-                    onVoice: _openVoiceSheet,
-                    onOpenAiOptions: _openAiOptionsSheet,
-                    onClearTool: _onClearTool,
                     onOpenAttachedFiles: _openAttachedFilesSheet,
                   ),
                   AnimatedContainer(
