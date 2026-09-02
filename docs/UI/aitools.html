@@ -36,6 +36,8 @@
     margin-top: 8px;
   }
   button:disabled { opacity: 0.5; }
+  button.secondary { background: #333; }
+  button.danger { background: #b91c1c; }
   #status {
     font-size: 12px;
     color: #999;
@@ -64,11 +66,199 @@
     margin: 8px 0;
     background: #1a1a1a;
   }
+  .cardTitle {
+    font-size: 12px;
+    font-weight: bold;
+    color: #ccc;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
   .ok { color: #4ade80; }
   .err { color: #f87171; }
+  .warn { color: #fbbf24; }
   .imgRow { display: flex; gap: 8px; overflow-x: auto; }
   .imgRow img { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
   a.dl { color: #6F5AF6; word-break: break-all; }
+  pre.textPreview {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 11px;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 6px 0;
+  }
+  table.previewTable { width: 100%; border-collapse: collapse; font-size: 11px; margin: 6px 0; }
+  table.previewTable th, table.previewTable td { border: 1px solid #333; padding: 4px 6px; text-align: left; }
+  table.previewTable th { background: #222; }
+  .fileList { list-style: none; padding: 0; margin: 6px 0; font-size: 11px; }
+  .fileList li { padding: 3px 0; border-bottom: 1px solid #222; }
+  .badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #333; margin-left: 4px; }
+
+  /* ── Progress bar individual (por execução isolada) ── */
+  #singleProgressWrap {
+    display: none;
+    margin: 8px 0;
+  }
+  #singleProgressWrap.active { display: block; }
+  .progressBarOuter {
+    width: 100%;
+    height: 8px;
+    background: #1a1a1a;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+  .progressBarInner {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #6F5AF6, #a78bfa);
+    transition: width 0.15s linear;
+  }
+  .progressBarInner.indeterminate {
+    width: 40% !important;
+    animation: indet 1.1s ease-in-out infinite;
+  }
+  @keyframes indet {
+    0% { margin-left: -40%; }
+    100% { margin-left: 100%; }
+  }
+  #singleProgressLabel {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ── Progress bar agregada (corrida em lote) ── */
+  #allRunPanel {
+    display: none;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 12px 0;
+    background: #151515;
+  }
+  #allRunPanel.active { display: block; }
+  #allProgressLabel {
+    font-size: 12px;
+    color: #ccc;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+  #allProgressBarOuter {
+    width: 100%;
+    height: 10px;
+    background: #1a1a1a;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+  #allProgressBarInner {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4ade80, #22c55e);
+    transition: width 0.25s ease;
+  }
+  #allCurrentTool {
+    font-size: 11px;
+    color: #999;
+    margin-top: 6px;
+    font-family: monospace;
+  }
+  #allResultsSummary {
+    margin-top: 10px;
+    font-size: 11px;
+  }
+  .resultRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 6px;
+    border-bottom: 1px solid #222;
+    font-family: monospace;
+  }
+  .resultRow.rowOk { color: #4ade80; }
+  .resultRow.rowErr { color: #f87171; }
+  .resultRow .toolTime { color: #777; margin-left: 8px; }
+  .btnRow { display: flex; gap: 8px; }
+  .btnRow button { flex: 1; }
+
+  /* ── Lista de checkboxes por tool ── */
+  #toolCheckList {
+    border: 1px solid #333;
+    border-radius: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    margin: 6px 0;
+    background: #111;
+  }
+  .checkGroupTitle {
+    font-size: 11px;
+    color: #777;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 10px 4px 10px;
+    background: #1a1a1a;
+    position: sticky;
+    top: 0;
+  }
+  .checkRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-bottom: 1px solid #1c1c1c;
+  }
+  .checkRow input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #6F5AF6;
+  }
+  .checkRow label {
+    flex: 1;
+    cursor: pointer;
+  }
+  #selectAllRow {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0;
+  }
+  #selectAllRow button { flex: 1; margin-top: 0; }
+
+  /* ── Envio de email manual (secção 4) ── */
+  #emailImagePreviewRow {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin: 6px 0;
+  }
+  #emailImagePreviewRow .emailImgThumb {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    border: 1px solid #333;
+  }
+  .cidHint {
+    font-size: 11px;
+    color: #6F5AF6;
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin: 4px 0;
+    font-family: monospace;
+  }
 </style>
 </head>
 <body>
@@ -82,58 +272,334 @@
 <input id="password" type="password" placeholder="password">
 <button onclick="doLogin()">Entrar</button>
 
-<h2>2. Escolher tool</h2>
-<select id="toolName" onchange="updateInputHint()">
-  <option value="web_search">web_search</option>
-  <option value="search_images" selected>search_images</option>
-  <option value="search_market">search_market</option>
-  <option value="search_place">search_place</option>
-  <option value="search_calendar_date">search_calendar_date</option>
-  <option value="get_weather">get_weather</option>
-  <option value="generate_chart">generate_chart</option>
-  <option value="generate_mindmap">generate_mindmap</option>
-  <option value="generate_qrcode">generate_qrcode</option>
-  <option value="generate_barcode">generate_barcode</option>
-  <option value="generate_math">generate_math</option>
-  <option value="generate_table_image">generate_table_image</option>
-  <option value="create_pdf">create_pdf</option>
-  <option value="create_docx">create_docx</option>
-  <option value="create_xlsx">create_xlsx</option>
-  <option value="create_pptx">create_pptx</option>
-</select>
+<h2>2. Testar tools (seleciona quais correr)</h2>
+<div id="selectAllRow">
+  <button class="secondary" onclick="selectAllTools()">Selecionar todas</button>
+  <button class="secondary" onclick="clearAllTools()">Limpar seleção</button>
+</div>
+<div id="toolCheckList"></div>
+<div class="btnRow">
+  <button id="runAllBtn" onclick="runSelectedTools()" disabled>▶ Correr selecionadas</button>
+  <button id="stopAllBtn" class="danger" onclick="stopAllTools()" disabled style="display:none;">■ Parar</button>
+</div>
+<div id="allRunPanel">
+  <div id="allProgressLabel"><span id="allProgressText">0 / 0</span><span id="allProgressPct">0%</span></div>
+  <div id="allProgressBarOuter"><div id="allProgressBarInner"></div></div>
+  <div id="allCurrentTool">—</div>
+  <div id="allResultsSummary"></div>
+</div>
+
+<h2>3. Testar uma tool isolada</h2>
+<select id="toolName" onchange="updateInputHint()"></select>
 <div id="inputHint" style="font-size:11px;color:#777;margin-bottom:4px;"></div>
-<textarea id="toolInput">{"query":"Cristiano Ronaldo"}</textarea>
+<textarea id="toolInput">{}</textarea>
 <button id="runBtn" onclick="runTool()" disabled>Executar tool</button>
+
+<div id="singleProgressWrap">
+  <div class="progressBarOuter"><div id="singleProgressBar" class="progressBarInner indeterminate"></div></div>
+  <div id="singleProgressLabel"><span id="singleProgressName">—</span><span id="singleProgressTime">0.0s</span></div>
+</div>
+
+<h2>4. Enviar email de teste (formulário dedicado)</h2>
+<input id="emailTo" placeholder="destinatário@example.com">
+<input id="emailSubject" placeholder="Assunto do email">
+<input id="emailFromName" placeholder="Nome do remetente (opcional, ex: Nexa)">
+<textarea id="emailContent" placeholder="Corpo em HTML. Ex: &lt;h1&gt;Olá&lt;/h1&gt;&lt;p&gt;Texto...&lt;/p&gt;">&lt;div style="font-family:sans-serif;padding:20px;"&gt;
+  &lt;h1 style="color:#6F5AF6;"&gt;Olá!&lt;/h1&gt;
+  &lt;p&gt;Este é um email de teste com &lt;strong&gt;HTML estilizado&lt;/strong&gt;.&lt;/p&gt;
+&lt;/div&gt;</textarea>
+
+<input type="file" id="emailImageFile" accept="image/*" onchange="handleEmailImageSelect(event)">
+<div id="emailImagePreviewRow"></div>
+<div id="cidHintArea"></div>
+
+<button id="sendEmailBtn" onclick="sendTestEmail()" disabled>✉ Enviar email</button>
+<div id="emailSendStatus" style="font-size:12px;margin-top:6px;"></div>
 
 <div id="renderOutput"></div>
 <div id="rawOutput"></div>
 
 <script>
 let TOKEN = null;
+let ALL_RUN_ABORT = false;
+let EMAIL_IMAGES = []; // { content_base64, content_id, filename }
 
+// ═══════════════════════════════════════════════════════════
+// CATÁLOGO — tools atuais do server.js v2.3.0. Agrupadas por
+// categoria só para o <select> e para a lista de checkboxes.
+// generate_html_image foi removida do catálogo por pedido.
+// send_email adicionada.
+// ═══════════════════════════════════════════════════════════
+const TOOL_CATALOG = {
+  "Busca / dados": [
+    "web_search", "read_website", "search_images", "search_videos", "search_books",
+    "download_image_for_project", "search_market", "search_place", "search_calendar_date",
+    "get_weather",
+  ],
+  "Email": [
+    "send_email",
+  ],
+  "Geração de imagem": [
+    "generate_chart", "generate_function_plot", "generate_math_sheet", "generate_mindmap",
+    "generate_qrcode", "generate_barcode", "generate_table_image",
+    "generate_color_scheme", "generate_random_avatar",
+  ],
+  "Documentos": [
+    "create_pdf", "create_pdf_structured", "create_docx", "create_xlsx", "create_pptx",
+    "create_project_zip",
+  ],
+  "Leitura de ficheiros": [
+    "read_zip_contents", "read_pdf_contents", "extract_document_outline",
+  ],
+  "Conversão": [
+    "csv_to_xlsx", "json_transform", "xlsx_to_json", "html_to_docx", "html_to_pdf",
+    "html_to_xlsx", "html_to_pptx", "docx_to_html",
+  ],
+  "Imagem — utilitários": [
+    "get_image_colors", "convert_image_format", "resize_image", "crop_image",
+    "watermark_image", "image_metadata", "vectorize_image", "ocr_extract_text",
+    "pdf_to_images", "pptx_to_images", "audio_duration_check",
+  ],
+  "Texto / dados": [
+    "str_replace_file", "diff_text", "extract_urls_from_text", "format_markdown_to_html",
+    "count_tokens_estimate", "text_summary_stats", "youtube_thumbnail_extract",
+    "merge_pdfs", "split_pdf_pages",
+  ],
+  "Heavy (atrás de ENABLE_HEAVY_TOOLS)": [
+    "animate_html", "generate_infographic",
+  ],
+};
+
+// ═══════════════════════════════════════════════════════════
+// ORDEM DE EXECUÇÃO — simples → complexo. generate_html_image
+// removida. send_email colocada no grupo 2 (rede simples), mas
+// SEM to real por defeito — ver PRESETS. runSelectedTools()
+// filtra este array pela seleção, preservando a ordem relativa.
+// ═══════════════════════════════════════════════════════════
+const RUN_ORDER = [
+  // 1. Puro CPU/string, sem rede, sem satori — deve responder em ms
+  "count_tokens_estimate", "text_summary_stats", "extract_urls_from_text",
+  "format_markdown_to_html", "diff_text", "str_replace_file", "json_transform",
+  "generate_color_scheme", "search_calendar_date",
+
+  // 2. Uma chamada de rede externa simples
+  "web_search", "read_website", "search_images", "search_videos", "search_books",
+  "search_market", "search_place", "get_weather", "youtube_thumbnail_extract",
+  "download_image_for_project", "send_email",
+
+  // 3. Geração de imagem leve (canvas/chart.js/qrcode/bwip-js — sem satori)
+  "generate_qrcode", "generate_barcode", "generate_chart", "generate_function_plot",
+
+  // 4. Satori (precisa de ./fonts/Inter-*.ttf — vai falhar com found:false
+  // e mensagem clara se as fontes ainda não estiverem no repo, sem
+  // derrubar o resto da sequência)
+  "generate_math_sheet", "generate_table_image",
+  "generate_mindmap", "generate_random_avatar",
+
+  // 5. Utilitários de imagem sobre imagem já existente (sharp — geram a
+  // própria imagem-base internamente via generate_qrcode para testar)
+  "image_metadata", "convert_image_format", "resize_image", "crop_image",
+  "get_image_colors", "watermark_image",
+
+  // 6. Conversões de dados tabulares/HTML
+  "csv_to_xlsx", "xlsx_to_json", "html_to_xlsx", "html_to_pptx",
+
+  // 7. Documentos completos (satori + pdfkit/docx/exceljs/pptxgenjs/adm-zip)
+  "create_xlsx", "create_pptx", "create_docx", "html_to_docx", "create_pdf",
+  "create_pdf_structured", "html_to_pdf", "create_project_zip",
+
+  // 8. Leitura de ficheiros (usa o PDF gerado no passo 7 como input real,
+  // em vez de base64 vazio)
+  "read_pdf_contents", "extract_document_outline", "read_zip_contents",
+
+  // 9. Mais pesadas em CPU/RAM — OCR, vetorização, parsing binário
+  "docx_to_html", "vectorize_image", "ocr_extract_text", "audio_duration_check",
+  "merge_pdfs", "split_pdf_pages",
+
+  // 10. Bloqueadas por defeito (ENABLE_HEAVY_TOOLS=false) — esperado
+  // devolver found:false sempre, isso É o teste de que a flag funciona
+  "generate_infographic", "animate_html",
+];
+
+// ═══════════════════════════════════════════════════════════
+// PRESETS — um input plausível por tool. generate_html_image
+// removida. As que dependem de um artefacto gerado por outra
+// tool ficam com preset vazio e são preenchidas dinamicamente
+// durante a corrida em lote. send_email usa "to" vazio de
+// propósito na corrida em lote/isolada por defeito — edita
+// manualmente antes de correr, ou usa a secção 4 dedicada.
+// ═══════════════════════════════════════════════════════════
 const PRESETS = {
   web_search: '{"query":"resultado do jogo de ontem"}',
-  search_images: '{"query":"Cristiano Ronaldo"}',
+  read_website: '{"url":"https://pt.wikipedia.org/wiki/JavaScript"}',
+  search_images: '{"query":"Cristiano Ronaldo","max_results":10}',
+  search_videos: '{"query":"tutorial Flutter","max_results":10}',
+  search_books: '{"query":"Clean Code","max_results":5}',
+  download_image_for_project: '{"query_or_url":"gato preto","target_filename":"gato.png"}',
   search_market: '{"query":"bitcoin"}',
   search_place: '{"query":"Torre Eiffel"}',
   search_calendar_date: '{"query":"amanhã"}',
   get_weather: '{"city":"Lisboa"}',
+
+  send_email: '{"to":"","subject":"Email de teste","content":"<div style=\\"font-family:sans-serif;padding:20px;\\"><h1 style=\\"color:#6F5AF6;\\">Ola!</h1><p>Este e um email de teste com <strong>HTML estilizado</strong>.</p></div>","from_name":"Nexa"}',
+
   generate_chart: '{"chart_type":"bar","title":"Teste","labels":["Jan","Fev","Mar"],"datasets":[{"label":"Vendas","data":[10,20,15]}]}',
+  generate_function_plot: '{"expression":"x^2 - 4*x + 3","x_min":-5,"x_max":8,"title":"Parabola teste","highlight_roots":true}',
+  generate_math_sheet: '{"expression":"x^2 - 4*x + 3","show_graph":true}',
   generate_mindmap: '{"root":{"label":"Raiz","children":[{"label":"Filho A"},{"label":"Filho B"}]}}',
   generate_qrcode: '{"content":"https://exemplo.com","size":300}',
   generate_barcode: '{"content":"123456789012","format":"code128"}',
-  generate_math: '{"expression":"2^10"}',
   generate_table_image: '{"title":"Tabela Teste","headers":["Nome","Idade"],"rows":[["Ana","30"],["Bruno","25"]]}',
-  create_pdf: '{"title":"Documento Teste","html_content":"<h1>Titulo</h1><p>Paragrafo de teste.</p><ul><li>Item 1</li><li>Item 2</li></ul>"}',
+  generate_color_scheme: '{"base_color_hex":"#6F5AF6"}',
+  generate_random_avatar: '{"seed":"alfred@teste.com","size":200}',
+
+  create_pdf: '{"title":"Documento Teste","html_content":"<div style=\\"display:flex;\\"><h1>Titulo</h1></div><div style=\\"display:flex;flex-direction:column;\\"><div style=\\"display:flex;\\">Paragrafo de teste.</div></div>"}',
+  create_pdf_structured: '{"title":"Relatorio Teste","subtitle":"Teste automatico","sections":[{"heading":"Introducao","paragraphs":["Primeiro paragrafo de teste."],"bullet_list":["Ponto A","Ponto B"]}]}',
   create_docx: '{"title":"Documento Teste","html_content":"<h1>Titulo</h1><p>Paragrafo de teste.</p>"}',
   create_xlsx: '{"sheet_name":"Dados","headers":["Nome","Idade"],"rows":[["Ana","30"],["Bruno","25"]]}',
   create_pptx: '{"title":"Apresentacao Teste","slides":[{"heading":"Slide 1","bullets":["Ponto A","Ponto B"]}]}',
+  create_project_zip: '{"project_name":"projeto-teste","files":[{"path":"README.md","content":"# Projeto Teste\\n\\nGerado pelo testador."},{"path":"lib/main.dart","content":"void main() {}\\n"}]}',
+
+  read_zip_contents: '{"zip_base64":""}',
+  read_pdf_contents: '{"pdf_base64":""}',
+  extract_document_outline: '{"pdf_base64":"","source_type":"pdf"}',
+
+  csv_to_xlsx: '{"csv_content":"Nome,Idade\\nAna,30\\nBruno,25"}',
+  json_transform: '{"json_data":"[{\\"nome\\":\\"Ana\\",\\"idade\\":30},{\\"nome\\":\\"Bruno\\",\\"idade\\":25}]"}',
+  xlsx_to_json: '{"xlsx_base64":""}',
+  html_to_docx: '{"html_content":"<h1>Titulo</h1><p>Texto de teste.</p>","filename":"convertido"}',
+  html_to_pdf: '{"html_content":"<div style=\\"display:flex;\\"><h1>Titulo</h1></div><div style=\\"display:flex;\\">Texto de teste.</div>","title":"Convertido"}',
+  html_to_xlsx: '{"html_content":"<table><tr><th>Nome</th><th>Idade</th></tr><tr><td>Ana</td><td>30</td></tr></table>","sheet_name":"Dados"}',
+  html_to_pptx: '{"html_content":"<h1>Slide 1</h1><ul><li>Ponto A</li><li>Ponto B</li></ul>","title":"Apresentacao"}',
+  docx_to_html: '{"docx_base64":""}',
+
+  get_image_colors: '{"image_base64":"","num_colors":5}',
+  convert_image_format: '{"image_base64":"","target_format":"webp"}',
+  resize_image: '{"image_base64":"","width":100}',
+  crop_image: '{"image_base64":"","left":0,"top":0,"width":50,"height":50}',
+  watermark_image: '{"image_base64":"","watermark_text":"TESTE","position":"bottom-right"}',
+  image_metadata: '{"image_base64":""}',
+  vectorize_image: '{"image_base64":"","mode":"black_transparent"}',
+  ocr_extract_text: '{"image_base64":"","language":"por"}',
+  pdf_to_images: '{"pdf_base64":"","max_pages":1}',
+  pptx_to_images: '{"pptx_base64":""}',
+  audio_duration_check: '{"audio_base64":""}',
+
+  str_replace_file: '{"content":"linha 1\\nlinha 2\\nlinha 3","old_str":"linha 2","new_str":"linha 2 editada"}',
+  diff_text: '{"text_before":"ola\\nmundo","text_after":"ola\\nmundo editado"}',
+  extract_urls_from_text: '{"text":"Visita https://exemplo.com e tambem http://outro.pt/pagina"}',
+  format_markdown_to_html: '{"markdown":"# Titulo\\n\\nTexto **negrito** e *italico*.\\n\\n- item 1\\n- item 2"}',
+  count_tokens_estimate: '{"text":"Este e um texto de exemplo para estimar tokens."}',
+  text_summary_stats: '{"text":"Primeiro paragrafo com algumas frases. Tem duas frases aqui.\\n\\nSegundo paragrafo, mais curto."}',
+  youtube_thumbnail_extract: '{"youtube_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}',
+  merge_pdfs: '{"pdfs_base64":[]}',
+  split_pdf_pages: '{"pdf_base64":"","page_numbers":[1]}',
+
+  animate_html: '{"html":"<div>anim</div>","duration_seconds":3}',
+  generate_infographic: '{"title":"Info Teste","blocks":[{"label":"Bloco A"}]}',
 };
+
+// Notas por tool — lembretes de campos que precisam de artefacto
+// real (base64 de outra tool) antes de correr isoladamente.
+const HINTS = {
+  send_email: 'to vazio de propósito — preenche o destinatário real antes de correr, ou usa a secção 4 dedicada (mais abaixo) que já trata de tudo, incluindo imagens via CID.',
+  read_zip_contents: 'zip_base64 vazio — corre "create_project_zip" primeiro e cola o content_base64 aqui, ou usa a corrida em lote que encadeia isto automaticamente.',
+  read_pdf_contents: 'pdf_base64 vazio — corre "create_pdf" primeiro e cola o content_base64 aqui, ou usa a corrida em lote.',
+  extract_document_outline: 'pdf_base64 vazio — mesmo caso de read_pdf_contents.',
+  xlsx_to_json: 'xlsx_base64 vazio — corre "create_xlsx" primeiro e cola o content_base64 aqui.',
+  docx_to_html: 'docx_base64 vazio — corre "create_docx" primeiro.',
+  get_image_colors: 'image_base64 vazio — corre "generate_qrcode" primeiro e cola o content_base64 aqui.',
+  convert_image_format: 'image_base64 vazio — mesmo caso acima.',
+  resize_image: 'image_base64 vazio — mesmo caso acima.',
+  crop_image: 'image_base64 vazio — mesmo caso acima (nota: left/top/width/height têm de caber dentro da imagem gerada).',
+  watermark_image: 'image_base64 vazio — mesmo caso acima.',
+  image_metadata: 'image_base64 vazio — mesmo caso acima.',
+  vectorize_image: 'image_base64 vazio — mesmo caso acima.',
+  ocr_extract_text: 'image_base64 vazio — mesmo caso acima.',
+  pdf_to_images: 'pdf_base64 vazio — corre "create_pdf" primeiro.',
+  pptx_to_images: 'pptx_base64 vazio — corre "create_pptx" primeiro.',
+  audio_duration_check: 'audio_base64 vazio — precisa de um mp3/wav/m4a real em base64.',
+  merge_pdfs: 'pdfs_base64 vazio — precisa de pelo menos 2 PDFs em base64 (ex: corre create_pdf duas vezes).',
+  split_pdf_pages: 'pdf_base64 vazio — corre "create_pdf" primeiro.',
+  animate_html: 'Bloqueada por defeito (ENABLE_HEAVY_TOOLS=false) — espera-se found:false.',
+  generate_infographic: 'Bloqueada por defeito (ENABLE_HEAVY_TOOLS=false) — espera-se found:false.',
+};
+
+// ═══════════════════════════════════════════════════════════
+// SETUP DO <select> — populado a partir do catálogo, agrupado
+// por categoria.
+// ═══════════════════════════════════════════════════════════
+function buildToolSelect() {
+  const sel = document.getElementById('toolName');
+  sel.innerHTML = '';
+  Object.entries(TOOL_CATALOG).forEach(([groupLabel, names]) => {
+    const og = document.createElement('optgroup');
+    og.label = groupLabel;
+    names.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+  sel.value = 'search_images';
+}
+buildToolSelect();
+
+// ═══════════════════════════════════════════════════════════
+// SETUP DA LISTA DE CHECKBOXES — mesma agrupação do catálogo.
+// Todas vêm pré-selecionadas, EXCETO send_email (por defeito
+// desmarcada — evita enviar emails reais sem querer numa
+// corrida em lote "selecionar todas").
+// ═══════════════════════════════════════════════════════════
+function checkboxId(name) {
+  return 'chk_' + name;
+}
+
+function buildToolCheckList() {
+  const container = document.getElementById('toolCheckList');
+  container.innerHTML = '';
+  Object.entries(TOOL_CATALOG).forEach(([groupLabel, names]) => {
+    const title = document.createElement('div');
+    title.className = 'checkGroupTitle';
+    title.textContent = groupLabel;
+    container.appendChild(title);
+    names.forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'checkRow';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = checkboxId(name);
+      cb.value = name;
+      cb.checked = name !== 'send_email';
+      const label = document.createElement('label');
+      label.htmlFor = checkboxId(name);
+      label.textContent = name;
+      row.appendChild(cb);
+      row.appendChild(label);
+      container.appendChild(row);
+    });
+  });
+}
+buildToolCheckList();
+
+function selectAllTools() {
+  document.querySelectorAll('#toolCheckList input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+}
+
+function clearAllTools() {
+  document.querySelectorAll('#toolCheckList input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+}
+
+function getSelectedToolNames() {
+  return Array.from(document.querySelectorAll('#toolCheckList input[type="checkbox"]:checked')).map(cb => cb.value);
+}
 
 function updateInputHint() {
   const name = document.getElementById('toolName').value;
   document.getElementById('toolInput').value = PRESETS[name] || '{}';
-  document.getElementById('inputHint').textContent = 'Preset carregado — edita se quiseres';
+  document.getElementById('inputHint').textContent = HINTS[name] || 'Preset carregado — edita se quiseres';
 }
 updateInputHint();
 
@@ -160,12 +626,52 @@ async function doLogin() {
     TOKEN = data.token;
     setStatus('✓ Autenticado. Token guardado em memória.', 'ok');
     document.getElementById('runBtn').disabled = false;
+    document.getElementById('runAllBtn').disabled = false;
+    document.getElementById('sendEmailBtn').disabled = false;
   } catch (e) {
     setStatus('✗ Erro no login: ' + e.message, 'err');
     document.getElementById('runBtn').disabled = true;
+    document.getElementById('runAllBtn').disabled = true;
+    document.getElementById('sendEmailBtn').disabled = true;
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// EXECUÇÃO DE UMA TOOL — chamada de baixo nível reutilizada
+// tanto pelo modo isolado como pela corrida em lote.
+// Devolve { ok, elapsedSec, data, error }.
+// ═══════════════════════════════════════════════════════════
+async function callTool(base, name, input) {
+  const startTime = performance.now();
+  try {
+    const res = await fetch(`${base}/tools/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${TOKEN}`,
+      },
+      body: JSON.stringify({ name, input }),
+    });
+    const elapsedSec = (performance.now() - startTime) / 1000;
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, elapsedSec, data, error: `HTTP ${res.status}` };
+    }
+    const result = data.result !== undefined ? data.result : data;
+    if (result && result.found === false) {
+      return { ok: false, elapsedSec, data, error: result.reason || '(sem reason)' };
+    }
+    return { ok: true, elapsedSec, data };
+  } catch (e) {
+    const elapsedSec = (performance.now() - startTime) / 1000;
+    return { ok: false, elapsedSec, data: null, error: 'Erro de rede/fetch: ' + e.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODO ISOLADO — barra individual com tempo decorrido ao vivo
+// enquanto espera a resposta desta chamada específica.
+// ═══════════════════════════════════════════════════════════
 async function runTool() {
   const base = document.getElementById('apiBase').value.trim();
   const name = document.getElementById('toolName').value;
@@ -179,86 +685,695 @@ async function runTool() {
 
   document.getElementById('renderOutput').innerHTML = '';
   document.getElementById('rawOutput').textContent = '';
+  document.getElementById('runBtn').disabled = true;
+
+  const wrap = document.getElementById('singleProgressWrap');
+  const bar = document.getElementById('singleProgressBar');
+  const nameEl = document.getElementById('singleProgressName');
+  const timeEl = document.getElementById('singleProgressTime');
+  wrap.classList.add('active');
+  bar.classList.add('indeterminate');
+  nameEl.textContent = name;
+  const tickStart = performance.now();
+  const ticker = setInterval(() => {
+    timeEl.textContent = ((performance.now() - tickStart) / 1000).toFixed(1) + 's';
+  }, 100);
+
   setStatus(`A executar "${name}"...`);
-  const startTime = performance.now();
 
-  try {
-    const res = await fetch(`${base}/tools/execute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TOKEN}`,
-      },
-      body: JSON.stringify({ name, input }),
-    });
-    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-    const data = await res.json();
+  const outcome = await callTool(base, name, input);
 
-    if (!res.ok) {
-      setStatus(`✗ HTTP ${res.status} após ${elapsed}s`, 'err');
-      document.getElementById('rawOutput').textContent = JSON.stringify(data, null, 2);
-      return;
-    }
+  clearInterval(ticker);
+  wrap.classList.remove('active');
+  document.getElementById('runBtn').disabled = false;
 
-    setStatus(`✓ Resposta recebida em ${elapsed}s. Vê abaixo o JSON bruto e a renderização.`, 'ok');
-    document.getElementById('rawOutput').textContent = JSON.stringify(data, null, 2);
-
-    renderResult(name, data);
-  } catch (e) {
-    setStatus('✗ Erro de rede/fetch: ' + e.message, 'err');
+  const elapsed = outcome.elapsedSec.toFixed(1);
+  if (!outcome.ok && !outcome.data) {
+    setStatus(`✗ ${outcome.error} após ${elapsed}s`, 'err');
+    return;
   }
+  if (!outcome.ok) {
+    setStatus(`✗ found:false após ${elapsed}s — ${outcome.error}`, 'err');
+    document.getElementById('rawOutput').textContent = JSON.stringify(outcome.data, null, 2);
+    renderResult(name, outcome.data);
+    return;
+  }
+
+  setStatus(`✓ Resposta recebida em ${elapsed}s. Vê abaixo o JSON bruto e a renderização.`, 'ok');
+  document.getElementById('rawOutput').textContent = JSON.stringify(outcome.data, null, 2);
+  renderResult(name, outcome.data);
 }
 
+// ═══════════════════════════════════════════════════════════
+// CORRIDA EM LOTE — corre RUN_ORDER filtrado pelas checkboxes
+// marcadas, preservando a ordem relativa (simples→complexo),
+// para as dependências entre tools continuarem a funcionar
+// mesmo com um subconjunto selecionado. Barra agregada + lista
+// de resultado por tool com tempo individual, e no fim mostra
+// o resultado de TODAS as tools desta corrida de uma só vez na
+// área de baixo (um card por tool, acumulado, não substituído).
+// Não interrompe em erro — regista e segue, porque o objetivo é
+// mapear os limites, não parar no primeiro problema.
+// ═══════════════════════════════════════════════════════════
+async function runSelectedTools() {
+  const base = document.getElementById('apiBase').value.trim();
+  const selectedNames = new Set(getSelectedToolNames());
+
+  if (selectedNames.size === 0) {
+    setStatus('✗ Nenhuma tool selecionada — marca pelo menos uma checkbox.', 'err');
+    return;
+  }
+
+  if (selectedNames.has('send_email')) {
+    const proceed = confirm('send_email está selecionada — isto vai ENVIAR um email real (to vazio no preset vai provavelmente falhar, mas confirma antes de continuar). Continuar?');
+    if (!proceed) {
+      setStatus('Corrida cancelada pelo utilizador (send_email estava selecionada).', 'warn');
+      return;
+    }
+  }
+
+  const orderedSelection = RUN_ORDER.filter(n => selectedNames.has(n));
+  selectedNames.forEach(n => { if (!orderedSelection.includes(n)) orderedSelection.push(n); });
+
+  ALL_RUN_ABORT = false;
+
+  document.getElementById('runAllBtn').style.display = 'none';
+  document.getElementById('stopAllBtn').style.display = 'block';
+  document.getElementById('stopAllBtn').disabled = false;
+  document.getElementById('runBtn').disabled = true;
+
+  const panel = document.getElementById('allRunPanel');
+  panel.classList.add('active');
+  const progressText = document.getElementById('allProgressText');
+  const progressPct = document.getElementById('allProgressPct');
+  const barInner = document.getElementById('allProgressBarInner');
+  const currentToolEl = document.getElementById('allCurrentTool');
+  const summaryEl = document.getElementById('allResultsSummary');
+  summaryEl.innerHTML = '';
+
+  document.getElementById('renderOutput').innerHTML = '';
+  document.getElementById('rawOutput').textContent = '';
+
+  const artifacts = { pdfBase64: null, zipBase64: null, xlsxBase64: null, pngBase64: null, docxBase64: null, pptxBase64: null };
+
+  const results = [];
+  const total = orderedSelection.length;
+
+  for (let i = 0; i < total; i++) {
+    if (ALL_RUN_ABORT) break;
+    const name = orderedSelection[i];
+
+    let input;
+    try {
+      input = JSON.parse(PRESETS[name] || '{}');
+    } catch (e) {
+      input = {};
+    }
+
+    if (name === 'read_pdf_contents' || name === 'extract_document_outline' || name === 'pdf_to_images' || name === 'split_pdf_pages') {
+      if (artifacts.pdfBase64) input.pdf_base64 = artifacts.pdfBase64;
+    }
+    if (name === 'read_zip_contents') {
+      if (artifacts.zipBase64) input.zip_base64 = artifacts.zipBase64;
+    }
+    if (name === 'xlsx_to_json') {
+      if (artifacts.xlsxBase64) input.xlsx_base64 = artifacts.xlsxBase64;
+    }
+    if (name === 'docx_to_html') {
+      if (artifacts.docxBase64) input.docx_base64 = artifacts.docxBase64;
+    }
+    if (name === 'pptx_to_images') {
+      if (artifacts.pptxBase64) input.pptx_base64 = artifacts.pptxBase64;
+    }
+    if (['get_image_colors', 'convert_image_format', 'resize_image', 'crop_image', 'watermark_image', 'image_metadata', 'vectorize_image', 'ocr_extract_text'].includes(name)) {
+      if (artifacts.pngBase64) input.image_base64 = artifacts.pngBase64;
+    }
+    if (name === 'merge_pdfs') {
+      if (artifacts.pdfBase64) input.pdfs_base64 = [artifacts.pdfBase64, artifacts.pdfBase64];
+    }
+
+    currentToolEl.textContent = `A correr: ${name}`;
+    progressText.textContent = `${i + 1} / ${total}`;
+    progressPct.textContent = Math.round(((i) / total) * 100) + '%';
+    barInner.style.width = Math.round(((i) / total) * 100) + '%';
+
+    const outcome = await callTool(base, name, input);
+
+    if (outcome.ok && outcome.data) {
+      const r = outcome.data.result !== undefined ? outcome.data.result : outcome.data;
+      if (r && typeof r.content_base64 === 'string' && r.content_base64.length > 0) {
+        const mime = r.mime_type || '';
+        if (name === 'create_pdf' || name === 'create_pdf_structured' || name === 'html_to_pdf') artifacts.pdfBase64 = r.content_base64;
+        if (name === 'create_project_zip') artifacts.zipBase64 = r.content_base64;
+        if (name === 'create_xlsx') artifacts.xlsxBase64 = r.content_base64;
+        if (name === 'create_docx') artifacts.docxBase64 = r.content_base64;
+        if (name === 'create_pptx') artifacts.pptxBase64 = r.content_base64;
+        if (mime.startsWith('image/') && !artifacts.pngBase64) artifacts.pngBase64 = r.content_base64;
+      }
+    }
+
+    results.push({ name, ok: outcome.ok, elapsedSec: outcome.elapsedSec, error: outcome.error });
+
+    const row = document.createElement('div');
+    row.className = 'resultRow ' + (outcome.ok ? 'rowOk' : 'rowErr');
+    row.innerHTML = `<span>${outcome.ok ? '✓' : '✗'} ${name}</span><span class="toolTime">${outcome.elapsedSec.toFixed(1)}s</span>`;
+    if (!outcome.ok) row.title = outcome.error || '';
+    summaryEl.appendChild(row);
+    summaryEl.scrollTop = summaryEl.scrollHeight;
+
+    appendBatchResultCard(name, outcome);
+  }
+
+  progressText.textContent = `${results.length} / ${total}`;
+  const pct = Math.round((results.length / total) * 100);
+  progressPct.textContent = pct + '%';
+  barInner.style.width = pct + '%';
+
+  const okCount = results.filter(r => r.ok).length;
+  const failCount = results.length - okCount;
+  const totalTime = results.reduce((s, r) => s + r.elapsedSec, 0);
+  const slowest = results.slice().sort((a, b) => b.elapsedSec - a.elapsedSec).slice(0, 3);
+
+  currentToolEl.innerHTML = ALL_RUN_ABORT
+    ? `Parado manualmente após ${results.length}/${total}.`
+    : `Concluído: ${okCount} ok, ${failCount} falharam, ${totalTime.toFixed(1)}s no total.` +
+      (slowest.length ? `<br>Mais lentas: ${slowest.map(s => `${s.name} (${s.elapsedSec.toFixed(1)}s)`).join(', ')}` : '');
+
+  document.getElementById('runAllBtn').style.display = 'block';
+  document.getElementById('stopAllBtn').style.display = 'none';
+  document.getElementById('runBtn').disabled = false;
+
+  setStatus(ALL_RUN_ABORT ? `Corrida interrompida (${results.length}/${total}).` : `Corrida completa: ${okCount}/${total} tools ok.`, ALL_RUN_ABORT ? 'warn' : (failCount === 0 ? 'ok' : 'warn'));
+}
+
+function stopAllTools() {
+  ALL_RUN_ABORT = true;
+  document.getElementById('stopAllBtn').disabled = true;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECÇÃO 4 — ENVIO DE EMAIL MANUAL DEDICADO
+// Formulário próprio para testar send_email de forma direta,
+// incluindo seleção de imagem local → conversão para base64 →
+// geração automática de content_id → botão para inserir a tag
+// <img src="cid:..."> no textarea do conteúdo.
+// ═══════════════════════════════════════════════════════════
+function handleEmailImageSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = reader.result;
+    const base64Only = dataUrl.split(',')[1];
+    const contentId = 'img_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+
+    EMAIL_IMAGES.push({
+      content_base64: base64Only,
+      content_id: contentId,
+      filename: file.name || `${contentId}.png`,
+      previewDataUrl: dataUrl,
+    });
+
+    renderEmailImagePreviews();
+    event.target.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderEmailImagePreviews() {
+  const row = document.getElementById('emailImagePreviewRow');
+  const hintArea = document.getElementById('cidHintArea');
+  row.innerHTML = '';
+  hintArea.innerHTML = '';
+
+  EMAIL_IMAGES.forEach((img, idx) => {
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    wrap.style.flexShrink = '0';
+
+    const thumb = document.createElement('img');
+    thumb.src = img.previewDataUrl;
+    thumb.className = 'emailImgThumb';
+    thumb.title = `Clica para inserir <img src="cid:${img.content_id}"> no conteúdo`;
+    thumb.style.cursor = 'pointer';
+    thumb.onclick = () => insertCidTagIntoContent(img.content_id);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.style.position = 'absolute';
+    removeBtn.style.top = '-6px';
+    removeBtn.style.right = '-6px';
+    removeBtn.style.width = '20px';
+    removeBtn.style.height = '20px';
+    removeBtn.style.padding = '0';
+    removeBtn.style.borderRadius = '50%';
+    removeBtn.style.background = '#b91c1c';
+    removeBtn.style.margin = '0';
+    removeBtn.style.fontSize = '11px';
+    removeBtn.style.lineHeight = '1';
+    removeBtn.onclick = () => { EMAIL_IMAGES.splice(idx, 1); renderEmailImagePreviews(); };
+
+    wrap.appendChild(thumb);
+    wrap.appendChild(removeBtn);
+    row.appendChild(wrap);
+
+    const hint = document.createElement('div');
+    hint.className = 'cidHint';
+    hint.textContent = `cid:${img.content_id}  →  clica na miniatura para inserir a tag <img> no conteúdo`;
+    hintArea.appendChild(hint);
+  });
+}
+
+function insertCidTagIntoContent(contentId) {
+  const textarea = document.getElementById('emailContent');
+  const tag = `<img src="cid:${contentId}" style="max-width:100%;border-radius:8px;" />`;
+  const pos = textarea.selectionStart || textarea.value.length;
+  textarea.value = textarea.value.slice(0, pos) + tag + textarea.value.slice(pos);
+  textarea.focus();
+}
+
+async function sendTestEmail() {
+  const base = document.getElementById('apiBase').value.trim();
+  const to = document.getElementById('emailTo').value.trim();
+  const subject = document.getElementById('emailSubject').value.trim();
+  const content = document.getElementById('emailContent').value.trim();
+  const fromName = document.getElementById('emailFromName').value.trim();
+  const statusEl = document.getElementById('emailSendStatus');
+  const btn = document.getElementById('sendEmailBtn');
+
+  if (!to || !subject || !content) {
+    statusEl.innerHTML = '<span class="err">Preenche pelo menos: destinatário, assunto e conteúdo.</span>';
+    return;
+  }
+
+  const input = { to, subject, content };
+  if (fromName) input.from_name = fromName;
+  if (EMAIL_IMAGES.length > 0) {
+    input.images = EMAIL_IMAGES.map(img => ({
+      content_base64: img.content_base64,
+      content_id: img.content_id,
+      filename: img.filename,
+    }));
+  }
+
+  btn.disabled = true;
+  statusEl.innerHTML = '<span class="warn">A enviar...</span>';
+
+  const outcome = await callTool(base, 'send_email', input);
+
+  btn.disabled = false;
+
+  document.getElementById('renderOutput').innerHTML = '';
+  document.getElementById('rawOutput').textContent = JSON.stringify(outcome.data, null, 2);
+
+  if (outcome.ok) {
+    const r = outcome.data.result !== undefined ? outcome.data.result : outcome.data;
+    statusEl.innerHTML = `<span class="ok">✓ Enviado! email_id: ${r.email_id || '(sem id)'} · imagens anexadas: ${r.images_attached ?? 0} · ${outcome.elapsedSec.toFixed(1)}s</span>`;
+  } else {
+    statusEl.innerHTML = `<span class="err">✗ Falhou: ${outcome.error}</span>`;
+  }
+
+  renderResult('send_email', outcome.data);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CARD DE RESULTADO — usado tanto no modo isolado (renderResult,
+// que limpa e mostra um único card) como na corrida em lote
+// (appendBatchResultCard, que acrescenta um card por tool sem
+// apagar os anteriores, para no fim aparecerem todos juntos).
+// Ambos delegam no mesmo buildResultCardBody() para não haver
+// duas implementações divergentes do mesmo render.
+// ═══════════════════════════════════════════════════════════
 function renderResult(toolName, data) {
   const out = document.getElementById('renderOutput');
   out.innerHTML = '';
+  const card = buildResultCardBody(toolName, data);
+  out.appendChild(card);
+}
 
-  // O worker devolve { tool_name, result }. Extraímos result tal
-  // como o app Flutter faz em ToolsApiService.executeTool.
-  const result = data.result !== undefined ? data.result : data;
+function appendBatchResultCard(toolName, outcome) {
+  const out = document.getElementById('renderOutput');
+  const card = buildResultCardBody(toolName, outcome.data, outcome);
+  out.appendChild(card);
+}
 
+function buildResultCardBody(toolName, data, outcomeForBatch) {
   const card = document.createElement('div');
   card.className = 'card';
 
+  const titleRow = document.createElement('div');
+  titleRow.className = 'cardTitle';
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = toolName;
+  titleRow.appendChild(nameSpan);
+  if (outcomeForBatch) {
+    const timeSpan = document.createElement('span');
+    timeSpan.className = outcomeForBatch.ok ? 'ok' : 'err';
+    timeSpan.textContent = `${outcomeForBatch.ok ? '✓' : '✗'} ${outcomeForBatch.elapsedSec.toFixed(1)}s`;
+    titleRow.appendChild(timeSpan);
+  }
+  card.appendChild(titleRow);
+
+  if (!data) {
+    const p = document.createElement('div');
+    p.className = 'err';
+    p.textContent = 'Sem resposta do servidor (erro de rede/fetch).';
+    card.appendChild(p);
+    return card;
+  }
+
+  const result = data.result !== undefined ? data.result : data;
+
   if (result === null || result === undefined) {
-    card.innerHTML = '<span class="err">result veio null/undefined — nada para renderizar.</span>';
-    out.appendChild(card);
-    return;
+    const p = document.createElement('div');
+    p.className = 'err';
+    p.textContent = 'result veio null/undefined — nada para renderizar.';
+    card.appendChild(p);
+    return card;
   }
 
   if (result.found === false) {
-    card.innerHTML = `<span class="err">found: false</span><br>reason: ${escapeHtml(result.reason || '(sem reason)')}`;
-    out.appendChild(card);
-    return;
+    const p = document.createElement('div');
+    p.innerHTML = `<span class="err">found: false</span><br>reason: ${escapeHtml(result.reason || '(sem reason)')}`;
+    card.appendChild(p);
+    return card;
   }
 
-  // search_images — testa exatamente a chave que buildImagesMarker usa: images[].imageUrl
-  if (toolName === 'search_images') {
-    if (!Array.isArray(result.images) || result.images.length === 0) {
-      card.innerHTML = '<span class="err">Sem campo "images" (array) ou array vazio. O app espera exatamente result.images[].imageUrl</span>';
-    } else {
-      const row = document.createElement('div');
-      row.className = 'imgRow';
-      result.images.forEach(img => {
-        if (!img.imageUrl) return;
-        const im = document.createElement('img');
-        im.src = img.imageUrl;
-        im.title = img.title || '';
-        im.onerror = () => { im.style.border = '2px solid #f87171'; im.alt = 'FALHOU AO CARREGAR'; };
-        row.appendChild(im);
-      });
-      card.appendChild(document.createTextNode(`${result.images.length} imagens encontradas:`));
-      card.appendChild(row);
+  const handlers = {
+    read_website: renderKeyValue,
+    search_images: renderSearchImages,
+    search_videos: renderSearchVideos,
+    search_books: renderSearchBooks,
+    download_image_for_project: renderContentBase64Card,
+    search_market: renderKeyValue,
+    search_place: renderKeyValue,
+    search_calendar_date: renderKeyValue,
+    get_weather: renderWeatherAndImage,
+    send_email: renderSendEmail,
+    generate_function_plot: renderContentBase64Card,
+    generate_math_sheet: renderContentBase64Card,
+    generate_color_scheme: renderKeyValue,
+    text_summary_stats: renderKeyValue,
+    count_tokens_estimate: renderKeyValue,
+    extract_urls_from_text: renderKeyValue,
+    diff_text: renderKeyValue,
+    str_replace_file: renderKeyValue,
+    format_markdown_to_html: renderKeyValue,
+    image_metadata: renderKeyValue,
+    get_image_colors: renderKeyValue,
+    youtube_thumbnail_extract: renderKeyValue,
+    extract_document_outline: renderKeyValue,
+    read_zip_contents: renderZipContents,
+    read_pdf_contents: renderPdfContents,
+    pdf_to_images: renderPdfToImages,
+    pptx_to_images: renderPptxToImages,
+    vectorize_image: renderVectorized,
+    docx_to_html: renderDocxToHtml,
+    audio_duration_check: renderKeyValue,
+    csv_to_xlsx: renderContentBase64Card,
+    json_transform: renderJsonTransform,
+    xlsx_to_json: renderKeyValue,
+    html_to_docx: renderContentBase64Card,
+    html_to_pdf: renderContentBase64Card,
+    html_to_xlsx: renderContentBase64Card,
+    html_to_pptx: renderContentBase64Card,
+    create_project_zip: renderContentBase64Card,
+  };
+
+  const handler = handlers[toolName] || renderContentBase64Card;
+  handler(card, result);
+  return card;
+}
+
+function renderSendEmail(card, result) {
+  const pre = document.createElement('pre');
+  pre.className = 'textPreview';
+  pre.textContent = JSON.stringify(result, null, 2);
+  card.appendChild(document.createTextNode('Resposta do envio:'));
+  card.appendChild(pre);
+}
+
+function renderSearchImages(card, result) {
+  if (!Array.isArray(result.images) || result.images.length === 0) {
+    card.innerHTML += '<span class="err">Sem campo "images" (array) ou array vazio. server.js devolve result.images[].url</span>';
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'imgRow';
+  result.images.forEach(img => {
+    if (!img.url) return;
+    const im = document.createElement('img');
+    im.src = img.url;
+    im.title = img.title || '';
+    im.onerror = () => { im.style.border = '2px solid #f87171'; im.alt = 'FALHOU AO CARREGAR'; };
+    row.appendChild(im);
+  });
+  card.appendChild(document.createTextNode(`${result.total_returned ?? result.images.length} imagens encontradas:`));
+  card.appendChild(row);
+}
+
+function renderSearchVideos(card, result) {
+  if (!Array.isArray(result.videos) || result.videos.length === 0) {
+    card.innerHTML += '<span class="err">Sem campo "videos" (array) ou array vazio. Nota: nome do campo "videos" na resposta Serper nunca foi confirmado contra resposta real — ver [search_videos] no log do Render se isto falhar sistematicamente.</span>';
+    return;
+  }
+  result.videos.forEach(v => {
+    const row = document.createElement('div');
+    row.style.marginBottom = '6px';
+    row.innerHTML = `<strong>${escapeHtml(v.title || '(sem título)')}</strong><br><a class="dl" href="${v.link}" target="_blank">${v.link}</a>`;
+    if (v.thumbnailUrl) {
+      const im = document.createElement('img');
+      im.src = v.thumbnailUrl;
+      im.style.width = '160px';
+      im.style.borderRadius = '6px';
+      row.appendChild(document.createElement('br'));
+      row.appendChild(im);
     }
-    out.appendChild(card);
+    card.appendChild(row);
+  });
+}
+
+function renderSearchBooks(card, result) {
+  if (!Array.isArray(result.books) || result.books.length === 0) {
+    card.innerHTML += '<span class="err">Sem campo "books" (array) ou array vazio. server.js devolve result.books[] via Google Books API.</span>';
     return;
   }
+  result.books.forEach(b => {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.marginBottom = '8px';
+    if (b.thumbnail) {
+      const im = document.createElement('img');
+      im.src = b.thumbnail;
+      im.style.width = '56px';
+      im.style.borderRadius = '4px';
+      im.style.flexShrink = '0';
+      row.appendChild(im);
+    }
+    const info = document.createElement('div');
+    info.innerHTML = `<strong>${escapeHtml(b.title || '(sem título)')}</strong><br><span style="color:#999;">${escapeHtml((b.authors || []).join(', ') || 'autor desconhecido')}</span>${b.average_rating ? `<br><span style="color:#fbbf24;">★ ${b.average_rating} (${b.ratings_count || 0})</span>` : ''}`;
+    row.appendChild(info);
+    card.appendChild(row);
+  });
+}
 
-  // tools visuais/documento — testa exatamente a chave que o app lê: content_base64
+function renderKeyValue(card, result) {
+  const { found, ...rest } = result;
+  const pre = document.createElement('pre');
+  pre.className = 'textPreview';
+  pre.textContent = JSON.stringify(rest, null, 2);
+  card.appendChild(document.createTextNode('Campos devolvidos:'));
+  card.appendChild(pre);
+}
+
+function renderWeatherAndImage(card, result) {
+  const { found, content_base64, mime_type, ...rest } = result;
+  const pre = document.createElement('pre');
+  pre.className = 'textPreview';
+  pre.textContent = JSON.stringify(rest, null, 2);
+  card.appendChild(document.createTextNode('Dados do clima:'));
+  card.appendChild(pre);
+  if (content_base64) {
+    renderContentBase64Card(card, result, true);
+  } else {
+    const warn = document.createElement('div');
+    warn.className = 'warn';
+    warn.textContent = 'content_base64 é null — normal se as fontes Inter ainda não estiverem em ./fonts/ (o card visual falha mas os dados de clima continuam válidos).';
+    card.appendChild(warn);
+  }
+}
+
+function renderZipContents(card, result) {
+  const files = Array.isArray(result.files) ? result.files : [];
+  const summary = document.createElement('div');
+  summary.textContent = `total_entries: ${result.total_entries} | files_read: ${result.files_read}`;
+  card.appendChild(summary);
+
+  const textFiles = files.filter(f => f.type === 'text');
+  const imageFiles = files.filter(f => f.type === 'image');
+  const binaryFiles = files.filter(f => f.type === 'binary');
+
+  if (textFiles.length > 0) {
+    const ul = document.createElement('ul');
+    ul.className = 'fileList';
+    textFiles.forEach(f => {
+      const li = document.createElement('li');
+      li.textContent = f.path;
+      if (f.truncated) {
+        const b = document.createElement('span');
+        b.className = 'badge';
+        b.textContent = 'truncado';
+        li.appendChild(b);
+      }
+      ul.appendChild(li);
+    });
+    card.appendChild(document.createTextNode('Ficheiros de texto:'));
+    card.appendChild(ul);
+  }
+
+  if (imageFiles.length > 0) {
+    const row = document.createElement('div');
+    row.className = 'imgRow';
+    imageFiles.forEach(img => {
+      const im = document.createElement('img');
+      im.src = `data:${img.mime_type};base64,${img.content_base64}`;
+      im.title = img.path;
+      row.appendChild(im);
+    });
+    card.appendChild(document.createTextNode('Imagens no zip:'));
+    card.appendChild(row);
+  }
+
+  if (binaryFiles.length > 0) {
+    const pre = document.createElement('pre');
+    pre.className = 'textPreview';
+    pre.textContent = binaryFiles.map(f => `${f.path} (${f.size_bytes} bytes)`).join('\n');
+    card.appendChild(document.createTextNode('Binários (conteúdo não incluído):'));
+    card.appendChild(pre);
+  }
+}
+
+function renderPdfContents(card, result) {
+  const summary = document.createElement('div');
+  summary.textContent = `total_pages: ${result.total_pages}`;
+  card.appendChild(summary);
+
+  if (result.note) {
+    const note = document.createElement('div');
+    note.className = 'warn';
+    note.textContent = result.note;
+    card.appendChild(note);
+  }
+
+  const pre = document.createElement('pre');
+  pre.className = 'textPreview';
+  const text = result.text || '';
+  pre.textContent = text.slice(0, 800) + (text.length > 800 ? '…' : '');
+  card.appendChild(document.createTextNode('Texto extraído:'));
+  card.appendChild(pre);
+}
+
+function renderPdfToImages(card, result) {
+  if (result.note) {
+    const note = document.createElement('div');
+    note.className = 'warn';
+    note.textContent = result.note;
+    card.appendChild(note);
+  }
+  (result.images || []).forEach(img => {
+    const im = document.createElement('img');
+    im.src = `data:${img.mime_type};base64,${img.content_base64}`;
+    card.appendChild(document.createTextNode(`Página ${img.page}:`));
+    card.appendChild(im);
+  });
+}
+
+function renderPptxToImages(card, result) {
+  if (result.note) {
+    const note = document.createElement('div');
+    note.className = 'warn';
+    note.textContent = result.note;
+    card.appendChild(note);
+  }
+  card.appendChild(document.createTextNode(`${result.total_slides} slides:`));
+  (result.images || []).forEach(img => {
+    const im = document.createElement('img');
+    im.src = `data:${img.mime_type};base64,${img.content_base64}`;
+    card.appendChild(document.createTextNode(`Slide ${img.slide}:`));
+    card.appendChild(im);
+  });
+}
+
+function renderVectorized(card, result) {
+  if (typeof result.svg !== 'string' || !result.svg) {
+    card.innerHTML += '<span class="err">Sem campo "svg" (string).</span>';
+    return;
+  }
+  const wrap = document.createElement('div');
+  wrap.style.background = '#fff';
+  wrap.style.padding = '8px';
+  wrap.style.borderRadius = '6px';
+  wrap.innerHTML = result.svg;
+  card.appendChild(document.createTextNode('SVG vetorizado:'));
+  card.appendChild(wrap);
+}
+
+function renderDocxToHtml(card, result) {
+  if (typeof result.html !== 'string') {
+    card.innerHTML += '<span class="err">Sem campo "html" (string).</span>';
+    return;
+  }
+  const pre = document.createElement('pre');
+  pre.className = 'textPreview';
+  pre.textContent = result.html.slice(0, 800) + (result.html.length > 800 ? '…' : '');
+  card.appendChild(document.createTextNode('HTML convertido:'));
+  card.appendChild(pre);
+  if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+    const warn = document.createElement('div');
+    warn.className = 'warn';
+    warn.textContent = `Avisos do mammoth: ${result.warnings.join('; ')}`;
+    card.appendChild(warn);
+  }
+}
+
+function renderJsonTransform(card, result) {
+  if (!Array.isArray(result.headers) || !Array.isArray(result.rows)) {
+    card.innerHTML += '<span class="err">Sem "headers"/"rows" válidos.</span>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'previewTable';
+  const thead = document.createElement('tr');
+  result.headers.forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    thead.appendChild(th);
+  });
+  table.appendChild(thead);
+  result.rows.slice(0, 10).forEach(row => {
+    const tr = document.createElement('tr');
+    row.forEach(cell => {
+      const td = document.createElement('td');
+      td.textContent = cell;
+      tr.appendChild(td);
+    });
+    table.appendChild(tr);
+  });
+  card.appendChild(document.createTextNode(`${result.rows.length} linhas:`));
+  card.appendChild(table);
+  if (result.rows.length > 10) {
+    card.appendChild(document.createTextNode(`(+ ${result.rows.length - 10} linhas não mostradas aqui)`));
+  }
+}
+
+function renderContentBase64Card(card, result, skipEmptyMsg) {
   const hasBase64 = typeof result.content_base64 === 'string' && result.content_base64.length > 0;
   if (!hasBase64) {
-    card.innerHTML = '<span class="err">Sem campo "content_base64" (string não-vazia). O app procura exatamente result.content_base64 — sem isto, nenhum card aparece no Flutter.</span>';
-    out.appendChild(card);
+    if (!skipEmptyMsg) {
+      card.innerHTML += '<span class="err">Sem campo "content_base64" (string não-vazia). O app procura exatamente result.content_base64 — sem isto, nenhum card aparece no Flutter.</span>';
+    }
     return;
   }
 
@@ -280,7 +1395,25 @@ function renderResult(toolName, data) {
     card.appendChild(document.createElement('br'));
     card.appendChild(link);
   }
-  out.appendChild(card);
+
+  if (result.label) {
+    card.appendChild(document.createElement('br'));
+    const lbl = document.createElement('span');
+    lbl.style.color = '#777';
+    lbl.style.fontSize = '11px';
+    lbl.textContent = `label: ${result.label}`;
+    card.appendChild(lbl);
+  }
+
+  if (Array.isArray(result.roots_approx) && result.roots_approx.length > 0) {
+    card.appendChild(document.createElement('br'));
+    card.appendChild(document.createTextNode(`Raízes aproximadas: ${result.roots_approx.join(', ')}`));
+  }
+
+  if (typeof result.has_graph === 'boolean') {
+    card.appendChild(document.createElement('br'));
+    card.appendChild(document.createTextNode(`has_graph: ${result.has_graph}`));
+  }
 }
 
 function escapeHtml(str) {

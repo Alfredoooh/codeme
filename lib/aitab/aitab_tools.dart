@@ -93,16 +93,20 @@ class ImagesToolResult {
 
 const Set<String> kVisualTools = {
   'generate_chart', 'generate_mindmap', 'generate_qrcode', 'generate_barcode',
-  'generate_math', 'generate_table_image', 'generate_html_image',
+  'generate_math_sheet', 'generate_table_image',
   'generate_function_plot', 'download_image_for_project',
+  'generate_random_avatar',
   'get_weather',
+  // Utilitários de imagem que devolvem content_base64 diretamente:
+  'convert_image_format', 'resize_image', 'crop_image', 'watermark_image',
 };
 
 const Set<String> kDocumentTools = {
-  'create_pdf', 'create_docx', 'create_xlsx', 'create_pptx',
-  'csv_to_xlsx', 'convert_document',
+  'create_pdf', 'create_pdf_structured', 'create_docx', 'create_xlsx', 'create_pptx',
+  'csv_to_xlsx',
   'html_to_docx', 'html_to_pdf', 'html_to_xlsx', 'html_to_pptx',
   'create_project_zip',
+  'merge_pdfs', 'split_pdf_pages',
 };
 
 const Set<String> kImageSearchTools = {'search_images'};
@@ -126,10 +130,104 @@ class ToolExecutionOutcome {
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+// INJEÇÃO AUTOMÁTICA DE ANEXOS EM ARGUMENTOS DE TOOL
+//
+// O modelo nunca vê o base64 real de um ficheiro anexado — só sabe
+// que existe pelo nome/tipo. Quando o modelo chama uma tool que
+// precisa de um campo *_base64 e deixa esse campo vazio ou
+// claramente inválido (< 100 caracteres não pode ser um ficheiro
+// real), substituímos pelo base64 do anexo mais recente e
+// compatível encontrado no histórico da conversa. Isto é o que
+// destrava ZIP/PDF/DOCX/XLSX/imagens de facto funcionarem.
+// ══════════════════════════════════════════════════════════════
+
+/// Nome do campo de input que cada tool espera receber com o
+/// conteúdo do ficheiro em base64, e que tipos mime são aceitáveis
+/// para preencher esse campo automaticamente.
+const Map<String, ({String field, List<String> mimePrefixes})> kToolAttachmentFields = {
+  'read_zip_contents':        (field: 'zip_base64',   mimePrefixes: ['application/zip']),
+  'read_pdf_contents':        (field: 'pdf_base64',   mimePrefixes: ['application/pdf']),
+  'extract_document_outline': (field: 'pdf_base64',   mimePrefixes: ['application/pdf']),
+  'xlsx_to_json':             (field: 'xlsx_base64',  mimePrefixes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']),
+  'docx_to_html':             (field: 'docx_base64',  mimePrefixes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']),
+  'pdf_to_images':            (field: 'pdf_base64',   mimePrefixes: ['application/pdf']),
+  'pptx_to_images':           (field: 'pptx_base64',  mimePrefixes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation']),
+  'audio_duration_check':     (field: 'audio_base64', mimePrefixes: ['audio/']),
+  'get_image_colors':         (field: 'image_base64', mimePrefixes: ['image/']),
+  'convert_image_format':     (field: 'image_base64', mimePrefixes: ['image/']),
+  'resize_image':             (field: 'image_base64', mimePrefixes: ['image/']),
+  'crop_image':               (field: 'image_base64', mimePrefixes: ['image/']),
+  'watermark_image':          (field: 'image_base64', mimePrefixes: ['image/']),
+  'image_metadata':           (field: 'image_base64', mimePrefixes: ['image/']),
+  'vectorize_image':          (field: 'image_base64', mimePrefixes: ['image/']),
+  'ocr_extract_text':         (field: 'image_base64', mimePrefixes: ['image/']),
+};
+
+/// Threshold mínimo de comprimento para considerar que o modelo já
+/// escreveu um base64 real e válido no argumento — abaixo disto
+/// (string vazia, placeholder, ou alucinação curta) substituímos
+/// pelo anexo real do utilizador.
+const int kMinPlausibleBase64Length = 100;
+
+/// Procura, na lista de mensagens da conversa, o anexo mais recente
+/// cujo mimeType comece por um dos prefixos aceites. Percorre de
+/// trás para a frente (mais recente primeiro).
+Map<String, dynamic>? findMostRecentAttachment(
+  List<ChatMessage> history,
+  List<String> mimePrefixes,
+) {
+  for (var i = history.length - 1; i >= 0; i--) {
+    final atts = history[i].attachments;
+    if (atts == null || atts.isEmpty) continue;
+    for (var j = atts.length - 1; j >= 0; j--) {
+      final att = atts[j];
+      final mime = att['mimeType']?.toString() ?? '';
+      final matches = mimePrefixes.any((p) => mime.startsWith(p));
+      if (matches) return att;
+    }
+  }
+  return null;
+}
+
+/// Dado o nome da tool e os argumentos que o modelo pediu, devolve
+/// os argumentos já corrigidos com o base64 real injetado, se
+/// aplicável. Se não houver campo a injetar, ou não houver anexo
+/// compatível, devolve os argumentos originais sem alteração.
+Map<String, dynamic> injectAttachmentIfNeeded(
+  String toolName,
+  Map<String, dynamic> arguments,
+  List<ChatMessage> history,
+) {
+  final spec = kToolAttachmentFields[toolName];
+  if (spec == null) return arguments;
+
+  final current = arguments[spec.field]?.toString() ?? '';
+  if (current.length >= kMinPlausibleBase64Length) return arguments;
+
+  final attachment = findMostRecentAttachment(history, spec.mimePrefixes);
+  if (attachment == null) return arguments;
+
+  final base64Data = attachment['base64']?.toString();
+  if (base64Data == null || base64Data.isEmpty) return arguments;
+
+  final updated = Map<String, dynamic>.from(arguments);
+  updated[spec.field] = base64Data;
+  return updated;
+}
+
 /// Executa uma única tool call contra o backend (ou localmente para
 /// search_market/search_place/search_calendar_date, que já tinham
 /// resolvers locais antes desta refatoração).
-Future<Map<String, dynamic>> executeToolCall(ToolCall call) async {
+///
+/// [history] é o histórico da conversa até este ponto — usado
+/// apenas para injeção automática de anexos (ver
+/// injectAttachmentIfNeeded acima). Pode ser vazio para tools que
+/// não usam ficheiros.
+Future<Map<String, dynamic>> executeToolCall(
+  ToolCall call,
+  List<ChatMessage> history,
+) async {
   final token = authController.token;
   if (token == null) {
     return {'found': false, 'reason': 'Sessão expirada'};
@@ -150,11 +248,13 @@ Future<Map<String, dynamic>> executeToolCall(ToolCall call) async {
       return result.toToolResultJson();
   }
 
+  final effectiveArgs = injectAttachmentIfNeeded(call.name, call.arguments, history);
+
   try {
     final result = await ToolsApiService.executeTool(
       token: token,
       name: call.name,
-      input: call.arguments,
+      input: effectiveArgs,
     );
     return result;
   } catch (e) {
@@ -164,14 +264,21 @@ Future<Map<String, dynamic>> executeToolCall(ToolCall call) async {
 
 /// Processa uma lista de tool calls já resolvidas, separando o que
 /// é renderizável localmente do que precisa de ir para o modelo.
-Future<ToolExecutionOutcome> processToolCalls(List<ToolCall> calls) async {
+///
+/// [history] é o histórico da conversa até este ponto (antes desta
+/// rodada de tool calls) — necessário para a injeção automática de
+/// anexos em tools que precisam de ficheiros do utilizador.
+Future<ToolExecutionOutcome> processToolCalls(
+  List<ToolCall> calls,
+  List<ChatMessage> history,
+) async {
   final visuals = <VisualToolResult>[];
   final documents = <DocumentToolResult>[];
   final images = <ImagesToolResult>[];
   final toolResultMsgs = <ChatMessage>[];
 
   for (final call in calls) {
-    final resultJson = await executeToolCall(call);
+    final resultJson = await executeToolCall(call, history);
 
     if (kImageSearchTools.contains(call.name)) {
       final marker = buildImagesMarker(resultJson);

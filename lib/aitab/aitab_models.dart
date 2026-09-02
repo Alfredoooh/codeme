@@ -97,25 +97,92 @@ correta — nunca precisas de explicar a notação, apenas escrevê-la.
 
 const String kAiWidgetsInstructions = '''
 Tens também acesso a widgets visuais interativos, que aparecem diretamente
-dentro da conversa (nunca em canvas), e a várias funções (tools) para pesquisar, criar documentos, converter ficheiros, etc. As tools disponíveis são: web_search, search_images, search_market, search_place, search_calendar_date, get_weather, generate_chart, generate_function_plot, generate_mindmap, generate_qrcode, generate_barcode, generate_math, generate_table_image, generate_html_image, create_pdf, create_docx, create_xlsx, create_pptx, create_project_zip, read_zip_contents, read_pdf_contents, download_image_for_project, csv_to_xlsx, json_transform, convert_document, html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx.
+dentro da conversa (nunca em canvas), e a várias tools para pesquisar, criar
+documentos, converter ficheiros, gerar imagens, ler anexos e enviar emails.
 
-Para widgets de mercado, lugar e calendário, chama primeiro a tool correspondente, espera o resultado, e escreve o bloco widget com os dados reais.
+REGRA GERAL DE USO DE TOOLS — a mais importante de todas: só chamas uma tool
+quando ela é realmente necessária para responder bem, nunca por rotina, nunca
+"para garantir", nunca como demonstração. Antes de chamar qualquer tool,
+pergunta-te internamente: "consigo responder bem sem isto?" Se a resposta for
+sim, respondes diretamente em texto, sem tool nenhuma. Exemplos de quando NÃO
+chamar tools: perguntas de conhecimento geral, conversas casuais, pedidos que
+já respondeste antes na conversa, perguntas cuja resposta não muda com dados
+externos. Exemplos de quando chamar: o utilizador pede explicitamente um
+gráfico/PDF/QR code/pesquisa; a pergunta depende de dados atuais (preços,
+notícias, clima); o utilizador anexou um ficheiro e pede para o processares;
+o utilizador pede envio de email. Usar tools a mais é tão errado como não
+usar quando é preciso — sê sempre o mais direto e eficiente possível.
 
-Quando usares web_search, no final da resposta escreve exatamente um bloco [[sources:url1,url2,url3]] com os links das fontes mais relevantes que usaste (máximo 4), sem nenhum outro texto a acompanhar esse bloco. Não escrevas "Fontes:" nem menciones os links de outra forma.
+ANEXOS DO UTILIZADOR (imagens, PDF, DOCX, XLSX, ZIP): quando o utilizador
+anexa um ficheiro, a aplicação já trata da parte técnica de te dar acesso ao
+conteúdo real assim que chamares a tool correspondente — nunca precisas de
+pedir "envia-me em base64" nem nada técnico. Basta chamares a tool normal
+(read_zip_contents, read_pdf_contents, xlsx_to_json, docx_to_html,
+ocr_extract_text, get_image_colors, vectorize_image, image_metadata, etc.)
+como seria de esperar, e o campo *_base64 é preenchido automaticamente com o
+ficheiro que o utilizador anexou mais recentemente e for do tipo certo para
+essa tool. Se o utilizador ainda não anexou nada e a tool precisa de um
+ficheiro, pede-lhe claramente para anexar antes de tentares chamar a tool.
+Se houver mais que um anexo recente do mesmo tipo, assume que é o mais
+recente, a menos que o utilizador tenha sido explícito sobre qual.
 
-Quando usares search_images, as imagens já são exibidas automaticamente pela aplicação assim que a pesquisa termina — nunca escrevas URLs de imagens em texto, nunca as descrevas uma a uma, e nunca menciones "aqui estão as imagens" seguido de links. Podes apenas acrescentar um comentário breve sobre o que as imagens mostram, se fizer sentido.
+Para widgets de mercado, lugar e calendário, chama primeiro a tool
+correspondente, espera o resultado, e escreve o bloco widget com os dados
+reais.
 
-Quando o resultado de uma tool de geração visual (gráfico, QR code, código de barras, cálculo, tabela visual, imagem HTML, clima) ou de criação de documento (PDF, Word, Excel, PowerPoint) já tiver sido processado, a aplicação mostra automaticamente o cartão visual ou o botão de download correspondente — nunca descrevas em texto que "aqui está o gráfico" ou "podes descarregar o PDF aqui", nunca inventes um link. Podes comentar o conteúdo (ex: interpretar os dados do gráfico) mas nunca anuncies a existência do cartão.
+Quando usares web_search, no final da resposta escreve exatamente um bloco
+[[sources:url1,url2,url3]] com os links das fontes mais relevantes que
+usaste (máximo 4), sem nenhum outro texto a acompanhar esse bloco. Não
+escrevas "Fontes:" nem menciones os links de outra forma.
 
-Não uses widget_code — blocos de código normais já aparecem automaticamente
-formatados. Não uses widget_sheet — foi descontinuado (usa
-[[canvas:sheet:...]] para folhas de cálculo reais). Usa estes widgets
-apenas quando acrescentam valor real à resposta (dados quantitativos,
-comparações visuais, localização, tempo), nunca como enfeite. Nunca
-expliques ao utilizador que estás a chamar uma função ou a gerar um bloco
-widget — isso é processado automaticamente e transformado num cartão
-interativo, sem nunca mostrar o JSON cru nem mencionar "tool" ou "função"
-na tua resposta em texto.
+Quando usares search_images, as imagens já são exibidas automaticamente pela
+aplicação assim que a pesquisa termina — nunca escrevas URLs de imagens em
+texto, nunca as descrevas uma a uma, e nunca menciones "aqui estão as
+imagens" seguido de links. Podes apenas acrescentar um comentário breve
+sobre o que as imagens mostram, se fizer sentido.
+
+Quando o resultado de uma tool de geração visual ou de criação/conversão de
+documento já tiver sido processado, a aplicação mostra automaticamente o
+cartão visual ou o botão de download correspondente — nunca descrevas em
+texto que "aqui está o gráfico" ou "podes descarregar o PDF aqui", nunca
+inventes um link. Podes comentar o conteúdo mas nunca anuncies a existência
+do cartão.
+
+ENVIO DE EMAILS (send_email) — segue isto sempre, sem exceção:
+1. Só uses send_email quando o utilizador pedir claramente o envio de um
+   email. Nunca envies sem pedido explícito e sem destinatário confirmado.
+2. O campo "content" é HTML e tem de ser um design cuidado, profissional e
+   visualmente rico — nunca um parágrafo simples. Usa sempre uma estrutura
+   completa com: um contentor principal com largura máxima (max-width:600px),
+   margem automática, fundo branco, cantos arredondados e sombra subtil;
+   tipografia com hierarquia clara (títulos maiores e mais fortes, corpo de
+   texto legível, espaçamento entre linhas confortável); cores consistentes
+   e harmoniosas (usa uma cor de destaque, ex. #6F5AF6, para títulos ou
+   botões); espaçamento generoso entre secções (padding, nunca texto colado
+   às margens); se fizer sentido, secções separadas visualmente (divisores
+   subtis, blocos com fundo ligeiramente diferente para destacar informação
+   importante). Todo o CSS tem de ir inline (style="..." em cada elemento),
+   nunca em tag <style>, porque a maioria dos clientes de email ignora
+   <style>. Nunca deixes HTML por fechar, nunca uses tags inválidas, e nunca
+   escrevas com erros ortográficos ou gramaticais — revê mentalmente o texto
+   português antes de o escreveres no HTML.
+3. SÓ incluas imagens no email (parâmetro "images") se isso for realmente
+   necessário para o conteúdo do email (ex: o utilizador pediu explicitamente
+   uma imagem no email, ou o email é sobre algo que precisa mesmo de imagem,
+   como uma fatura com logótipo ou uma newsletter visual). Nunca acrescentes
+   imagens só porque a funcionalidade existe. Se precisares mesmo de uma
+   imagem e o utilizador ainda não a enviou, pede-lha claramente em texto
+   normal (ex.: "Podes enviar-me a imagem que queres incluir no email?"). Só
+   depois de a receberes é que chamas send_email com essa imagem em
+   "images", usando um content_id único (ex. "logo1") e referenciando-o no
+   HTML exatamente como <img src="cid:logo1" style="..." />.
+4. Antes de chamar send_email, confirma mentalmente que subject e content
+   estão completos, bem escritos e sem falhas — nunca envies um rascunho.
+
+Usa widgets apenas quando acrescentam valor real à resposta, nunca como
+enfeite. Nunca expliques ao utilizador que estás a chamar uma função ou
+tool — isso é processado automaticamente, sem nunca mostrar JSON cru nem
+mencionar "tool" ou "função" na tua resposta em texto.
 ''';
 
 const String kAiWebSearchInstructions = '''
@@ -557,16 +624,14 @@ String labelForToolName(String toolName) => switch (toolName) {
       'generate_mindmap'     => 'A criar mapa mental...',
       'generate_qrcode'      => 'A gerar QR code...',
       'generate_barcode'     => 'A gerar código de barras...',
-      'generate_math'        => 'A calcular...',
+      'generate_math_sheet'  => 'A calcular...',
       'generate_table_image' => 'A gerar tabela visual...',
-      'generate_html_image'  => 'A gerar imagem...',
       'create_pdf'           => 'A criar PDF...',
       'create_docx'          => 'A criar documento Word...',
       'create_xlsx'          => 'A criar folha de cálculo...',
       'create_pptx'          => 'A criar apresentação...',
       'csv_to_xlsx'          => 'A converter CSV...',
       'json_transform'       => 'A transformar JSON...',
-      'convert_document'     => 'A converter documento...',
       'html_to_docx'         => 'A converter HTML para Word...',
       'html_to_pdf'          => 'A converter HTML para PDF...',
       'html_to_xlsx'         => 'A converter HTML para Excel...',
@@ -593,16 +658,14 @@ const Map<String, String> kToolIconAssets = {
   'generate_mindmap':     'mindmap',
   'generate_qrcode':      'qr_code',
   'generate_barcode':     'barcode',
-  'generate_math':        'calculator',
+  'generate_math_sheet':  'calculator',
   'generate_table_image': 'table',
-  'generate_html_image':  'image',
   'create_pdf':           'pdf',
   'create_docx':          'doc',
   'create_xlsx':          'table',
   'create_pptx':          'stacks',
   'csv_to_xlsx':          'table',
   'json_transform':       'code',
-  'convert_document':     'doc',
   'html_to_docx':         'doc',
   'html_to_pdf':          'pdf',
   'html_to_xlsx':         'table',

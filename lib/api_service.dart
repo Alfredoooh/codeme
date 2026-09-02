@@ -1018,7 +1018,7 @@ class ToolsApiService {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw ApiException(data['error']?.toString() ?? 'Erro ao executar tool', statusCode: res.statusCode);
     }
-    if (data is Map && data.containsKey('result')) {
+    if (data.containsKey('result')) {
       final result = data['result'];
       if (result is Map<String, dynamic>) return result;
       if (result is Map) return Map<String, dynamic>.from(result);
@@ -1029,9 +1029,18 @@ class ToolsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DEFINIÇÕES COMPLETAS DAS TOOLS — todas as expostas pelo servidor
+// DEFINIÇÕES COMPLETAS DAS TOOLS — sincronizado com o catálogo
+// real do server.js (TOOL_CATALOG do testador de tools em HTML).
+// 57 tools no total, agrupadas nas mesmas categorias do testador.
+//
+// EXCLUÍDAS DE PROPÓSITO:
+//   - generate_html_image: removida do catálogo do servidor.
+//   - animate_html, generate_infographic: bloqueadas por defeito
+//     no servidor (ENABLE_HEAVY_TOOLS=false) — fora por agora,
+//     re-adicionar aqui quando a flag for ligada em produção.
 // ══════════════════════════════════════════════════════════════
 const List<ToolDefinition> kAllTools = [
+  // ── Busca / dados (10) ──────────────────────────────────────
   ToolDefinition(
     name: 'web_search',
     description: 'Pesquisa informação atual na web. Devolve resultados com snippets, imagens e a data atual injetada automaticamente. Usa sempre que precisares de informação recente — nunca inventes resultados.',
@@ -1044,14 +1053,62 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
+    name: 'read_website',
+    description: 'Lê e extrai o conteúdo textual de uma página web a partir do seu URL. Usa quando o utilizador dá um link e pede para ler, resumir ou analisar o que lá está.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'url': {'type': 'string', 'description': 'URL completo da página a ler'},
+      },
+      'required': ['url'],
+    },
+  ),
+  ToolDefinition(
     name: 'search_images',
     description: 'Pesquisa imagens na web via Serper. Devolve URLs de imagens relevantes. Usa quando o utilizador pede imagens de algo.',
     parameters: {
       'type': 'object',
       'properties': {
         'query': {'type': 'string', 'description': 'Termo de busca de imagens'},
+        'max_results': {'type': 'number', 'description': 'Número máximo de imagens a devolver'},
       },
       'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'search_videos',
+    description: 'Pesquisa vídeos na web via Serper. Devolve título, link e thumbnail de cada vídeo encontrado. Usa quando o utilizador pede vídeos, tutoriais em vídeo, etc.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Termo de busca de vídeos'},
+        'max_results': {'type': 'number', 'description': 'Número máximo de vídeos a devolver'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'search_books',
+    description: 'Pesquisa livros via Google Books API. Devolve título, autores, thumbnail e rating de cada livro encontrado. Usa quando o utilizador pergunta sobre livros ou pede recomendações de leitura.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query': {'type': 'string', 'description': 'Título, autor ou tema do livro'},
+        'max_results': {'type': 'number', 'description': 'Número máximo de livros a devolver'},
+      },
+      'required': ['query'],
+    },
+  ),
+  ToolDefinition(
+    name: 'download_image_for_project',
+    description: 'Descarrega uma imagem real da web (por URL direto ou por pesquisa de termo) e devolve-a em base64 pronta para ser anexada a um projeto, documento ou ZIP. Usa quando o utilizador pedir para adicionar uma imagem real a um ficheiro/projeto que estás a criar. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'query_or_url': {'type': 'string', 'description': 'URL direto da imagem OU um termo de pesquisa (nesse caso pesquisa e usa o primeiro resultado)'},
+        'target_filename': {'type': 'string', 'description': 'Nome sugerido para o ficheiro dentro do projeto, ex "logo.png"'},
+      },
+      'required': ['query_or_url'],
     },
   ),
   ToolDefinition(
@@ -1098,6 +1155,37 @@ const List<ToolDefinition> kAllTools = [
       'required': ['city'],
     },
   ),
+
+  // ── Email (1) ────────────────────────────────────────────────
+  ToolDefinition(
+    name: 'send_email',
+    description: 'Envia um email real através do servidor. Suporta HTML rico no corpo e imagens embutidas inline via Content-ID (CID): cada imagem em "images" recebe um content_id, e esse mesmo valor deve ser referenciado no HTML do "content" como <img src="cid:AQUELE_ID">, para a imagem aparecer embutida no corpo do email em vez de anexada. Usa apenas quando o utilizador pedir explicitamente o envio de um email — nunca envies sem confirmação clara do destinatário.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'to': {'type': 'string', 'description': 'Endereço de email do destinatário'},
+        'subject': {'type': 'string', 'description': 'Assunto do email'},
+        'content': {'type': 'string', 'description': 'Corpo do email em HTML. Para embutir uma imagem de "images", usa <img src="cid:CONTENT_ID_DA_IMAGEM">'},
+        'from_name': {'type': 'string', 'description': 'Nome do remetente a mostrar (opcional)'},
+        'images': {
+          'type': 'array',
+          'description': 'Imagens a embutir inline no corpo do email via CID. Cada uma deve ter um content_id único, referenciado no HTML de "content" como cid:content_id.',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'content_base64': {'type': 'string', 'description': 'Imagem em base64'},
+              'content_id': {'type': 'string', 'description': 'Identificador único usado no HTML como cid:content_id'},
+              'filename': {'type': 'string', 'description': 'Nome do ficheiro da imagem'},
+            },
+            'required': ['content_base64', 'content_id'],
+          },
+        },
+      },
+      'required': ['to', 'subject', 'content'],
+    },
+  ),
+
+  // ── Geração de imagem (9) ───────────────────────────────────
   ToolDefinition(
     name: 'generate_chart',
     description: 'Gera um gráfico visual como PNG base64. Suporta line, bar, pie, doughnut, radar, polarArea, scatter, bubble. Aceita múltiplos datasets. Devolve content_base64 com PNG — exibe diretamente no chat.',
@@ -1124,7 +1212,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'generate_function_plot',
-    description: 'Gera o gráfico REAL de uma função matemática (parábolas, senos, cúbicas, raiz, exponenciais) avaliando a expressão ponto a ponto num intervalo e desenhando com eixos, grelha e marcação de zero. Usa esta tool em vez de generate_math sempre que o pedido for "gráfico de uma função", "parábola", "esboça y = ...", etc. Devolve content_base64 — exibe diretamente no chat.',
+    description: 'Gera o gráfico REAL de uma função matemática (parábolas, senos, cúbicas, raiz, exponenciais) avaliando a expressão ponto a ponto num intervalo e desenhando com eixos, grelha e marcação de zero. Usa esta tool em vez de generate_math_sheet sempre que o pedido for "gráfico de uma função", "parábola", "esboça y = ...", etc. Devolve content_base64 — exibe diretamente no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1133,6 +1221,18 @@ const List<ToolDefinition> kAllTools = [
         'x_max': {'type': 'number', 'description': 'Default 10'},
         'title': {'type': 'string'},
         'highlight_roots': {'type': 'boolean', 'description': 'Se true, marca visualmente onde a função cruza y=0 (raízes aproximadas)'},
+      },
+      'required': ['expression'],
+    },
+  ),
+  ToolDefinition(
+    name: 'generate_math_sheet',
+    description: 'Avalia uma expressão matemática e gera imagem PNG com resultado, incluindo o gráfico se "show_graph" for true. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'expression': {'type': 'string', 'description': 'Expressão matemática ex: "2^10", "sqrt(144)", "x^2 + 2*x + 1"'},
+        'show_graph': {'type': 'boolean', 'description': 'Se true e a expressão for função de x, inclui o gráfico'},
       },
       'required': ['expression'],
     },
@@ -1179,24 +1279,6 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'generate_math',
-    description: 'Avalia uma expressão matemática e gera imagem PNG com resultado. Se for função (ex: x^2), gera gráfico automaticamente. Devolve content_base64 — exibe diretamente no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'expression': {'type': 'string', 'description': 'Expressão matemática ex: "2^10", "sqrt(144)", "x^2 + 2*x + 1"'},
-        'variable_range': {
-          'type': 'object',
-          'properties': {
-            'min': {'type': 'number'},
-            'max': {'type': 'number'},
-          },
-        },
-      },
-      'required': ['expression'],
-    },
-  ),
-  ToolDefinition(
     name: 'generate_table_image',
     description: 'Gera uma tabela complexa como PNG base64. Usa quando markdown não é suficiente. Devolve content_base64 — exibe diretamente no chat.',
     parameters: {
@@ -1211,18 +1293,30 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'generate_html_image',
-    description: 'Converte um snippet HTML/CSS em PNG base64. Usa para criar cards visuais, infográficos, dashboards, snippets de código com syntax highlight, ou qualquer layout visual personalizado. Devolve content_base64 — exibe diretamente no chat.',
+    name: 'generate_color_scheme',
+    description: 'Gera uma paleta de cores harmoniosa a partir de uma cor base hexadecimal. Devolve as cores derivadas em campos de dados — usa quando o utilizador pedir sugestões de esquema de cores para design.',
     parameters: {
       'type': 'object',
       'properties': {
-        'html': {'type': 'string', 'description': 'HTML completo com estilos inline ou tag <style>'},
-        'width': {'type': 'number', 'description': 'Largura em pixels (default 800)'},
-        'height': {'type': 'number', 'description': 'Altura em pixels (default 600)'},
+        'base_color_hex': {'type': 'string', 'description': 'Cor base em hexadecimal, ex "#6F5AF6"'},
       },
-      'required': ['html'],
+      'required': ['base_color_hex'],
     },
   ),
+  ToolDefinition(
+    name: 'generate_random_avatar',
+    description: 'Gera um avatar aleatório determinístico a partir de um seed (ex: email ou username) como PNG base64. Mesma seed produz sempre o mesmo avatar. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'seed': {'type': 'string', 'description': 'String usada como semente do avatar, ex email ou username'},
+        'size': {'type': 'number', 'description': 'Tamanho em pixels (default 200)'},
+      },
+      'required': ['seed'],
+    },
+  ),
+
+  // ── Documentos (6) ───────────────────────────────────────────
   ToolDefinition(
     name: 'create_pdf',
     description: 'Gera um PDF a partir de HTML rico. Pode incluir imagens reais (via image_urls) e/ou um gráfico gerado (via embed_chart) diretamente dentro do PDF. Devolve content_base64 e filename — mostra botão de download no chat.',
@@ -1243,6 +1337,29 @@ const List<ToolDefinition> kAllTools = [
         },
       },
       'required': ['title', 'html_content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'create_pdf_structured',
+    description: 'Gera um PDF a partir de uma estrutura de secções (título, subtítulo, parágrafos e listas com marcadores por secção), sem precisar escrever HTML. Usa quando o conteúdo é claramente organizado em secções de relatório. Devolve content_base64 e filename — mostra botão de download no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'title': {'type': 'string'},
+        'subtitle': {'type': 'string'},
+        'sections': {
+          'type': 'array',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'heading': {'type': 'string'},
+              'paragraphs': {'type': 'array', 'items': {'type': 'string'}},
+              'bullet_list': {'type': 'array', 'items': {'type': 'string'}},
+            },
+          },
+        },
+      },
+      'required': ['title', 'sections'],
     },
   ),
   ToolDefinition(
@@ -1332,6 +1449,8 @@ const List<ToolDefinition> kAllTools = [
       'required': ['project_name', 'files'],
     },
   ),
+
+  // ── Leitura de ficheiros (3) ─────────────────────────────────
   ToolDefinition(
     name: 'read_zip_contents',
     description: 'Lê o conteúdo de um ficheiro .zip enviado pelo utilizador (código-fonte de um projeto, etc). Descompacta e devolve a árvore de ficheiros com o texto de cada ficheiro de código/texto, e as imagens em base64. Limite: 15MB, 100 ficheiros, 15000 caracteres por ficheiro de texto, até 10 imagens decodificadas.',
@@ -1355,17 +1474,19 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'download_image_for_project',
-    description: 'Descarrega uma imagem real da web (por URL direto ou por pesquisa de termo) e devolve-a em base64 pronta para ser anexada a um projeto, documento ou ZIP. Usa quando o utilizador pedir para adicionar uma imagem real a um ficheiro/projeto que estás a criar. Devolve content_base64 — exibe diretamente no chat.',
+    name: 'extract_document_outline',
+    description: 'Extrai a estrutura/índice (títulos, secções, hierarquia) de um documento PDF. Usa quando o utilizador pedir o esboço, índice ou estrutura de um documento sem precisar do texto completo.',
     parameters: {
       'type': 'object',
       'properties': {
-        'query_or_url': {'type': 'string', 'description': 'URL direto da imagem OU um termo de pesquisa (nesse caso pesquisa e usa o primeiro resultado)'},
-        'target_filename': {'type': 'string', 'description': 'Nome sugerido para o ficheiro dentro do projeto, ex "logo.png"'},
+        'pdf_base64': {'type': 'string', 'description': 'Conteúdo do PDF em base64'},
+        'source_type': {'type': 'string', 'description': 'Tipo de origem do documento, ex "pdf"'},
       },
-      'required': ['query_or_url'],
+      'required': ['pdf_base64'],
     },
   ),
+
+  // ── Conversão (8) ─────────────────────────────────────────────
   ToolDefinition(
     name: 'csv_to_xlsx',
     description: 'Converte CSV em Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
@@ -1389,17 +1510,14 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'convert_document',
-    description: 'Converte um documento entre formatos a partir de conteúdo base64. Devolve content_base64 e filename — mostra botão de download no chat.',
+    name: 'xlsx_to_json',
+    description: 'Converte uma planilha Excel (.xlsx) enviada pelo utilizador em dados JSON estruturados. Usa quando o utilizador pedir para extrair os dados de um Excel para JSON.',
     parameters: {
       'type': 'object',
       'properties': {
-        'source_format': {'type': 'string'},
-        'target_format': {'type': 'string'},
-        'content_base64': {'type': 'string'},
-        'filename': {'type': 'string'},
+        'xlsx_base64': {'type': 'string', 'description': 'Conteúdo do .xlsx em base64'},
       },
-      'required': ['source_format', 'target_format', 'content_base64'],
+      'required': ['xlsx_base64'],
     },
   ),
   ToolDefinition(
@@ -1448,6 +1566,258 @@ const List<ToolDefinition> kAllTools = [
         'title': {'type': 'string'},
       },
       'required': ['html_content'],
+    },
+  ),
+  ToolDefinition(
+    name: 'docx_to_html',
+    description: 'Converte um Word (.docx) enviado pelo utilizador em HTML. Usa quando o utilizador pedir para extrair ou reaproveitar o conteúdo de um .docx como HTML.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'docx_base64': {'type': 'string', 'description': 'Conteúdo do .docx em base64'},
+      },
+      'required': ['docx_base64'],
+    },
+  ),
+
+  // ── Imagem — utilitários (11) ────────────────────────────────
+  ToolDefinition(
+    name: 'get_image_colors',
+    description: 'Extrai a paleta de cores dominantes de uma imagem. Usa quando o utilizador pedir para saber ou usar as cores de uma imagem.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'num_colors': {'type': 'number', 'description': 'Número de cores dominantes a extrair'},
+      },
+      'required': ['image_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'convert_image_format',
+    description: 'Converte uma imagem para outro formato (ex: webp, png, jpeg). Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'target_format': {'type': 'string', 'description': 'Formato de destino, ex "webp", "png", "jpeg"'},
+      },
+      'required': ['image_base64', 'target_format'],
+    },
+  ),
+  ToolDefinition(
+    name: 'resize_image',
+    description: 'Redimensiona uma imagem para uma largura (e opcionalmente altura) especificada, mantendo proporção se só a largura for dada. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'width': {'type': 'number', 'description': 'Largura de destino em pixels'},
+        'height': {'type': 'number', 'description': 'Altura de destino em pixels (opcional)'},
+      },
+      'required': ['image_base64', 'width'],
+    },
+  ),
+  ToolDefinition(
+    name: 'crop_image',
+    description: 'Recorta uma região retangular de uma imagem, definida por posição (left/top) e tamanho (width/height). Os valores têm de caber dentro das dimensões da imagem original. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'left': {'type': 'number', 'description': 'Posição X do canto superior esquerdo do recorte'},
+        'top': {'type': 'number', 'description': 'Posição Y do canto superior esquerdo do recorte'},
+        'width': {'type': 'number', 'description': 'Largura do recorte'},
+        'height': {'type': 'number', 'description': 'Altura do recorte'},
+      },
+      'required': ['image_base64', 'left', 'top', 'width', 'height'],
+    },
+  ),
+  ToolDefinition(
+    name: 'watermark_image',
+    description: 'Adiciona uma marca de água de texto sobre uma imagem, numa posição escolhida. Devolve content_base64 — exibe diretamente no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'watermark_text': {'type': 'string', 'description': 'Texto a colocar como marca de água'},
+        'position': {'type': 'string', 'enum': ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center']},
+      },
+      'required': ['image_base64', 'watermark_text'],
+    },
+  ),
+  ToolDefinition(
+    name: 'image_metadata',
+    description: 'Devolve os metadados de uma imagem: dimensões, formato, tamanho em bytes, e outras propriedades técnicas.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+      },
+      'required': ['image_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'vectorize_image',
+    description: 'Converte uma imagem raster (PNG/JPEG) em SVG vetorizado. Usa quando o utilizador pedir para vetorizar um logo ou desenho simples. Devolve svg (string).',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'mode': {'type': 'string', 'description': 'Modo de vetorização, ex "black_transparent"'},
+      },
+      'required': ['image_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'ocr_extract_text',
+    description: 'Extrai texto de uma imagem via OCR. Usa quando o utilizador enviar uma foto ou print com texto e pedir para extrair/transcrever esse texto.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
+        'language': {'type': 'string', 'description': 'Código de idioma para o OCR, ex "por" para português'},
+      },
+      'required': ['image_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'pdf_to_images',
+    description: 'Converte páginas de um PDF em imagens PNG, uma por página, até um máximo de páginas definido. Usa quando o utilizador quiser visualizar páginas de um PDF como imagens.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'pdf_base64': {'type': 'string', 'description': 'Conteúdo do PDF em base64'},
+        'max_pages': {'type': 'number', 'description': 'Número máximo de páginas a converter'},
+      },
+      'required': ['pdf_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'pptx_to_images',
+    description: 'Converte os slides de um PowerPoint (.pptx) em imagens, um por slide. Usa quando o utilizador quiser visualizar os slides de uma apresentação como imagens.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'pptx_base64': {'type': 'string', 'description': 'Conteúdo do .pptx em base64'},
+      },
+      'required': ['pptx_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'audio_duration_check',
+    description: 'Devolve a duração e metadados técnicos de um ficheiro de áudio (mp3, wav, m4a). Usa quando o utilizador pedir informação sobre um áudio enviado.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'audio_base64': {'type': 'string', 'description': 'Conteúdo do ficheiro de áudio em base64'},
+      },
+      'required': ['audio_base64'],
+    },
+  ),
+
+  // ── Texto / dados (9) ─────────────────────────────────────────
+  ToolDefinition(
+    name: 'str_replace_file',
+    description: 'Substitui uma ocorrência de texto (old_str) por outro (new_str) dentro de um conteúdo de texto fornecido. Usa para edições pontuais de texto sem reescrever tudo.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'content': {'type': 'string', 'description': 'Texto original completo'},
+        'old_str': {'type': 'string', 'description': 'Trecho de texto a substituir'},
+        'new_str': {'type': 'string', 'description': 'Novo trecho de texto'},
+      },
+      'required': ['content', 'old_str', 'new_str'],
+    },
+  ),
+  ToolDefinition(
+    name: 'diff_text',
+    description: 'Compara dois textos e devolve as diferenças entre eles (linhas adicionadas, removidas, alteradas). Usa quando o utilizador quiser ver o que mudou entre duas versões de um texto.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'text_before': {'type': 'string', 'description': 'Versão original do texto'},
+        'text_after': {'type': 'string', 'description': 'Versão modificada do texto'},
+      },
+      'required': ['text_before', 'text_after'],
+    },
+  ),
+  ToolDefinition(
+    name: 'extract_urls_from_text',
+    description: 'Extrai todos os URLs presentes num bloco de texto. Usa quando o utilizador quiser recolher todos os links de um texto.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'text': {'type': 'string', 'description': 'Texto de onde extrair os URLs'},
+      },
+      'required': ['text'],
+    },
+  ),
+  ToolDefinition(
+    name: 'format_markdown_to_html',
+    description: 'Converte texto em Markdown para HTML formatado. Usa quando precisares de transformar markdown (títulos, negrito, listas) em HTML para outra tool ou documento.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'markdown': {'type': 'string', 'description': 'Conteúdo em Markdown'},
+      },
+      'required': ['markdown'],
+    },
+  ),
+  ToolDefinition(
+    name: 'count_tokens_estimate',
+    description: 'Estima o número de tokens de um texto. Usa quando o utilizador perguntar quantos tokens um texto tem ou ocuparia.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'text': {'type': 'string', 'description': 'Texto a estimar'},
+      },
+      'required': ['text'],
+    },
+  ),
+  ToolDefinition(
+    name: 'text_summary_stats',
+    description: 'Devolve estatísticas de um texto: número de palavras, frases, parágrafos, caracteres, tempo estimado de leitura. Usa quando o utilizador pedir estatísticas ou análise quantitativa de um texto.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'text': {'type': 'string', 'description': 'Texto a analisar'},
+      },
+      'required': ['text'],
+    },
+  ),
+  ToolDefinition(
+    name: 'youtube_thumbnail_extract',
+    description: 'Extrai a thumbnail (miniatura) de um vídeo do YouTube a partir do seu URL. Usa quando o utilizador der um link do YouTube e pedir a imagem de capa.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'youtube_url': {'type': 'string', 'description': 'URL do vídeo no YouTube'},
+      },
+      'required': ['youtube_url'],
+    },
+  ),
+  ToolDefinition(
+    name: 'merge_pdfs',
+    description: 'Junta vários ficheiros PDF num único PDF, pela ordem dada. Precisa de pelo menos 2 PDFs em base64. Devolve content_base64 e filename — mostra botão de download no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'pdfs_base64': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Lista de PDFs em base64, na ordem em que devem ser juntados'},
+      },
+      'required': ['pdfs_base64'],
+    },
+  ),
+  ToolDefinition(
+    name: 'split_pdf_pages',
+    description: 'Extrai páginas específicas de um PDF para um novo PDF, dado o número dessas páginas. Devolve content_base64 e filename — mostra botão de download no chat.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'pdf_base64': {'type': 'string', 'description': 'Conteúdo do PDF original em base64'},
+        'page_numbers': {'type': 'array', 'items': {'type': 'number'}, 'description': 'Números das páginas a extrair (1-indexado)'},
+      },
+      'required': ['pdf_base64', 'page_numbers'],
     },
   ),
 ];

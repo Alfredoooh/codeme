@@ -22,6 +22,10 @@
 // anchorKey na chamada de showAttachMenuSheet. ChatInput agora
 // recebe attachedFiles (lista) + onRemoveFile em vez de
 // attachedFilesCount + onOpenAttachedFiles.
+//
+// NOVA CORREÇÃO (ANEXOS): removido o bloqueio automático de análise
+// de imagem e passado o histórico _msgs para processToolCalls para
+// permitir injeção automática de anexos.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -303,7 +307,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       toolCalls: calls.map((c) => c.toMessageJson()).toList(),
     );
 
-    final outcome = await processToolCalls(calls);
+    final outcome = await processToolCalls(calls, _msgs);
 
     if (!mounted) return;
 
@@ -358,20 +362,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final isFirst = _msgs.isEmpty;
 
     final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
-    final imageAttachments = pendingAttachments.where((f) => f.mimeType.startsWith('image/')).toList();
-
-    var effectiveContent = t;
-    if (imageAttachments.isNotEmpty) {
-      final names = imageAttachments.map((f) => f.name).join(', ');
-      final note = '[Nota: o utilizador anexou ${imageAttachments.length == 1 ? 'a imagem' : 'as imagens'} '
-          '"$names", mas não é possível analisar imagens neste momento. '
-          'Informa isso ao utilizador em vez de descrever ou assumir o conteúdo da imagem.]';
-      effectiveContent = effectiveContent.isEmpty ? note : '$effectiveContent\n\n$note';
-    }
 
     final userMsg = ChatMessage(
       role: 'user',
-      content: effectiveContent,
+      content: t,
       attachments: pendingAttachments.isEmpty
           ? null
           : pendingAttachments
