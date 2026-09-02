@@ -4,6 +4,22 @@
 // IA, ações de conversa, e todos os parsers de marcadores
 // ([[VISUAL:...]], [[DOCUMENT:...]], [[images:...]], [[canvas:...]],
 // [[THINKING]], [[sources:...]]). Zero UI neste arquivo.
+//
+// SINCRONIZADO com o catálogo real de 36 tools ativas (kAllTools em
+// api_service.dart). labelForToolName e kToolIconAssets removeram
+// toda entrada para tools que saíram do catálogo (search_place,
+// search_calendar_date, json_transform, html_to_docx/pdf/xlsx/pptx,
+// create_project_zip, create_pdf_structured, generate_random_avatar,
+// docx_to_html, get_image_colors, image_metadata, vectorize_image,
+// pdf_to_images, pptx_to_images, audio_duration_check,
+// format_markdown_to_html, youtube_thumbnail_extract,
+// extract_document_outline) e ganharam entrada própria para as que
+// faltavam (send_email, generate_barcode, create_file, xlsx_to_json,
+// convert_image_format, resize_image, crop_image, watermark_image,
+// ocr_extract_text, str_replace_file, diff_text,
+// extract_urls_from_text, count_tokens_estimate, text_summary_stats,
+// merge_pdfs, split_pdf_pages), em vez de caírem no fallback
+// genérico "A executar...".
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -113,12 +129,11 @@ notícias, clima); o utilizador anexou um ficheiro e pede para o processares;
 o utilizador pede envio de email. Usar tools a mais é tão errado como não
 usar quando é preciso — sê sempre o mais direto e eficiente possível.
 
-ANEXOS DO UTILIZADOR (imagens, PDF, DOCX, XLSX, ZIP): quando o utilizador
-anexa um ficheiro, a aplicação já trata da parte técnica de te dar acesso ao
-conteúdo real assim que chamares a tool correspondente — nunca precisas de
-pedir "envia-me em base64" nem nada técnico. Basta chamares a tool normal
-(read_zip_contents, read_pdf_contents, xlsx_to_json, docx_to_html,
-ocr_extract_text, get_image_colors, vectorize_image, image_metadata, etc.)
+ANEXOS DO UTILIZADOR (imagens, PDF, XLSX, ZIP): quando o utilizador anexa um
+ficheiro, a aplicação já trata da parte técnica de te dar acesso ao conteúdo
+real assim que chamares a tool correspondente — nunca precisas de pedir
+"envia-me em base64" nem nada técnico. Basta chamares a tool normal
+(read_zip_contents, read_pdf_contents, xlsx_to_json, ocr_extract_text, etc.)
 como seria de esperar, e o campo *_base64 é preenchido automaticamente com o
 ficheiro que o utilizador anexou mais recentemente e for do tipo certo para
 essa tool. Se o utilizador ainda não anexou nada e a tool precisa de um
@@ -126,9 +141,8 @@ ficheiro, pede-lhe claramente para anexar antes de tentares chamar a tool.
 Se houver mais que um anexo recente do mesmo tipo, assume que é o mais
 recente, a menos que o utilizador tenha sido explícito sobre qual.
 
-Para widgets de mercado, lugar e calendário, chama primeiro a tool
-correspondente, espera o resultado, e escreve o bloco widget com os dados
-reais.
+Para o widget de mercado, chama primeiro a tool correspondente, espera o
+resultado, e escreve o bloco widget com os dados reais.
 
 Quando usares web_search, no final da resposta escreve exatamente um bloco
 [[sources:url1,url2,url3]] com os links das fontes mais relevantes que
@@ -613,68 +627,90 @@ String labelForWidgetId(String widgetId) => switch (widgetId) {
     };
 
 /// Mapa central nome-da-tool → texto de progresso ("A pesquisar na web...").
+/// Sincronizado com as 36 tools ativas em kAllTools (api_service.dart).
 String labelForToolName(String toolName) => switch (toolName) {
-      'web_search'           => 'A pesquisar na web...',
-      'search_images'        => 'A pesquisar imagens...',
-      'search_market'        => 'A pesquisar mercado...',
-      'search_place'         => 'A localizar...',
-      'search_calendar_date' => 'A interpretar data...',
-      'get_weather'          => 'A obter clima...',
-      'generate_chart'       => 'A gerar gráfico...',
-      'generate_mindmap'     => 'A criar mapa mental...',
-      'generate_qrcode'      => 'A gerar QR code...',
-      'generate_barcode'     => 'A gerar código de barras...',
-      'generate_math_sheet'  => 'A calcular...',
-      'generate_table_image' => 'A gerar tabela visual...',
-      'create_pdf'           => 'A criar PDF...',
-      'create_docx'          => 'A criar documento Word...',
-      'create_xlsx'          => 'A criar folha de cálculo...',
-      'create_pptx'          => 'A criar apresentação...',
-      'csv_to_xlsx'          => 'A converter CSV...',
-      'json_transform'       => 'A transformar JSON...',
-      'html_to_docx'         => 'A converter HTML para Word...',
-      'html_to_pdf'          => 'A converter HTML para PDF...',
-      'html_to_xlsx'         => 'A converter HTML para Excel...',
-      'html_to_pptx'         => 'A converter HTML para PowerPoint...',
-      'generate_function_plot' => 'A gerar gráfico de função...',
-      'create_project_zip'   => 'A criar projeto ZIP...',
-      'read_zip_contents'    => 'A ler conteúdo do ZIP...',
-      'read_pdf_contents'    => 'A extrair texto do PDF...',
-      'download_image_for_project' => 'A descarregar imagem...',
-      _                      => 'A executar...',
+      'web_search'                  => 'A pesquisar na web...',
+      'read_website'                => 'A ler página...',
+      'search_images'               => 'A pesquisar imagens...',
+      'search_videos'               => 'A pesquisar vídeos...',
+      'search_books'                => 'A pesquisar livros...',
+      'download_image_for_project'  => 'A descarregar imagem...',
+      'search_market'               => 'A pesquisar mercado...',
+      'get_weather'                 => 'A obter clima...',
+      'send_email'                  => 'A enviar email...',
+      'generate_chart'              => 'A gerar gráfico...',
+      'generate_function_plot'      => 'A gerar gráfico de função...',
+      'generate_math_sheet'         => 'A calcular...',
+      'generate_mindmap'            => 'A criar mapa mental...',
+      'generate_qrcode'             => 'A gerar QR code...',
+      'generate_barcode'            => 'A gerar código de barras...',
+      'generate_table_image'        => 'A gerar tabela visual...',
+      'create_pdf'                  => 'A criar PDF...',
+      'create_docx'                 => 'A criar documento Word...',
+      'create_xlsx'                 => 'A criar folha de cálculo...',
+      'create_pptx'                 => 'A criar apresentação...',
+      'create_file'                 => 'A criar ficheiro...',
+      'read_zip_contents'           => 'A ler conteúdo do ZIP...',
+      'read_pdf_contents'           => 'A extrair texto do PDF...',
+      'csv_to_xlsx'                 => 'A converter CSV...',
+      'xlsx_to_json'                => 'A converter Excel para JSON...',
+      'convert_image_format'        => 'A converter formato de imagem...',
+      'resize_image'                => 'A redimensionar imagem...',
+      'crop_image'                  => 'A recortar imagem...',
+      'watermark_image'             => 'A aplicar marca de água...',
+      'ocr_extract_text'            => 'A extrair texto da imagem...',
+      'str_replace_file'            => 'A editar texto...',
+      'diff_text'                   => 'A comparar textos...',
+      'extract_urls_from_text'      => 'A extrair links...',
+      'count_tokens_estimate'       => 'A estimar tokens...',
+      'text_summary_stats'          => 'A analisar texto...',
+      'merge_pdfs'                  => 'A juntar PDFs...',
+      'split_pdf_pages'             => 'A extrair páginas do PDF...',
+      _                             => 'A executar...',
     };
 
 /// Mapa central nome-da-tool → asset SVG específico. Tools sem entrada
 /// aqui (ou cujo ficheiro não exista em assets/icons/outline/) caem
 /// automaticamente no fallback 'tools' via ToolIcon (ver aitab_tools.dart).
+/// Sincronizado com as 36 tools ativas em kAllTools (api_service.dart).
 const Map<String, String> kToolIconAssets = {
-  'web_search':           'globe',
-  'search_images':        'image',
-  'search_market':        'trending_up',
-  'search_place':         'map_pin',
-  'search_calendar_date': 'calendar',
-  'get_weather':          'cloud',
-  'generate_chart':       'bar_chart',
-  'generate_mindmap':     'mindmap',
-  'generate_qrcode':      'qr_code',
-  'generate_barcode':     'barcode',
-  'generate_math_sheet':  'calculator',
-  'generate_table_image': 'table',
-  'create_pdf':           'pdf',
-  'create_docx':          'doc',
-  'create_xlsx':          'table',
-  'create_pptx':          'stacks',
-  'csv_to_xlsx':          'table',
-  'json_transform':       'code',
-  'html_to_docx':         'doc',
-  'html_to_pdf':          'pdf',
-  'html_to_xlsx':         'table',
-  'html_to_pptx':         'stacks',
-  'generate_function_plot': 'bar_chart',
-  'create_project_zip':   'folder',
-  'read_zip_contents':    'folder_upload',
-  'read_pdf_contents':    'pdf',
+  'web_search':                 'globe',
+  'read_website':               'globe',
+  'search_images':              'image',
+  'search_videos':              'video',
+  'search_books':               'book',
   'download_image_for_project': 'image',
+  'search_market':              'trending_up',
+  'get_weather':                'cloud',
+  'send_email':                 'mail',
+  'generate_chart':             'bar_chart',
+  'generate_function_plot':     'bar_chart',
+  'generate_math_sheet':        'calculator',
+  'generate_mindmap':           'mindmap',
+  'generate_qrcode':            'qr_code',
+  'generate_barcode':           'barcode',
+  'generate_table_image':       'table',
+  'create_pdf':                 'pdf',
+  'create_docx':                'doc',
+  'create_xlsx':                'table',
+  'create_pptx':                'stacks',
+  'create_file':                'code',
+  'read_zip_contents':          'folder_upload',
+  'read_pdf_contents':          'pdf',
+  'csv_to_xlsx':                'table',
+  'xlsx_to_json':               'code',
+  'convert_image_format':       'image',
+  'resize_image':               'image',
+  'crop_image':                 'image',
+  'watermark_image':            'image',
+  'ocr_extract_text':           'image',
+  'str_replace_file':           'pencil',
+  'diff_text':                  'code',
+  'extract_urls_from_text':     'globe',
+  'count_tokens_estimate':      'code',
+  'text_summary_stats':         'code',
+  'merge_pdfs':                 'pdf',
+  'split_pdf_pages':            'pdf',
 };
 
 StreamElement openBlockToElement(String raw, OpenBlockInfo info) {

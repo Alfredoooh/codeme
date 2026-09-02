@@ -1030,17 +1030,32 @@ class ToolsApiService {
 
 // ══════════════════════════════════════════════════════════════
 // DEFINIÇÕES COMPLETAS DAS TOOLS — sincronizado com o catálogo
-// real do server.js (TOOL_CATALOG do testador de tools em HTML).
-// 57 tools no total, agrupadas nas mesmas categorias do testador.
+// real do servidor: 36 tools ativas, agrupadas nas mesmas
+// categorias do testador HTML (TOOL_CATALOG).
 //
-// EXCLUÍDAS DE PROPÓSITO:
-//   - generate_html_image: removida do catálogo do servidor.
-//   - animate_html, generate_infographic: bloqueadas por defeito
-//     no servidor (ENABLE_HEAVY_TOOLS=false) — fora por agora,
-//     re-adicionar aqui quando a flag for ligada em produção.
+// REMOVIDAS DE PROPÓSITO (heavy tools / não implementadas no
+// backend atual — nem no switch de tools/index.js, nem em
+// definitions.js, nem no documents.py):
+//   search_place, search_calendar_date, generate_color_scheme,
+//   generate_random_avatar, create_project_zip, json_transform,
+//   html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx,
+//   docx_to_html, get_image_colors, image_metadata,
+//   vectorize_image, pdf_to_images, pptx_to_images,
+//   audio_duration_check, format_markdown_to_html,
+//   youtube_thumbnail_extract, extract_document_outline,
+//   generate_mindmap (removida daqui de propósito por ser satori/
+//   drawing pesado — mantida só no documents.py local, fora do
+//   catálogo exposto ao modelo).
+//   create_pdf_structured: absorvida por create_pdf (aceita
+//   "sections" OU campos soltos na raiz — ver documents.py).
+//
+// PARAMETERS de create_pdf/create_docx/create_xlsx/create_pptx
+// reescritos para bater certo com o documents.py real (fonte de
+// verdade), não com o testador HTML antigo que ainda falava em
+// html_content.
 // ══════════════════════════════════════════════════════════════
 const List<ToolDefinition> kAllTools = [
-  // ── Busca / dados (10) ──────────────────────────────────────
+  // ── Busca / dados (8) ────────────────────────────────────────
   ToolDefinition(
     name: 'web_search',
     description: 'Pesquisa informação atual na web. Devolve resultados com snippets, imagens e a data atual injetada automaticamente. Usa sempre que precisares de informação recente — nunca inventes resultados.',
@@ -1123,28 +1138,6 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'search_place',
-    description: 'Pesquisa a localização real (coordenadas e nome formal) de um lugar — cidade, morada, ponto de interesse. Nunca inventes coordenadas.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'query': {'type': 'string', 'description': 'Nome do lugar'},
-      },
-      'required': ['query'],
-    },
-  ),
-  ToolDefinition(
-    name: 'search_calendar_date',
-    description: 'Resolve uma data em linguagem natural (ex "próxima sexta-feira") para ISO (YYYY-MM-DD).',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'query': {'type': 'string', 'description': 'Referência de data em linguagem natural'},
-      },
-      'required': ['query'],
-    },
-  ),
-  ToolDefinition(
     name: 'get_weather',
     description: 'Obtém o clima atual de uma cidade e gera um card visual PNG base64. Usa sempre que o utilizador perguntar sobre o tempo ou clima — nunca inventes valores meteorológicos.',
     parameters: {
@@ -1185,7 +1178,7 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
 
-  // ── Geração de imagem (9) ───────────────────────────────────
+  // ── Geração de imagem (7) ────────────────────────────────────
   ToolDefinition(
     name: 'generate_chart',
     description: 'Gera um gráfico visual como PNG base64. Suporta line, bar, pie, doughnut, radar, polarArea, scatter, bubble. Aceita múltiplos datasets. Devolve content_base64 com PNG — exibe diretamente no chat.',
@@ -1292,69 +1285,242 @@ const List<ToolDefinition> kAllTools = [
       'required': ['headers', 'rows'],
     },
   ),
-  ToolDefinition(
-    name: 'generate_color_scheme',
-    description: 'Gera uma paleta de cores harmoniosa a partir de uma cor base hexadecimal. Devolve as cores derivadas em campos de dados — usa quando o utilizador pedir sugestões de esquema de cores para design.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'base_color_hex': {'type': 'string', 'description': 'Cor base em hexadecimal, ex "#6F5AF6"'},
-      },
-      'required': ['base_color_hex'],
-    },
-  ),
-  ToolDefinition(
-    name: 'generate_random_avatar',
-    description: 'Gera um avatar aleatório determinístico a partir de um seed (ex: email ou username) como PNG base64. Mesma seed produz sempre o mesmo avatar. Devolve content_base64 — exibe diretamente no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'seed': {'type': 'string', 'description': 'String usada como semente do avatar, ex email ou username'},
-        'size': {'type': 'number', 'description': 'Tamanho em pixels (default 200)'},
-      },
-      'required': ['seed'],
-    },
-  ),
 
-  // ── Documentos (6) ───────────────────────────────────────────
+  // ── Documentos (4) ───────────────────────────────────────────
+  // Parameters sincronizados com documents.py (fonte de verdade),
+  // não com o testador HTML. create_pdf_structured foi removida:
+  // create_pdf agora absorve os dois modos (sections OU campos
+  // soltos na raiz).
   ToolDefinition(
     name: 'create_pdf',
-    description: 'Gera um PDF a partir de HTML rico. Pode incluir imagens reais (via image_urls) e/ou um gráfico gerado (via embed_chart) diretamente dentro do PDF. Devolve content_base64 e filename — mostra botão de download no chat.',
+    description: 'Gera um PDF completo via reportlab, a partir de uma lista de secções ("sections") ou de campos soltos na raiz (title/paragraphs/bullet_list — tratados como 1 secção só, para pedidos simples). Suporta capa customizada ("cover"), índice automático ("toc"), múltiplas colunas ("columns"), marca d\'água ("watermark"), rodapé customizado ("footer") e faixa lateral colorida ("side_bar_color"). Cada secção pode conter: heading/heading_level, texto simples (runs — com bold/italic/underline/strike/color/link por trecho), paragraphs, bullet_list, numbered_list, quote (citação com autor), callout (caixa de destaque com ícone), progress_bar, badges (etiquetas coloridas), chart ou charts (gráfico bar/line/pie nativo), shapes (formas livres: rect/circle/ellipse/line/polygon/text), qrcode, barcode, table (com merge de células, alinhamento por coluna, estilos por célula), image_url, images_grid. Usa esta tool para qualquer PDF, de relatório simples a documento com gráficos e imagens. Devolve pdf_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'title': {'type': 'string'},
-        'html_content': {'type': 'string'},
-        'image_urls': {'type': 'array', 'items': {'type': 'string'}, 'description': 'URLs de imagens da web para descarregar e incluir no PDF, na ordem dada'},
-        'embed_chart': {
+        'title': {'type': 'string', 'description': 'Título principal do documento'},
+        'subtitle': {'type': 'string', 'description': 'Subtítulo, aparece abaixo do título'},
+        'page_size': {'type': 'string', 'enum': ['A4', 'LETTER', 'LEGAL'], 'description': 'Tamanho de página (default A4)'},
+        'columns': {'type': 'number', 'description': 'Número de colunas de texto por página (default 1)'},
+        'toc': {'type': 'boolean', 'description': 'Se true, gera índice automático a partir dos headings das secções'},
+        'title_divider_color': {'type': 'string', 'description': 'Cor hex da linha divisória sob o título'},
+        'side_bar_color': {'type': 'string', 'description': 'Cor hex de uma faixa vertical colorida na margem esquerda de todas as páginas'},
+        'header_color': {'type': 'string', 'description': 'Cor hex do texto de cabeçalho fixo (usa header_text de uma secção)'},
+        'watermark': {
           'type': 'object',
-          'description': 'Opcional: gera um gráfico e insere-o no PDF. Mesma estrutura de generate_chart.',
+          'description': 'Marca d\'água diagonal em todas as páginas',
           'properties': {
-            'chart_type': {'type': 'string'},
-            'labels': {'type': 'array', 'items': {'type': 'string'}},
-            'datasets': {'type': 'array', 'items': {'type': 'object'}},
+            'text': {'type': 'string'},
+            'color': {'type': 'string', 'description': 'Cor hex, default #EEEEEE'},
+            'opacity': {'type': 'number', 'description': 'Default 0.3'},
+            'angle': {'type': 'number', 'description': 'Ângulo de rotação em graus, default 45'},
+            'font_size': {'type': 'number', 'description': 'Default 60'},
+          },
+        },
+        'footer': {
+          'type': 'object',
+          'description': 'Rodapé customizado em todas as páginas. Use {page} no texto para número de página.',
+          'properties': {
+            'text': {'type': 'string', 'description': 'Ex: "Página {page}"'},
+            'color': {'type': 'string', 'description': 'Cor hex'},
+          },
+        },
+        'cover': {
+          'type': 'object',
+          'description': 'Página de capa full-bleed antes do conteúdo, com fundo colorido próprio',
+          'properties': {
+            'bg': {'type': 'string', 'description': 'Cor hex de fundo, default #0F172A'},
+            'accent_color': {'type': 'string', 'description': 'Cor hex de uma faixa de destaque horizontal'},
+            'title': {'type': 'string'},
+            'subtitle': {'type': 'string'},
+            'footer': {'type': 'string'},
+          },
+        },
+        'paragraphs': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Atalho: parágrafos na raiz sem usar "sections" — vira 1 secção automática'},
+        'bullet_list': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Atalho: lista com marcadores na raiz sem usar "sections"'},
+        'sections': {
+          'type': 'array',
+          'description': 'Lista de secções do documento, na ordem em que aparecem',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'heading': {'type': 'string'},
+              'heading_level': {'type': 'number', 'description': '1, 2 ou 3 (default 1)'},
+              'header_text': {'type': 'string', 'description': 'Texto fixo de cabeçalho, repetido em todas as páginas'},
+              'divider_after_heading': {'type': 'boolean'},
+              'divider_color': {'type': 'string'},
+              'runs': {
+                'type': 'array',
+                'description': 'Parágrafo único com trechos formatados individualmente',
+                'items': {
+                  'type': 'object',
+                  'properties': {
+                    'text': {'type': 'string'},
+                    'bold': {'type': 'boolean'},
+                    'italic': {'type': 'boolean'},
+                    'underline': {'type': 'boolean'},
+                    'strike': {'type': 'boolean'},
+                    'color': {'type': 'string'},
+                    'font_size': {'type': 'number'},
+                    'link': {'type': 'string', 'description': 'URL clicável'},
+                  },
+                  'required': ['text'],
+                },
+              },
+              'paragraphs': {'type': 'array', 'items': {'type': 'string'}},
+              'bullet_list': {'type': 'array', 'items': {'type': 'string'}},
+              'numbered_list': {'type': 'array', 'items': {'type': 'string'}},
+              'quote': {
+                'type': 'object',
+                'properties': {'text': {'type': 'string'}, 'author': {'type': 'string'}},
+                'required': ['text'],
+              },
+              'callout': {
+                'type': 'object',
+                'description': 'Caixa de destaque com fundo e borda lateral coloridos',
+                'properties': {
+                  'text': {'type': 'string', 'description': 'Suporta <b>, <i> inline'},
+                  'bg': {'type': 'string'},
+                  'border_color': {'type': 'string'},
+                  'icon': {'type': 'string', 'description': 'Emoji opcional antes do texto'},
+                },
+                'required': ['text'],
+              },
+              'progress_bar': {
+                'type': 'object',
+                'properties': {
+                  'value': {'type': 'number', 'description': '0 a 100'},
+                  'color': {'type': 'string'},
+                  'bg': {'type': 'string'},
+                  'show_label': {'type': 'boolean'},
+                },
+                'required': ['value'],
+              },
+              'badges': {
+                'type': 'array',
+                'description': 'Etiquetas coloridas lado a lado',
+                'items': {
+                  'type': 'object',
+                  'properties': {
+                    'text': {'type': 'string'},
+                    'bg': {'type': 'string'},
+                    'text_color': {'type': 'string'},
+                  },
+                  'required': ['text'],
+                },
+              },
+              'chart': {
+                'type': 'object',
+                'description': 'Gráfico nativo desenhado no PDF',
+                'properties': {
+                  'type': {'type': 'string', 'enum': ['bar', 'line', 'pie']},
+                  'title': {'type': 'string'},
+                  'labels': {'type': 'array', 'items': {'type': 'string'}},
+                  'series': {
+                    'type': 'array',
+                    'items': {
+                      'type': 'object',
+                      'properties': {
+                        'name': {'type': 'string'},
+                        'data': {'type': 'array', 'items': {'type': 'number'}},
+                      },
+                      'required': ['data'],
+                    },
+                  },
+                  'donut': {'type': 'boolean', 'description': 'Só para type=pie'},
+                  'colors': {'type': 'array', 'items': {'type': 'string'}},
+                },
+                'required': ['labels', 'series'],
+              },
+              'charts': {'type': 'array', 'description': 'Múltiplos gráficos na mesma secção, mesma estrutura de "chart" cada', 'items': {'type': 'object'}},
+              'shapes': {
+                'type': 'object',
+                'description': 'Desenho livre com formas geométricas',
+                'properties': {
+                  'width': {'type': 'number'},
+                  'height': {'type': 'number'},
+                  'shapes': {
+                    'type': 'array',
+                    'items': {
+                      'type': 'object',
+                      'description': 'Cada forma tem "type" (rect/circle/ellipse/line/polygon/polyline/text/wedge) e campos próprios (x/y/w/h para rect, cx/cy/r para circle, points para polygon, etc), mais fill/stroke/stroke_width opcionais',
+                    },
+                  },
+                },
+              },
+              'qrcode': {
+                'type': 'object',
+                'properties': {'content': {'type': 'string'}, 'size': {'type': 'number'}},
+                'required': ['content'],
+              },
+              'barcode': {
+                'type': 'object',
+                'properties': {'content': {'type': 'string'}, 'height': {'type': 'number'}, 'bar_width': {'type': 'number'}},
+                'required': ['content'],
+              },
+              'image_url': {'type': 'string', 'description': 'URL de uma imagem a inserir na secção'},
+              'image_width_cm': {'type': 'number'},
+              'images_grid': {'type': 'array', 'items': {'type': 'string'}, 'description': 'URLs de imagens dispostas em grelha de 2 colunas'},
+              'table': {
+                'type': 'object',
+                'properties': {
+                  'headers': {'type': 'array', 'items': {'type': 'string'}},
+                  'rows': {'type': 'array', 'items': {'type': 'array'}},
+                  'col_widths_cm': {'type': 'array', 'items': {'type': 'number'}},
+                  'align': {'type': 'object', 'description': 'Chave = índice da coluna (string), valor = left/center/right/decimal'},
+                  'header_bg': {'type': 'string'},
+                  'header_text_color': {'type': 'string'},
+                  'zebra_color_1': {'type': 'string'},
+                  'zebra_color_2': {'type': 'string'},
+                  'cell_styles': {
+                    'type': 'array',
+                    'items': {
+                      'type': 'object',
+                      'properties': {
+                        'row': {'type': 'number'}, 'col': {'type': 'number'},
+                        'bg': {'type': 'string'}, 'text_color': {'type': 'string'}, 'bold': {'type': 'boolean'},
+                      },
+                    },
+                  },
+                },
+                'required': ['headers', 'rows'],
+              },
+              'keep_together': {'type': 'boolean', 'description': 'Evita quebra de página no meio da secção'},
+              'page_break_after': {'type': 'boolean'},
+              'frame_break_after': {'type': 'boolean', 'description': 'Só tem efeito com columns > 1'},
+            },
           },
         },
       },
-      'required': ['title', 'html_content'],
+      'required': ['title'],
     },
   ),
   ToolDefinition(
-    name: 'create_pdf_structured',
-    description: 'Gera um PDF a partir de uma estrutura de secções (título, subtítulo, parágrafos e listas com marcadores por secção), sem precisar escrever HTML. Usa quando o conteúdo é claramente organizado em secções de relatório. Devolve content_base64 e filename — mostra botão de download no chat.',
+    name: 'create_docx',
+    description: 'Gera um Word (.docx) via python-docx, a partir de uma lista de secções. Cada secção pode ter heading com heading_level (1-9), paragraphs, bullet_list, numbered_list, image_url (baixada e inserida com 14cm de largura) e table (headers + rows, estilo "Light Grid Accent 1"). Usa para qualquer documento Word — relatórios, propostas, atas. Devolve docx_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'title': {'type': 'string'},
-        'subtitle': {'type': 'string'},
+        'title': {'type': 'string', 'description': 'Título principal (heading nível 0)'},
+        'subtitle': {'type': 'string', 'description': 'Subtítulo logo abaixo do título'},
         'sections': {
           'type': 'array',
           'items': {
             'type': 'object',
             'properties': {
               'heading': {'type': 'string'},
+              'heading_level': {'type': 'number', 'description': '1 a 9 (default 1)'},
               'paragraphs': {'type': 'array', 'items': {'type': 'string'}},
               'bullet_list': {'type': 'array', 'items': {'type': 'string'}},
+              'numbered_list': {'type': 'array', 'items': {'type': 'string'}},
+              'image_url': {'type': 'string', 'description': 'URL de imagem a baixar e inserir na secção'},
+              'table': {
+                'type': 'object',
+                'properties': {
+                  'headers': {'type': 'array', 'items': {'type': 'string'}},
+                  'rows': {'type': 'array', 'items': {'type': 'array'}},
+                },
+                'required': ['headers', 'rows'],
+              },
             },
           },
         },
@@ -1363,53 +1529,167 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'create_docx',
-    description: 'Gera um Word (.docx) a partir de HTML. Pode incluir imagens reais (via image_urls) e/ou um gráfico gerado (via embed_chart) diretamente dentro do documento. Devolve content_base64 e filename — mostra botão de download no chat.',
+    name: 'create_xlsx',
+    description: 'Gera uma planilha Excel (.xlsx) via openpyxl. Pode ser 1 sheet só (usa sheet_name/headers/rows/etc direto na raiz) ou múltiplas sheets (array "sheets"). Cada sheet suporta: title (linha de título mesclada), header_bg/header_text_color, zebra, freeze_header, as_excel_table (tabela nativa do Excel com estilo), col_widths, tab_color, chart (gráfico nativo bar/line/pie/scatter ligado aos dados), charts (múltiplos), conditional_color_scale (escala de cor numa coluna), data_bars (barras de dados numa coluna), notes (linhas de texto no fim), image_url. Usa para qualquer planilha — relatórios, dashboards, dados tabulares. Devolve xlsx_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'title': {'type': 'string'},
-        'html_content': {'type': 'string'},
-        'image_urls': {'type': 'array', 'items': {'type': 'string'}},
-        'embed_chart': {
-          'type': 'object',
-          'properties': {
-            'chart_type': {'type': 'string'},
-            'labels': {'type': 'array', 'items': {'type': 'string'}},
-            'datasets': {'type': 'array', 'items': {'type': 'object'}},
+        'sheet_name': {'type': 'string', 'description': 'Usado só no modo de 1 sheet (sem "sheets")'},
+        'title': {'type': 'string', 'description': 'Linha de título mesclada no topo da sheet (modo 1 sheet)'},
+        'headers': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Modo 1 sheet'},
+        'rows': {'type': 'array', 'items': {'type': 'array'}, 'description': 'Modo 1 sheet'},
+        'sheets': {
+          'type': 'array',
+          'description': 'Modo múltiplas sheets — cada item é uma sheet completa',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'name': {'type': 'string', 'description': 'Nome da aba (máx 31 caracteres)'},
+              'title': {'type': 'string'},
+              'title_color': {'type': 'string'},
+              'tab_color': {'type': 'string', 'description': 'Cor hex da aba na barra inferior do Excel'},
+              'headers': {'type': 'array', 'items': {'type': 'string'}},
+              'rows': {'type': 'array', 'items': {'type': 'array'}},
+              'header_bg': {'type': 'string'},
+              'header_text_color': {'type': 'string'},
+              'zebra': {'type': 'boolean', 'description': 'Linhas alternadas coloridas (default true)'},
+              'freeze_header': {'type': 'boolean', 'description': 'Congela a linha de cabeçalho ao rolar'},
+              'as_excel_table': {'type': 'boolean', 'description': 'Formata como Tabela nativa do Excel'},
+              'table_style': {'type': 'string', 'description': 'Ex "TableStyleMedium9"'},
+              'col_widths': {'type': 'array', 'items': {'type': 'number'}},
+              'number_format': {'type': 'string', 'description': 'Ex "#,##0.00"'},
+              'chart': {
+                'type': 'object',
+                'properties': {
+                  'type': {'type': 'string', 'enum': ['bar', 'line', 'pie', 'scatter']},
+                  'title': {'type': 'string'},
+                  'data_col_start': {'type': 'number'},
+                  'data_col_end': {'type': 'number'},
+                  'width_cm': {'type': 'number'},
+                  'height_cm': {'type': 'number'},
+                  'anchor': {'type': 'string', 'description': 'Célula de ancoragem, ex "E2"'},
+                  'colors': {'type': 'array', 'items': {'type': 'string'}},
+                  'horizontal': {'type': 'boolean'},
+                  'legend_position': {'type': 'string'},
+                  'show_legend': {'type': 'boolean'},
+                },
+              },
+              'charts': {'type': 'array', 'description': 'Múltiplos gráficos na mesma sheet, mesma estrutura de "chart"', 'items': {'type': 'object'}},
+              'conditional_color_scale': {
+                'type': 'object',
+                'properties': {'col': {'type': 'number', 'description': 'Índice da coluna, 1-based'}},
+                'required': ['col'],
+              },
+              'data_bars': {
+                'type': 'object',
+                'properties': {'col': {'type': 'number'}, 'color': {'type': 'string'}},
+                'required': ['col'],
+              },
+              'notes': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Linhas de texto itálico no fim da sheet'},
+              'image_url': {'type': 'string'},
+              'image_anchor': {'type': 'string'},
+              'image_width_px': {'type': 'number'},
+            },
+            'required': ['headers', 'rows'],
           },
         },
       },
-      'required': ['title', 'html_content'],
-    },
-  ),
-  ToolDefinition(
-    name: 'create_xlsx',
-    description: 'Gera planilha Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'sheet_name': {'type': 'string'},
-        'headers': {'type': 'array', 'items': {'type': 'string'}},
-        'rows': {'type': 'array', 'items': {'type': 'array', 'items': {'type': 'string'}}},
-      },
-      'required': ['headers', 'rows'],
     },
   ),
   ToolDefinition(
     name: 'create_pptx',
-    description: 'Gera PowerPoint (.pptx). Devolve content_base64 e filename — mostra botão de download no chat.',
+    description: 'Gera um PowerPoint (.pptx) via python-pptx, a partir de uma lista de slides. Gera automaticamente um slide de capa se "title" for dado e o primeiro slide não for já do tipo cover. Cada slide pode ter type "cover" ou "section" (slide de transição de secção com fundo colorido), ou ser um slide de conteúdo com: heading/subheading, bullets (com "numbered" para lista numerada), image_url (lateral) ou images_grid (até 4 imagens em grelha), table (headers+rows com zebra), chart (gráfico nativo do PowerPoint: bar/bar_horizontal/line/pie/doughnut/area), shapes (formas como rounded_rect, arrow_right, oval, star, chevron, hexagon — com texto opcional dentro), quote (citação com autor), speaker_notes (notas do orador), footer_text, bg (cor de fundo do slide). Suporta um "theme" global (cover_bg, title_color, subtitle_color, text_color). Devolve pptx_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'title': {'type': 'string'},
+        'title': {'type': 'string', 'description': 'Usado para gerar a capa automática'},
+        'subtitle': {'type': 'string'},
+        'author': {'type': 'string'},
+        'date': {'type': 'string'},
+        'cover': {'type': 'boolean', 'description': 'Se false, não gera capa automática mesmo com "title" (default true)'},
+        'theme': {
+          'type': 'object',
+          'properties': {
+            'cover_bg': {'type': 'string', 'description': 'Cor hex de fundo da capa, default 0F172A'},
+            'title_color': {'type': 'string'},
+            'subtitle_color': {'type': 'string'},
+            'text_color': {'type': 'string'},
+          },
+        },
         'slides': {
           'type': 'array',
           'items': {
             'type': 'object',
             'properties': {
-              'heading': {'type': 'string'},
+              'type': {'type': 'string', 'enum': ['cover', 'section'], 'description': 'Omitir para slide de conteúdo normal'},
+              'title': {'type': 'string', 'description': 'Usado só quando type é cover/section'},
+              'subtitle': {'type': 'string'},
+              'bg': {'type': 'string', 'description': 'Cor hex de fundo deste slide'},
+              'title_color': {'type': 'string'},
+              'title_size': {'type': 'number'},
+              'subtitle_color': {'type': 'string'},
+              'heading': {'type': 'string', 'description': 'Título do slide de conteúdo'},
+              'subheading': {'type': 'string'},
+              'text_color': {'type': 'string'},
               'bullets': {'type': 'array', 'items': {'type': 'string'}},
+              'numbered': {'type': 'boolean', 'description': 'Bullets viram lista numerada'},
+              'image_url': {'type': 'string', 'description': 'Imagem lateral direita'},
+              'image_left': {'type': 'string', 'description': 'Imagem lateral esquerda'},
+              'images_grid': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Até 4 imagens em grelha 2x2'},
+              'table': {
+                'type': 'object',
+                'properties': {
+                  'headers': {'type': 'array', 'items': {'type': 'string'}},
+                  'rows': {'type': 'array', 'items': {'type': 'array'}},
+                  'header_bg': {'type': 'string'},
+                  'header_text_color': {'type': 'string'},
+                  'zebra': {'type': 'boolean'},
+                  'zebra_color': {'type': 'string'},
+                  'font_size': {'type': 'number'},
+                  'text_color': {'type': 'string'},
+                },
+                'required': ['headers', 'rows'],
+              },
+              'chart': {
+                'type': 'object',
+                'properties': {
+                  'type': {'type': 'string', 'enum': ['bar', 'bar_horizontal', 'line', 'pie', 'doughnut', 'area']},
+                  'title': {'type': 'string'},
+                  'labels': {'type': 'array', 'items': {'type': 'string'}},
+                  'series': {
+                    'type': 'array',
+                    'items': {
+                      'type': 'object',
+                      'properties': {'name': {'type': 'string'}, 'data': {'type': 'array', 'items': {'type': 'number'}}},
+                      'required': ['data'],
+                    },
+                  },
+                  'colors': {'type': 'array', 'items': {'type': 'string'}},
+                  'show_legend': {'type': 'boolean'},
+                },
+                'required': ['labels', 'series'],
+              },
+              'shapes': {
+                'type': 'array',
+                'items': {
+                  'type': 'object',
+                  'properties': {
+                    'type': {'type': 'string', 'enum': ['rect', 'rounded_rect', 'oval', 'triangle', 'arrow_right', 'star', 'chevron', 'hexagon']},
+                    'left': {'type': 'number'}, 'top': {'type': 'number'},
+                    'width': {'type': 'number'}, 'height': {'type': 'number'},
+                    'fill': {'type': 'string'}, 'stroke': {'type': 'string'}, 'stroke_width': {'type': 'number'},
+                    'text': {'type': 'string'}, 'text_color': {'type': 'string'}, 'font_size': {'type': 'number'}, 'bold': {'type': 'boolean'},
+                  },
+                },
+              },
+              'quote': {
+                'type': 'object',
+                'properties': {'text': {'type': 'string'}, 'author': {'type': 'string'}},
+                'required': ['text'],
+              },
+              'speaker_notes': {'type': 'string'},
+              'footer_text': {'type': 'string'},
+              'slide_number': {'type': 'boolean', 'description': 'Mostra número de página no canto (default true)'},
             },
           },
         },
@@ -1417,40 +1697,22 @@ const List<ToolDefinition> kAllTools = [
       'required': ['title', 'slides'],
     },
   ),
+
+  // ── Criação de arquivo genérico (1) ──────────────────────────
   ToolDefinition(
-    name: 'create_project_zip',
-    description: 'Cria um projeto completo como ficheiro ZIP, com estrutura de pastas e múltiplos ficheiros de código/texto de uma vez. Usa quando o utilizador pedir para gerar/criar um projeto inteiro (app, script, template) para download. Pode incluir imagens reais da web via image_urls_to_include. Devolve content_base64 e filename — mostra botão de download no chat.',
+    name: 'create_file',
+    description: 'Cria um único ficheiro de texto/código genérico (não documento office) a partir de conteúdo e nome de ficheiro. Usa quando o utilizador pedir um único ficheiro de código ou texto solto, sem precisar de ZIP. Devolve content_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
-        'project_name': {'type': 'string'},
-        'files': {
-          'type': 'array',
-          'items': {
-            'type': 'object',
-            'properties': {
-              'path': {'type': 'string', 'description': 'Caminho relativo dentro do zip, ex "lib/main.dart" ou "README.md"'},
-              'content': {'type': 'string'},
-            },
-            'required': ['path', 'content'],
-          },
-        },
-        'image_urls_to_include': {
-          'type': 'array',
-          'items': {
-            'type': 'object',
-            'properties': {
-              'url': {'type': 'string'},
-              'path': {'type': 'string', 'description': 'Caminho relativo dentro do zip para a imagem, ex "assets/logo.png"'},
-            },
-          },
-        },
+        'filename': {'type': 'string', 'description': 'Nome do ficheiro, ex "script.py"'},
+        'content': {'type': 'string', 'description': 'Conteúdo completo do ficheiro'},
       },
-      'required': ['project_name', 'files'],
+      'required': ['filename', 'content'],
     },
   ),
 
-  // ── Leitura de ficheiros (3) ─────────────────────────────────
+  // ── Leitura de ficheiros (2) ─────────────────────────────────
   ToolDefinition(
     name: 'read_zip_contents',
     description: 'Lê o conteúdo de um ficheiro .zip enviado pelo utilizador (código-fonte de um projeto, etc). Descompacta e devolve a árvore de ficheiros com o texto de cada ficheiro de código/texto, e as imagens em base64. Limite: 15MB, 100 ficheiros, 15000 caracteres por ficheiro de texto, até 10 imagens decodificadas.',
@@ -1473,20 +1735,8 @@ const List<ToolDefinition> kAllTools = [
       'required': ['pdf_base64'],
     },
   ),
-  ToolDefinition(
-    name: 'extract_document_outline',
-    description: 'Extrai a estrutura/índice (títulos, secções, hierarquia) de um documento PDF. Usa quando o utilizador pedir o esboço, índice ou estrutura de um documento sem precisar do texto completo.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'pdf_base64': {'type': 'string', 'description': 'Conteúdo do PDF em base64'},
-        'source_type': {'type': 'string', 'description': 'Tipo de origem do documento, ex "pdf"'},
-      },
-      'required': ['pdf_base64'],
-    },
-  ),
 
-  // ── Conversão (8) ─────────────────────────────────────────────
+  // ── Conversão (2) ─────────────────────────────────────────────
   ToolDefinition(
     name: 'csv_to_xlsx',
     description: 'Converte CSV em Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
@@ -1496,17 +1746,6 @@ const List<ToolDefinition> kAllTools = [
         'csv_content': {'type': 'string'},
       },
       'required': ['csv_content'],
-    },
-  ),
-  ToolDefinition(
-    name: 'json_transform',
-    description: 'Transforma array JSON de objetos em tabela (headers + rows).',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'json_data': {'type': 'string'},
-      },
-      'required': ['json_data'],
     },
   ),
   ToolDefinition(
@@ -1520,79 +1759,8 @@ const List<ToolDefinition> kAllTools = [
       'required': ['xlsx_base64'],
     },
   ),
-  ToolDefinition(
-    name: 'html_to_docx',
-    description: 'Converte HTML em Word (.docx). Devolve content_base64 e filename — mostra botão de download no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'html_content': {'type': 'string'},
-        'filename': {'type': 'string'},
-      },
-      'required': ['html_content'],
-    },
-  ),
-  ToolDefinition(
-    name: 'html_to_pdf',
-    description: 'Converte HTML em PDF. Devolve content_base64 e filename — mostra botão de download no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'html_content': {'type': 'string'},
-        'title': {'type': 'string'},
-      },
-      'required': ['html_content'],
-    },
-  ),
-  ToolDefinition(
-    name: 'html_to_xlsx',
-    description: 'Converte HTML em Excel (.xlsx). Devolve content_base64 e filename — mostra botão de download no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'html_content': {'type': 'string'},
-        'sheet_name': {'type': 'string'},
-      },
-      'required': ['html_content'],
-    },
-  ),
-  ToolDefinition(
-    name: 'html_to_pptx',
-    description: 'Converte HTML em PowerPoint (.pptx). Devolve content_base64 e filename — mostra botão de download no chat.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'html_content': {'type': 'string'},
-        'title': {'type': 'string'},
-      },
-      'required': ['html_content'],
-    },
-  ),
-  ToolDefinition(
-    name: 'docx_to_html',
-    description: 'Converte um Word (.docx) enviado pelo utilizador em HTML. Usa quando o utilizador pedir para extrair ou reaproveitar o conteúdo de um .docx como HTML.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'docx_base64': {'type': 'string', 'description': 'Conteúdo do .docx em base64'},
-      },
-      'required': ['docx_base64'],
-    },
-  ),
 
-  // ── Imagem — utilitários (11) ────────────────────────────────
-  ToolDefinition(
-    name: 'get_image_colors',
-    description: 'Extrai a paleta de cores dominantes de uma imagem. Usa quando o utilizador pedir para saber ou usar as cores de uma imagem.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
-        'num_colors': {'type': 'number', 'description': 'Número de cores dominantes a extrair'},
-      },
-      'required': ['image_base64'],
-    },
-  ),
+  // ── Imagem — utilitários (5) ──────────────────────────────────
   ToolDefinition(
     name: 'convert_image_format',
     description: 'Converte uma imagem para outro formato (ex: webp, png, jpeg). Devolve content_base64 — exibe diretamente no chat.',
@@ -1647,29 +1815,6 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'image_metadata',
-    description: 'Devolve os metadados de uma imagem: dimensões, formato, tamanho em bytes, e outras propriedades técnicas.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
-      },
-      'required': ['image_base64'],
-    },
-  ),
-  ToolDefinition(
-    name: 'vectorize_image',
-    description: 'Converte uma imagem raster (PNG/JPEG) em SVG vetorizado. Usa quando o utilizador pedir para vetorizar um logo ou desenho simples. Devolve svg (string).',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'image_base64': {'type': 'string', 'description': 'Imagem em base64'},
-        'mode': {'type': 'string', 'description': 'Modo de vetorização, ex "black_transparent"'},
-      },
-      'required': ['image_base64'],
-    },
-  ),
-  ToolDefinition(
     name: 'ocr_extract_text',
     description: 'Extrai texto de uma imagem via OCR. Usa quando o utilizador enviar uma foto ou print com texto e pedir para extrair/transcrever esse texto.',
     parameters: {
@@ -1681,42 +1826,8 @@ const List<ToolDefinition> kAllTools = [
       'required': ['image_base64'],
     },
   ),
-  ToolDefinition(
-    name: 'pdf_to_images',
-    description: 'Converte páginas de um PDF em imagens PNG, uma por página, até um máximo de páginas definido. Usa quando o utilizador quiser visualizar páginas de um PDF como imagens.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'pdf_base64': {'type': 'string', 'description': 'Conteúdo do PDF em base64'},
-        'max_pages': {'type': 'number', 'description': 'Número máximo de páginas a converter'},
-      },
-      'required': ['pdf_base64'],
-    },
-  ),
-  ToolDefinition(
-    name: 'pptx_to_images',
-    description: 'Converte os slides de um PowerPoint (.pptx) em imagens, um por slide. Usa quando o utilizador quiser visualizar os slides de uma apresentação como imagens.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'pptx_base64': {'type': 'string', 'description': 'Conteúdo do .pptx em base64'},
-      },
-      'required': ['pptx_base64'],
-    },
-  ),
-  ToolDefinition(
-    name: 'audio_duration_check',
-    description: 'Devolve a duração e metadados técnicos de um ficheiro de áudio (mp3, wav, m4a). Usa quando o utilizador pedir informação sobre um áudio enviado.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'audio_base64': {'type': 'string', 'description': 'Conteúdo do ficheiro de áudio em base64'},
-      },
-      'required': ['audio_base64'],
-    },
-  ),
 
-  // ── Texto / dados (9) ─────────────────────────────────────────
+  // ── Texto / dados (7) ──────────────────────────────────────────
   ToolDefinition(
     name: 'str_replace_file',
     description: 'Substitui uma ocorrência de texto (old_str) por outro (new_str) dentro de um conteúdo de texto fornecido. Usa para edições pontuais de texto sem reescrever tudo.',
@@ -1754,17 +1865,6 @@ const List<ToolDefinition> kAllTools = [
     },
   ),
   ToolDefinition(
-    name: 'format_markdown_to_html',
-    description: 'Converte texto em Markdown para HTML formatado. Usa quando precisares de transformar markdown (títulos, negrito, listas) em HTML para outra tool ou documento.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'markdown': {'type': 'string', 'description': 'Conteúdo em Markdown'},
-      },
-      'required': ['markdown'],
-    },
-  ),
-  ToolDefinition(
     name: 'count_tokens_estimate',
     description: 'Estima o número de tokens de um texto. Usa quando o utilizador perguntar quantos tokens um texto tem ou ocuparia.',
     parameters: {
@@ -1784,17 +1884,6 @@ const List<ToolDefinition> kAllTools = [
         'text': {'type': 'string', 'description': 'Texto a analisar'},
       },
       'required': ['text'],
-    },
-  ),
-  ToolDefinition(
-    name: 'youtube_thumbnail_extract',
-    description: 'Extrai a thumbnail (miniatura) de um vídeo do YouTube a partir do seu URL. Usa quando o utilizador der um link do YouTube e pedir a imagem de capa.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'youtube_url': {'type': 'string', 'description': 'URL do vídeo no YouTube'},
-      },
-      'required': ['youtube_url'],
     },
   ),
   ToolDefinition(

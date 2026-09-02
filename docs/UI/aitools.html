@@ -99,7 +99,6 @@
   .fileList li { padding: 3px 0; border-bottom: 1px solid #222; }
   .badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #333; margin-left: 4px; }
 
-  /* ── Progress bar individual (por execução isolada) ── */
   #singleProgressWrap {
     display: none;
     margin: 8px 0;
@@ -135,7 +134,6 @@
     justify-content: space-between;
   }
 
-  /* ── Progress bar agregada (corrida em lote) ── */
   #allRunPanel {
     display: none;
     border: 1px solid #333;
@@ -189,7 +187,6 @@
   .btnRow { display: flex; gap: 8px; }
   .btnRow button { flex: 1; }
 
-  /* ── Lista de checkboxes por tool ── */
   #toolCheckList {
     border: 1px solid #333;
     border-radius: 8px;
@@ -234,7 +231,6 @@
   }
   #selectAllRow button { flex: 1; margin-top: 0; }
 
-  /* ── Envio de email manual (secção 4) ── */
   #emailImagePreviewRow {
     display: flex;
     gap: 8px;
@@ -258,6 +254,73 @@
     padding: 6px 8px;
     margin: 4px 0;
     font-family: monospace;
+  }
+
+  #fileImportDropZone {
+    border: 2px dashed #333;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    margin: 8px 0;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #fileImportDropZone.dragover {
+    border-color: #6F5AF6;
+    background: #1a1a2e;
+  }
+  #fileImportDropZone .dzIcon { font-size: 28px; margin-bottom: 6px; }
+  #fileImportDropZone .dzText { font-size: 13px; color: #ccc; }
+  #fileImportDropZone .dzHint { font-size: 11px; color: #777; margin-top: 4px; }
+  #fileImportInfo {
+    display: none;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    background: #1a1a1a;
+    font-size: 12px;
+  }
+  #fileImportInfo.active { display: flex; align-items: center; gap: 10px; }
+  #fileImportInfo img.previewThumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    border: 1px solid #333;
+  }
+  #fileImportInfo .fileIconBox {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    background: #262626;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  #fileImportInfo .fileMeta { flex: 1; overflow: hidden; }
+  #fileImportInfo .fileMeta .fname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #fileImportInfo .fileMeta .fdetail { color: #999; font-size: 11px; margin-top: 2px; }
+  #fileImportInfo .fileRemoveBtn {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: #333;
+    border: none;
+    color: #eee;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+  }
+  #extractToolSelectWrap { margin-top: 8px; }
+  .autoDetectHint {
+    font-size: 11px;
+    color: #6F5AF6;
+    margin: 4px 0;
   }
 </style>
 </head>
@@ -316,6 +379,38 @@
 <button id="sendEmailBtn" onclick="sendTestEmail()" disabled>✉ Enviar email</button>
 <div id="emailSendStatus" style="font-size:12px;margin-top:6px;"></div>
 
+<h2>5. Importar ficheiro para extração (imagem / documento)</h2>
+<div id="fileImportDropZone" onclick="document.getElementById('fileImportInput').click()">
+  <div class="dzIcon">📎</div>
+  <div class="dzText">Toca para escolher ou arrasta um ficheiro aqui</div>
+  <div class="dzHint">Imagem, PDF, XLSX ou ZIP</div>
+</div>
+<input type="file" id="fileImportInput" style="display:none;" onchange="handleFileImportSelect(event)">
+
+<div id="fileImportInfo">
+  <img id="fileImportThumb" class="previewThumb" style="display:none;">
+  <div id="fileImportIconBox" class="fileIconBox" style="display:none;">📄</div>
+  <div class="fileMeta">
+    <div class="fname" id="fileImportName">—</div>
+    <div class="fdetail" id="fileImportDetail">—</div>
+  </div>
+  <button class="fileRemoveBtn" onclick="clearFileImport()">✕</button>
+</div>
+
+<div id="extractToolSelectWrap" style="display:none;">
+  <div class="autoDetectHint" id="autoDetectHint"></div>
+  <select id="extractToolName" onchange="updateExtractHint()"></select>
+  <div id="extractInputHint" style="font-size:11px;color:#777;margin-bottom:4px;"></div>
+  <button id="extractBtn" onclick="runExtraction()" disabled>🔍 Extrair dados</button>
+</div>
+
+<div id="extractProgressWrap" style="display:none;">
+  <div class="progressBarOuter"><div id="extractProgressBar" class="progressBarInner indeterminate"></div></div>
+  <div id="extractProgressLabel" style="font-size:11px;color:#999;margin-top:4px;display:flex;justify-content:space-between;">
+    <span id="extractProgressName">—</span><span id="extractProgressTime">0.0s</span>
+  </div>
+</div>
+
 <div id="renderOutput"></div>
 <div id="rawOutput"></div>
 
@@ -325,16 +420,22 @@ let ALL_RUN_ABORT = false;
 let EMAIL_IMAGES = []; // { content_base64, content_id, filename }
 
 // ═══════════════════════════════════════════════════════════
-// CATÁLOGO — tools atuais do server.js v2.3.0. Agrupadas por
-// categoria só para o <select> e para a lista de checkboxes.
-// generate_html_image foi removida do catálogo por pedido.
-// send_email adicionada.
+// CATÁLOGO — as 38 tools reais registadas em tools/definitions.js
+// no repo aitools atual (confirmado contra o zip, 38 entradas
+// exatas). NÃO existem no backend: search_place, search_calendar_date,
+// generate_color_scheme, generate_random_avatar, create_project_zip,
+// json_transform, html_to_docx/pdf/xlsx/pptx, docx_to_html,
+// get_image_colors, image_metadata, vectorize_image, pdf_to_images,
+// pptx_to_images, audio_duration_check, format_markdown_to_html,
+// youtube_thumbnail_extract, extract_document_outline, animate_html,
+// generate_infographic — removidas do catálogo porque não têm
+// implementação alcançável (nem no switch de tools/index.js, nem
+// em definitions.js). Se forem implementadas no futuro, voltam aqui.
 // ═══════════════════════════════════════════════════════════
 const TOOL_CATALOG = {
   "Busca / dados": [
     "web_search", "read_website", "search_images", "search_videos", "search_books",
-    "download_image_for_project", "search_market", "search_place", "search_calendar_date",
-    "get_weather",
+    "download_image_for_project", "search_market", "get_weather",
   ],
   "Email": [
     "send_email",
@@ -342,50 +443,41 @@ const TOOL_CATALOG = {
   "Geração de imagem": [
     "generate_chart", "generate_function_plot", "generate_math_sheet", "generate_mindmap",
     "generate_qrcode", "generate_barcode", "generate_table_image",
-    "generate_color_scheme", "generate_random_avatar",
   ],
   "Documentos": [
     "create_pdf", "create_pdf_structured", "create_docx", "create_xlsx", "create_pptx",
-    "create_project_zip",
+  ],
+  "Criação de arquivo genérico": [
+    "create_file",
   ],
   "Leitura de ficheiros": [
-    "read_zip_contents", "read_pdf_contents", "extract_document_outline",
+    "read_zip_contents", "read_pdf_contents",
   ],
   "Conversão": [
-    "csv_to_xlsx", "json_transform", "xlsx_to_json", "html_to_docx", "html_to_pdf",
-    "html_to_xlsx", "html_to_pptx", "docx_to_html",
+    "csv_to_xlsx", "xlsx_to_json",
   ],
   "Imagem — utilitários": [
-    "get_image_colors", "convert_image_format", "resize_image", "crop_image",
-    "watermark_image", "image_metadata", "vectorize_image", "ocr_extract_text",
-    "pdf_to_images", "pptx_to_images", "audio_duration_check",
+    "convert_image_format", "resize_image", "crop_image", "watermark_image", "ocr_extract_text",
   ],
   "Texto / dados": [
-    "str_replace_file", "diff_text", "extract_urls_from_text", "format_markdown_to_html",
-    "count_tokens_estimate", "text_summary_stats", "youtube_thumbnail_extract",
+    "str_replace_file", "diff_text", "extract_urls_from_text",
+    "count_tokens_estimate", "text_summary_stats",
     "merge_pdfs", "split_pdf_pages",
-  ],
-  "Heavy (atrás de ENABLE_HEAVY_TOOLS)": [
-    "animate_html", "generate_infographic",
   ],
 };
 
 // ═══════════════════════════════════════════════════════════
-// ORDEM DE EXECUÇÃO — simples → complexo. generate_html_image
-// removida. send_email colocada no grupo 2 (rede simples), mas
-// SEM to real por defeito — ver PRESETS. runSelectedTools()
-// filtra este array pela seleção, preservando a ordem relativa.
+// ORDEM DE EXECUÇÃO — simples → complexo, só com as 38 tools reais.
+// runSelectedTools() filtra este array pela seleção, preservando
+// a ordem relativa.
 // ═══════════════════════════════════════════════════════════
 const RUN_ORDER = [
   // 1. Puro CPU/string, sem rede, sem satori — deve responder em ms
-  "count_tokens_estimate", "text_summary_stats", "extract_urls_from_text",
-  "format_markdown_to_html", "diff_text", "str_replace_file", "json_transform",
-  "generate_color_scheme", "search_calendar_date",
+  "count_tokens_estimate", "text_summary_stats", "extract_urls_from_text", "diff_text", "str_replace_file",
 
   // 2. Uma chamada de rede externa simples
   "web_search", "read_website", "search_images", "search_videos", "search_books",
-  "search_market", "search_place", "get_weather", "youtube_thumbnail_extract",
-  "download_image_for_project", "send_email",
+  "search_market", "get_weather", "download_image_for_project", "send_email",
 
   // 3. Geração de imagem leve (canvas/chart.js/qrcode/bwip-js — sem satori)
   "generate_qrcode", "generate_barcode", "generate_chart", "generate_function_plot",
@@ -393,41 +485,36 @@ const RUN_ORDER = [
   // 4. Satori (precisa de ./fonts/Inter-*.ttf — vai falhar com found:false
   // e mensagem clara se as fontes ainda não estiverem no repo, sem
   // derrubar o resto da sequência)
-  "generate_math_sheet", "generate_table_image",
-  "generate_mindmap", "generate_random_avatar",
+  "generate_math_sheet", "generate_table_image", "generate_mindmap",
 
-  // 5. Utilitários de imagem sobre imagem já existente (sharp — geram a
-  // própria imagem-base internamente via generate_qrcode para testar)
-  "image_metadata", "convert_image_format", "resize_image", "crop_image",
-  "get_image_colors", "watermark_image",
+  // 5. Utilitários de imagem sobre imagem já existente (sharp — usam o
+  // PNG gerado pelo generate_qrcode no passo 3 como input real)
+  "convert_image_format", "resize_image", "crop_image", "watermark_image",
 
-  // 6. Conversões de dados tabulares/HTML
-  "csv_to_xlsx", "xlsx_to_json", "html_to_xlsx", "html_to_pptx",
+  // 6. Conversões de dados tabulares
+  "csv_to_xlsx", "xlsx_to_json",
 
-  // 7. Documentos completos (satori + pdfkit/docx/exceljs/pptxgenjs/adm-zip)
-  "create_xlsx", "create_pptx", "create_docx", "html_to_docx", "create_pdf",
-  "create_pdf_structured", "html_to_pdf", "create_project_zip",
+  // 7. Documentos completos — create_pdf/create_pdf_structured/create_docx
+  // vão via documents-bridge.js -> documents.py (reportlab/python-docx),
+  // create_xlsx/create_pptx via exceljs/pptxgenjs direto no Node
+  "create_file", "create_xlsx", "create_pptx", "create_docx",
+  "create_pdf", "create_pdf_structured",
 
   // 8. Leitura de ficheiros (usa o PDF gerado no passo 7 como input real,
   // em vez de base64 vazio)
-  "read_pdf_contents", "extract_document_outline", "read_zip_contents",
+  "read_pdf_contents", "read_zip_contents",
 
-  // 9. Mais pesadas em CPU/RAM — OCR, vetorização, parsing binário
-  "docx_to_html", "vectorize_image", "ocr_extract_text", "audio_duration_check",
-  "merge_pdfs", "split_pdf_pages",
-
-  // 10. Bloqueadas por defeito (ENABLE_HEAVY_TOOLS=false) — esperado
-  // devolver found:false sempre, isso É o teste de que a flag funciona
-  "generate_infographic", "animate_html",
+  // 9. Mais pesadas em CPU/RAM — OCR, merge/split PDF
+  "ocr_extract_text", "merge_pdfs", "split_pdf_pages",
 ];
 
 // ═══════════════════════════════════════════════════════════
-// PRESETS — um input plausível por tool. generate_html_image
-// removida. As que dependem de um artefacto gerado por outra
-// tool ficam com preset vazio e são preenchidas dinamicamente
-// durante a corrida em lote. send_email usa "to" vazio de
-// propósito na corrida em lote/isolada por defeito — edita
-// manualmente antes de correr, ou usa a secção 4 dedicada.
+// PRESETS — um input plausível por tool, alinhado ao input_schema
+// real de cada tool em tools/definitions.js. create_pdf,
+// create_pdf_structured e create_docx usam os campos estruturados
+// reais (title/subtitle/paragraphs/bullet_list/table/sections) —
+// o backend (documents.py) NÃO aceita html_content, só esses
+// campos estruturados via reportlab/python-docx.
 // ═══════════════════════════════════════════════════════════
 const PRESETS = {
   web_search: '{"query":"resultado do jogo de ontem"}',
@@ -437,8 +524,6 @@ const PRESETS = {
   search_books: '{"query":"Clean Code","max_results":5}',
   download_image_for_project: '{"query_or_url":"gato preto","target_filename":"gato.png"}',
   search_market: '{"query":"bitcoin"}',
-  search_place: '{"query":"Torre Eiffel"}',
-  search_calendar_date: '{"query":"amanhã"}',
   get_weather: '{"city":"Lisboa"}',
 
   send_email: '{"to":"","subject":"Email de teste","content":"<div style=\\"font-family:sans-serif;padding:20px;\\"><h1 style=\\"color:#6F5AF6;\\">Ola!</h1><p>Este e um email de teste com <strong>HTML estilizado</strong>.</p></div>","from_name":"Nexa"}',
@@ -450,79 +535,50 @@ const PRESETS = {
   generate_qrcode: '{"content":"https://exemplo.com","size":300}',
   generate_barcode: '{"content":"123456789012","format":"code128"}',
   generate_table_image: '{"title":"Tabela Teste","headers":["Nome","Idade"],"rows":[["Ana","30"],["Bruno","25"]]}',
-  generate_color_scheme: '{"base_color_hex":"#6F5AF6"}',
-  generate_random_avatar: '{"seed":"alfred@teste.com","size":200}',
 
-  create_pdf: '{"title":"Documento Teste","html_content":"<div style=\\"display:flex;\\"><h1>Titulo</h1></div><div style=\\"display:flex;flex-direction:column;\\"><div style=\\"display:flex;\\">Paragrafo de teste.</div></div>"}',
+  create_pdf: '{"title":"Documento Teste","subtitle":"Gerado pelo testador","paragraphs":["Primeiro paragrafo de teste, gerado via reportlab."],"bullet_list":["Ponto A","Ponto B"]}',
   create_pdf_structured: '{"title":"Relatorio Teste","subtitle":"Teste automatico","sections":[{"heading":"Introducao","paragraphs":["Primeiro paragrafo de teste."],"bullet_list":["Ponto A","Ponto B"]}]}',
-  create_docx: '{"title":"Documento Teste","html_content":"<h1>Titulo</h1><p>Paragrafo de teste.</p>"}',
+  create_docx: '{"title":"Documento Teste","subtitle":"Gerado pelo testador","sections":[{"heading":"Introducao","paragraphs":["Paragrafo de teste, gerado via python-docx."],"bullet_list":["Ponto A","Ponto B"]}]}',
   create_xlsx: '{"sheet_name":"Dados","headers":["Nome","Idade"],"rows":[["Ana","30"],["Bruno","25"]]}',
   create_pptx: '{"title":"Apresentacao Teste","slides":[{"heading":"Slide 1","bullets":["Ponto A","Ponto B"]}]}',
-  create_project_zip: '{"project_name":"projeto-teste","files":[{"path":"README.md","content":"# Projeto Teste\\n\\nGerado pelo testador."},{"path":"lib/main.dart","content":"void main() {}\\n"}]}',
+
+  create_file: '{"filename":"teste.py","content":"print(\\"ola mundo\\")\\n"}',
 
   read_zip_contents: '{"zip_base64":""}',
   read_pdf_contents: '{"pdf_base64":""}',
-  extract_document_outline: '{"pdf_base64":"","source_type":"pdf"}',
 
   csv_to_xlsx: '{"csv_content":"Nome,Idade\\nAna,30\\nBruno,25"}',
-  json_transform: '{"json_data":"[{\\"nome\\":\\"Ana\\",\\"idade\\":30},{\\"nome\\":\\"Bruno\\",\\"idade\\":25}]"}',
   xlsx_to_json: '{"xlsx_base64":""}',
-  html_to_docx: '{"html_content":"<h1>Titulo</h1><p>Texto de teste.</p>","filename":"convertido"}',
-  html_to_pdf: '{"html_content":"<div style=\\"display:flex;\\"><h1>Titulo</h1></div><div style=\\"display:flex;\\">Texto de teste.</div>","title":"Convertido"}',
-  html_to_xlsx: '{"html_content":"<table><tr><th>Nome</th><th>Idade</th></tr><tr><td>Ana</td><td>30</td></tr></table>","sheet_name":"Dados"}',
-  html_to_pptx: '{"html_content":"<h1>Slide 1</h1><ul><li>Ponto A</li><li>Ponto B</li></ul>","title":"Apresentacao"}',
-  docx_to_html: '{"docx_base64":""}',
 
-  get_image_colors: '{"image_base64":"","num_colors":5}',
   convert_image_format: '{"image_base64":"","target_format":"webp"}',
   resize_image: '{"image_base64":"","width":100}',
   crop_image: '{"image_base64":"","left":0,"top":0,"width":50,"height":50}',
   watermark_image: '{"image_base64":"","watermark_text":"TESTE","position":"bottom-right"}',
-  image_metadata: '{"image_base64":""}',
-  vectorize_image: '{"image_base64":"","mode":"black_transparent"}',
   ocr_extract_text: '{"image_base64":"","language":"por"}',
-  pdf_to_images: '{"pdf_base64":"","max_pages":1}',
-  pptx_to_images: '{"pptx_base64":""}',
-  audio_duration_check: '{"audio_base64":""}',
 
   str_replace_file: '{"content":"linha 1\\nlinha 2\\nlinha 3","old_str":"linha 2","new_str":"linha 2 editada"}',
   diff_text: '{"text_before":"ola\\nmundo","text_after":"ola\\nmundo editado"}',
   extract_urls_from_text: '{"text":"Visita https://exemplo.com e tambem http://outro.pt/pagina"}',
-  format_markdown_to_html: '{"markdown":"# Titulo\\n\\nTexto **negrito** e *italico*.\\n\\n- item 1\\n- item 2"}',
   count_tokens_estimate: '{"text":"Este e um texto de exemplo para estimar tokens."}',
   text_summary_stats: '{"text":"Primeiro paragrafo com algumas frases. Tem duas frases aqui.\\n\\nSegundo paragrafo, mais curto."}',
-  youtube_thumbnail_extract: '{"youtube_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}',
   merge_pdfs: '{"pdfs_base64":[]}',
   split_pdf_pages: '{"pdf_base64":"","page_numbers":[1]}',
-
-  animate_html: '{"html":"<div>anim</div>","duration_seconds":3}',
-  generate_infographic: '{"title":"Info Teste","blocks":[{"label":"Bloco A"}]}',
 };
 
 // Notas por tool — lembretes de campos que precisam de artefacto
 // real (base64 de outra tool) antes de correr isoladamente.
 const HINTS = {
   send_email: 'to vazio de propósito — preenche o destinatário real antes de correr, ou usa a secção 4 dedicada (mais abaixo) que já trata de tudo, incluindo imagens via CID.',
-  read_zip_contents: 'zip_base64 vazio — corre "create_project_zip" primeiro e cola o content_base64 aqui, ou usa a corrida em lote que encadeia isto automaticamente.',
-  read_pdf_contents: 'pdf_base64 vazio — corre "create_pdf" primeiro e cola o content_base64 aqui, ou usa a corrida em lote.',
-  extract_document_outline: 'pdf_base64 vazio — mesmo caso de read_pdf_contents.',
-  xlsx_to_json: 'xlsx_base64 vazio — corre "create_xlsx" primeiro e cola o content_base64 aqui.',
-  docx_to_html: 'docx_base64 vazio — corre "create_docx" primeiro.',
-  get_image_colors: 'image_base64 vazio — corre "generate_qrcode" primeiro e cola o content_base64 aqui.',
-  convert_image_format: 'image_base64 vazio — mesmo caso acima.',
-  resize_image: 'image_base64 vazio — mesmo caso acima.',
-  crop_image: 'image_base64 vazio — mesmo caso acima (nota: left/top/width/height têm de caber dentro da imagem gerada).',
-  watermark_image: 'image_base64 vazio — mesmo caso acima.',
-  image_metadata: 'image_base64 vazio — mesmo caso acima.',
-  vectorize_image: 'image_base64 vazio — mesmo caso acima.',
-  ocr_extract_text: 'image_base64 vazio — mesmo caso acima.',
-  pdf_to_images: 'pdf_base64 vazio — corre "create_pdf" primeiro.',
-  pptx_to_images: 'pptx_base64 vazio — corre "create_pptx" primeiro.',
-  audio_duration_check: 'audio_base64 vazio — precisa de um mp3/wav/m4a real em base64.',
+  read_zip_contents: 'zip_base64 vazio — este backend não tem tool de criação de zip. Usa a secção 5 abaixo para importar um zip real.',
+  read_pdf_contents: 'pdf_base64 vazio — corre "create_pdf" primeiro e cola o content_base64 aqui, ou usa a corrida em lote. Ou usa a secção 5 abaixo para importar um PDF real.',
+  xlsx_to_json: 'xlsx_base64 vazio — corre "create_xlsx" primeiro e cola o content_base64 aqui. Ou usa a secção 5 abaixo para importar um xlsx real.',
+  convert_image_format: 'image_base64 vazio — corre "generate_qrcode" primeiro e cola o content_base64 aqui. Ou usa a secção 5 abaixo para importar uma imagem real.',
+  resize_image: 'image_base64 vazio — mesmo caso acima. Ou usa a secção 5 abaixo.',
+  crop_image: 'image_base64 vazio — mesmo caso acima (nota: left/top/width/height têm de caber dentro da imagem gerada). Ou usa a secção 5 abaixo.',
+  watermark_image: 'image_base64 vazio — mesmo caso acima. Ou usa a secção 5 abaixo.',
+  ocr_extract_text: 'image_base64 vazio — mesmo caso acima. Ou usa a secção 5 abaixo para importar uma imagem real com texto.',
   merge_pdfs: 'pdfs_base64 vazio — precisa de pelo menos 2 PDFs em base64 (ex: corre create_pdf duas vezes).',
-  split_pdf_pages: 'pdf_base64 vazio — corre "create_pdf" primeiro.',
-  animate_html: 'Bloqueada por defeito (ENABLE_HEAVY_TOOLS=false) — espera-se found:false.',
-  generate_infographic: 'Bloqueada por defeito (ENABLE_HEAVY_TOOLS=false) — espera-se found:false.',
+  split_pdf_pages: 'pdf_base64 vazio — corre "create_pdf" primeiro. Ou usa a secção 5 abaixo.',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -628,11 +684,13 @@ async function doLogin() {
     document.getElementById('runBtn').disabled = false;
     document.getElementById('runAllBtn').disabled = false;
     document.getElementById('sendEmailBtn').disabled = false;
+    updateExtractButtonState();
   } catch (e) {
     setStatus('✗ Erro no login: ' + e.message, 'err');
     document.getElementById('runBtn').disabled = true;
     document.getElementById('runAllBtn').disabled = true;
     document.getElementById('sendEmailBtn').disabled = true;
+    updateExtractButtonState();
   }
 }
 
@@ -774,7 +832,7 @@ async function runSelectedTools() {
   document.getElementById('renderOutput').innerHTML = '';
   document.getElementById('rawOutput').textContent = '';
 
-  const artifacts = { pdfBase64: null, zipBase64: null, xlsxBase64: null, pngBase64: null, docxBase64: null, pptxBase64: null };
+  const artifacts = { pdfBase64: null, xlsxBase64: null, pngBase64: null };
 
   const results = [];
   const total = orderedSelection.length;
@@ -790,22 +848,13 @@ async function runSelectedTools() {
       input = {};
     }
 
-    if (name === 'read_pdf_contents' || name === 'extract_document_outline' || name === 'pdf_to_images' || name === 'split_pdf_pages') {
+    if (name === 'read_pdf_contents' || name === 'split_pdf_pages') {
       if (artifacts.pdfBase64) input.pdf_base64 = artifacts.pdfBase64;
-    }
-    if (name === 'read_zip_contents') {
-      if (artifacts.zipBase64) input.zip_base64 = artifacts.zipBase64;
     }
     if (name === 'xlsx_to_json') {
       if (artifacts.xlsxBase64) input.xlsx_base64 = artifacts.xlsxBase64;
     }
-    if (name === 'docx_to_html') {
-      if (artifacts.docxBase64) input.docx_base64 = artifacts.docxBase64;
-    }
-    if (name === 'pptx_to_images') {
-      if (artifacts.pptxBase64) input.pptx_base64 = artifacts.pptxBase64;
-    }
-    if (['get_image_colors', 'convert_image_format', 'resize_image', 'crop_image', 'watermark_image', 'image_metadata', 'vectorize_image', 'ocr_extract_text'].includes(name)) {
+    if (['convert_image_format', 'resize_image', 'crop_image', 'watermark_image', 'ocr_extract_text'].includes(name)) {
       if (artifacts.pngBase64) input.image_base64 = artifacts.pngBase64;
     }
     if (name === 'merge_pdfs') {
@@ -823,11 +872,8 @@ async function runSelectedTools() {
       const r = outcome.data.result !== undefined ? outcome.data.result : outcome.data;
       if (r && typeof r.content_base64 === 'string' && r.content_base64.length > 0) {
         const mime = r.mime_type || '';
-        if (name === 'create_pdf' || name === 'create_pdf_structured' || name === 'html_to_pdf') artifacts.pdfBase64 = r.content_base64;
-        if (name === 'create_project_zip') artifacts.zipBase64 = r.content_base64;
+        if (name === 'create_pdf' || name === 'create_pdf_structured') artifacts.pdfBase64 = r.content_base64;
         if (name === 'create_xlsx') artifacts.xlsxBase64 = r.content_base64;
-        if (name === 'create_docx') artifacts.docxBase64 = r.content_base64;
-        if (name === 'create_pptx') artifacts.pptxBase64 = r.content_base64;
         if (mime.startsWith('image/') && !artifacts.pngBase64) artifacts.pngBase64 = r.content_base64;
       }
     }
@@ -998,6 +1044,263 @@ async function sendTestEmail() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// SECÇÃO 5 — IMPORTAR FICHEIRO PARA EXTRAÇÃO
+//
+// Deixa escolher (clique ou drag&drop) uma imagem, PDF, XLSX ou
+// ZIP do disco, converte para base64, deteta automaticamente
+// qual campo de tool ele preenche (image_base64 / pdf_base64 /
+// xlsx_base64 / zip_base64) pelo mime type, sugere a tool mais
+// provável de entre as que existem realmente no backend, e deixa
+// escolher entre elas antes de disparar callTool() diretamente
+// contra /tools/execute.
+//
+// Nota: tipos como .docx/.pptx/áudio já não têm tool de leitura
+// no backend atual — por isso não constam neste mapa. Se
+// docx_to_html/pptx_to_images/audio_duration_check forem
+// implementadas no futuro, voltam aqui.
+// ═══════════════════════════════════════════════════════════
+
+const EXTRACT_FIELD_MAP = [
+  {
+    match: (mime, ext) => mime.startsWith('image/'),
+    field: 'image_base64',
+    tools: ['ocr_extract_text', 'convert_image_format', 'resize_image', 'crop_image', 'watermark_image'],
+    defaultTool: 'ocr_extract_text',
+    extraInput: (name) => ({ language: 'por' }),
+    label: 'Imagem',
+  },
+  {
+    match: (mime, ext) => mime === 'application/pdf' || ext === 'pdf',
+    field: 'pdf_base64',
+    tools: ['read_pdf_contents', 'split_pdf_pages'],
+    defaultTool: 'read_pdf_contents',
+    extraInput: () => ({}),
+    label: 'PDF',
+  },
+  {
+    match: (mime, ext) => mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || ext === 'xlsx',
+    field: 'xlsx_base64',
+    tools: ['xlsx_to_json'],
+    defaultTool: 'xlsx_to_json',
+    extraInput: () => ({}),
+    label: 'Excel (.xlsx)',
+  },
+  {
+    match: (mime, ext) => mime === 'application/zip' || mime === 'application/x-zip-compressed' || ext === 'zip',
+    field: 'zip_base64',
+    tools: ['read_zip_contents'],
+    defaultTool: 'read_zip_contents',
+    extraInput: () => ({}),
+    label: 'ZIP',
+  },
+];
+
+let CURRENT_IMPORT = null; // { file, base64, mime, ext, config }
+
+function getFileExtension(name) {
+  const idx = name.lastIndexOf('.');
+  return idx >= 0 ? name.slice(idx + 1).toLowerCase() : '';
+}
+
+function detectExtractConfig(file) {
+  const ext = getFileExtension(file.name);
+  const mime = file.type || '';
+  for (const cfg of EXTRACT_FIELD_MAP) {
+    if (cfg.match(mime, ext)) return cfg;
+  }
+  return null;
+}
+
+function humanFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function setupDropZone() {
+  const zone = document.getElementById('fileImportDropZone');
+  ['dragenter', 'dragover'].forEach(evt => {
+    zone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    zone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('dragover');
+    });
+  });
+  zone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) processImportedFile(file);
+  });
+}
+setupDropZone();
+
+function handleFileImportSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  processImportedFile(file);
+  event.target.value = '';
+}
+
+function processImportedFile(file) {
+  const cfg = detectExtractConfig(file);
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = reader.result;
+    const base64Only = dataUrl.split(',')[1] || '';
+
+    CURRENT_IMPORT = {
+      file,
+      base64: base64Only,
+      mime: file.type || 'application/octet-stream',
+      ext: getFileExtension(file.name),
+      config: cfg,
+      previewDataUrl: dataUrl,
+    };
+
+    renderFileImportInfo();
+    setupExtractToolSelect();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderFileImportInfo() {
+  const info = document.getElementById('fileImportInfo');
+  const thumb = document.getElementById('fileImportThumb');
+  const iconBox = document.getElementById('fileImportIconBox');
+  const nameEl = document.getElementById('fileImportName');
+  const detailEl = document.getElementById('fileImportDetail');
+
+  if (!CURRENT_IMPORT) {
+    info.classList.remove('active');
+    return;
+  }
+
+  info.classList.add('active');
+  nameEl.textContent = CURRENT_IMPORT.file.name;
+
+  const cfg = CURRENT_IMPORT.config;
+  const typeLabel = cfg ? cfg.label : 'Tipo não reconhecido (sem tool de leitura no backend atual)';
+  detailEl.textContent = `${typeLabel} · ${humanFileSize(CURRENT_IMPORT.file.size)} · ${CURRENT_IMPORT.mime || 'mime desconhecido'}`;
+
+  const isImage = CURRENT_IMPORT.mime.startsWith('image/');
+  if (isImage) {
+    thumb.src = CURRENT_IMPORT.previewDataUrl;
+    thumb.style.display = 'block';
+    iconBox.style.display = 'none';
+  } else {
+    thumb.style.display = 'none';
+    iconBox.style.display = 'flex';
+    const iconMap = { pdf_base64: '📕', xlsx_base64: '📗', zip_base64: '🗜️' };
+    iconBox.textContent = (cfg && iconMap[cfg.field]) || '📄';
+  }
+}
+
+function setupExtractToolSelect() {
+  const wrap = document.getElementById('extractToolSelectWrap');
+  const sel = document.getElementById('extractToolName');
+  const hint = document.getElementById('autoDetectHint');
+
+  if (!CURRENT_IMPORT || !CURRENT_IMPORT.config) {
+    wrap.style.display = 'block';
+    sel.innerHTML = '<option value="">— tipo de ficheiro não reconhecido / sem tool de leitura no backend —</option>';
+    hint.textContent = 'Este backend só lê imagem, PDF, XLSX e ZIP. Para outro tipo, usa a secção 3 acima e cola o base64 manualmente numa tool compatível, se existir.';
+    updateExtractButtonState();
+    return;
+  }
+
+  wrap.style.display = 'block';
+  sel.innerHTML = '';
+  CURRENT_IMPORT.config.tools.forEach(toolName => {
+    const opt = document.createElement('option');
+    opt.value = toolName;
+    opt.textContent = toolName;
+    sel.appendChild(opt);
+  });
+  sel.value = CURRENT_IMPORT.config.defaultTool;
+
+  hint.textContent = `Detetado: ${CURRENT_IMPORT.config.label} → campo "${CURRENT_IMPORT.config.field}" preenchido automaticamente.`;
+  updateExtractHint();
+  updateExtractButtonState();
+}
+
+function updateExtractHint() {
+  const toolName = document.getElementById('extractToolName').value;
+  document.getElementById('extractInputHint').textContent = toolName
+    ? `Vai chamar "${toolName}" com o ficheiro importado já no campo correto.`
+    : '';
+}
+
+function updateExtractButtonState() {
+  const btn = document.getElementById('extractBtn');
+  btn.disabled = !TOKEN || !CURRENT_IMPORT || !CURRENT_IMPORT.config;
+}
+
+function clearFileImport() {
+  CURRENT_IMPORT = null;
+  document.getElementById('fileImportInfo').classList.remove('active');
+  document.getElementById('extractToolSelectWrap').style.display = 'none';
+  updateExtractButtonState();
+}
+
+async function runExtraction() {
+  if (!CURRENT_IMPORT || !CURRENT_IMPORT.config) return;
+  const base = document.getElementById('apiBase').value.trim();
+  const toolName = document.getElementById('extractToolName').value;
+  if (!toolName) return;
+
+  const cfg = CURRENT_IMPORT.config;
+  const input = Object.assign({}, cfg.extraInput(toolName));
+  input[cfg.field] = CURRENT_IMPORT.base64;
+
+  document.getElementById('renderOutput').innerHTML = '';
+  document.getElementById('rawOutput').textContent = '';
+  document.getElementById('extractBtn').disabled = true;
+
+  const wrap = document.getElementById('extractProgressWrap');
+  const bar = document.getElementById('extractProgressBar');
+  const nameEl = document.getElementById('extractProgressName');
+  const timeEl = document.getElementById('extractProgressTime');
+  wrap.style.display = 'block';
+  bar.classList.add('indeterminate');
+  nameEl.textContent = toolName;
+  const tickStart = performance.now();
+  const ticker = setInterval(() => {
+    timeEl.textContent = ((performance.now() - tickStart) / 1000).toFixed(1) + 's';
+  }, 100);
+
+  setStatus(`A extrair dados de "${CURRENT_IMPORT.file.name}" via "${toolName}"...`);
+
+  const outcome = await callTool(base, toolName, input);
+
+  clearInterval(ticker);
+  wrap.style.display = 'none';
+  updateExtractButtonState();
+
+  const elapsed = outcome.elapsedSec.toFixed(1);
+  if (!outcome.ok && !outcome.data) {
+    setStatus(`✗ ${outcome.error} após ${elapsed}s`, 'err');
+    return;
+  }
+  if (!outcome.ok) {
+    setStatus(`✗ found:false após ${elapsed}s — ${outcome.error}`, 'err');
+    document.getElementById('rawOutput').textContent = JSON.stringify(outcome.data, null, 2);
+    renderResult(toolName, outcome.data);
+    return;
+  }
+
+  setStatus(`✓ Dados extraídos em ${elapsed}s a partir de "${CURRENT_IMPORT.file.name}".`, 'ok');
+  document.getElementById('rawOutput').textContent = JSON.stringify(outcome.data, null, 2);
+  renderResult(toolName, outcome.data);
+}
+
+// ═══════════════════════════════════════════════════════════
 // CARD DE RESULTADO — usado tanto no modo isolado (renderResult,
 // que limpa e mostra um único card) como na corrida em lote
 // (appendBatchResultCard, que acrescenta um card por tool sem
@@ -1067,38 +1370,21 @@ function buildResultCardBody(toolName, data, outcomeForBatch) {
     search_books: renderSearchBooks,
     download_image_for_project: renderContentBase64Card,
     search_market: renderKeyValue,
-    search_place: renderKeyValue,
-    search_calendar_date: renderKeyValue,
-    get_weather: renderWeatherAndImage,
+    get_weather: renderKeyValue,
     send_email: renderSendEmail,
     generate_function_plot: renderContentBase64Card,
     generate_math_sheet: renderContentBase64Card,
-    generate_color_scheme: renderKeyValue,
     text_summary_stats: renderKeyValue,
     count_tokens_estimate: renderKeyValue,
     extract_urls_from_text: renderKeyValue,
     diff_text: renderKeyValue,
     str_replace_file: renderKeyValue,
-    format_markdown_to_html: renderKeyValue,
-    image_metadata: renderKeyValue,
-    get_image_colors: renderKeyValue,
-    youtube_thumbnail_extract: renderKeyValue,
-    extract_document_outline: renderKeyValue,
     read_zip_contents: renderZipContents,
     read_pdf_contents: renderPdfContents,
-    pdf_to_images: renderPdfToImages,
-    pptx_to_images: renderPptxToImages,
-    vectorize_image: renderVectorized,
-    docx_to_html: renderDocxToHtml,
-    audio_duration_check: renderKeyValue,
     csv_to_xlsx: renderContentBase64Card,
-    json_transform: renderJsonTransform,
     xlsx_to_json: renderKeyValue,
-    html_to_docx: renderContentBase64Card,
-    html_to_pdf: renderContentBase64Card,
-    html_to_xlsx: renderContentBase64Card,
-    html_to_pptx: renderContentBase64Card,
-    create_project_zip: renderContentBase64Card,
+    create_file: renderKeyValue,
+    ocr_extract_text: renderKeyValue,
   };
 
   const handler = handlers[toolName] || renderContentBase64Card;
@@ -1116,7 +1402,7 @@ function renderSendEmail(card, result) {
 
 function renderSearchImages(card, result) {
   if (!Array.isArray(result.images) || result.images.length === 0) {
-    card.innerHTML += '<span class="err">Sem campo "images" (array) ou array vazio. server.js devolve result.images[].url</span>';
+    card.innerHTML += '<span class="err">Sem campo "images" (array) ou array vazio. server devolve result.images[].url</span>';
     return;
   }
   const row = document.createElement('div');
@@ -1135,7 +1421,7 @@ function renderSearchImages(card, result) {
 
 function renderSearchVideos(card, result) {
   if (!Array.isArray(result.videos) || result.videos.length === 0) {
-    card.innerHTML += '<span class="err">Sem campo "videos" (array) ou array vazio. Nota: nome do campo "videos" na resposta Serper nunca foi confirmado contra resposta real — ver [search_videos] no log do Render se isto falhar sistematicamente.</span>';
+    card.innerHTML += '<span class="err">Sem campo "videos" (array) ou array vazio.</span>';
     return;
   }
   result.videos.forEach(v => {
@@ -1156,7 +1442,7 @@ function renderSearchVideos(card, result) {
 
 function renderSearchBooks(card, result) {
   if (!Array.isArray(result.books) || result.books.length === 0) {
-    card.innerHTML += '<span class="err">Sem campo "books" (array) ou array vazio. server.js devolve result.books[] via Google Books API.</span>';
+    card.innerHTML += '<span class="err">Sem campo "books" (array) ou array vazio.</span>';
     return;
   }
   result.books.forEach(b => {
@@ -1186,23 +1472,6 @@ function renderKeyValue(card, result) {
   pre.textContent = JSON.stringify(rest, null, 2);
   card.appendChild(document.createTextNode('Campos devolvidos:'));
   card.appendChild(pre);
-}
-
-function renderWeatherAndImage(card, result) {
-  const { found, content_base64, mime_type, ...rest } = result;
-  const pre = document.createElement('pre');
-  pre.className = 'textPreview';
-  pre.textContent = JSON.stringify(rest, null, 2);
-  card.appendChild(document.createTextNode('Dados do clima:'));
-  card.appendChild(pre);
-  if (content_base64) {
-    renderContentBase64Card(card, result, true);
-  } else {
-    const warn = document.createElement('div');
-    warn.className = 'warn';
-    warn.textContent = 'content_base64 é null — normal se as fontes Inter ainda não estiverem em ./fonts/ (o card visual falha mas os dados de clima continuam válidos).';
-    card.appendChild(warn);
-  }
 }
 
 function renderZipContents(card, result) {
@@ -1275,104 +1544,11 @@ function renderPdfContents(card, result) {
   card.appendChild(pre);
 }
 
-function renderPdfToImages(card, result) {
-  if (result.note) {
-    const note = document.createElement('div');
-    note.className = 'warn';
-    note.textContent = result.note;
-    card.appendChild(note);
-  }
-  (result.images || []).forEach(img => {
-    const im = document.createElement('img');
-    im.src = `data:${img.mime_type};base64,${img.content_base64}`;
-    card.appendChild(document.createTextNode(`Página ${img.page}:`));
-    card.appendChild(im);
-  });
-}
-
-function renderPptxToImages(card, result) {
-  if (result.note) {
-    const note = document.createElement('div');
-    note.className = 'warn';
-    note.textContent = result.note;
-    card.appendChild(note);
-  }
-  card.appendChild(document.createTextNode(`${result.total_slides} slides:`));
-  (result.images || []).forEach(img => {
-    const im = document.createElement('img');
-    im.src = `data:${img.mime_type};base64,${img.content_base64}`;
-    card.appendChild(document.createTextNode(`Slide ${img.slide}:`));
-    card.appendChild(im);
-  });
-}
-
-function renderVectorized(card, result) {
-  if (typeof result.svg !== 'string' || !result.svg) {
-    card.innerHTML += '<span class="err">Sem campo "svg" (string).</span>';
-    return;
-  }
-  const wrap = document.createElement('div');
-  wrap.style.background = '#fff';
-  wrap.style.padding = '8px';
-  wrap.style.borderRadius = '6px';
-  wrap.innerHTML = result.svg;
-  card.appendChild(document.createTextNode('SVG vetorizado:'));
-  card.appendChild(wrap);
-}
-
-function renderDocxToHtml(card, result) {
-  if (typeof result.html !== 'string') {
-    card.innerHTML += '<span class="err">Sem campo "html" (string).</span>';
-    return;
-  }
-  const pre = document.createElement('pre');
-  pre.className = 'textPreview';
-  pre.textContent = result.html.slice(0, 800) + (result.html.length > 800 ? '…' : '');
-  card.appendChild(document.createTextNode('HTML convertido:'));
-  card.appendChild(pre);
-  if (Array.isArray(result.warnings) && result.warnings.length > 0) {
-    const warn = document.createElement('div');
-    warn.className = 'warn';
-    warn.textContent = `Avisos do mammoth: ${result.warnings.join('; ')}`;
-    card.appendChild(warn);
-  }
-}
-
-function renderJsonTransform(card, result) {
-  if (!Array.isArray(result.headers) || !Array.isArray(result.rows)) {
-    card.innerHTML += '<span class="err">Sem "headers"/"rows" válidos.</span>';
-    return;
-  }
-  const table = document.createElement('table');
-  table.className = 'previewTable';
-  const thead = document.createElement('tr');
-  result.headers.forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    thead.appendChild(th);
-  });
-  table.appendChild(thead);
-  result.rows.slice(0, 10).forEach(row => {
-    const tr = document.createElement('tr');
-    row.forEach(cell => {
-      const td = document.createElement('td');
-      td.textContent = cell;
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
-  });
-  card.appendChild(document.createTextNode(`${result.rows.length} linhas:`));
-  card.appendChild(table);
-  if (result.rows.length > 10) {
-    card.appendChild(document.createTextNode(`(+ ${result.rows.length - 10} linhas não mostradas aqui)`));
-  }
-}
-
 function renderContentBase64Card(card, result, skipEmptyMsg) {
   const hasBase64 = typeof result.content_base64 === 'string' && result.content_base64.length > 0;
   if (!hasBase64) {
     if (!skipEmptyMsg) {
-      card.innerHTML += '<span class="err">Sem campo "content_base64" (string não-vazia). O app procura exatamente result.content_base64 — sem isto, nenhum card aparece no Flutter.</span>';
+      card.innerHTML += '<span class="err">Sem campo "content_base64" (string não-vazia). O app procura exatamente result.content_base64 — sem isto, nenhum card aparece.</span>';
     }
     return;
   }

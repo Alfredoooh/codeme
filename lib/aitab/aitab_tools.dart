@@ -2,16 +2,27 @@
 // FILE: lib/aitab/aitab_tools.dart
 // Execução de tool calls e o widget de ícone por-tool com fallback.
 //
-// CORREÇÃO PRINCIPAL vs. versão anterior:
-// 1. search_images é tratada localmente — o resultado JSON da tool
-//    é convertido para [[images:...]] no cliente, sem depender do
-//    modelo para reescrever URLs em prosa (era a causa do bug de
-//    imagens aparecendo como texto).
-// 2. Resultados visuais/documento/imagens SEMPRE geram uma segunda
-//    chamada ao modelo com o resultado injetado como contexto —
-//    antes, se todas as tools fossem "locais", o código terminava
-//    ali sem nunca voltar a consultar o modelo, e o utilizador
-//    ficava só com o cartão, sem nenhum texto de acompanhamento.
+// SINCRONIZADO com o catálogo real de 36 tools ativas (kAllTools em
+// api_service.dart):
+// - Removidos os cases 'search_place' e 'search_calendar_date' (as
+//   tools correspondentes saíram do catálogo enviado ao modelo — o
+//   modelo nunca mais vai gerar essas chamadas, e as funções
+//   resolvePlaceQuery/resolveCalendarDateQuery deixam de ser usadas
+//   aqui; ficam disponíveis noutro módulo caso voltem a ser
+//   necessárias).
+// - kVisualTools perdeu generate_random_avatar (removida do
+//   catálogo) e ganhou generate_barcode (existe no catálogo e
+//   devolve content_base64 tal como as outras tools visuais).
+// - kDocumentTools perdeu create_pdf_structured (absorvida por
+//   create_pdf — já não é um nome de tool separado) e
+//   html_to_docx/html_to_pdf/html_to_xlsx/html_to_pptx/
+//   create_project_zip (removidas do catálogo); ganhou create_file
+//   (devolve content_base64 + filename, mesmo formato de download).
+// - kToolAttachmentFields perdeu as entradas para tools removidas
+//   (extract_document_outline, docx_to_html, pdf_to_images,
+//   pptx_to_images, audio_duration_check, get_image_colors,
+//   image_metadata, vectorize_image) — mantidas só as que
+//   correspondem a tools do catálogo atual.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -91,21 +102,28 @@ class ImagesToolResult {
   const ImagesToolResult({required this.marker});
 }
 
+/// Tools que devolvem content_base64 diretamente interpretável como
+/// imagem PNG a mostrar inline no chat (ToolResultImageCard).
 const Set<String> kVisualTools = {
-  'generate_chart', 'generate_mindmap', 'generate_qrcode', 'generate_barcode',
-  'generate_math_sheet', 'generate_table_image',
-  'generate_function_plot', 'download_image_for_project',
-  'generate_random_avatar',
+  'generate_chart',
+  'generate_function_plot',
+  'generate_math_sheet',
+  'generate_mindmap',
+  'generate_qrcode',
+  'generate_barcode',
+  'generate_table_image',
+  'download_image_for_project',
   'get_weather',
   // Utilitários de imagem que devolvem content_base64 diretamente:
   'convert_image_format', 'resize_image', 'crop_image', 'watermark_image',
 };
 
+/// Tools que devolvem um ficheiro para download (botão
+/// ToolResultDownloadCard) em vez de uma imagem inline.
 const Set<String> kDocumentTools = {
-  'create_pdf', 'create_pdf_structured', 'create_docx', 'create_xlsx', 'create_pptx',
+  'create_pdf', 'create_docx', 'create_xlsx', 'create_pptx',
+  'create_file',
   'csv_to_xlsx',
-  'html_to_docx', 'html_to_pdf', 'html_to_xlsx', 'html_to_pptx',
-  'create_project_zip',
   'merge_pdfs', 'split_pdf_pages',
 };
 
@@ -139,29 +157,22 @@ class ToolExecutionOutcome {
 // claramente inválido (< 100 caracteres não pode ser um ficheiro
 // real), substituímos pelo base64 do anexo mais recente e
 // compatível encontrado no histórico da conversa. Isto é o que
-// destrava ZIP/PDF/DOCX/XLSX/imagens de facto funcionarem.
+// destrava ZIP/PDF/XLSX/imagens de facto funcionarem.
 // ══════════════════════════════════════════════════════════════
 
 /// Nome do campo de input que cada tool espera receber com o
 /// conteúdo do ficheiro em base64, e que tipos mime são aceitáveis
-/// para preencher esse campo automaticamente.
+/// para preencher esse campo automaticamente. Só tools que existem
+/// no catálogo atual de 36.
 const Map<String, ({String field, List<String> mimePrefixes})> kToolAttachmentFields = {
-  'read_zip_contents':        (field: 'zip_base64',   mimePrefixes: ['application/zip']),
-  'read_pdf_contents':        (field: 'pdf_base64',   mimePrefixes: ['application/pdf']),
-  'extract_document_outline': (field: 'pdf_base64',   mimePrefixes: ['application/pdf']),
-  'xlsx_to_json':             (field: 'xlsx_base64',  mimePrefixes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']),
-  'docx_to_html':             (field: 'docx_base64',  mimePrefixes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword']),
-  'pdf_to_images':            (field: 'pdf_base64',   mimePrefixes: ['application/pdf']),
-  'pptx_to_images':           (field: 'pptx_base64',  mimePrefixes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation']),
-  'audio_duration_check':     (field: 'audio_base64', mimePrefixes: ['audio/']),
-  'get_image_colors':         (field: 'image_base64', mimePrefixes: ['image/']),
-  'convert_image_format':     (field: 'image_base64', mimePrefixes: ['image/']),
-  'resize_image':             (field: 'image_base64', mimePrefixes: ['image/']),
-  'crop_image':               (field: 'image_base64', mimePrefixes: ['image/']),
-  'watermark_image':          (field: 'image_base64', mimePrefixes: ['image/']),
-  'image_metadata':           (field: 'image_base64', mimePrefixes: ['image/']),
-  'vectorize_image':          (field: 'image_base64', mimePrefixes: ['image/']),
-  'ocr_extract_text':         (field: 'image_base64', mimePrefixes: ['image/']),
+  'read_zip_contents':  (field: 'zip_base64',  mimePrefixes: ['application/zip']),
+  'read_pdf_contents':  (field: 'pdf_base64',  mimePrefixes: ['application/pdf']),
+  'xlsx_to_json':       (field: 'xlsx_base64', mimePrefixes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']),
+  'convert_image_format': (field: 'image_base64', mimePrefixes: ['image/']),
+  'resize_image':       (field: 'image_base64', mimePrefixes: ['image/']),
+  'crop_image':         (field: 'image_base64', mimePrefixes: ['image/']),
+  'watermark_image':    (field: 'image_base64', mimePrefixes: ['image/']),
+  'ocr_extract_text':   (field: 'image_base64', mimePrefixes: ['image/']),
 };
 
 /// Threshold mínimo de comprimento para considerar que o modelo já
@@ -216,14 +227,16 @@ Map<String, dynamic> injectAttachmentIfNeeded(
   return updated;
 }
 
-/// Executa uma única tool call contra o backend (ou localmente para
-/// search_market/search_place/search_calendar_date, que já tinham
-/// resolvers locais antes desta refatoração).
+/// Executa uma única tool call contra o backend.
 ///
 /// [history] é o histórico da conversa até este ponto — usado
 /// apenas para injeção automática de anexos (ver
 /// injectAttachmentIfNeeded acima). Pode ser vazio para tools que
 /// não usam ficheiros.
+///
+/// search_market continua resolvida localmente (resolveMarketQuery),
+/// como já acontecia antes desta sincronização — as demais tools do
+/// catálogo vão todas via ToolsApiService.executeTool.
 Future<Map<String, dynamic>> executeToolCall(
   ToolCall call,
   List<ChatMessage> history,
@@ -233,19 +246,10 @@ Future<Map<String, dynamic>> executeToolCall(
     return {'found': false, 'reason': 'Sessão expirada'};
   }
 
-  switch (call.name) {
-    case 'search_market':
-      final query = call.arguments['query']?.toString() ?? '';
-      final result = await resolveMarketQuery(query);
-      return result.toToolResultJson();
-    case 'search_place':
-      final query = call.arguments['query']?.toString() ?? '';
-      final result = await resolvePlaceQuery(query);
-      return result.toToolResultJson();
-    case 'search_calendar_date':
-      final query = call.arguments['query']?.toString() ?? '';
-      final result = await resolveCalendarDateQuery(query);
-      return result.toToolResultJson();
+  if (call.name == 'search_market') {
+    final query = call.arguments['query']?.toString() ?? '';
+    final result = await resolveMarketQuery(query);
+    return result.toToolResultJson();
   }
 
   final effectiveArgs = injectAttachmentIfNeeded(call.name, call.arguments, history);
@@ -335,7 +339,7 @@ Future<ToolExecutionOutcome> processToolCalls(
     }
 
     // Passthrough: o modelo recebe o JSON cru para interpretar
-    // (web_search, search_market, clima em texto, json_transform, etc).
+    // (web_search, search_market, clima em texto, read_website, etc).
     toolResultMsgs.add(ChatMessage(
       role: 'tool',
       content: jsonEncode(resultJson),
