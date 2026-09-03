@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/colors.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -89,16 +92,18 @@ class AppColorScheme {
   }
 
   // Superfícies neutras
-  Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
+  // NOTA: fundo e cards escuros atualizados para tons mais escuros
+  // (#0D0D0D / #141414), conforme pedido. As cores claras mantêm-se.
+  Color get surface            => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF121313) : const Color(0xFFF9F7F4);
+  Color get pageBackground     => isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF9F7F4);
 
-  Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
-  Color get floatingSurface    => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
+  Color get cardBackground     => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
+  Color get floatingSurface    => isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF);
 
-  Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFDCDCE0);
-  Color get outlineVariant     => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFECECEE);
+  Color get outline            => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFDCDCE0);
+  Color get outlineVariant     => isDark ? const Color(0xFF2A2A2C) : const Color(0xFFECECEE);
 
   // Cores de estado
   Color get error              => isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30);
@@ -114,7 +119,7 @@ class AppColorScheme {
   Color get pressed            => isDark ? const Color(0x22FFFFFF) : const Color(0x10000000);
 
   // Navegação e tabs
-  Color get navBarBg           => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFBFBFC);
+  Color get navBarBg           => isDark ? const Color(0xFF0D0D0D) : const Color(0xFFFBFBFC);
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
   Color get navIconActive      => isDark ? Colors.white : primary;
   Color get navLabelActive     => onPrimaryContainer;
@@ -123,29 +128,29 @@ class AppColorScheme {
   Color get projectsTabBg      => primary;
   Color get projectsTabFg      => onPrimary;
 
-  Color get previewBackdrop    => isDark ? const Color(0xFF242426) : const Color(0xFFEFEFF1);
-  Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
+  Color get previewBackdrop    => isDark ? const Color(0xFF1A1A1A) : const Color(0xFFEFEFF1);
+  Color get downloadButtonBg   => isDark ? const Color(0xFF262626) : const Color(0xFFEFEFF1);
 
   List<BoxShadow> get cardShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 7, offset: const Offset(0, 1))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 7, offset: const Offset(0, 1))]
       : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))];
 
   List<BoxShadow> get floatingShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 14, offset: const Offset(0, 5))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.55), blurRadius: 14, offset: const Offset(0, 5))]
       : [BoxShadow(color: Colors.black.withOpacity(0.09), blurRadius: 16, offset: const Offset(0, 5))];
 
   List<BoxShadow> get cardShadowSoft => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.16), blurRadius: 4, offset: const Offset(0, 1))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 4, offset: const Offset(0, 1))]
       : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 5, offset: const Offset(0, 1))];
 
   List<BoxShadow> get navBarShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 12, offset: const Offset(0, 3))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 12, offset: const Offset(0, 3))]
       : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 2))];
 
-  Color get incognitoBackground => const Color(0xFF121212);
-  Color get incognitoSurface    => const Color(0xFF1C1C1E);
+  Color get incognitoBackground => const Color(0xFF0D0D0D);
+  Color get incognitoSurface    => const Color(0xFF141414);
   Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
-  Color get sheetBackdrop => const Color(0xFF0B0B0D);
+  Color get sheetBackdrop => const Color(0xFF000000);
 
   SystemUiOverlayStyle get statusBarStyle => SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,

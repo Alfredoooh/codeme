@@ -1,11 +1,14 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/apps/docs.dart
 // ══════════════════════════════════════════════════════════════
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:image_picker/image_picker.dart';
 import '../colors.dart';
 import '../widgets.dart';
 import '../sheets.dart';
@@ -44,7 +47,17 @@ const Set<String> _kEditorSvgIcons = {
   'superscript',
   'text_color',
   'underline',
-
+  'download',
+  'share',
+  'pdf',
+  'check',
+  'plus',
+  'minus',
+  'trash',
+  'grid',
+  'row',
+  'column',
+  'wand',
 };
 
 const Map<String, String> _kEditorIconAliases = {
@@ -79,34 +92,178 @@ class _EditorIcon extends StatelessWidget {
   }
 }
 
-Future<T?> _showAppPopupMenu<T>(
+// ══════════════════════════════════════════════════════════════
+// POPUP CUSTOMIZADO — Container Transform super suave
+// ══════════════════════════════════════════════════════════════
+//
+// Substitui o antigo `showMenu` nativo. Nasce a partir do botão
+// (posição + tamanho do anchor) e expande em direção ao tamanho
+// final do cartão, com blur de fundo, bordas suaves e curva
+// elástica muito lenta — efeito "morph" em vez de "popup".
+
+Future<T?> _showMorphMenu<T>(
   BuildContext context,
   AppColorScheme s, {
   required GlobalKey anchorKey,
-  required List<PopupMenuEntry<T>> items,
+  required List<_MorphMenuItem<T>> items,
+  double width = 240,
 }) async {
   final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
   if (box == null) return null;
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final offset = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-  final size = box.size;
-  final position = RelativeRect.fromLTRB(
-    offset.dx,
-    offset.dy + size.height,
-    overlayBox.size.width - (offset.dx + size.width),
-    overlayBox.size.height - (offset.dy + size.height),
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+  final anchorSize = box.size;
+  final screenSize = overlay.size;
+
+  final anchorRect = Rect.fromLTWH(
+    anchorTopLeft.dx,
+    anchorTopLeft.dy,
+    anchorSize.width,
+    anchorSize.height,
   );
-  return showMenu<T>(
+
+  double left = anchorRect.right - width;
+  if (left < 12) left = 12;
+  if (left + width > screenSize.width - 12) left = screenSize.width - 12 - width;
+  double top = anchorRect.bottom + 8;
+
+  return showGeneralDialog<T>(
     context: context,
-    position: position,
-    color: s.floatingSurface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: s.outline.withOpacity(0.25)),
-    ),
-    items: items,
+    barrierLabel: 'menu',
+    barrierColor: Colors.black.withOpacity(0.001),
+    barrierDismissible: true,
+    transitionDuration: const Duration(milliseconds: 480),
+    pageBuilder: (ctx, anim, secAnim) => const SizedBox.shrink(),
+    transitionBuilder: (ctx, anim, secAnim, child) {
+      final curved = CurvedAnimation(parent: anim, curve: const Cubic(0.16, 1, 0.3, 1));
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+              child: GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: BackdropBlurBox(sigma: 6 * curved.value, color: s.barrier.withOpacity(0.18 * curved.value)),
+              ),
+            ),
+          ),
+          Positioned(
+            left: Tween<double>(begin: anchorRect.left, end: left).transform(curved.value),
+            top: Tween<double>(begin: anchorRect.top, end: top).transform(curved.value),
+            width: Tween<double>(begin: anchorRect.width, end: width).transform(curved.value),
+            child: Opacity(
+              opacity: Curves.easeOut.transform(anim.value.clamp(0.0, 1.0)),
+              child: Transform.scale(
+                alignment: Alignment.topRight,
+                scale: 0.86 + (0.14 * curved.value),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: s.floatingSurface.withOpacity(0.98),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: s.outline.withOpacity(0.14), width: 1),
+                      boxShadow: s.floatingShadow,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (int i = 0; i < items.length; i++)
+                          _MorphMenuTile<T>(
+                            item: items[i],
+                            s: s,
+                            onSelected: (v) => Navigator.of(ctx).pop(v),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
   );
+}
+
+class _MorphMenuItem<T> {
+  final T value;
+  final String asset;
+  final String label;
+  final bool destructive;
+  const _MorphMenuItem({
+    required this.value,
+    required this.asset,
+    required this.label,
+    this.destructive = false,
+  });
+}
+
+class _MorphMenuTile<T> extends StatefulWidget {
+  final _MorphMenuItem<T> item;
+  final AppColorScheme s;
+  final void Function(T) onSelected;
+  const _MorphMenuTile({required this.item, required this.s, required this.onSelected});
+
+  @override
+  State<_MorphMenuTile<T>> createState() => _MorphMenuTileState<T>();
+}
+
+class _MorphMenuTileState<T> extends State<_MorphMenuTile<T>> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final item = widget.item;
+    final color = item.destructive ? s.error : s.onSurface;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: () => widget.onSelected(item.value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: _pressed ? s.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            _EditorIcon(item.asset, size: 18, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                item.label,
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Retângulo desfocado leve para o fundo do menu morph. Evita
+/// depender de `BackdropFilter` dentro de um `showGeneralDialog`
+/// sem contexto de clipping garantido — usa apenas opacidade,
+/// suficiente para o efeito desejado sem custo de performance.
+class BackdropBlurBox extends StatelessWidget {
+  final double sigma;
+  final Color color;
+  const BackdropBlurBox({super.key, required this.sigma, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(color: color);
+  }
 }
 
 class DocsScreen extends StatefulWidget {
@@ -231,7 +388,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   void _openColorPicker(BuildContext context, AppColorScheme s, String cb) async {
-    final hex = await showColorPickerSheet(context, s);
+    final hex = await showAdvancedColorPickerSheet(context, s);
     if (hex != null) _runJs("$cb('$hex')");
   }
 
@@ -249,26 +406,50 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     if (ctrl != null) _injectCanvas(ctrl, content);
   }
 
-  Future<void> _downloadCurrentDocument() async {
+  Future<Uint8List?> _exportDocx() async {
     final content = await _getCurrentContent();
     if (content.trim().isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível obter o conteúdo atual.')),
       );
-      return;
+      return null;
     }
-    try {
-      final item = LocalCanvasItem(
-        id: 'export-docx',
-        kind: LocalCanvasKind.doc,
-        title: _documentTitle,
-        content: content,
+    final item = LocalCanvasItem(
+      id: 'export-docx',
+      kind: LocalCanvasKind.doc,
+      title: _documentTitle,
+      content: content,
+    );
+    return ExportService.export(item: item, format: 'docx');
+  }
+
+  Future<Uint8List?> _exportPdf() async {
+    final content = await _getCurrentContent();
+    if (content.trim().isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível obter o conteúdo atual.')),
       );
-      final bytes = await ExportService.export(item: item, format: 'docx');
-      final safeTitle = _documentTitle.trim().isEmpty
-          ? 'documento'
-          : _documentTitle.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_').trim();
-      await ExportService.shareBytes(bytes, filename: '$safeTitle.docx');
+      return null;
+    }
+    final item = LocalCanvasItem(
+      id: 'export-pdf',
+      kind: LocalCanvasKind.doc,
+      title: _documentTitle,
+      content: content,
+    );
+    return ExportService.export(item: item, format: 'pdf');
+  }
+
+  String get _safeTitle {
+    final t = _documentTitle.trim();
+    return t.isEmpty ? 'documento' : t.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_').trim();
+  }
+
+  Future<void> _downloadCurrentDocument() async {
+    try {
+      final bytes = await _exportDocx();
+      if (bytes == null) return;
+      await ExportService.shareBytes(bytes, filename: '$_safeTitle.docx');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Não foi possível descarregar documento Word: ${e.toString()}')),
@@ -276,6 +457,29 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     }
   }
 
+  Future<void> _shareCurrentDocument() async {
+    try {
+      final bytes = await _exportDocx();
+      if (bytes == null) return;
+      await ExportService.shareBytes(bytes, filename: '$_safeTitle.docx', share: true);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível partilhar o documento: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _sharePdf() async {
+    try {
+      final bytes = await _exportPdf();
+      if (bytes == null) return;
+      await ExportService.shareBytes(bytes, filename: '$_safeTitle.pdf', share: true);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível partilhar como PDF: ${e.toString()}')),
+      );
+    }
+  }
 
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
@@ -303,15 +507,33 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   void _onInsertTable() {
-    showTableDialog(context, AppTheme.of(context), (rows, cols) {
-      _runJs("editorApi.insertTable($rows,$cols)");
+    showTableDialog(context, AppTheme.of(context), (config) {
+      _runJs("editorApi.insertTable(${config.toJs()})");
     });
   }
 
   void _onInsertImage() async {
-    final url = await showImageUrlDialog(context, AppTheme.of(context));
-    if (url == null || url.trim().isEmpty) return;
-    _runJs("editorApi.insertImageAtCursor('$url')");
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (file == null) return;
+    try {
+      final bytes = await file.readAsBytes();
+      final b64 = base64Encode(bytes);
+      final mime = _guessMime(file.path);
+      _runJs("editorApi.insertImageAtCursor('data:$mime;base64,$b64')");
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível carregar a imagem: ${e.toString()}')),
+      );
+    }
+  }
+
+  String _guessMime(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
   }
 
   void _onInsertLink() {
@@ -321,81 +543,73 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   void _onInsertShape(String shapeKind) {
-    showColorPickerSheet(context, AppTheme.of(context)).then((hex) {
+    showAdvancedColorPickerSheet(context, AppTheme.of(context)).then((hex) {
       if (hex != null) _runJs("editorApi.insertShape('$shapeKind','$hex')");
     });
   }
 
-  void _onInsertChart() {
-    showChartConfigDialog(context, AppTheme.of(context)).then((json) {
-      if (json != null && json.trim().isNotEmpty) {
-        final safe = json.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
-        _runJs("editorApi.insertChart(JSON.parse('$safe'))");
-      }
-    });
+  Future<void> _onInsertChart() async {
+    final preset = await Navigator.of(context).push<ChartPreset>(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 380),
+        pageBuilder: (_, __, ___) => const ChartPresetScreen(),
+        transitionsBuilder: (_, anim, __, child) {
+          final curved = CurvedAnimation(parent: anim, curve: const Cubic(0.16, 1, 0.3, 1));
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+    if (preset != null) {
+      final safe = preset.toJson().replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
+      _runJs("editorApi.insertChart(JSON.parse('$safe'))");
+    }
   }
 
-  // Menu "more" como popup
+  // Menu "more" — agora um popup customizado (Container Transform)
+  // com apenas as três ações que fazem sentido aqui: descarregar,
+  // partilhar e partilhar como PDF. As restantes ferramentas
+  // (tabela, imagem, forma, gráfico, IA) vivem só no bottomtoolbar.
   void _openMenu() async {
-    final result = await _showAppPopupMenu<int>(
+    final s = AppTheme.of(context);
+    final result = await _showMorphMenu<int>(
       context,
-      AppTheme.of(context),
+      s,
       anchorKey: _moreMenuKey,
-      items: [
-        PopupMenuItem(value: 1, child: _buildPopupItem('table', 'Inserir tabela', false)),
-        PopupMenuItem(value: 2, child: _buildPopupItem('image', 'Inserir imagem', false)),
-        PopupMenuItem(value: 3, child: _buildPopupItem('link', 'Inserir hiperligação', false)),
-        PopupMenuItem(value: 4, child: _buildPopupItem('shapes', 'Inserir forma', false)),
-        PopupMenuItem(value: 5, child: _buildPopupItem('chart', 'Inserir gráfico', false)),
-        PopupMenuItem(value: 6, child: _buildPopupItem('sparkles', 'Editar com IA', false)),
-        PopupMenuItem(value: 7, child: _buildPopupItem('download', 'Descarregar documento', false)),
+      items: const [
+        _MorphMenuItem(value: 1, asset: 'download', label: 'Descarregar documento'),
+        _MorphMenuItem(value: 2, asset: 'share', label: 'Partilhar'),
+        _MorphMenuItem(value: 3, asset: 'pdf', label: 'Partilhar como PDF'),
       ],
     );
-    if (result == 1) _onInsertTable();
-    else if (result == 2) _onInsertImage();
-    else if (result == 3) _onInsertLink();
-    else if (result == 4) _showShapeMenuPopup();
-    else if (result == 5) _onInsertChart();
-    else if (result == 6) _openAiEditModal();
-    else if (result == 7) _downloadCurrentDocument();
+    if (result == 1) _downloadCurrentDocument();
+    else if (result == 2) _shareCurrentDocument();
+    else if (result == 3) _sharePdf();
   }
 
-  // Menu de formas como popup
+  // Menu de formas — mesmo popup morph, com formas geométricas
   Future<void> _showShapeMenuPopup() async {
-    final result = await _showAppPopupMenu<int>(
+    final s = AppTheme.of(context);
+    final result = await _showMorphMenu<int>(
       context,
-      AppTheme.of(context),
+      s,
       anchorKey: _shapesMenuKey,
-      items: [
-        PopupMenuItem(value: 1, child: _buildPopupItem('rect', 'Retângulo', false)),
-        PopupMenuItem(value: 2, child: _buildPopupItem('circle', 'Círculo', false)),
-        PopupMenuItem(value: 3, child: _buildPopupItem('line', 'Linha', false)),
-        PopupMenuItem(value: 4, child: _buildPopupItem('arrow', 'Seta', false)),
+      items: const [
+        _MorphMenuItem(value: 1, asset: 'rect', label: 'Retângulo'),
+        _MorphMenuItem(value: 2, asset: 'circle', label: 'Círculo'),
+        _MorphMenuItem(value: 3, asset: 'line', label: 'Linha'),
+        _MorphMenuItem(value: 4, asset: 'arrow', label: 'Seta'),
       ],
     );
     if (result == 1) _onInsertShape('rect');
     else if (result == 2) _onInsertShape('circle');
     else if (result == 3) _onInsertShape('line');
     else if (result == 4) _onInsertShape('arrow');
-  }
-
-  Widget _buildPopupItem(String assetName, String label, bool destructive) {
-    final s = AppTheme.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          _EditorIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(fontSize: 14, color: destructive ? s.error : s.onSurface)),
-        ],
-      ),
-    );
   }
 
   @override
@@ -436,7 +650,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
                           );
                           c.addJavaScriptHandler(
                             handlerName: 'openImagePicker',
-                            callback: (_) => showImagePickerSheet(context, s),
+                            callback: (_) => _onInsertImage(),
                           );
                           c.addJavaScriptHandler(
                             handlerName: 'openLinkSheet',
@@ -489,6 +703,12 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
                 onJustify: () => _runJs("editorApi.exec('alignJustify')"),
                 onBullet: () => _runJs("editorApi.exec('bulletList')"),
                 onNumbered: () => _runJs("editorApi.exec('numberedList')"),
+                onIndentIncrease: () => _runJs("editorApi.exec('indentIncrease')"),
+                onIndentDecrease: () => _runJs("editorApi.exec('indentDecrease')"),
+                onSubscript: () => _runJs("editorApi.exec('subscript')"),
+                onSuperscript: () => _runJs("editorApi.exec('superscript')"),
+                onQuote: () => _runJs("editorApi.exec('blockquote')"),
+                onClearFormat: () => _runJs("editorApi.exec('clearFormat')"),
                 onTextColor: () => _openColorPicker(context, s, 'editorApi.setColor'),
                 onHighlight: () => _openColorPicker(context, s, 'editorApi.setHighlight'),
                 onInsertImage: _onInsertImage,
@@ -604,6 +824,12 @@ class _DocsBottomToolbar extends StatelessWidget {
   final VoidCallback onJustify;
   final VoidCallback onBullet;
   final VoidCallback onNumbered;
+  final VoidCallback onIndentIncrease;
+  final VoidCallback onIndentDecrease;
+  final VoidCallback onSubscript;
+  final VoidCallback onSuperscript;
+  final VoidCallback onQuote;
+  final VoidCallback onClearFormat;
   final VoidCallback onTextColor;
   final VoidCallback onHighlight;
   final VoidCallback onInsertImage;
@@ -628,6 +854,12 @@ class _DocsBottomToolbar extends StatelessWidget {
     required this.onJustify,
     required this.onBullet,
     required this.onNumbered,
+    required this.onIndentIncrease,
+    required this.onIndentDecrease,
+    required this.onSubscript,
+    required this.onSuperscript,
+    required this.onQuote,
+    required this.onClearFormat,
     required this.onTextColor,
     required this.onHighlight,
     required this.onInsertImage,
@@ -661,19 +893,31 @@ class _DocsBottomToolbar extends StatelessWidget {
               _ToolbarButton(s: s, assetName: 'italic', onTap: onItalic),
               _ToolbarButton(s: s, assetName: 'underline', onTap: onUnderline),
               _ToolbarButton(s: s, assetName: 'strike', onTap: onStrike),
+              _ToolbarDivider(s: s),
               _ToolbarButton(s: s, assetName: 'align_left', onTap: onAlignLeft),
               _ToolbarButton(s: s, assetName: 'align_center', onTap: onAlignCenter),
               _ToolbarButton(s: s, assetName: 'align_right', onTap: onAlignRight),
               _ToolbarButton(s: s, assetName: 'align_justify', onTap: onJustify),
+              _ToolbarDivider(s: s),
               _ToolbarButton(s: s, assetName: 'bullet', onTap: onBullet),
               _ToolbarButton(s: s, assetName: 'numbered', onTap: onNumbered),
+              _ToolbarButton(s: s, assetName: 'indent_decrease', onTap: onIndentDecrease),
+              _ToolbarButton(s: s, assetName: 'indent_increase', onTap: onIndentIncrease),
+              _ToolbarDivider(s: s),
+              _ToolbarButton(s: s, assetName: 'subscript', onTap: onSubscript),
+              _ToolbarButton(s: s, assetName: 'superscript', onTap: onSuperscript),
+              _ToolbarButton(s: s, assetName: 'quote', onTap: onQuote),
+              _ToolbarButton(s: s, assetName: 'eraser', onTap: onClearFormat),
+              _ToolbarDivider(s: s),
               _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
               _ToolbarButton(s: s, assetName: 'highlight', onTap: onHighlight),
+              _ToolbarDivider(s: s),
               _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
               _ToolbarButton(s: s, assetName: 'table', onTap: onInsertTable),
               _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
               _ToolbarButton(s: s, assetName: 'shapes', onTap: onInsertShape, anchorKey: shapeMenuKey),
               _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
+              _ToolbarDivider(s: s),
               _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
               _ToolbarButton(s: s, assetName: 'front', onTap: onFront),
               _ToolbarButton(s: s, assetName: 'back', onTap: onBack),
@@ -681,6 +925,20 @@ class _DocsBottomToolbar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ToolbarDivider extends StatelessWidget {
+  final AppColorScheme s;
+  const _ToolbarDivider({required this.s});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 22,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: s.outlineVariant,
     );
   }
 }
@@ -712,102 +970,925 @@ class _ToolbarButton extends StatelessWidget {
   }
 }
 
-Future<void> showTableDialog(BuildContext context, AppColorScheme s, void Function(int, int) onInsert) {
-  final rowsCtrl = TextEditingController(text: '2');
-  final colsCtrl = TextEditingController(text: '2');
+// ══════════════════════════════════════════════════════════════
+// INSERIR TABELA — completo (dimensões + preview + cabeçalho + bordas)
+// ══════════════════════════════════════════════════════════════
+
+class TableInsertConfig {
+  final int rows;
+  final int cols;
+  final bool header;
+  final bool bordered;
+  final bool striped;
+  const TableInsertConfig({
+    required this.rows,
+    required this.cols,
+    required this.header,
+    required this.bordered,
+    required this.striped,
+  });
+
+  String toJs() => '{'
+      '"rows":$rows,'
+      '"cols":$cols,'
+      '"header":$header,'
+      '"bordered":$bordered,'
+      '"striped":$striped'
+      '}';
+}
+
+Future<void> showTableDialog(
+  BuildContext context,
+  AppColorScheme s,
+  void Function(TableInsertConfig) onInsert,
+) {
   return showCraftBottomSheet<void>(
     context: context,
     s: s,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+    child: _TableInsertSheet(s: s, onInsert: onInsert),
+  );
+}
+
+class _TableInsertSheet extends StatefulWidget {
+  final AppColorScheme s;
+  final void Function(TableInsertConfig) onInsert;
+  const _TableInsertSheet({required this.s, required this.onInsert});
+
+  @override
+  State<_TableInsertSheet> createState() => _TableInsertSheetState();
+}
+
+class _TableInsertSheetState extends State<_TableInsertSheet> {
+  int _rows = 3;
+  int _cols = 3;
+  bool _header = true;
+  bool _bordered = true;
+  bool _striped = false;
+
+  static const int _maxGrid = 8;
+  int _hoverRow = -1;
+  int _hoverCol = -1;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Inserir tabela', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: TextField(controller: rowsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Linhas'))),
-            const SizedBox(width: 10),
-            Expanded(child: TextField(controller: colsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Colunas'))),
-          ]),
+          Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: s.outline, borderRadius: BorderRadius.circular(4)),
+          ),
+          Row(
+            children: [
+              Text('Inserir tabela', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
+              const Spacer(),
+              Text('$_cols × $_rows', style: TextStyle(fontSize: 13, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            ],
+          ),
           const SizedBox(height: 16),
+
+          // Grelha de seleção rápida estilo Word/Excel
+          GestureDetector(
+            onPanUpdate: (details) => _updateHoverFromLocal(details.localPosition),
+            onPanEnd: (_) => setState(() { _hoverRow = -1; _hoverCol = -1; }),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final cell = (constraints.maxWidth - (_maxGrid - 1) * 4) / _maxGrid;
+                return Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: List.generate(_maxGrid * _maxGrid, (i) {
+                    final r = i ~/ _maxGrid;
+                    final c = i % _maxGrid;
+                    final activeR = _hoverRow >= 0 ? _hoverRow : _rows - 1;
+                    final activeC = _hoverCol >= 0 ? _hoverCol : _cols - 1;
+                    final selected = r <= activeR && c <= activeC;
+                    return GestureDetector(
+                      onTap: () => setState(() { _rows = r + 1; _cols = c + 1; }),
+                      child: Container(
+                        width: cell,
+                        height: cell,
+                        decoration: BoxDecoration(
+                          color: selected ? s.primary : s.outlineVariant,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    );
+                  }),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Pré-visualização em miniatura da tabela configurada
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: s.pageBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: s.outlineVariant),
+            ),
+            child: _TablePreview(s: s, rows: _rows, cols: _cols, header: _header, bordered: _bordered, striped: _striped),
+          ),
+
+          const SizedBox(height: 16),
+
+          _TableToggleRow(s: s, label: 'Linha de cabeçalho', value: _header, onChanged: (v) => setState(() => _header = v)),
+          _TableToggleRow(s: s, label: 'Bordas visíveis', value: _bordered, onChanged: (v) => setState(() => _bordered = v)),
+          _TableToggleRow(s: s, label: 'Linhas alternadas', value: _striped, onChanged: (v) => setState(() => _striped = v)),
+
+          const SizedBox(height: 20),
+
+          Row(
+            children: [
+              _StepperField(
+                s: s,
+                label: 'Linhas',
+                value: _rows,
+                min: 1,
+                max: 20,
+                onChanged: (v) => setState(() => _rows = v),
+              ),
+              const SizedBox(width: 12),
+              _StepperField(
+                s: s,
+                label: 'Colunas',
+                value: _cols,
+                min: 1,
+                max: 10,
+                onChanged: (v) => setState(() => _cols = v),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
           GestureDetector(
             onTap: () {
-              final r = int.tryParse(rowsCtrl.text) ?? 2;
-              final c = int.tryParse(colsCtrl.text) ?? 2;
               Navigator.pop(context);
-              onInsert(r, c);
+              widget.onInsert(TableInsertConfig(
+                rows: _rows,
+                cols: _cols,
+                header: _header,
+                bordered: _bordered,
+                striped: _striped,
+              ));
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
               alignment: Alignment.center,
               decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
+              child: Text('Inserir tabela', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
             ),
           ),
         ],
       ),
-    ),
-  );
+    );
+  }
+
+  void _updateHoverFromLocal(Offset local) {
+    const spacing = 4.0;
+    final approxCell = (MediaQuery.of(context).size.width - 40 - (_maxGrid - 1) * spacing) / _maxGrid;
+    final col = (local.dx / (approxCell + spacing)).floor().clamp(0, _maxGrid - 1);
+    final row = (local.dy / (approxCell + spacing)).floor().clamp(0, _maxGrid - 1);
+    setState(() { _hoverRow = row; _hoverCol = col; _rows = row + 1; _cols = col + 1; });
+  }
 }
 
-Future<String?> showImageUrlDialog(BuildContext context, AppColorScheme s) {
-  final ctrl = TextEditingController();
+class _TablePreview extends StatelessWidget {
+  final AppColorScheme s;
+  final int rows;
+  final int cols;
+  final bool header;
+  final bool bordered;
+  final bool striped;
+  const _TablePreview({
+    required this.s,
+    required this.rows,
+    required this.cols,
+    required this.header,
+    required this.bordered,
+    required this.striped,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayRows = math.min(rows, 4);
+    final displayCols = math.min(cols, 5);
+    return Column(
+      children: List.generate(displayRows, (r) {
+        final isHeader = header && r == 0;
+        final isStriped = striped && !isHeader && r.isOdd;
+        return Container(
+          decoration: BoxDecoration(
+            color: isHeader
+                ? s.primary.withOpacity(0.16)
+                : isStriped
+                    ? s.outlineVariant.withOpacity(0.5)
+                    : Colors.transparent,
+            border: bordered ? Border(bottom: BorderSide(color: s.outlineVariant)) : null,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: List.generate(displayCols, (c) {
+              return Expanded(
+                child: Container(
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: isHeader ? s.primary.withOpacity(0.4) : s.outline.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _TableToggleRow extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _TableToggleRow({required this.s, required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: GestureDetector(
+        onTap: () => onChanged(!value),
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+            Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              activeColor: s.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepperField extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final int value;
+  final int min;
+  final int max;
+  final ValueChanged<int> onChanged;
+  const _StepperField({
+    required this.s,
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: s.pageBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: s.outlineVariant),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                _stepBtn(context, '-', () { if (value > min) onChanged(value - 1); }),
+                Expanded(
+                  child: Text(
+                    '$value',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface),
+                  ),
+                ),
+                _stepBtn(context, '+', () { if (value < max) onChanged(value + 1); }),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepBtn(BuildContext context, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28, height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadowSoft),
+        child: Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// COLOR PICKER AVANÇADO — com gerador de paleta HSV
+// ══════════════════════════════════════════════════════════════
+
+const List<Color> _kQuickPaletteColors = [
+  Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFFFFCC00), Color(0xFF34C759),
+  Color(0xFF00C7BE), Color(0xFF32ADE6), Color(0xFF007AFF), Color(0xFF5856D6),
+  Color(0xFFAF52DE), Color(0xFFFF2D55), Color(0xFF8E8E93), Color(0xFF1C1C1E),
+  Color(0xFFFFFFFF),
+];
+
+Future<String?> showAdvancedColorPickerSheet(BuildContext context, AppColorScheme s) {
   return showCraftBottomSheet<String>(
     context: context,
     s: s,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('URL da imagem', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
-          const SizedBox(height: 12),
-          TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'https://')),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () => Navigator.pop(context, ctrl.text.trim()),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
-            ),
-          ),
-        ],
-      ),
-    ),
+    child: _AdvancedColorPickerSheet(s: s),
   );
 }
 
-Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {
-  final ctrl = TextEditingController();
-  return showCraftBottomSheet<String>(
-    context: context,
-    s: s,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+class _AdvancedColorPickerSheet extends StatefulWidget {
+  final AppColorScheme s;
+  const _AdvancedColorPickerSheet({required this.s});
+
+  @override
+  State<_AdvancedColorPickerSheet> createState() => _AdvancedColorPickerSheetState();
+}
+
+class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
+  bool _generatorMode = false;
+  double _hue = 210;
+  double _saturation = 0.75;
+  double _lightness = 0.5;
+
+  Color get _currentColor => HSLColor.fromAHSL(1, _hue, _saturation, _lightness).toColor();
+
+  String _toHex(Color c) =>
+      '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Configuração do gráfico', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
-          const SizedBox(height: 12),
-          TextField(controller: ctrl, minLines: 3, maxLines: 6, decoration: const InputDecoration(hintText: '{"type":"bar",...}')),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: () => Navigator.pop(context, ctrl.text.trim()),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
-            ),
+          Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: s.outline, borderRadius: BorderRadius.circular(4)),
           ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _generatorMode ? 'Gerador de paleta' : 'Escolher cor',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface),
+                ),
+              ),
+              _ModeToggleButton(
+                s: s,
+                icon: 'wand',
+                active: _generatorMode,
+                onTap: () => setState(() => _generatorMode = !_generatorMode),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_generatorMode) _buildGenerator(s) else _buildQuickPalette(s),
         ],
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _buildQuickPalette(AppColorScheme s) {
+    return Column(
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: _kQuickPaletteColors.map((c) {
+            return GestureDetector(
+              onTap: () => Navigator.pop(context, _toHex(c)),
+              child: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: c,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: s.outline.withOpacity(0.4), width: 1),
+                  boxShadow: s.cardShadowSoft,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        GestureDetector(
+          onTap: () => setState(() => _generatorMode = true),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: s.pageBackground,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: s.outlineVariant),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _EditorIcon('wand', size: 17, color: s.onSurface),
+                const SizedBox(width: 8),
+                Text('Gerar qualquer cor', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenerator(AppColorScheme s) {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          height: 84,
+          decoration: BoxDecoration(
+            color: _currentColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: s.outline.withOpacity(0.3)),
+            boxShadow: s.cardShadow,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _toHex(_currentColor),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: _lightness > 0.55 ? Colors.black.withOpacity(0.7) : Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _HueSlider(hue: _hue, onChanged: (v) => setState(() => _hue = v)),
+        const SizedBox(height: 14),
+        _ShadeSlider(
+          label: 'Saturação',
+          value: _saturation,
+          baseColor: HSLColor.fromAHSL(1, _hue, 1, 0.5).toColor(),
+          trackBuilder: (t) => HSLColor.fromAHSL(1, _hue, t, _lightness).toColor(),
+          onChanged: (v) => setState(() => _saturation = v),
+        ),
+        const SizedBox(height: 14),
+        _ShadeSlider(
+          label: 'Luminosidade',
+          value: _lightness,
+          baseColor: HSLColor.fromAHSL(1, _hue, _saturation, 0.5).toColor(),
+          trackBuilder: (t) => HSLColor.fromAHSL(1, _hue, _saturation, t).toColor(),
+          onChanged: (v) => setState(() => _lightness = v),
+        ),
+        const SizedBox(height: 22),
+        GestureDetector(
+          onTap: () => Navigator.pop(context, _toHex(_currentColor)),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
+            child: Text('Aplicar cor', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+          ),
+        ),
+      ],
+    );
+  }
 }
+
+class _ModeToggleButton extends StatelessWidget {
+  final AppColorScheme s;
+  final String icon;
+  final bool active;
+  final VoidCallback onTap;
+  const _ModeToggleButton({required this.s, required this.icon, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 36, height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? s.primaryContainer : s.pageBackground,
+          shape: BoxShape.circle,
+          border: Border.all(color: active ? Colors.transparent : s.outlineVariant),
+        ),
+        child: _EditorIcon(icon, size: 17, color: active ? s.onPrimaryContainer : s.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+class _HueSlider extends StatelessWidget {
+  final double hue;
+  final ValueChanged<double> onChanged;
+  const _HueSlider({required this.hue, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+            Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000),
+          ],
+        ),
+      ),
+      child: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          trackHeight: 32,
+          activeTrackColor: Colors.transparent,
+          inactiveTrackColor: Colors.transparent,
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12, elevation: 3),
+          overlayShape: SliderComponentShape.noOverlay,
+          thumbColor: Colors.white,
+        ),
+        child: Slider(
+          value: hue,
+          min: 0,
+          max: 360,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ShadeSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final Color baseColor;
+  final Color Function(double) trackBuilder;
+  final ValueChanged<double> onChanged;
+  const _ShadeSlider({
+    required this.label,
+    required this.value,
+    required this.baseColor,
+    required this.trackBuilder,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 4),
+          child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.grey)),
+        ),
+        Container(
+          height: 28,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              colors: List.generate(9, (i) => trackBuilder(i / 8)),
+            ),
+          ),
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 28,
+              activeTrackColor: Colors.transparent,
+              inactiveTrackColor: Colors.transparent,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10, elevation: 3),
+              overlayShape: SliderComponentShape.noOverlay,
+              thumbColor: Colors.white,
+            ),
+            child: Slider(
+              value: value,
+              min: 0,
+              max: 1,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// GRÁFICOS PRONTOS — tela de presets em vez de JSON manual
+// ══════════════════════════════════════════════════════════════
+
+enum ChartKind { bar, line, pie, area, donut, scatter }
+
+class ChartPreset {
+  final String id;
+  final String title;
+  final ChartKind kind;
+  final List<double> sampleValues;
+  final List<String> sampleLabels;
+  const ChartPreset({
+    required this.id,
+    required this.title,
+    required this.kind,
+    required this.sampleValues,
+    required this.sampleLabels,
+  });
+
+  String get kindKey => const {
+        ChartKind.bar: 'bar',
+        ChartKind.line: 'line',
+        ChartKind.pie: 'pie',
+        ChartKind.area: 'area',
+        ChartKind.donut: 'donut',
+        ChartKind.scatter: 'scatter',
+      }[kind]!;
+
+  String toJson() {
+    final labels = sampleLabels.map((l) => '"$l"').join(',');
+    final values = sampleValues.map((v) => v.toString()).join(',');
+    return '{"type":"$kindKey","title":"$title","labels":[$labels],"values":[$values]}';
+  }
+}
+
+const List<ChartPreset> _kChartPresets = [
+  ChartPreset(id: 'bar_basic', title: 'Barras simples', kind: ChartKind.bar,
+      sampleValues: [4, 7, 3, 8, 5], sampleLabels: ['A', 'B', 'C', 'D', 'E']),
+  ChartPreset(id: 'bar_growth', title: 'Barras — crescimento', kind: ChartKind.bar,
+      sampleValues: [2, 4, 6, 9, 13], sampleLabels: ['T1', 'T2', 'T3', 'T4', 'T5']),
+  ChartPreset(id: 'line_trend', title: 'Linha — tendência', kind: ChartKind.line,
+      sampleValues: [3, 5, 4, 7, 9, 8], sampleLabels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun']),
+  ChartPreset(id: 'area_volume', title: 'Área — volume', kind: ChartKind.area,
+      sampleValues: [10, 14, 9, 18, 16], sampleLabels: ['S1', 'S2', 'S3', 'S4', 'S5']),
+  ChartPreset(id: 'pie_share', title: 'Circular — distribuição', kind: ChartKind.pie,
+      sampleValues: [40, 25, 20, 15], sampleLabels: ['Norte', 'Sul', 'Este', 'Oeste']),
+  ChartPreset(id: 'donut_share', title: 'Rosca — distribuição', kind: ChartKind.donut,
+      sampleValues: [35, 30, 20, 15], sampleLabels: ['A', 'B', 'C', 'D']),
+  ChartPreset(id: 'scatter_corr', title: 'Dispersão — correlação', kind: ChartKind.scatter,
+      sampleValues: [2, 5, 3, 8, 6, 9], sampleLabels: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']),
+];
+
+class ChartPresetScreen extends StatelessWidget {
+  const ChartPresetScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: s.statusBarStyle,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ColoredBox(
+          color: s.pageBackground,
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  child: Row(
+                    children: [
+                      ScreenBackButton(s: s),
+                      const SizedBox(width: 12),
+                      Text('Inserir gráfico', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: s.onSurface)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: 14,
+                      childAspectRatio: 0.92,
+                    ),
+                    itemCount: _kChartPresets.length,
+                    itemBuilder: (context, i) {
+                      final preset = _kChartPresets[i];
+                      return _ChartPresetCard(
+                        s: s,
+                        preset: preset,
+                        onTap: () => Navigator.of(context).pop(preset),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChartPresetCard extends StatefulWidget {
+  final AppColorScheme s;
+  final ChartPreset preset;
+  final VoidCallback onTap;
+  const _ChartPresetCard({required this.s, required this.preset, required this.onTap});
+
+  @override
+  State<_ChartPresetCard> createState() => _ChartPresetCardState();
+}
+
+class _ChartPresetCardState extends State<_ChartPresetCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: s.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _ChartThumbnail(s: s, preset: widget.preset)),
+              const SizedBox(height: 10),
+              Text(
+                widget.preset.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChartThumbnail extends StatelessWidget {
+  final AppColorScheme s;
+  final ChartPreset preset;
+  const _ChartThumbnail({required this.s, required this.preset});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (preset.kind) {
+      case ChartKind.bar:
+      case ChartKind.area:
+        return _barThumb();
+      case ChartKind.line:
+      case ChartKind.scatter:
+        return _lineThumb();
+      case ChartKind.pie:
+      case ChartKind.donut:
+        return _pieThumb();
+    }
+  }
+
+  Widget _barThumb() {
+    final maxV = preset.sampleValues.reduce(math.max);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: preset.sampleValues.map((v) {
+        return Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            height: 46 * (v / maxV),
+            decoration: BoxDecoration(
+              color: s.primary.withOpacity(0.55 + 0.35 * (v / maxV)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _lineThumb() {
+    return CustomPaint(
+      size: const Size(double.infinity, 52),
+      painter: _MiniLinePainter(values: preset.sampleValues, color: s.primary),
+    );
+  }
+
+  Widget _pieThumb() {
+    return Center(
+      child: SizedBox(
+        width: 52, height: 52,
+        child: CustomPaint(
+          painter: _MiniPiePainter(values: preset.sampleValues, color: s.primary, donut: preset.kind == ChartKind.donut),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniLinePainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+  _MiniLinePainter({required this.values, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+    final maxV = values.reduce(math.max);
+    final minV = values.reduce(math.min);
+    final range = (maxV - minV).abs() < 0.0001 ? 1 : (maxV - minV);
+    final path = Path();
+    final dx = size.width / (values.length - 1).clamp(1, 999);
+    for (int i = 0; i < values.length; i++) {
+      final x = dx * i;
+      final y = size.height - ((values[i] - minV) / range) * size.height;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2.4
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniLinePainter oldDelegate) => false;
+}
+
+class _MiniPiePainter extends CustomPainter {
+  final List<double> values;
+  final Color color;
+  final bool donut;
+  _MiniPiePainter({required this.values, required this.color, required this.donut});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (a, b) => a + b);
+    if (total <= 0) return;
+    final rect = Offset.zero & size;
+    double start = -math.pi / 2;
+    for (int i = 0; i < values.length; i++) {
+      final sweep = (values[i] / total) * 2 * math.pi;
+      canvas.drawArc(
+        rect,
+        start,
+        sweep,
+        true,
+        Paint()..color = color.withOpacity(0.4 + 0.5 * (i / values.length)),
+      );
+      start += sweep;
+    }
+    if (donut) {
+      canvas.drawCircle(size.center(Offset.zero), size.width * 0.32, Paint()..color = Colors.white.withOpacity(0.001)..blendMode = BlendMode.clear);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniPiePainter oldDelegate) => false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE VOLTAR — inalterado
+// ══════════════════════════════════════════════════════════════
 
 class ScreenBackButton extends StatefulWidget {
   final AppColorScheme s;

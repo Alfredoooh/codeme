@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root {
-    --doc-bg: #E8EAED;
+    --doc-bg: transparent;
     --page-bg: #FFFFFF;
     --page-text: #1A1A1A;
     --page-border: #CCCCCC;
@@ -17,19 +17,26 @@
     --placeholder-bg: #F2F2F2;
     --placeholder-border: #CCCCCC;
     --table-border: #D0D0D0;
+    --table-header-bg: rgba(47,123,246,0.10);
+    --table-stripe-bg: rgba(0,0,0,0.03);
+    --header-footer-text: #8A8A8E;
+    --header-footer-border: #E4E4E6;
   }
 
   body.dark {
-    --doc-bg: #121313;
-    --page-bg: #1C1C1E;
+    --page-bg: #141414;
     --page-text: #F2F2F2;
-    --page-border: #3A3A3C;
-    --page-shadow: rgba(0,0,0,0.4);
+    --page-border: #2A2A2C;
+    --page-shadow: rgba(0,0,0,0.55);
     --selection: #0A84FF;
     --page-number: #6E6E73;
-    --placeholder-bg: #2C2C2E;
-    --placeholder-border: #48484A;
-    --table-border: #3A3A3C;
+    --placeholder-bg: #1F1F1F;
+    --placeholder-border: #3A3A3C;
+    --table-border: #2A2A2C;
+    --table-header-bg: rgba(10,132,255,0.12);
+    --table-stripe-bg: rgba(255,255,255,0.03);
+    --header-footer-text: #8E8E93;
+    --header-footer-border: #262626;
   }
 
   * {
@@ -41,11 +48,18 @@
     padding: 0;
     width: 100%;
     height: 100%;
-    background: transparent;
+    background: transparent !important;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
+  /*
+   * O fundo por trás das folhas é sempre transparente. Quem decide
+   * a cor que aparece atrás (pageBackground escuro/claro do
+   * docs.dart) é o Flutter, não este HTML. Isto garante que nunca
+   * há um "flash" de cor errada nem uma cor duplicada/dessincronizada
+   * entre o WebView e o resto do ecrã.
+   */
   #canvasScroll {
     position: relative;
     width: 100%;
@@ -59,7 +73,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: var(--doc-bg);
+    background: transparent;
   }
 
   #pagesStack {
@@ -87,6 +101,16 @@
     color: var(--page-text);
   }
 
+  /* A folha em si nunca é transparente — só o fundo à sua volta.
+     Isto garante que texto/tabelas/gráficos nunca ficam "vazados"
+     contra o fundo do ecrã por trás. */
+  .page-a4,
+  .conteudo,
+  .doc-header,
+  .doc-footer {
+    background-color: var(--page-bg);
+  }
+
   .conteudo {
     flex: 1;
     min-height: 0;
@@ -105,6 +129,50 @@
   .conteudo a { color: var(--selection); text-decoration: underline; }
   .conteudo img { max-width: 100%; height: auto; }
 
+  /* ══════════════════════════════════════════════
+     CABEÇALHO E RODAPÉ
+     ══════════════════════════════════════════════ */
+
+  .doc-header,
+  .doc-footer {
+    position: absolute;
+    left: 72px;
+    right: 72px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--header-footer-text);
+    outline: none;
+    min-height: 18px;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .doc-header {
+    top: 40px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--header-footer-border);
+  }
+  .doc-footer {
+    bottom: 40px;
+    padding-top: 10px;
+    border-top: 1px solid var(--header-footer-border);
+  }
+  .doc-header:empty::before,
+  .doc-footer:empty::before {
+    content: attr(data-placeholder);
+    color: var(--header-footer-text);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .doc-header.hidden,
+  .doc-footer.hidden {
+    display: none;
+  }
+
+  /* Espaço reservado ao conteúdo quando header/footer estão ativos,
+     para nunca sobrepor texto. Aplicado via classe no .page-a4. */
+  .page-a4.has-header { padding-top: 118px; }
+  .page-a4.has-footer { padding-bottom: 118px; }
+
   .page-number {
     position: absolute;
     bottom: 14px;
@@ -114,10 +182,40 @@
     font-size: 10px;
     color: var(--page-number);
     pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+  .page-number.hidden {
+    display: none;
+  }
+  /* Quando há rodapé visível, o número de página sobe para não colidir */
+  .page-a4.has-footer .page-number {
+    bottom: 14px;
   }
 
+  /* ══════════════════════════════════════════════
+     TABELAS — suporte a header / bordas / listras
+     ══════════════════════════════════════════════ */
+
   .doc-table { border-collapse: collapse; width: 100%; margin: 4px 0; }
-  .doc-table td { border: 1px solid var(--table-border); padding: 8px; min-width: 32px; height: 26px; vertical-align: top; }
+  .doc-table td, .doc-table th {
+    border: 1px solid var(--table-border);
+    padding: 8px;
+    min-width: 32px;
+    height: 26px;
+    vertical-align: top;
+  }
+  .doc-table.no-border td,
+  .doc-table.no-border th {
+    border-color: transparent;
+  }
+  .doc-table th {
+    background: var(--table-header-bg);
+    font-weight: 700;
+    text-align: left;
+  }
+  .doc-table.striped tbody tr:nth-child(even) td {
+    background: var(--table-stripe-bg);
+  }
   .doc-table-wrap { position: relative; display: block; margin: 8px 0; }
 
   .doc-shape-wrap {
@@ -244,6 +342,17 @@
   var chartInstances = {};
   var isPreviewMode = false;
 
+  // ══════════════════════════════════════════════
+  // ESTADO GLOBAL DE DOCUMENTO (header/footer/numeração)
+  // ══════════════════════════════════════════════
+  var docSettings = {
+    showPageNumbers: true,
+    showHeader: false,
+    showFooter: false,
+    headerHtml: '',
+    footerHtml: ''
+  };
+
   function detectarModoPreview() {
     try {
       var params = new URLSearchParams(window.location.search);
@@ -267,27 +376,51 @@
     pageEl.style.width = PAGE_W + 'px';
     pageEl.style.height = PAGE_H + 'px';
 
+    var headerEl = document.createElement('div');
+    headerEl.className = 'doc-header';
+    headerEl.setAttribute('data-placeholder', 'Cabeçalho');
+    headerEl.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
+
     var contentEl = document.createElement('div');
     contentEl.className = 'conteudo';
     contentEl.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
     contentEl.setAttribute('spellcheck', 'true');
     contentEl.innerHTML = '<p><br></p>';
 
+    var footerEl = document.createElement('div');
+    footerEl.className = 'doc-footer';
+    footerEl.setAttribute('data-placeholder', 'Rodapé');
+    footerEl.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
+
     if (!isPreviewMode) {
       contentEl.addEventListener('input', handleInput);
       contentEl.addEventListener('paste', aoColar);
       contentEl.addEventListener('click', aoClicarNoConteudo);
+      headerEl.addEventListener('input', aoEditarHeaderFooter);
+      footerEl.addEventListener('input', aoEditarHeaderFooter);
+      headerEl.addEventListener('paste', aoColarSimples);
+      footerEl.addEventListener('paste', aoColarSimples);
     }
 
     var pageNumberEl = document.createElement('div');
     pageNumberEl.className = 'page-number';
 
+    pageEl.appendChild(headerEl);
     pageEl.appendChild(contentEl);
+    pageEl.appendChild(footerEl);
     pageEl.appendChild(pageNumberEl);
     pagesStack.appendChild(pageEl);
 
-    var folha = { id: id, pageEl: pageEl, contentEl: contentEl, pageNumberEl: pageNumberEl };
+    var folha = {
+      id: id,
+      pageEl: pageEl,
+      contentEl: contentEl,
+      pageNumberEl: pageNumberEl,
+      headerEl: headerEl,
+      footerEl: footerEl
+    };
     folhas.push(folha);
+    aplicarConfigDocAFolha(folha);
     atualizarNumerosPagina();
     return folha;
   }
@@ -295,7 +428,51 @@
   function atualizarNumerosPagina() {
     for (var i = 0; i < folhas.length; i++) {
       folhas[i].pageNumberEl.textContent = String(i + 1);
+      folhas[i].pageNumberEl.classList.toggle('hidden', !docSettings.showPageNumbers);
     }
+  }
+
+  function aplicarConfigDocAFolha(folha) {
+    folha.headerEl.classList.toggle('hidden', !docSettings.showHeader);
+    folha.footerEl.classList.toggle('hidden', !docSettings.showFooter);
+    folha.pageEl.classList.toggle('has-header', docSettings.showHeader);
+    folha.pageEl.classList.toggle('has-footer', docSettings.showFooter);
+    if (folha.headerEl.innerHTML.trim() === '' && docSettings.headerHtml) {
+      folha.headerEl.innerHTML = docSettings.headerHtml;
+    }
+    if (folha.footerEl.innerHTML.trim() === '' && docSettings.footerHtml) {
+      folha.footerEl.innerHTML = docSettings.footerHtml;
+    }
+  }
+
+  function aplicarConfigDocATodas() {
+    for (var i = 0; i < folhas.length; i++) aplicarConfigDocAFolha(folhas[i]);
+    atualizarNumerosPagina();
+    setTimeout(reequilibrarDocumento, 0);
+  }
+
+  function aoEditarHeaderFooter(evento) {
+    // O cabeçalho/rodapé é replicado em todas as páginas — editar
+    // numa página atualiza o texto-modelo usado nas restantes e em
+    // páginas futuras. Evita ecos infinitos comparando innerHTML.
+    var el = evento.target;
+    var isHeader = el.classList.contains('doc-header');
+    var novoHtml = el.innerHTML;
+    if (isHeader) docSettings.headerHtml = novoHtml;
+    else docSettings.footerHtml = novoHtml;
+
+    for (var i = 0; i < folhas.length; i++) {
+      var alvo = isHeader ? folhas[i].headerEl : folhas[i].footerEl;
+      if (alvo !== el && alvo.innerHTML !== novoHtml) alvo.innerHTML = novoHtml;
+    }
+    agendarGravacao();
+  }
+
+  function aoColarSimples(evento) {
+    evento.preventDefault();
+    var texto = evento.clipboardData ? evento.clipboardData.getData('text/plain') : '';
+    document.execCommand('insertText', false, texto);
+    aoEditarHeaderFooter(evento);
   }
 
   function getConteudoEl(idx) {
@@ -454,15 +631,35 @@
     if (isPreviewMode) return;
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(function () {
-      var html = getContent();
+      var payload = getDocumentPayload();
       if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-        window.flutter_inappwebview.callHandler('saveDocument', html);
+        window.flutter_inappwebview.callHandler('saveDocument', payload);
       }
     }, 500);
   }
 
+  /*
+   * getContent() continua a devolver só o HTML das páginas (para
+   * compatibilidade com quem já chama editorApi.getContent() a
+   * pedir um docx/pdf). getDocumentPayload() devolve tudo — HTML +
+   * config de header/footer/numeração — serializado como JSON, e é
+   * o que é gravado internamente e o que setContent() sabe ler.
+   */
   function getContent() {
     return folhas.map(function (f) { return f.contentEl.innerHTML; }).join('<div class="page-break-marker"></div>');
+  }
+
+  function getDocumentPayload() {
+    return JSON.stringify({
+      pagesHtml: folhas.map(function (f) { return f.contentEl.innerHTML; }),
+      settings: {
+        showPageNumbers: docSettings.showPageNumbers,
+        showHeader: docSettings.showHeader,
+        showFooter: docSettings.showFooter,
+        headerHtml: docSettings.headerHtml,
+        footerHtml: docSettings.footerHtml
+      }
+    });
   }
 
   function destruirTodosOsCharts() {
@@ -478,7 +675,14 @@
     });
   }
 
-  function setContent(html) {
+  /*
+   * setContent aceita três formatos, por ordem de prioridade:
+   *  1) JSON produzido por getDocumentPayload() — { pagesHtml, settings }
+   *  2) A string antiga com '<div class="page-break-marker"></div>'
+   *     entre páginas (compatibilidade com documentos já gravados)
+   *  3) HTML simples de uma única página
+   */
+  function setContent(raw) {
     destruirTodosOsCharts();
     folhas.forEach(function (f) { f.pageEl.remove(); });
     folhas = [];
@@ -486,15 +690,41 @@
     selectedShapeEl = null;
     selectedImgEl = null;
     selectedChartEl = null;
-    var parts = (html || '').split('<div class="page-break-marker"></div>');
-    var htmls = parts.length ? parts : ['<p><br></p>'];
-    htmls.forEach(function (h) {
+
+    var pagesHtml = null;
+    var parsedSettings = null;
+
+    if (typeof raw === 'string' && raw.trim().charAt(0) === '{') {
+      try {
+        var parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.pagesHtml)) {
+          pagesHtml = parsed.pagesHtml;
+          parsedSettings = parsed.settings || null;
+        }
+      } catch (e) { /* não era JSON válido; cai para o formato antigo */ }
+    }
+
+    if (parsedSettings) {
+      docSettings.showPageNumbers = parsedSettings.showPageNumbers !== false;
+      docSettings.showHeader = !!parsedSettings.showHeader;
+      docSettings.showFooter = !!parsedSettings.showFooter;
+      docSettings.headerHtml = parsedSettings.headerHtml || '';
+      docSettings.footerHtml = parsedSettings.footerHtml || '';
+    }
+
+    if (!pagesHtml) {
+      var parts = (raw || '').split('<div class="page-break-marker"></div>');
+      pagesHtml = parts.length ? parts : ['<p><br></p>'];
+    }
+
+    pagesHtml.forEach(function (h) {
       var folha = criarFolha();
       folha.contentEl.innerHTML = h || '<p><br></p>';
       monitorizarErrosDeImagem(folha.contentEl);
     });
     reativarHandlersDeFormasEImagens();
     reidratarGraficos();
+    aplicarConfigDocATodas();
     reequilibrarDocumento();
   }
 
@@ -528,10 +758,21 @@
       case 'alignJustify': document.execCommand('justifyFull'); break;
       case 'bulletList': document.execCommand('insertUnorderedList'); break;
       case 'numberedList': document.execCommand('insertOrderedList'); break;
+      case 'indentIncrease': document.execCommand('indent'); break;
+      case 'indentDecrease': document.execCommand('outdent'); break;
+      case 'subscript': document.execCommand('subscript'); break;
+      case 'superscript': document.execCommand('superscript'); break;
+      case 'blockquote': aplicarCitacao(); break;
+      case 'clearFormat': document.execCommand('removeFormat'); break;
       case 'undo': document.execCommand('undo'); break;
       case 'redo': document.execCommand('redo'); break;
     }
     handleInput();
+  }
+
+  function aplicarCitacao() {
+    focarSePreciso();
+    document.execCommand('formatBlock', false, 'blockquote');
   }
 
   function setFontSize(px) {
@@ -570,12 +811,33 @@
     handleInput();
   }
 
-  function insertTable(rows, cols) {
+  /*
+   * insertTable aceita:
+   *  - insertTable(rows, cols)                          [compatibilidade antiga]
+   *  - insertTable({rows, cols, header, bordered, striped}) [novo formato do docs.dart]
+   */
+  function insertTable(a, b) {
     focarSePreciso();
-    var r = Math.max(1, Math.min(20, rows || 2));
-    var c = Math.max(1, Math.min(10, cols || 2));
-    var html = '<div class="doc-table-wrap" contenteditable="false"><table class="doc-table"><tbody>';
-    for (var ri = 0; ri < r; ri++) {
+    var opts = (a && typeof a === 'object') ? a : { rows: a, cols: b };
+    var r = Math.max(1, Math.min(20, opts.rows || 2));
+    var c = Math.max(1, Math.min(10, opts.cols || 2));
+    var comHeader = opts.header !== false && opts.header !== undefined ? !!opts.header : false;
+    var comBordas = opts.bordered !== undefined ? !!opts.bordered : true;
+    var comListras = !!opts.striped;
+
+    var classes = 'doc-table';
+    if (!comBordas) classes += ' no-border';
+    if (comListras) classes += ' striped';
+
+    var html = '<div class="doc-table-wrap" contenteditable="false"><table class="' + classes + '"><tbody>';
+    var linhaInicial = 0;
+    if (comHeader) {
+      html += '<tr>';
+      for (var ciH = 0; ciH < c; ciH++) html += '<th contenteditable="true"><br></th>';
+      html += '</tr>';
+      linhaInicial = 1;
+    }
+    for (var ri = linhaInicial; ri < r; ri++) {
       html += '<tr>';
       for (var ci = 0; ci < c; ci++) html += '<td contenteditable="true"><br></td>';
       html += '</tr>';
@@ -660,10 +922,18 @@
     return textarea.value;
   }
 
-  function insertChart(chartConfigJson) {
+  /*
+   * insertChart aceita tanto uma config Chart.js "crua" (formato
+   * antigo) como o novo formato de preset do docs.dart:
+   *   {type, title, labels, values}
+   * Neste segundo caso, é convertida aqui para uma config Chart.js
+   * completa antes de desenhar.
+   */
+  function insertChart(chartConfigInput) {
     focarSePreciso();
     var id = 'chart_' + (nextChartId++);
-    var configStr = typeof chartConfigJson === 'string' ? chartConfigJson : JSON.stringify(chartConfigJson);
+    var configObj = normalizarConfigDeChart(chartConfigInput);
+    var configStr = JSON.stringify(configObj);
     var html = '<div class="doc-chart-wrap" data-chart-id="' + id + '" data-chart-config="' + escaparParaAtributo(configStr) + '" contenteditable="false"><canvas></canvas><span class="resize-handle"></span></div><p><br></p>';
     document.execCommand('insertHTML', false, html);
     handleInput();
@@ -672,6 +942,52 @@
       if (wrap) inicializarChartNoWrapper(wrap, id, configStr);
       reativarHandlersDeFormasEImagens();
     }, 30);
+  }
+
+  function normalizarConfigDeChart(input) {
+    var parsed = input;
+    if (typeof input === 'string') {
+      try { parsed = JSON.parse(input); } catch (e) { parsed = null; }
+    }
+    if (!parsed) return { type: 'bar', data: { labels: [], datasets: [] } };
+
+    // Já é uma config Chart.js completa (tem "data" com "datasets")
+    if (parsed.data && parsed.data.datasets) return parsed;
+
+    // Formato de preset do docs.dart: {type, title, labels, values}
+    if (Array.isArray(parsed.labels) && Array.isArray(parsed.values)) {
+      var chartType = parsed.type === 'donut' ? 'doughnut' : (parsed.type || 'bar');
+      var isCircular = chartType === 'pie' || chartType === 'doughnut';
+      var isScatter = chartType === 'scatter';
+      var isArea = parsed.type === 'area';
+
+      var dataset = {
+        label: parsed.title || '',
+        data: isScatter
+          ? parsed.values.map(function (v, i) { return { x: i, y: v }; })
+          : parsed.values,
+        fill: isArea,
+        tension: (chartType === 'line' || isArea) ? 0.35 : 0
+      };
+
+      return {
+        type: isArea ? 'line' : (isScatter ? 'scatter' : chartType),
+        data: {
+          labels: isCircular || isScatter ? parsed.labels : parsed.labels,
+          datasets: [dataset]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: isCircular },
+            title: { display: !!parsed.title, text: parsed.title || '' }
+          }
+        }
+      };
+    }
+
+    return parsed;
   }
 
   function inicializarChartNoWrapper(wrapEl, id, configStr) {
@@ -810,6 +1126,48 @@
     handleInput();
   }
 
+  // ══════════════════════════════════════════════
+  // API PÚBLICA — numeração / cabeçalho / rodapé
+  // ══════════════════════════════════════════════
+
+  function setPageNumbersVisible(visible) {
+    docSettings.showPageNumbers = !!visible;
+    aplicarConfigDocATodas();
+    agendarGravacao();
+  }
+
+  function setHeaderVisible(visible) {
+    docSettings.showHeader = !!visible;
+    aplicarConfigDocATodas();
+    agendarGravacao();
+  }
+
+  function setFooterVisible(visible) {
+    docSettings.showFooter = !!visible;
+    aplicarConfigDocATodas();
+    agendarGravacao();
+  }
+
+  function setHeaderText(html) {
+    docSettings.headerHtml = html || '';
+    for (var i = 0; i < folhas.length; i++) folhas[i].headerEl.innerHTML = docSettings.headerHtml;
+    agendarGravacao();
+  }
+
+  function setFooterText(html) {
+    docSettings.footerHtml = html || '';
+    for (var i = 0; i < folhas.length; i++) folhas[i].footerEl.innerHTML = docSettings.footerHtml;
+    agendarGravacao();
+  }
+
+  function getDocSettings() {
+    return JSON.stringify(docSettings);
+  }
+
+  function setThemeMode(modo) {
+    document.body.classList.toggle('dark', modo === 'dark');
+  }
+
   window.editorApi = {
     exec: exec,
     setFontSize: setFontSize,
@@ -829,7 +1187,15 @@
     trazerParaFrente: trazerParaFrente,
     enviarParaTras: enviarParaTras,
     getContent: getContent,
-    setContent: setContent
+    getDocumentPayload: getDocumentPayload,
+    setContent: setContent,
+    setPageNumbersVisible: setPageNumbersVisible,
+    setHeaderVisible: setHeaderVisible,
+    setFooterVisible: setFooterVisible,
+    setHeaderText: setHeaderText,
+    setFooterText: setFooterText,
+    getDocSettings: getDocSettings,
+    setThemeMode: setThemeMode
   };
 
   function iniciar() {

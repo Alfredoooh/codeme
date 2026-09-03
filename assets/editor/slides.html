@@ -7,30 +7,37 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root {
-    --slides-bg: #EDEEF0;
+    --craft-primary: #0F6CBD;
+    --craft-on-primary: #FFFFFF;
+
+    /* A folha é SEMPRE clara — nunca segue o dark mode do app.
+       Estas variáveis não têm par "dark"; ficam fixas. */
     --slide-bg: #FFFFFF;
     --slide-text: #1A1A1A;
-    --slide-shadow: rgba(0,0,0,0.18);
-    --craft-primary: #0F6CBD;
-    --thumb-bg: #FFFFFF;
+    --slide-shadow: rgba(0,0,0,0.20);
+    --slide-border: rgba(0,0,0,0.06);
+
+    /* Já a tira de miniaturas e o resto da chrome seguem o tema do
+       app, como pedido — combinando com o resto do sistema de design. */
+    --strip-bg: #FFFFFF;
+    --strip-border: rgba(0,0,0,0.06);
+    --strip-shadow: rgba(0,0,0,0.09);
     --thumb-border: #DADCE0;
     --thumb-add-border: #C4C7CC;
     --thumb-add-color: #9AA0A6;
-    --strip-bg: #FFFFFF;
-    --strip-border: #E5E5EA;
+    --onSurface: #1C1C1E;
+    --onSurfaceVariant: #6E6E73;
   }
 
   body.dark {
-    --slides-bg: #121313;
-    --slide-bg: #1C1C1E;
-    --slide-text: #F2F2F2;
-    --slide-shadow: rgba(0,0,0,0.4);
-    --thumb-bg: #1C1C1E;
+    --strip-bg: #141414;
+    --strip-border: rgba(255,255,255,0.06);
+    --strip-shadow: rgba(0,0,0,0.55);
     --thumb-border: #3A3A3C;
     --thumb-add-border: #48484A;
     --thumb-add-color: #6E6E73;
-    --strip-bg: #1C1C1E;
-    --strip-border: #2C2C2E;
+    --onSurface: #F2F2F2;
+    --onSurfaceVariant: #9B9B9F;
   }
 
   * {
@@ -42,16 +49,19 @@
     padding: 0;
     width: 100%;
     height: 100%;
-    background: transparent;
+    background: transparent !important;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
+  /* Fundo do ecrã inteiro: sempre transparente. Só as folhas
+     (.slide-16-9) têm fundo próprio (branco, fixo). */
   #root {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
+    background: transparent;
   }
 
   #mainStage {
@@ -62,7 +72,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--slides-bg);
+    background: transparent;
+    /* Espaço para a tira de miniaturas flutuante não tapar o slide */
+    padding-bottom: 118px;
   }
 
   #slideCanvas {
@@ -71,24 +83,18 @@
 
   .slide-16-9 {
     background: var(--slide-bg);
+    color: var(--slide-text);
     width: 960px;
     height: 540px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 8px 24px var(--slide-shadow);
-    border-radius: 6px;
+    border-radius: 18px;
+    border: 1px solid var(--slide-border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.10), 0 10px 28px var(--slide-shadow);
     position: relative;
     transform-origin: center;
     overflow: hidden;
-    transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-  }
-
-  .slide-16-9.anim-out {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-
-  .slide-16-9.anim-in {
-    opacity: 1;
-    transform: scale(1);
+    /* Apenas suaviza trocas de escala/zoom — sem animação de
+       entrada/saída ao trocar de slide, como pedido. */
+    transition: transform 0.15s ease;
   }
 
   .slide-element {
@@ -113,13 +119,14 @@
     height: 100%;
     object-fit: contain;
     pointer-events: none;
+    border-radius: 4px;
   }
   .slide-element[data-type="image"] img.img-broken {
-    background: var(--slide-bg);
-    border: 1px dashed var(--thumb-border);
+    background: #F2F2F2;
+    border: 1px dashed #CCCCCC;
   }
   .slide-element[data-type="shape"] {
-    border-radius: 4px;
+    border-radius: 8px;
   }
   .slide-element[data-type="shape"].shape-circle {
     border-radius: 50%;
@@ -129,11 +136,20 @@
     height: 100% !important;
     pointer-events: none;
   }
+  /* Wrapper de HTML livre embebido — nunca deixa o conteúdo
+     injetado "rebentar" o layout do slide nem travar o resto do
+     editor caso o HTML/CSS/JS seja inválido. */
+  .slide-element[data-type="html"] {
+    overflow: hidden;
+    border-radius: 8px;
+  }
+  .slide-element[data-type="html"] .html-frame-wrap {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+  }
 
-  /* ── Resize handles estilo PowerPoint mobile ─────────────────
-     8 pontos (4 cantos + 4 lados). O quadrado visível é pequeno,
-     mas cada handle tem uma zona de toque maior (::before) para
-     não obrigar a precisão cirúrgica num ecrã de telemóvel. */
   .resize-handle {
     position: absolute;
     width: 12px;
@@ -167,25 +183,39 @@
     border-radius: 50%;
   }
 
+  /* ══════════════════════════════════════════════
+     TIRA DE MINIATURAS — flutuante sobre o bottomtoolbar,
+     mesmas curvas dele, um pouco mais alta por causa das folhas.
+     ══════════════════════════════════════════════ */
+  #thumbStripWrap {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 76px;
+    z-index: 5;
+    pointer-events: none;
+  }
   #thumbStrip {
-    height: 92px;
-    flex-shrink: 0;
+    pointer-events: auto;
+    height: 68px;
     background: var(--strip-bg);
-    border-top: 1px solid var(--strip-border);
+    border-radius: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 8px 22px var(--strip-shadow);
+    border: 1px solid var(--strip-border);
     display: flex;
     align-items: center;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    padding: 10px 10px;
+    padding: 0 10px;
     gap: 8px;
   }
   .thumb-item {
     flex-shrink: 0;
-    width: 96px;
-    height: 54px;
-    border-radius: 5px;
-    background: var(--thumb-bg);
+    width: 84px;
+    height: 47px;
+    border-radius: 10px;
+    background: #FFFFFF;
     border: 2px solid var(--thumb-border);
     position: relative;
     overflow: hidden;
@@ -203,6 +233,7 @@
     height: 540px;
     transform-origin: top left;
     pointer-events: none;
+    background: #FFFFFF;
   }
   .thumb-number {
     position: absolute;
@@ -210,34 +241,34 @@
     left: 4px;
     font-size: 9px;
     font-weight: 700;
-    color: var(--slide-text);
-    text-shadow: 0 0 2px rgba(0,0,0,0.2);
+    color: #1A1A1A;
+    text-shadow: 0 0 2px rgba(255,255,255,0.6);
     z-index: 2;
   }
   .thumb-add {
     flex-shrink: 0;
-    width: 96px;
-    height: 54px;
-    border-radius: 5px;
+    width: 84px;
+    height: 47px;
+    border-radius: 10px;
     border: 2px dashed var(--thumb-add-border);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--thumb-add-color);
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 300;
     transition: background 0.15s ease;
   }
   .thumb-add:active {
-    background: var(--thumb-bg);
+    background: rgba(127,127,127,0.08);
   }
 
-  /* Modo preview */
-  body.preview-mode #thumbStrip {
+  body.preview-mode #thumbStripWrap {
     display: none;
   }
   body.preview-mode #mainStage {
     pointer-events: none;
+    padding-bottom: 0;
   }
 </style>
 </head>
@@ -249,7 +280,9 @@
       <div class="slide-16-9" id="currentSlide"></div>
     </div>
   </div>
-  <div id="thumbStrip"></div>
+  <div id="thumbStripWrap">
+    <div id="thumbStrip"></div>
+  </div>
 </div>
 
 <script>
@@ -258,7 +291,7 @@
 
   var SLIDE_W = 960;
   var SLIDE_H = 540;
-  var THUMB_SCALE = 96 / SLIDE_W;
+  var THUMB_SCALE = 84 / SLIDE_W;
   var HANDLE_POSITIONS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
   var MIN_SIZE = 24;
 
@@ -275,7 +308,6 @@
   var saveTimeout = null;
   var isPreviewMode = false;
   var chartInstancesSlides = {};
-  var animating = false;
 
   function detectarModoPreview() {
     try {
@@ -289,9 +321,6 @@
     }
   }
 
-  // Isto continua a mexer SÓ na .slide-16-9 (currentSlideEl). O
-  // #mainStage e o #thumbStrip nunca recebem transform nenhum,
-  // por isso o zoom fica sempre isolado à página do slide.
   function ajustarZoom() {
     var margem = isPreviewMode ? 0 : 28;
     var larguraDisponivel = mainStage.clientWidth - margem;
@@ -310,6 +339,49 @@
     });
   }
 
+  /*
+   * Renderiza um elemento de HTML livre dentro de uma sandbox
+   * isolada (iframe com sandbox="allow-scripts"), para que HTML,
+   * CSS e JS arbitrários possam ser desenhados no slide sem nunca
+   * travar o editor ou quebrar o resto da página caso o conteúdo
+   * seja inválido ou lance uma exceção.
+   */
+  function montarFrameHtml(el) {
+    var wrap = document.createElement('div');
+    wrap.className = 'html-frame-wrap';
+
+    var iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = '0';
+    iframe.style.background = 'transparent';
+    iframe.style.pointerEvents = 'none';
+
+    var doc = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;'
+      + 'background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}'
+      + '*{box-sizing:border-box;}</style></head><body>'
+      + (el.htmlContent || '')
+      + '<script>window.onerror=function(){return true;};<\/script>'
+      + '</body></html>';
+
+    wrap.appendChild(iframe);
+
+    // srcdoc falha silenciosamente em conteúdo malformado em vez de
+    // travar; um try/catch extra protege contra ambientes onde
+    // srcdoc não é suportado.
+    try {
+      iframe.srcdoc = doc;
+    } catch (e) {
+      try {
+        iframe.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(doc);
+      } catch (e2) {}
+    }
+
+    return wrap;
+  }
+
   function renderizarSlideAtual() {
     destruirChartsDoSlideAtual();
     currentSlideEl.innerHTML = '';
@@ -326,36 +398,46 @@
       div.style.width = el.w + 'px';
       div.style.height = el.h + 'px';
 
-      if (el.type === 'text') {
-        div.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
-        div.innerHTML = el.html || 'Texto';
-        div.style.fontSize = (el.fontSize || 24) + 'px';
-        if (el.color) div.style.color = el.color;
-        if (!isPreviewMode) {
-          div.addEventListener('input', function () {
-            el.html = div.innerHTML;
-            agendarGravacao();
-          });
+      try {
+        if (el.type === 'text') {
+          div.setAttribute('contenteditable', isPreviewMode ? 'false' : 'true');
+          div.innerHTML = el.html || 'Texto';
+          div.style.fontSize = (el.fontSize || 24) + 'px';
+          if (el.color) div.style.color = el.color;
+          if (!isPreviewMode) {
+            div.addEventListener('input', function () {
+              el.html = div.innerHTML;
+              agendarGravacao();
+            });
+          }
+        } else if (el.type === 'image') {
+          var img = document.createElement('img');
+          img.src = el.src;
+          img.addEventListener('error', function () { img.classList.add('img-broken'); });
+          div.appendChild(img);
+        } else if (el.type === 'shape') {
+          div.style.background = el.color || '#2F7BF6';
+          if (el.shapeKind === 'circle') div.classList.add('shape-circle');
+        } else if (el.type === 'chart') {
+          var canvas = document.createElement('canvas');
+          div.appendChild(canvas);
+          (function (canvasEl, config, key) {
+            requestAnimationFrame(function () {
+              if (typeof Chart === 'undefined') return;
+              try {
+                chartInstancesSlides[key] = new Chart(canvasEl.getContext('2d'), config);
+              } catch (e) {}
+            });
+          })(canvas, el.chartConfig || { type: 'bar', data: { labels: [], datasets: [] } }, currentSlideIndex + ':' + el.id);
+        } else if (el.type === 'html') {
+          div.appendChild(montarFrameHtml(el));
         }
-      } else if (el.type === 'image') {
-        var img = document.createElement('img');
-        img.src = el.src;
-        img.addEventListener('error', function () { img.classList.add('img-broken'); });
-        div.appendChild(img);
-      } else if (el.type === 'shape') {
-        div.style.background = el.color || '#2F7BF6';
-        if (el.shapeKind === 'circle') div.classList.add('shape-circle');
-      } else if (el.type === 'chart') {
-        var canvas = document.createElement('canvas');
-        div.appendChild(canvas);
-        (function (canvasEl, config, key) {
-          requestAnimationFrame(function () {
-            if (typeof Chart === 'undefined') return;
-            try {
-              chartInstancesSlides[key] = new Chart(canvasEl.getContext('2d'), config);
-            } catch (e) {}
-          });
-        })(canvas, el.chartConfig || { type: 'bar', data: { labels: [], datasets: [] } }, currentSlideIndex + ':' + el.id);
+      } catch (erroElemento) {
+        // Um elemento malformado nunca deve impedir os restantes de
+        // aparecerem — mostra um placeholder discreto no lugar dele.
+        div.innerHTML = '';
+        div.style.background = 'rgba(0,0,0,0.04)';
+        div.style.border = '1px dashed rgba(0,0,0,0.2)';
       }
 
       if (!isPreviewMode) {
@@ -576,7 +658,6 @@
       var scaled = document.createElement('div');
       scaled.className = 'thumb-scaled';
       scaled.style.transform = 'scale(' + THUMB_SCALE + ')';
-      scaled.style.background = '#FFFFFF';
 
       slide.elements.forEach(function (el) {
         var mini = document.createElement('div');
@@ -600,10 +681,13 @@
           mini.appendChild(img);
         } else if (el.type === 'shape') {
           mini.style.background = el.color || '#2F7BF6';
-          mini.style.borderRadius = el.shapeKind === 'circle' ? '50%' : '4px';
+          mini.style.borderRadius = el.shapeKind === 'circle' ? '50%' : '8px';
         } else if (el.type === 'chart') {
           mini.style.background = '#EEF2F8';
           mini.style.border = '1px solid #D8DEE8';
+        } else if (el.type === 'html') {
+          mini.style.background = '#EEF2F8';
+          mini.style.border = '1px dashed #D8DEE8';
         }
         scaled.appendChild(mini);
       });
@@ -645,21 +729,13 @@
     agendarGravacao();
   }
 
+  // Sem animação de "papel entrando" — troca instantânea, apenas
+  // o zoom (transform:scale) mantém uma transição suave.
   function goToSlide(index) {
-    if (index < 0 || index >= slides.length || animating) return;
-    animating = true;
-    currentSlideEl.classList.add('anim-out');
-    setTimeout(function () {
-      currentSlideIndex = index;
-      selectedElementId = null;
-      renderizarSlideAtual();
-      currentSlideEl.classList.remove('anim-out');
-      currentSlideEl.classList.add('anim-in');
-      setTimeout(function () {
-        currentSlideEl.classList.remove('anim-in');
-        animating = false;
-      }, 250);
-    }, 250);
+    if (index < 0 || index >= slides.length) return;
+    currentSlideIndex = index;
+    selectedElementId = null;
+    renderizarSlideAtual();
   }
 
   function deleteCurrentSlide() {
@@ -725,6 +801,49 @@
       type: 'chart',
       x: 100, y: 100, w: 480, h: 300,
       chartConfig: config
+    };
+    slide.elements.push(novoElemento);
+    renderizarSlideAtual();
+    renderizarThumbs();
+    agendarGravacao();
+  }
+
+  /*
+   * Insere um bloco de HTML/CSS/JS livre no slide, isolado numa
+   * sandbox (iframe). Aceita tanto uma string HTML simples como
+   * um objeto {html, w, h}. Nunca lança exceção para fora — um
+   * conteúdo malformado apenas resulta num quadro vazio/quebrado,
+   * sem travar o resto do editor.
+   */
+  function insertHtml(htmlOrConfig) {
+    var slide = slides[currentSlideIndex];
+    var htmlContent = '';
+    var w = 480, h = 300;
+    try {
+      if (typeof htmlOrConfig === 'string') {
+        var trimmed = htmlOrConfig.trim();
+        if (trimmed.charAt(0) === '{') {
+          var parsed = JSON.parse(trimmed);
+          htmlContent = parsed.html || '';
+          w = parsed.w || w;
+          h = parsed.h || h;
+        } else {
+          htmlContent = htmlOrConfig;
+        }
+      } else if (htmlOrConfig && typeof htmlOrConfig === 'object') {
+        htmlContent = htmlOrConfig.html || '';
+        w = htmlOrConfig.w || w;
+        h = htmlOrConfig.h || h;
+      }
+    } catch (e) {
+      htmlContent = typeof htmlOrConfig === 'string' ? htmlOrConfig : '';
+    }
+
+    var novoElemento = {
+      id: nextElementId++,
+      type: 'html',
+      x: 100, y: 100, w: w, h: h,
+      htmlContent: htmlContent
     };
     slide.elements.push(novoElemento);
     renderizarSlideAtual();
@@ -830,33 +949,41 @@
     return slides.length;
   }
 
+  /*
+   * O dark mode do app NUNCA escurece a folha (--slide-bg fica
+   * sempre #FFFFFF, sem par dark definido em CSS). Apenas a chrome
+   * (tira de miniaturas, fundo geral) reage ao tema. O Chart.js
+   * também mantém sempre texto escuro por cima de fundo claro,
+   * já que os gráficos vivem dentro da folha branca.
+   */
   function setThemeMode(mode) {
     var isDark = (mode === 'dark') || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.body.classList.toggle('dark', isDark);
     if (window.Chart) {
-      Chart.defaults.color = isDark ? '#F2F2F2' : '#1A1A1A';
+      Chart.defaults.color = '#1A1A1A';
       Object.keys(chartInstancesSlides).forEach(function (key) {
         var chart = chartInstancesSlides[key];
         if (chart && chart.options) {
           chart.options.plugins = chart.options.plugins || {};
           chart.options.plugins.legend = chart.options.plugins.legend || {};
           chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
-          chart.options.plugins.legend.labels.color = Chart.defaults.color;
+          chart.options.plugins.legend.labels.color = '#1A1A1A';
           chart.update();
         }
       });
     }
   }
 
-  // Recebe a cor primária escolhida em Settings > Personalização >
-  // Cor primária. Chamado pelo Flutter (slides_screen.dart) sempre
-  // que appTheme notifica uma mudança, e também logo após o load
-  // inicial do WebView. Só atualiza a custom property, tudo o resto
-  // (seleção, thumb ativa, handles) lê --craft-primary via CSS.
   function setPrimaryColor(hex) {
     if (!hex || typeof hex !== 'string') return;
     document.documentElement.style.setProperty('--craft-primary', hex);
   }
+
+  // Protege o editor inteiro contra exceções não tratadas (por
+  // exemplo, vindas de JS injetado dentro de um elemento HTML
+  // livre que escape da sandbox de alguma forma) — nunca deixa o
+  // WebView "morrer" silenciosamente.
+  window.addEventListener('error', function () { return true; });
 
   window.editorApi = {
     addSlide: addSlide,
@@ -866,6 +993,7 @@
     insertImage: insertImage,
     insertShape: insertShape,
     insertChart: insertChart,
+    insertHtml: insertHtml,
     deleteSelectedElement: deleteSelectedElement,
     applyTextFormat: applyTextFormat,
     setSelectedTextColor: setSelectedTextColor,
@@ -886,7 +1014,6 @@
     window.addEventListener('orientationchange', ajustarZoom);
 
     var conteudoInicial = '';
-    // O Flutter injeta via setContent após onLoadStop
     if (conteudoInicial) {
       setContent(conteudoInicial);
     } else {

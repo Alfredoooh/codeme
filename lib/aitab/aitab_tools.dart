@@ -23,6 +23,19 @@
 //   pptx_to_images, audio_duration_check, get_image_colors,
 //   image_metadata, vectorize_image) — mantidas só as que
 //   correspondem a tools do catálogo atual.
+//
+// CORREÇÃO NESTA VERSÃO — CAMPO DE RESPOSTA NÃO NORMALIZADO:
+// documents.py devolve o documento sob uma chave própria por tool
+// (pdf_base64/docx_base64/xlsx_base64/pptx_base64), NÃO sob
+// content_base64. O Worker passa isto adiante sem renomear — é o
+// mesmo comportamento que o testador HTML de documentos já
+// documenta e resolve via RAW_FIELD_BY_TOOL. extractDocumentPayload
+// replica exatamente essa lógica aqui: para as 4 tools do
+// documents.py, lê o campo certo por nome de tool; para as
+// restantes kDocumentTools (create_file, csv_to_xlsx, merge_pdfs,
+// split_pdf_pages), continua a ler content_base64 como já
+// funcionava. Sem isto, os 4 documentos do documents.py caíam
+// sempre no passthrough e nunca mostravam o ToolResultDownloadCard.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -128,6 +141,61 @@ const Set<String> kDocumentTools = {
 };
 
 const Set<String> kImageSearchTools = {'search_images'};
+
+/// Mapeamento nome-da-tool → nome do campo que documents.py usa em
+/// vez de content_base64, e o mime_type/extensão a atribuir já que
+/// documents.py também não devolve mime_type/filename. Réplica
+/// direta de RAW_FIELD_BY_TOOL no testador HTML de documentos —
+/// mesma causa, mesma correção, só que aqui aplicada ao app real.
+const Map<String, ({String field, String mime, String ext})> kRawDocumentFieldByTool = {
+  'create_pdf':  (field: 'pdf_base64',  mime: 'application/pdf', ext: 'pdf'),
+  'create_docx': (field: 'docx_base64', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx'),
+  'create_xlsx': (field: 'xlsx_base64', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx'),
+  'create_pptx': (field: 'pptx_base64', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: 'pptx'),
+};
+
+/// Extrai (base64, filename, mimeType) de um resultado de tool,
+/// cobrindo os dois formatos de resposta que existem no backend:
+/// 1) o formato "normal" {content_base64, filename, mime_type} usado
+///    por create_file/csv_to_xlsx/merge_pdfs/split_pdf_pages;
+/// 2) o formato cru do documents.py {pdf_base64|docx_base64|
+///    xlsx_base64|pptx_base64}, sem filename nem mime_type — usado
+///    por create_pdf/create_docx/create_xlsx/create_pptx.
+/// Devolve null se nenhum dos dois formatos produzir um base64
+/// não-vazio.
+({String base64Data, String filename, String mimeType})? extractDocumentPayload(
+  String toolName,
+  Map<String, dynamic> resultJson,
+) {
+  final rawCfg = kRawDocumentFieldByTool[toolName];
+  if (rawCfg != null) {
+    final raw = resultJson[rawCfg.field]?.toString();
+    if (raw != null && raw.isNotEmpty) {
+      return (
+        base64Data: raw,
+        filename: 'documento.${rawCfg.ext}',
+        mimeType: rawCfg.mime,
+      );
+    }
+    // Tool está no mapa de campo cru mas não veio o campo esperado
+    // (ex: documents.py devolveu {"error": "..."}) — não tenta o
+    // formato normal como fallback, porque não faz sentido para
+    // estas 4 tools; deixa cair para o passthrough normal.
+    return null;
+  }
+
+  final normal = resultJson['content_base64']?.toString();
+  if (normal != null && normal.isNotEmpty) {
+    return (
+      base64Data: normal,
+      filename: resultJson['filename']?.toString() ??
+          '${toolName}_${DateTime.now().millisecondsSinceEpoch}.bin',
+      mimeType: resultJson['mime_type']?.toString() ?? 'application/octet-stream',
+    );
+  }
+
+  return null;
+}
 
 /// Resultado agregado de processar uma lista de tool calls: separa
 /// o que foi resolvido localmente (visual/document/images, cada um
@@ -318,19 +386,16 @@ Future<ToolExecutionOutcome> processToolCalls(
     }
 
     if (kDocumentTools.contains(call.name)) {
-      final base64Data = resultJson['content_base64']?.toString();
-      final filename = resultJson['filename']?.toString() ??
-          '${call.name}_${DateTime.now().millisecondsSinceEpoch}.bin';
-      final mimeType = resultJson['mime_type']?.toString() ?? 'application/octet-stream';
-      if (base64Data != null && base64Data.isNotEmpty) {
+      final payload = extractDocumentPayload(call.name, resultJson);
+      if (payload != null) {
         documents.add(DocumentToolResult(
-          base64Data: base64Data,
-          filename: filename,
-          mimeType: mimeType,
+          base64Data: payload.base64Data,
+          filename: payload.filename,
+          mimeType: payload.mimeType,
         ));
         toolResultMsgs.add(ChatMessage(
           role: 'tool',
-          content: jsonEncode({'success': true, 'filename': filename, 'ready_for_download': true}),
+          content: jsonEncode({'success': true, 'filename': payload.filename, 'ready_for_download': true}),
           toolCallId: call.id,
           name: call.name,
         ));
@@ -339,7 +404,8 @@ Future<ToolExecutionOutcome> processToolCalls(
     }
 
     // Passthrough: o modelo recebe o JSON cru para interpretar
-    // (web_search, search_market, clima em texto, read_website, etc).
+    // (web_search, search_market, clima em texto, read_website, ou
+    // uma tool de documento que devolveu {"error": "..."}).
     toolResultMsgs.add(ChatMessage(
       role: 'tool',
       content: jsonEncode(resultJson),

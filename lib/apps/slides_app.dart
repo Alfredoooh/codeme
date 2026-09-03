@@ -44,7 +44,18 @@ const Set<String> _kEditorSvgIcons = {
   'superscript',
   'text_color',
   'underline',
-
+  'download',
+  'share',
+  'pdf',
+  'check',
+  'plus',
+  'minus',
+  'trash',
+  'grid',
+  'row',
+  'column',
+  'wand',
+  'add',
 };
 
 const Map<String, String> _kEditorIconAliases = {
@@ -79,34 +90,169 @@ class _EditorIcon extends StatelessWidget {
   }
 }
 
-Future<T?> _showAppPopupMenu<T>(
+// ══════════════════════════════════════════════════════════════
+// POPUP CUSTOMIZADO — Container Transform, igual ao docs.dart
+// ══════════════════════════════════════════════════════════════
+
+Future<T?> _showMorphMenu<T>(
   BuildContext context,
   AppColorScheme s, {
   required GlobalKey anchorKey,
-  required List<PopupMenuEntry<T>> items,
+  required List<_MorphMenuItem<T>> items,
+  double width = 240,
 }) async {
   final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
   if (box == null) return null;
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final offset = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-  final size = box.size;
-  final position = RelativeRect.fromLTRB(
-    offset.dx,
-    offset.dy + size.height,
-    overlayBox.size.width - (offset.dx + size.width),
-    overlayBox.size.height - (offset.dy + size.height),
+  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+  final anchorSize = box.size;
+  final screenSize = overlay.size;
+
+  final anchorRect = Rect.fromLTWH(
+    anchorTopLeft.dx,
+    anchorTopLeft.dy,
+    anchorSize.width,
+    anchorSize.height,
   );
-  return showMenu<T>(
+
+  double left = anchorRect.right - width;
+  if (left < 12) left = 12;
+  if (left + width > screenSize.width - 12) left = screenSize.width - 12 - width;
+  double top = anchorRect.bottom + 8;
+
+  return showGeneralDialog<T>(
     context: context,
-    position: position,
-    color: s.floatingSurface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: s.outline.withOpacity(0.25)),
-    ),
-    items: items,
+    barrierLabel: 'menu',
+    barrierColor: Colors.black.withOpacity(0.001),
+    barrierDismissible: true,
+    transitionDuration: const Duration(milliseconds: 480),
+    pageBuilder: (ctx, anim, secAnim) => const SizedBox.shrink(),
+    transitionBuilder: (ctx, anim, secAnim, child) {
+      final curved = CurvedAnimation(parent: anim, curve: const Cubic(0.16, 1, 0.3, 1));
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+              child: GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: BackdropBlurBox(sigma: 6 * curved.value, color: s.barrier.withOpacity(0.18 * curved.value)),
+              ),
+            ),
+          ),
+          Positioned(
+            left: Tween<double>(begin: anchorRect.left, end: left).transform(curved.value),
+            top: Tween<double>(begin: anchorRect.top, end: top).transform(curved.value),
+            width: Tween<double>(begin: anchorRect.width, end: width).transform(curved.value),
+            child: Opacity(
+              opacity: Curves.easeOut.transform(anim.value.clamp(0.0, 1.0)),
+              child: Transform.scale(
+                alignment: Alignment.topRight,
+                scale: 0.86 + (0.14 * curved.value),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: s.floatingSurface.withOpacity(0.98),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: s.outline.withOpacity(0.14), width: 1),
+                      boxShadow: s.floatingShadow,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (int i = 0; i < items.length; i++)
+                          _MorphMenuTile<T>(
+                            item: items[i],
+                            s: s,
+                            onSelected: (v) => Navigator.of(ctx).pop(v),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
   );
+}
+
+class _MorphMenuItem<T> {
+  final T value;
+  final String asset;
+  final String label;
+  final bool destructive;
+  const _MorphMenuItem({
+    required this.value,
+    required this.asset,
+    required this.label,
+    this.destructive = false,
+  });
+}
+
+class _MorphMenuTile<T> extends StatefulWidget {
+  final _MorphMenuItem<T> item;
+  final AppColorScheme s;
+  final void Function(T) onSelected;
+  const _MorphMenuTile({required this.item, required this.s, required this.onSelected});
+
+  @override
+  State<_MorphMenuTile<T>> createState() => _MorphMenuTileState<T>();
+}
+
+class _MorphMenuTileState<T> extends State<_MorphMenuTile<T>> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final item = widget.item;
+    final color = item.destructive ? s.error : s.onSurface;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: () => widget.onSelected(item.value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: _pressed ? s.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            _EditorIcon(item.asset, size: 18, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                item.label,
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BackdropBlurBox extends StatelessWidget {
+  final double sigma;
+  final Color color;
+  const BackdropBlurBox({super.key, required this.sigma, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(color: color);
+  }
 }
 
 class SlidesScreen extends StatefulWidget {
@@ -282,7 +428,6 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
     }
   }
 
-
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
     final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
@@ -328,46 +473,21 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
     });
   }
 
-  // Menu "more" como popup
+  // Menu "more" — popup morph igual ao docs.dart. Apenas ações que
+  // NÃO existem no bottomtoolbar (que já tem: slide, apagar slide,
+  // texto, imagem, forma, círculo, gráfico, apagar elemento,
+  // negrito, itálico, sublinhado, cor de texto, cor de forma, IA).
   void _openMenu() async {
-    final result = await _showAppPopupMenu<int>(
+    final s = AppTheme.of(context);
+    final result = await _showMorphMenu<int>(
       context,
-      AppTheme.of(context),
+      s,
       anchorKey: _moreMenuKey,
-      items: [
-        PopupMenuItem(value: 1, child: _buildPopupItem('add', 'Adicionar slide', false)),
-        PopupMenuItem(value: 2, child: _buildPopupItem('trash', 'Excluir slide atual', true)),
-        PopupMenuItem(value: 3, child: _buildPopupItem('image', 'Inserir imagem', false)),
-        PopupMenuItem(value: 4, child: _buildPopupItem('chart', 'Inserir gráfico', false)),
-        PopupMenuItem(value: 5, child: _buildPopupItem('sparkles', 'Editar com IA', false)),
-        PopupMenuItem(value: 6, child: _buildPopupItem('download', 'Descarregar documento', false)),
+      items: const [
+        _MorphMenuItem(value: 1, asset: 'download', label: 'Descarregar documento'),
       ],
     );
-    if (result == 1) _runJs("editorApi.addSlide()");
-    else if (result == 2) _runJs("editorApi.deleteCurrentSlide()");
-    else if (result == 3) _onInsertImage();
-    else if (result == 4) _onInsertChart();
-    else if (result == 5) _openAiEditModal();
-    else if (result == 6) _downloadCurrentDocument();
-  }
-
-  Widget _buildPopupItem(String assetName, String label, bool destructive) {
-    final s = AppTheme.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          _EditorIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(fontSize: 14, color: destructive ? s.error : s.onSurface)),
-        ],
-      ),
-    );
+    if (result == 1) _downloadCurrentDocument();
   }
 
   @override
