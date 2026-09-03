@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'dart:convert';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:image_picker/image_picker.dart';
@@ -458,28 +459,28 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   Future<void> _shareCurrentDocument() async {
-    try {
-      final bytes = await _exportDocx();
-      if (bytes == null) return;
-      await ExportService.shareBytes(bytes, filename: '$_safeTitle.docx', share: true);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível partilhar o documento: ${e.toString()}')),
-      );
-    }
+  try {
+    final bytes = await _exportDocx();
+    if (bytes == null) return;
+    await ExportService.shareBytes(bytes, filename: '$_safeTitle.docx');
+  } catch (e) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Não foi possível partilhar o documento: ${e.toString()}')),
+    );
   }
+}
 
   Future<void> _sharePdf() async {
-    try {
-      final bytes = await _exportPdf();
-      if (bytes == null) return;
-      await ExportService.shareBytes(bytes, filename: '$_safeTitle.pdf', share: true);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível partilhar como PDF: ${e.toString()}')),
-      );
-    }
+  try {
+    final bytes = await _exportPdf();
+    if (bytes == null) return;
+    await ExportService.shareBytes(bytes, filename: '$_safeTitle.pdf');
+  } catch (e) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Não foi possível partilhar como PDF: ${e.toString()}')),
+    );
   }
+}
 
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
