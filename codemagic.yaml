@@ -276,6 +276,25 @@ workflows:
           echo "✅ applicationId ajustado para com.jj_group.nexa"
           echo "✅ Nome do app ajustado para Nexa"
 
+      - name: Bump compileSdk to 36
+        script: |
+          BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle"
+          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
+            BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
+          fi
+
+          # Cobre a sintaxe Groovy (compileSdk 34 / compileSdkVersion 34),
+          # a Kotlin DSL (compileSdk = 34), e o caso em que o template
+          # referencia flutter.compileSdkVersion em vez de um número fixo.
+          sed -i 's/compileSdk = flutter\.compileSdkVersion/compileSdk = 36/' "$BUILD_GRADLE"
+          sed -i 's/compileSdk flutter\.compileSdkVersion/compileSdk 36/' "$BUILD_GRADLE"
+          sed -i 's/compileSdkVersion flutter\.compileSdkVersion/compileSdkVersion 36/' "$BUILD_GRADLE"
+          sed -i -E 's/compileSdk[[:space:]]*=?[[:space:]]*[0-9]+/compileSdk 36/' "$BUILD_GRADLE"
+          sed -i -E 's/compileSdkVersion[[:space:]]*=?[[:space:]]*[0-9]+/compileSdkVersion 36/' "$BUILD_GRADLE"
+
+          echo "✅ compileSdk ajustado para 36 em ${BUILD_GRADLE}"
+          grep -n "compileSdk" "$BUILD_GRADLE" || echo "⚠️ Nenhuma linha compileSdk encontrada — verificar manualmente"
+
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
@@ -610,6 +629,22 @@ workflows:
 
           echo "✅ applicationId ajustado para com.jj_group.nexa"
           echo "✅ Nome do app ajustado para Nexa"
+
+      - name: Bump compileSdk to 36
+        script: |
+          BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle"
+          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
+            BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
+          fi
+
+          sed -i 's/compileSdk = flutter\.compileSdkVersion/compileSdk = 36/' "$BUILD_GRADLE"
+          sed -i 's/compileSdk flutter\.compileSdkVersion/compileSdk 36/' "$BUILD_GRADLE"
+          sed -i 's/compileSdkVersion flutter\.compileSdkVersion/compileSdkVersion 36/' "$BUILD_GRADLE"
+          sed -i -E 's/compileSdk[[:space:]]*=?[[:space:]]*[0-9]+/compileSdk 36/' "$BUILD_GRADLE"
+          sed -i -E 's/compileSdkVersion[[:space:]]*=?[[:space:]]*[0-9]+/compileSdkVersion 36/' "$BUILD_GRADLE"
+
+          echo "✅ compileSdk ajustado para 36 em ${BUILD_GRADLE}"
+          grep -n "compileSdk" "$BUILD_GRADLE" || echo "⚠️ Nenhuma linha compileSdk encontrada — verificar manualmente"
 
       - name: Get Flutter packages
         script: |
