@@ -5,20 +5,21 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'colors.dart';
-import 'widgets.dart';
-import 'drawermenu.dart';
-import 'aitab/aitab.dart';
-import 'settingsscreen.dart';
-import 'sheets.dart';
-import 'auth_service.dart';
-import 'authscreens.dart';
-import 'library_screen.dart';
-import 'apps/app_types.dart';
-import 'apps/registry/app_registry.dart';
-import 'apps/docs.dart';               // necessário para o RootShell
-import 'apps/sheets_app.dart';         // necessário para o RootShell
-import 'apps/slides_app.dart';         // necessário para o RootShell
+import 'core/theme/colors.dart';
+import 'core/widgets/widgets.dart';
+import 'core/navigation/app_page_route.dart';
+import 'features/drawer/drawermenu.dart';
+import 'features/aitab/aitab.dart';
+import 'features/settings/settingsscreen.dart';
+import 'features/apps/sheets/sheets.dart';
+import 'services/auth_service.dart';
+import 'features/auth/authscreens.dart';
+import 'features/library/library_screen.dart';
+import 'features/apps/app_types.dart';
+import 'features/apps/registry/app_registry.dart';
+import 'features/apps/docs/docs.dart';
+import 'features/apps/sheets/sheets_app.dart';
+import 'features/apps/slides/slides_app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,6 +98,7 @@ class _CraftLabAppState extends State<CraftLabApp> {
         return MaterialApp(
           title: 'CraftLab',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: const AppScrollBehavior(),
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
@@ -148,8 +150,6 @@ class _RootShellState extends State<RootShell>
     _drawerCtrl.animateTo(1.0, curve: _drawerCurve);
   }
 
-  // Retorna um Future que só resolve quando a animação de fecho termina,
-  // para quem precisar de encadear navegação depois do drawer fechar.
   Future<void> _closeDrawer() =>
       _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
 
@@ -164,13 +164,13 @@ class _RootShellState extends State<RootShell>
   void _openSettings() {
     _closeDrawer();
     Navigator.of(context)
-        .push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
+        .push(AppPageRoute(builder: (_) => const SettingsScreen()));
   }
 
   void _openLibrary() {
     _closeDrawer();
     Navigator.of(context)
-        .push(CupertinoPageRoute(builder: (_) => const LibraryScreen()));
+        .push(AppPageRoute(builder: (_) => const LibraryScreen()));
   }
 
   void _onMessageSent() {
@@ -270,7 +270,7 @@ class _RootShellState extends State<RootShell>
           EditorType.sheets => SheetsScreen(),
           EditorType.slides => SlidesScreen(),
         };
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+        Navigator.of(context).push(AppPageRoute(builder: (_) => screen));
       },
       child: Scaffold(
         backgroundColor: s.surface,
@@ -312,7 +312,6 @@ class _RootShellState extends State<RootShell>
               ),
             ),
 
-            // Overlay escuro — agora com tap-to-close e drag-to-close.
             AnimatedBuilder(
               animation: _drawerCtrl,
               builder: (_, __) {
@@ -598,9 +597,10 @@ class _AppHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
+          // Igualado ao _SettingsAppBar: nunca chega a 0, mínimo de 0.4.
           colors: [
             headerBackground,
-            headerBackground.withOpacity(0.0),
+            headerBackground.withOpacity(0.4),
           ],
         ),
       ),
