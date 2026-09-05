@@ -8,7 +8,7 @@ import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import 'dart:typed_data';
-import '../aitab/aitab_widgets_shared.dart
+import '../aitab/aitab_widgets_shared.dart;
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/navigation/app_page_route.dart';
@@ -1184,10 +1184,23 @@ class _SpringMenuRoute<T> extends PopupRoute<T> {
     return CustomSingleChildLayout(
       delegate: _PopupMenuRouteLayout(position),
       child: Material(
-        type: MaterialType.transparency,
-        child: PopupMenu<T>(
-          items: items,
-          route: this,
+        color: color,
+        elevation: 8,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: items.map<Widget>((entry) {
+              if (entry is PopupMenuItem<T>) {
+                return InkWell(
+                  onTap: () => Navigator.of(context).pop(entry.value),
+                  child: entry.child ?? const SizedBox.shrink(),
+                );
+              }
+              return entry.child ?? const SizedBox.shrink();
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -1195,8 +1208,6 @@ class _SpringMenuRoute<T> extends PopupRoute<T> {
 
   @override
   Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
-    // Curva suave com leve overshoot no fim, tipo spring do iOS,
-    // no lugar da curva seca padrão do showMenu.
     final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
     final fade = CurvedAnimation(parent: animation, curve: const Interval(0.0, 0.55, curve: Curves.easeOut));
     return FadeTransition(
