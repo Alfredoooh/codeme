@@ -283,8 +283,30 @@ workflows:
             PROJECT_GRADLE="${CM_BUILD_DIR}/android/build.gradle.kts"
           fi
 
+          IS_KTS=false
+          if [[ "$PROJECT_GRADLE" == *.kts ]]; then
+            IS_KTS=true
+          fi
+
           if grep -q "NEXA_FORCE_COMPILE_SDK_36" "$PROJECT_GRADLE"; then
             echo "✅ Bloco de força já presente, pulando."
+          elif [ "$IS_KTS" = true ]; then
+            cat >> "$PROJECT_GRADLE" << 'EOF'
+
+          // NEXA_FORCE_COMPILE_SDK_36 — força todos os módulos Android
+          // (app + plugins como file_picker) a compilarem contra a API 36,
+          // já que plugins baixados do pub.dev podem trazer seu próprio
+          // compileSdk desatualizado, independente do que o módulo app usa.
+          subprojects {
+              afterEvaluate {
+                  extensions.findByName("android")?.let { ext ->
+                      val android = ext as com.android.build.gradle.BaseExtension
+                      android.compileSdkVersion(36)
+                  }
+              }
+          }
+          EOF
+            echo "✅ Bloco subprojects{} (Kotlin DSL) adicionado a ${PROJECT_GRADLE}."
           else
             cat >> "$PROJECT_GRADLE" << 'EOF'
 
@@ -302,7 +324,7 @@ workflows:
               }
           }
           EOF
-            echo "✅ Bloco subprojects{} adicionado a ${PROJECT_GRADLE}, forçando compileSdkVersion 36 em todos os módulos."
+            echo "✅ Bloco subprojects{} (Groovy) adicionado a ${PROJECT_GRADLE}."
           fi
 
           echo "--- Conteúdo final do arquivo ---"
@@ -650,8 +672,30 @@ workflows:
             PROJECT_GRADLE="${CM_BUILD_DIR}/android/build.gradle.kts"
           fi
 
+          IS_KTS=false
+          if [[ "$PROJECT_GRADLE" == *.kts ]]; then
+            IS_KTS=true
+          fi
+
           if grep -q "NEXA_FORCE_COMPILE_SDK_36" "$PROJECT_GRADLE"; then
             echo "✅ Bloco de força já presente, pulando."
+          elif [ "$IS_KTS" = true ]; then
+            cat >> "$PROJECT_GRADLE" << 'EOF'
+
+          // NEXA_FORCE_COMPILE_SDK_36 — força todos os módulos Android
+          // (app + plugins como file_picker) a compilarem contra a API 36,
+          // já que plugins baixados do pub.dev podem trazer seu próprio
+          // compileSdk desatualizado, independente do que o módulo app usa.
+          subprojects {
+              afterEvaluate {
+                  extensions.findByName("android")?.let { ext ->
+                      val android = ext as com.android.build.gradle.BaseExtension
+                      android.compileSdkVersion(36)
+                  }
+              }
+          }
+          EOF
+            echo "✅ Bloco subprojects{} (Kotlin DSL) adicionado a ${PROJECT_GRADLE}."
           else
             cat >> "$PROJECT_GRADLE" << 'EOF'
 
@@ -669,7 +713,7 @@ workflows:
               }
           }
           EOF
-            echo "✅ Bloco subprojects{} adicionado a ${PROJECT_GRADLE}, forçando compileSdkVersion 36 em todos os módulos."
+            echo "✅ Bloco subprojects{} (Groovy) adicionado a ${PROJECT_GRADLE}."
           fi
 
           echo "--- Conteúdo final do arquivo ---"
