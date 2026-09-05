@@ -254,7 +254,7 @@ workflows:
               </style>
           </resources>
           EOF
-          echo "✅ values-night-v27/styles.xml (dark v27) escrito"
+          echo "✅ Todos os styles.xml (light/dark/v27) escritos"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |
@@ -283,23 +283,43 @@ workflows:
 
       - name: Patch flutter_inappwebview proguard method call
         script: |
-          PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+          python3 << 'PYEOF'
+          import os
+          import glob
 
-          if [ -z "$PLUGIN_GRADLE" ]; then
-            echo "⚠️ build.gradle não encontrado no pub-cache — rodando pub get novamente"
-            cd "${CM_BUILD_DIR}" && flutter pub get
-            PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
-          fi
+          home = os.environ["HOME"]
+          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/flutter_inappwebview_android-*/android/build.gradle")
+          candidates = [f for f in glob.glob(pattern) if "example" not in f]
 
-          if [ -n "$PLUGIN_GRADLE" ]; then
-            echo "Arquivo encontrado: $PLUGIN_GRADLE"
-            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE"
-            sed -i 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE"
-            echo "✅ proguard-android.txt substituído por proguard-android-optimize.txt no plugin"
-            grep -n "getDefaultProguardFile" "$PLUGIN_GRADLE"
-          else
-            echo "❌ build.gradle do flutter_inappwebview_android ainda não encontrado — verificar manualmente"
-          fi
+          if not candidates:
+              print("❌ build.gradle do flutter_inappwebview_android não encontrado")
+              raise SystemExit(1)
+
+          target = candidates[0]
+          print(f"Arquivo encontrado: {target}")
+
+          with open(target, "r") as f:
+              content = f.read()
+
+          new_content = content.replace(
+              "getDefaultProguardFile('proguard-android.txt')",
+              "getDefaultProguardFile('proguard-android-optimize.txt')"
+          ).replace(
+              'getDefaultProguardFile("proguard-android.txt")',
+              'getDefaultProguardFile("proguard-android-optimize.txt")'
+          )
+
+          if new_content == content:
+              print("⚠️ Nenhuma ocorrência de proguard-android.txt encontrada — verificar manualmente")
+          else:
+              with open(target, "w") as f:
+                  f.write(new_content)
+              print("✅ proguard-android.txt substituído por proguard-android-optimize.txt")
+
+          for i, line in enumerate(new_content.splitlines(), 1):
+              if "getDefaultProguardFile" in line:
+                  print(f"  linha {i}: {line.strip()}")
+          PYEOF
 
       - name: Enable R8 + resource shrinking
         script: |
@@ -598,28 +618,43 @@ workflows:
 
       - name: Patch flutter_inappwebview proguard method call
         script: |
-          PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" ! -path "*example*" 2>/dev/null | head -n 1)
+          python3 << 'PYEOF'
+          import os
+          import glob
 
-          if [ -z "$PLUGIN_GRADLE" ]; then
-            echo "⚠️ build.gradle não encontrado no pub-cache — rodando pub get novamente"
-            cd "${CM_BUILD_DIR}" && flutter pub get
-            PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" ! -path "*example*" 2>/dev/null | head -n 1)
-          fi
+          home = os.environ["HOME"]
+          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/flutter_inappwebview_android-*/android/build.gradle")
+          candidates = [f for f in glob.glob(pattern) if "example" not in f]
 
-          if [ -n "$PLUGIN_GRADLE" ]; then
-            echo "Arquivo encontrado: $PLUGIN_GRADLE"
-            sed -i '' "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE" 2>/dev/null || \
-            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE"
+          if not candidates:
+              print("❌ build.gradle do flutter_inappwebview_android não encontrado")
+              raise SystemExit(1)
 
-            sed -i '' 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE" 2>/dev/null || \
-            sed -i 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE"
+          target = candidates[0]
+          print(f"Arquivo encontrado: {target}")
 
-            echo "✅ proguard-android.txt substituído por proguard-android-optimize.txt no plugin"
-            grep -n "getDefaultProguardFile" "$PLUGIN_GRADLE"
-          else
-            echo "❌ build.gradle do flutter_inappwebview_android ainda não encontrado — verificar manualmente"
-            exit 1
-          fi
+          with open(target, "r") as f:
+              content = f.read()
+
+          new_content = content.replace(
+              "getDefaultProguardFile('proguard-android.txt')",
+              "getDefaultProguardFile('proguard-android-optimize.txt')"
+          ).replace(
+              'getDefaultProguardFile("proguard-android.txt")',
+              'getDefaultProguardFile("proguard-android-optimize.txt")'
+          )
+
+          if new_content == content:
+              print("⚠️ Nenhuma ocorrência de proguard-android.txt encontrada — verificar manualmente")
+          else:
+              with open(target, "w") as f:
+                  f.write(new_content)
+              print("✅ proguard-android.txt substituído por proguard-android-optimize.txt")
+
+          for i, line in enumerate(new_content.splitlines(), 1):
+              if "getDefaultProguardFile" in line:
+                  print(f"  linha {i}: {line.strip()}")
+          PYEOF
 
       - name: Build debug APK
         script: |
