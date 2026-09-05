@@ -18,23 +18,6 @@ workflows:
             echo "Pasta android/ já existe, pulando geração."
           fi
 
-      - name: Pin AGP version to avoid R8 proguard-android.txt conflict
-        script: |
-          SETTINGS_GRADLE="${CM_BUILD_DIR}/android/settings.gradle"
-          SETTINGS_KTS="${CM_BUILD_DIR}/android/settings.gradle.kts"
-
-          if [ -f "$SETTINGS_KTS" ]; then
-            sed -i 's/id("com.android.application") version "[^"]*"/id("com.android.application") version "8.7.0"/' "$SETTINGS_KTS"
-            echo "✅ AGP fixado em 8.7.0 no settings.gradle.kts"
-          elif [ -f "$SETTINGS_GRADLE" ]; then
-            sed -i 's/id "com.android.application" version "[^"]*"/id "com.android.application" version "8.7.0"/' "$SETTINGS_GRADLE"
-            echo "✅ AGP fixado em 8.7.0 no settings.gradle"
-          else
-            echo "⚠️ Nenhum settings.gradle(.kts) encontrado — verificar estrutura gerada"
-          fi
-
-          cat "$SETTINGS_KTS" 2>/dev/null || cat "$SETTINGS_GRADLE" 2>/dev/null
-
       - name: Generate key.properties
         script: |
           cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
@@ -59,7 +42,6 @@ workflows:
           LAUNCHER        = os.path.join(CM, "ic_launcher.png")
           SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
           SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
-          # Fallback: se não existir splash dedicado, usa o launcher centralizado
           SPLASH_FALLBACK = LAUNCHER
 
           if not os.path.exists(LAUNCHER):
@@ -105,7 +87,6 @@ workflows:
           def make_splash(source_path, dest_path):
               CANVAS, ICON = 288, 288
               src_img = Image.open(source_path).convert("RGBA")
-              # Se a imagem for menor que o canvas, centraliza num fundo transparente
               if src_img.size != (CANVAS, CANVAS):
                   ICON = 160
                   canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
@@ -141,7 +122,6 @@ workflows:
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
-          # Light: fundo branco + splash_icon centrado
           mkdir -p "${RES}/drawable"
           cat > "${RES}/drawable/launch_background.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -156,7 +136,6 @@ workflows:
           EOF
           echo "✅ drawable/launch_background.xml (light) criado"
 
-          # Dark: fundo #0d0d0d + splash_icon centrado (vem de drawable-night)
           mkdir -p "${RES}/drawable-night"
           cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -177,7 +156,6 @@ workflows:
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
-          # values/styles.xml — tema claro (padrão)
           mkdir -p "${RES}/values"
           cat > "${RES}/values/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -206,7 +184,6 @@ workflows:
           EOF
           echo "✅ values/styles.xml (light) escrito"
 
-          # values-night/styles.xml — tema escuro
           mkdir -p "${RES}/values-night"
           cat > "${RES}/values-night/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -235,7 +212,6 @@ workflows:
           EOF
           echo "✅ values-night/styles.xml (dark) escrito"
 
-          # values-v27/styles.xml — claro, API 27+ (windowLightNavigationBar)
           mkdir -p "${RES}/values-v27"
           cat > "${RES}/values-v27/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -258,7 +234,6 @@ workflows:
           EOF
           echo "✅ values-v27/styles.xml (light v27) escrito"
 
-          # values-night-v27/styles.xml — escuro, API 27+
           mkdir -p "${RES}/values-night-v27"
           cat > "${RES}/values-night-v27/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -305,6 +280,26 @@ workflows:
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
+
+      - name: Patch flutter_inappwebview proguard method call
+        script: |
+          PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+
+          if [ -z "$PLUGIN_GRADLE" ]; then
+            echo "⚠️ build.gradle não encontrado no pub-cache — rodando pub get novamente"
+            cd "${CM_BUILD_DIR}" && flutter pub get
+            PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+          fi
+
+          if [ -n "$PLUGIN_GRADLE" ]; then
+            echo "Arquivo encontrado: $PLUGIN_GRADLE"
+            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE"
+            sed -i 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE"
+            echo "✅ proguard-android.txt substituído por proguard-android-optimize.txt no plugin"
+            grep -n "getDefaultProguardFile" "$PLUGIN_GRADLE"
+          else
+            echo "❌ build.gradle do flutter_inappwebview_android ainda não encontrado — verificar manualmente"
+          fi
 
       - name: Enable R8 + resource shrinking
         script: |
@@ -355,23 +350,6 @@ workflows:
           else
             echo "Pasta android/ já existe, pulando geração."
           fi
-
-      - name: Pin AGP version to avoid R8 proguard-android.txt conflict
-        script: |
-          SETTINGS_GRADLE="${CM_BUILD_DIR}/android/settings.gradle"
-          SETTINGS_KTS="${CM_BUILD_DIR}/android/settings.gradle.kts"
-
-          if [ -f "$SETTINGS_KTS" ]; then
-            sed -i 's/id("com.android.application") version "[^"]*"/id("com.android.application") version "8.7.0"/' "$SETTINGS_KTS"
-            echo "✅ AGP fixado em 8.7.0 no settings.gradle.kts"
-          elif [ -f "$SETTINGS_GRADLE" ]; then
-            sed -i 's/id "com.android.application" version "[^"]*"/id "com.android.application" version "8.7.0"/' "$SETTINGS_GRADLE"
-            echo "✅ AGP fixado em 8.7.0 no settings.gradle"
-          else
-            echo "⚠️ Nenhum settings.gradle(.kts) encontrado — verificar estrutura gerada"
-          fi
-
-          cat "$SETTINGS_KTS" 2>/dev/null || cat "$SETTINGS_GRADLE" 2>/dev/null
 
       - name: Install Pillow
         script: pip3 install Pillow --quiet
@@ -617,6 +595,26 @@ workflows:
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
+
+      - name: Patch flutter_inappwebview proguard method call
+        script: |
+          PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+
+          if [ -z "$PLUGIN_GRADLE" ]; then
+            echo "⚠️ build.gradle não encontrado no pub-cache — rodando pub get novamente"
+            cd "${CM_BUILD_DIR}" && flutter pub get
+            PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+          fi
+
+          if [ -n "$PLUGIN_GRADLE" ]; then
+            echo "Arquivo encontrado: $PLUGIN_GRADLE"
+            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE"
+            sed -i 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE"
+            echo "✅ proguard-android.txt substituído por proguard-android-optimize.txt no plugin"
+            grep -n "getDefaultProguardFile" "$PLUGIN_GRADLE"
+          else
+            echo "❌ build.gradle do flutter_inappwebview_android ainda não encontrado — verificar manualmente"
+          fi
 
       - name: Build debug APK
         script: |
