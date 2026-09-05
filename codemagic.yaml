@@ -598,22 +598,27 @@ workflows:
 
       - name: Patch flutter_inappwebview proguard method call
         script: |
-          PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+          PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" ! -path "*example*" 2>/dev/null | head -n 1)
 
           if [ -z "$PLUGIN_GRADLE" ]; then
             echo "⚠️ build.gradle não encontrado no pub-cache — rodando pub get novamente"
             cd "${CM_BUILD_DIR}" && flutter pub get
-            PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" 2>/dev/null | head -n 1)
+            PLUGIN_GRADLE=$(find "${HOME}/.pub-cache" -path "*flutter_inappwebview_android*/android/build.gradle" ! -path "*example*" 2>/dev/null | head -n 1)
           fi
 
           if [ -n "$PLUGIN_GRADLE" ]; then
             echo "Arquivo encontrado: $PLUGIN_GRADLE"
+            sed -i '' "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE" 2>/dev/null || \
             sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$PLUGIN_GRADLE"
+
+            sed -i '' 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE" 2>/dev/null || \
             sed -i 's/getDefaultProguardFile("proguard-android.txt")/getDefaultProguardFile("proguard-android-optimize.txt")/g' "$PLUGIN_GRADLE"
+
             echo "✅ proguard-android.txt substituído por proguard-android-optimize.txt no plugin"
             grep -n "getDefaultProguardFile" "$PLUGIN_GRADLE"
           else
             echo "❌ build.gradle do flutter_inappwebview_android ainda não encontrado — verificar manualmente"
+            exit 1
           fi
 
       - name: Build debug APK
