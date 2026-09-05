@@ -1,5 +1,5 @@
 name: nexa
-description: CodeMe App - Custom UI Native
+description: AI.
 
 publish_to: 'none'
 
@@ -37,7 +37,7 @@ dependencies:
   flutter_highlight: ^0.7.0
   highlight: ^0.7.0
   visibility_detector: ^0.4.0+2
-  
+
 flutter:
   uses-material-design: true
   assets:

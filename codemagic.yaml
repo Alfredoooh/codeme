@@ -8,6 +8,16 @@ workflows:
       groups:
         - codeme_keystore
     scripts:
+      - name: Generate Android project from scratch
+        script: |
+          cd "${CM_BUILD_DIR}"
+          if [ ! -d "android" ]; then
+            echo "Pasta android/ não existe, gerando projeto Flutter completo..."
+            flutter create --platforms=android --org com.jj_group --project-name nexa .
+          else
+            echo "Pasta android/ já existe, pulando geração."
+          fi
+
       - name: Generate key.properties
         script: |
           cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
@@ -259,6 +269,21 @@ workflows:
           rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
           echo "✅ mipmap-anydpi-v26 removido (se existia)"
 
+      - name: Set applicationId and app label
+        script: |
+          BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle"
+          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
+            BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
+          fi
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+
+          sed -i 's/applicationId = "com.example.nexa"/applicationId = "com.jj_group.nexa"/' "$BUILD_GRADLE"
+          sed -i 's/applicationId "com.example.nexa"/applicationId "com.jj_group.nexa"/' "$BUILD_GRADLE"
+          sed -i 's/android:label="nexa"/android:label="Nexa"/' "$MANIFEST"
+
+          echo "✅ applicationId ajustado para com.jj_group.nexa"
+          echo "✅ Nome do app ajustado para Nexa"
+
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
@@ -304,6 +329,16 @@ workflows:
       flutter: stable
       java: 17
     scripts:
+      - name: Generate Android project from scratch
+        script: |
+          cd "${CM_BUILD_DIR}"
+          if [ ! -d "android" ]; then
+            echo "Pasta android/ não existe, gerando projeto Flutter completo..."
+            flutter create --platforms=android --org com.jj_group --project-name nexa .
+          else
+            echo "Pasta android/ já existe, pulando geração."
+          fi
+
       - name: Install Pillow
         script: pip3 install Pillow --quiet
 
@@ -528,6 +563,21 @@ workflows:
         script: |
           rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
           echo "✅ mipmap-anydpi-v26 removido (se existia)"
+
+      - name: Set applicationId and app label
+        script: |
+          BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle"
+          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
+            BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
+          fi
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+
+          sed -i 's/applicationId = "com.example.nexa"/applicationId = "com.jj_group.nexa"/' "$BUILD_GRADLE"
+          sed -i 's/applicationId "com.example.nexa"/applicationId "com.jj_group.nexa"/' "$BUILD_GRADLE"
+          sed -i 's/android:label="nexa"/android:label="Nexa"/' "$MANIFEST"
+
+          echo "✅ applicationId ajustado para com.jj_group.nexa"
+          echo "✅ Nome do app ajustado para Nexa"
 
       - name: Get Flutter packages
         script: |
