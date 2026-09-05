@@ -4,6 +4,7 @@ import '../../core/widgets/widgets.dart';
 import '../../services/auth_service.dart';
 import '../../core/widgets/app_sheet.dart';
 import 'settings_widgets.dart';
+import '../apps/sheets/sheets.dart';
 
 class PersonalizationScreen extends StatefulWidget {
   const PersonalizationScreen({super.key});
