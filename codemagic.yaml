@@ -18,6 +18,26 @@ workflows:
             echo "Pasta android/ já existe, pulando geração."
           fi
 
+      - name: Pin AGP version to avoid R8 proguard-android.txt conflict
+        script: |
+          SETTINGS="${CM_BUILD_DIR}/android/settings.gradle"
+          if grep -q "com.android.application" "$SETTINGS"; then
+            sed -i "s/id \"com.android.application\" version \"[^\"]*\"/id \"com.android.application\" version \"8.1.4\"/" "$SETTINGS"
+            echo "✅ AGP fixado em 8.1.4 no settings.gradle"
+          else
+            echo "⚠️ Bloco com.android.application não encontrado em settings.gradle — verificar manualmente"
+          fi
+
+      - name: Generate key.properties
+        script: |
+          cd "${CM_BUILD_DIR}"
+          if [ ! -d "android" ]; then
+            echo "Pasta android/ não existe, gerando projeto Flutter completo..."
+            flutter create --platforms=android --org com.jj_group --project-name nexa .
+          else
+            echo "Pasta android/ já existe, pulando geração."
+          fi
+
       - name: Generate key.properties
         script: |
           cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
