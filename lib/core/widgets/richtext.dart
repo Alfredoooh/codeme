@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../theme/colors.dart';
-import '../../features/ai_widgets/ai_widgets.dart' show buildAiTableFromWidgetJson;
+import '../../features/ai_widgets/ai_widgets.dart' show buildAiTableFromWidgetJson, buildAiWidget;
+import '../../features/ai_widgets/ai_widgets_shared.dart' show parseAiWidgetBlocks;
 import 'widgets.dart';
 import '../navigation/app_page_route.dart';
 

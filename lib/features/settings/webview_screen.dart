@@ -25,7 +25,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   String? _errorMessage;
   bool _canGoBack = false;
 
-  static const _settings = InAppWebViewSettings(
+  static final _settings = InAppWebViewSettings(
     javaScriptEnabled: true,
     useOnDownloadStart: true,
     supportZoom: true,
@@ -33,7 +33,7 @@ class _WebViewScreenState extends State<WebViewScreen>
     disableVerticalScroll: false,
     transparentBackground: true,
   );
-
+  
   Future<void> _reload() async {
     setState(() {
       _hasError = false;

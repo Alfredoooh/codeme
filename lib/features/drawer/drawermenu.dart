@@ -8,6 +8,7 @@ import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import '../aitab/aitab_widgets_shared.dart
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/navigation/app_page_route.dart';

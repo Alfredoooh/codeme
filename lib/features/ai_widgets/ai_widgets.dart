@@ -5,6 +5,7 @@
 // quem já importava "aiwidgets.dart" (agora "ai_widgets.dart")
 // continue enxergando exatamente a mesma API pública de antes.
 import 'package:flutter/material.dart';
+import '../../core/theme/colors.dart';
 import 'ai_widgets_shared.dart';
 import 'market_widget.dart';
 import 'calendar_widget.dart';
