@@ -276,60 +276,6 @@ workflows:
           echo "✅ applicationId ajustado para com.jj_group.nexa"
           echo "✅ Nome do app ajustado para Nexa"
 
-      - name: Force compileSdk 36 on all Android modules (app + plugins)
-        script: |
-          PROJECT_GRADLE="${CM_BUILD_DIR}/android/build.gradle"
-          if [ -f "${CM_BUILD_DIR}/android/build.gradle.kts" ]; then
-            PROJECT_GRADLE="${CM_BUILD_DIR}/android/build.gradle.kts"
-          fi
-
-          IS_KTS=false
-          if [[ "$PROJECT_GRADLE" == *.kts ]]; then
-            IS_KTS=true
-          fi
-
-          if grep -q "NEXA_FORCE_COMPILE_SDK_36" "$PROJECT_GRADLE"; then
-            echo "✅ Bloco de força já presente, pulando."
-          elif [ "$IS_KTS" = true ]; then
-            cat >> "$PROJECT_GRADLE" << 'EOF'
-
-          // NEXA_FORCE_COMPILE_SDK_36 — força todos os módulos Android
-          // (app + plugins como file_picker) a compilarem contra a API 36,
-          // já que plugins baixados do pub.dev podem trazer seu próprio
-          // compileSdk desatualizado, independente do que o módulo app usa.
-          subprojects {
-              afterEvaluate {
-                  extensions.findByName("android")?.let { ext ->
-                      val android = ext as com.android.build.gradle.BaseExtension
-                      android.compileSdkVersion(36)
-                  }
-              }
-          }
-          EOF
-            echo "✅ Bloco subprojects{} (Kotlin DSL) adicionado a ${PROJECT_GRADLE}."
-          else
-            cat >> "$PROJECT_GRADLE" << 'EOF'
-
-          // NEXA_FORCE_COMPILE_SDK_36 — força todos os módulos Android
-          // (app + plugins como file_picker) a compilarem contra a API 36,
-          // já que plugins baixados do pub.dev podem trazer seu próprio
-          // compileSdk desatualizado, independente do que o módulo app usa.
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 36
-                      }
-                  }
-              }
-          }
-          EOF
-            echo "✅ Bloco subprojects{} (Groovy) adicionado a ${PROJECT_GRADLE}."
-          fi
-
-          echo "--- Conteúdo final do arquivo ---"
-          tail -n 20 "$PROJECT_GRADLE"
-
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
@@ -373,6 +319,58 @@ workflows:
           for i, line in enumerate(new_content.splitlines(), 1):
               if "getDefaultProguardFile" in line:
                   print(f"  linha {i}: {line.strip()}")
+          PYEOF
+
+      - name: Patch file_picker compileSdk to 36
+        script: |
+          python3 << 'PYEOF'
+          import os
+          import re
+          import glob
+
+          home = os.environ["HOME"]
+          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle")
+          candidates = [f for f in glob.glob(pattern) if "example" not in f]
+
+          if not candidates:
+              pattern_kts = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle.kts")
+              candidates = [f for f in glob.glob(pattern_kts) if "example" not in f]
+
+          if not candidates:
+              print("❌ build.gradle do file_picker não encontrado — verificar manualmente")
+              raise SystemExit(1)
+
+          target = candidates[0]
+          print(f"Arquivo encontrado: {target}")
+
+          with open(target, "r") as f:
+              content = f.read()
+
+          original = content
+
+          # Cobre compileSdk / compileSdkVersion, com ou sem '=', número fixo
+          # ou referência a flutter.compileSdkVersion — tanto Groovy quanto Kotlin DSL.
+          content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
+          content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
+          content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
+          content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+          content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
+          content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
+          content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+
+          if content == original:
+              print("⚠️ Nenhuma substituição aplicada — padrão de compileSdk não reconhecido, verificar manualmente")
+              print("--- Trecho relevante do arquivo original ---")
+              for i, line in enumerate(original.splitlines(), 1):
+                  if "compileSdk" in line:
+                      print(f"  linha {i}: {line.strip()}")
+          else:
+              with open(target, "w") as f:
+                  f.write(content)
+              print("✅ compileSdk do file_picker ajustado para 36")
+              for i, line in enumerate(content.splitlines(), 1):
+                  if "compileSdk" in line:
+                      print(f"  linha {i}: {line.strip()}")
           PYEOF
 
       - name: Enable R8 + resource shrinking
@@ -665,60 +663,6 @@ workflows:
           echo "✅ applicationId ajustado para com.jj_group.nexa"
           echo "✅ Nome do app ajustado para Nexa"
 
-      - name: Force compileSdk 36 on all Android modules (app + plugins)
-        script: |
-          PROJECT_GRADLE="${CM_BUILD_DIR}/android/build.gradle"
-          if [ -f "${CM_BUILD_DIR}/android/build.gradle.kts" ]; then
-            PROJECT_GRADLE="${CM_BUILD_DIR}/android/build.gradle.kts"
-          fi
-
-          IS_KTS=false
-          if [[ "$PROJECT_GRADLE" == *.kts ]]; then
-            IS_KTS=true
-          fi
-
-          if grep -q "NEXA_FORCE_COMPILE_SDK_36" "$PROJECT_GRADLE"; then
-            echo "✅ Bloco de força já presente, pulando."
-          elif [ "$IS_KTS" = true ]; then
-            cat >> "$PROJECT_GRADLE" << 'EOF'
-
-          // NEXA_FORCE_COMPILE_SDK_36 — força todos os módulos Android
-          // (app + plugins como file_picker) a compilarem contra a API 36,
-          // já que plugins baixados do pub.dev podem trazer seu próprio
-          // compileSdk desatualizado, independente do que o módulo app usa.
-          subprojects {
-              afterEvaluate {
-                  extensions.findByName("android")?.let { ext ->
-                      val android = ext as com.android.build.gradle.BaseExtension
-                      android.compileSdkVersion(36)
-                  }
-              }
-          }
-          EOF
-            echo "✅ Bloco subprojects{} (Kotlin DSL) adicionado a ${PROJECT_GRADLE}."
-          else
-            cat >> "$PROJECT_GRADLE" << 'EOF'
-
-          // NEXA_FORCE_COMPILE_SDK_36 — força todos os módulos Android
-          // (app + plugins como file_picker) a compilarem contra a API 36,
-          // já que plugins baixados do pub.dev podem trazer seu próprio
-          // compileSdk desatualizado, independente do que o módulo app usa.
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 36
-                      }
-                  }
-              }
-          }
-          EOF
-            echo "✅ Bloco subprojects{} (Groovy) adicionado a ${PROJECT_GRADLE}."
-          fi
-
-          echo "--- Conteúdo final do arquivo ---"
-          tail -n 20 "$PROJECT_GRADLE"
-
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
@@ -762,6 +706,56 @@ workflows:
           for i, line in enumerate(new_content.splitlines(), 1):
               if "getDefaultProguardFile" in line:
                   print(f"  linha {i}: {line.strip()}")
+          PYEOF
+
+      - name: Patch file_picker compileSdk to 36
+        script: |
+          python3 << 'PYEOF'
+          import os
+          import re
+          import glob
+
+          home = os.environ["HOME"]
+          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle")
+          candidates = [f for f in glob.glob(pattern) if "example" not in f]
+
+          if not candidates:
+              pattern_kts = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle.kts")
+              candidates = [f for f in glob.glob(pattern_kts) if "example" not in f]
+
+          if not candidates:
+              print("❌ build.gradle do file_picker não encontrado — verificar manualmente")
+              raise SystemExit(1)
+
+          target = candidates[0]
+          print(f"Arquivo encontrado: {target}")
+
+          with open(target, "r") as f:
+              content = f.read()
+
+          original = content
+
+          content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
+          content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
+          content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
+          content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+          content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
+          content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
+          content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+
+          if content == original:
+              print("⚠️ Nenhuma substituição aplicada — padrão de compileSdk não reconhecido, verificar manualmente")
+              print("--- Trecho relevante do arquivo original ---")
+              for i, line in enumerate(original.splitlines(), 1):
+                  if "compileSdk" in line:
+                      print(f"  linha {i}: {line.strip()}")
+          else:
+              with open(target, "w") as f:
+                  f.write(content)
+              print("✅ compileSdk do file_picker ajustado para 36")
+              for i, line in enumerate(content.splitlines(), 1):
+                  if "compileSdk" in line:
+                      print(f"  linha {i}: {line.strip()}")
           PYEOF
 
       - name: Build debug APK
