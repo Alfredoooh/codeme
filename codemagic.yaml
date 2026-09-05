@@ -20,23 +20,20 @@ workflows:
 
       - name: Pin AGP version to avoid R8 proguard-android.txt conflict
         script: |
-          SETTINGS="${CM_BUILD_DIR}/android/settings.gradle"
-          if grep -q "com.android.application" "$SETTINGS"; then
-            sed -i "s/id \"com.android.application\" version \"[^\"]*\"/id \"com.android.application\" version \"8.1.4\"/" "$SETTINGS"
-            echo "✅ AGP fixado em 8.1.4 no settings.gradle"
+          SETTINGS_GRADLE="${CM_BUILD_DIR}/android/settings.gradle"
+          SETTINGS_KTS="${CM_BUILD_DIR}/android/settings.gradle.kts"
+
+          if [ -f "$SETTINGS_KTS" ]; then
+            sed -i 's/id("com.android.application") version "[^"]*"/id("com.android.application") version "8.7.0"/' "$SETTINGS_KTS"
+            echo "✅ AGP fixado em 8.7.0 no settings.gradle.kts"
+          elif [ -f "$SETTINGS_GRADLE" ]; then
+            sed -i 's/id "com.android.application" version "[^"]*"/id "com.android.application" version "8.7.0"/' "$SETTINGS_GRADLE"
+            echo "✅ AGP fixado em 8.7.0 no settings.gradle"
           else
-            echo "⚠️ Bloco com.android.application não encontrado em settings.gradle — verificar manualmente"
+            echo "⚠️ Nenhum settings.gradle(.kts) encontrado — verificar estrutura gerada"
           fi
 
-      - name: Generate key.properties
-        script: |
-          cd "${CM_BUILD_DIR}"
-          if [ ! -d "android" ]; then
-            echo "Pasta android/ não existe, gerando projeto Flutter completo..."
-            flutter create --platforms=android --org com.jj_group --project-name nexa .
-          else
-            echo "Pasta android/ já existe, pulando geração."
-          fi
+          cat "$SETTINGS_KTS" 2>/dev/null || cat "$SETTINGS_GRADLE" 2>/dev/null
 
       - name: Generate key.properties
         script: |
@@ -358,6 +355,23 @@ workflows:
           else
             echo "Pasta android/ já existe, pulando geração."
           fi
+
+      - name: Pin AGP version to avoid R8 proguard-android.txt conflict
+        script: |
+          SETTINGS_GRADLE="${CM_BUILD_DIR}/android/settings.gradle"
+          SETTINGS_KTS="${CM_BUILD_DIR}/android/settings.gradle.kts"
+
+          if [ -f "$SETTINGS_KTS" ]; then
+            sed -i 's/id("com.android.application") version "[^"]*"/id("com.android.application") version "8.7.0"/' "$SETTINGS_KTS"
+            echo "✅ AGP fixado em 8.7.0 no settings.gradle.kts"
+          elif [ -f "$SETTINGS_GRADLE" ]; then
+            sed -i 's/id "com.android.application" version "[^"]*"/id "com.android.application" version "8.7.0"/' "$SETTINGS_GRADLE"
+            echo "✅ AGP fixado em 8.7.0 no settings.gradle"
+          else
+            echo "⚠️ Nenhum settings.gradle(.kts) encontrado — verificar estrutura gerada"
+          fi
+
+          cat "$SETTINGS_KTS" 2>/dev/null || cat "$SETTINGS_GRADLE" 2>/dev/null
 
       - name: Install Pillow
         script: pip3 install Pillow --quiet
