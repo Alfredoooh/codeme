@@ -743,29 +743,32 @@ class HomePage extends StatelessWidget {
             ],
           ),
 
-          // AppBar fixa com blur e transição suave (sem linha divisória)
+          // AppBar com blur progressivo e sem linha divisória
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: 70, // altura compacta, como no exemplo HTML
+            height: 70,
             child: IgnorePointer(
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withOpacity(0.7),
-                          Colors.white.withOpacity(0.5),
-                          Colors.white.withOpacity(0.2),
-                          Colors.white.withOpacity(0.0),
-                        ],
-                        stops: const [0.0, 0.45, 0.75, 1.0],
-                      ),
+              child: ShaderMask(
+                shaderCallback: (rect) {
+                  return const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white,
+                      Colors.white,
+                      Colors.transparent,
+                    ],
+                    stops: [0.0, 0.55, 1.0],
+                  ).createShader(rect);
+                },
+                blendMode: BlendMode.dstIn,
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+                    child: Container(
+                      color: Colors.white.withOpacity(0.7),
                     ),
                   ),
                 ),
