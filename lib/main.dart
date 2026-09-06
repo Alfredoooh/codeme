@@ -649,14 +649,15 @@ class _AppHeader extends StatelessWidget {
 }*/
 
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const CraftLabApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class CraftLabApp extends StatelessWidget {
+  const CraftLabApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -664,119 +665,39 @@ class MyApp extends StatelessWidget {
       title: 'CraftLab',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFFFFFFF),
+        fontFamily: '.SF Pro Text',
       ),
-      home: const HomePage(),
+      home: const ScrollableTextPage(),
     );
   }
 }
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+class ScrollableTextPage extends StatelessWidget {
+  const ScrollableTextPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFFFFFF),
       body: Stack(
         children: [
-          // Conteúdo rolável
-          ListView(
-            padding: const EdgeInsets.fromLTRB(20, 90, 20, 50),
-            children: const [
-              Text(
-                'Texto deslizável',
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -1,
-                  height: 1.1,
-                  color: Color(0xFF111111),
-                ),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Este texto pode ser deslizado verticalmente pela tela. A AppBar permanece fixa enquanto o conteúdo passa por baixo dela.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 26),
-              Text(
-                'O efeito visual da AppBar utiliza um blur extremamente discreto, semelhante ao utilizado no seu código Flutter.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 30),
-              _Card(text: 'O fundo da AppBar permanece predominantemente branco, com apenas uma pequena transparência para permitir que o conteúdo abaixo apareça de forma muito suave.'),
-              SizedBox(height: 30),
-              Text(
-                'Continue deslizando para baixo para testar o comportamento da página. O conteúdo passa por trás da AppBar sem criar nenhuma linha ou borda.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 26),
-              Text(
-                'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer tincidunt velit vitae suscipit consequat.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 26),
-              Text(
-                'Suspendisse potenti. Donec tincidunt neque at tincidunt vulputate. Vestibulum ante ipsum primis in faucibus orci.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 30),
-              _Card(text: 'Mais conteúdo para permitir testar o scroll vertical.'),
-              SizedBox(height: 30),
-              Text(
-                'Curabitur non neque sed lorem elementum tincidunt. Integer aliquet justo sed lectus tincidunt.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 26),
-              Text(
-                'Sed vitae consequat nisl. Integer aliquet justo sed lectus tincidunt, vitae facilisis magna volutpat.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 26),
-              Text(
-                'O conteúdo continua normalmente até ao final da página.',
-                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
-              ),
-              SizedBox(height: 30),
-              _Card(text: 'Fim do conteúdo.'),
-            ],
+          // ══════════════════════════════════════════════════
+          // CONTEÚDO DESLIZÁVEL
+          // ══════════════════════════════════════════════════
+          Positioned.fill(
+            child: _ScrollableContent(),
           ),
 
-          // AppBar com blur progressivo e sem linha divisória
+          // ══════════════════════════════════════════════════
+          // APPBAR — sem linhas de divisão, blur contínuo
+          // ══════════════════════════════════════════════════
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: 70,
-            child: IgnorePointer(
-              child: ShaderMask(
-                shaderCallback: (rect) {
-                  return const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white,
-                      Colors.white,
-                      Color(0xE6FFFFFF), // ~85% branco
-                      Color(0x8CFFFFFF), // ~55% branco
-                      Color(0x38FFFFFF), // ~22% branco
-                      Colors.transparent,
-                    ],
-                    stops: [0.0, 0.45, 0.62, 0.78, 0.91, 1.0],
-                  ).createShader(rect);
-                },
-                blendMode: BlendMode.dstIn,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 1.5, sigmaY: 1.5),
-                    child: Container(
-                      color: Colors.white.withOpacity(0.7),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            child: _FadingBlurAppBar(),
           ),
         ],
       ),
@@ -784,13 +705,234 @@ class HomePage extends StatelessWidget {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// APPBAR COM BLUR E MÁSCARA DE GRADIENTE (fade-out)
+// ════════════════════════════════════════════════════════════
+
+class _FadingBlurAppBar extends StatelessWidget {
+  const _FadingBlurAppBar();
+
+  static const double _height = 70.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        height: _height,
+        width: double.infinity,
+        child: ShaderMask(
+          shaderCallback: (Rect bounds) {
+            // Replica o -webkit-mask-image: linear-gradient(
+            //   to bottom,
+            //   rgba(0,0,0,1) 0%,
+            //   rgba(0,0,0,1) 40%,
+            //   rgba(0,0,0,0.7) 65%,
+            //   rgba(0,0,0,0.3) 85%,
+            //   transparent 100%
+            // );
+            return const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0.0, 0.40, 0.65, 0.85, 1.0],
+              colors: [
+                Color(0xFF000000), // alpha 1.0
+                Color(0xFF000000), // alpha 1.0
+                Color(0xB3000000), // alpha 0.7
+                Color(0x4D000000), // alpha 0.3
+                Color(0x00000000), // alpha 0.0 (transparent)
+              ],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+              child: Container(
+                width: double.infinity,
+                height: _height,
+                // rgba(255, 255, 255, 0.7)
+                color: const Color(0xB3FFFFFF),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// CONTEÚDO SCROLLÁVEL
+// ════════════════════════════════════════════════════════════
+
+class _ScrollableContent extends StatelessWidget {
+  const _ScrollableContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrollConfiguration(
+      behavior: const _NoScrollbarBehavior(),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(
+          top: 90,
+          left: 20,
+          right: 20,
+          bottom: 50,
+        ),
+        physics: const BouncingScrollPhysics(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 700),
+            child: const _PageText(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoScrollbarBehavior extends ScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// TEXTO DA PÁGINA
+// ════════════════════════════════════════════════════════════
+
+class _PageText extends StatelessWidget {
+  const _PageText();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Heading('Texto deslizável'),
+
+        const _Paragraph(
+          'Este texto pode ser deslizado verticalmente pela tela. '
+          'A AppBar permanece fixa enquanto o conteúdo passa por '
+          'baixo dela.',
+        ),
+
+        const _Paragraph(
+          'O efeito visual da AppBar utiliza um blur extremamente '
+          'discreto, semelhante ao utilizado no seu código Flutter.',
+        ),
+
+        const _Card(
+          'O fundo da AppBar permanece predominantemente branco, '
+          'com apenas uma pequena transparência para permitir que '
+          'o conteúdo abaixo apareça de forma muito suave.',
+        ),
+
+        const _Paragraph(
+          'Continue deslizando para baixo para testar o comportamento '
+          'da página. O conteúdo passa por trás da AppBar sem criar '
+          'nenhuma linha ou borda.',
+        ),
+
+        const _Paragraph(
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '
+          'Integer tincidunt velit vitae suscipit consequat.',
+        ),
+
+        const _Paragraph(
+          'Suspendisse potenti. Donec tincidunt neque at tincidunt '
+          'vulputate. Vestibulum ante ipsum primis in faucibus orci.',
+        ),
+
+        const _Card(
+          'Mais conteúdo para permitir testar o scroll vertical.',
+        ),
+
+        const _Paragraph(
+          'Curabitur non neque sed lorem elementum tincidunt. '
+          'Integer aliquet justo sed lectus tincidunt.',
+        ),
+
+        const _Paragraph(
+          'Sed vitae consequat nisl. Integer aliquet justo sed lectus '
+          'tincidunt, vitae facilisis magna volutpat.',
+        ),
+
+        const _Paragraph(
+          'O conteúdo continua normalmente até ao final da página.',
+        ),
+
+        const _Card('Fim do conteúdo.'),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// COMPONENTES DE TEXTO (H1, P, DIV.CARD)
+// ════════════════════════════════════════════════════════════
+
+class _Heading extends StatelessWidget {
+  final String text;
+
+  const _Heading(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 36,
+          height: 1.1,
+          letterSpacing: -1,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF111111),
+        ),
+      ),
+    );
+  }
+}
+
+class _Paragraph extends StatelessWidget {
+  final String text;
+
+  const _Paragraph(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 26),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 18,
+          height: 1.75,
+          color: Color(0xFF4A4A4A),
+        ),
+      ),
+    );
+  }
+}
+
 class _Card extends StatelessWidget {
   final String text;
-  const _Card({required this.text});
+
+  const _Card(this.text);
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 30),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5F5),
@@ -798,7 +940,11 @@ class _Card extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 17, height: 1.65, color: Color(0xFF111111)),
+        style: const TextStyle(
+          fontSize: 17,
+          height: 1.65,
+          color: Color(0xFF111111),
+        ),
       ),
     );
   }
