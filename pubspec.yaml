@@ -67,6 +67,7 @@ flutter:
     - family: IndispensableSerif
       fonts:
         - asset: assets/fonts/IndispensableSerif.ttf
+          weight: 600
     - family: Inter
       fonts:
         - asset: assets/fonts/inter/Inter_24pt-SemiBold.ttf

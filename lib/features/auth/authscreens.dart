@@ -1,7 +1,8 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/authscreens.dart
+// FILE: lib/features/auth/authscreens.dart
 // ══════════════════════════════════════════════════════════════
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +13,6 @@ import '../../core/widgets/widgets.dart';
 import '../../core/navigation/app_page_route.dart';
 import '../../services/auth_service.dart';
 import '../../main.dart';
-
 
 // ══════════════════════════════════════════════════════════════
 // AUTH GATE
@@ -153,8 +153,6 @@ class _AnimatedLogoState extends State<_AnimatedLogo>
     final s = AppTheme.of(context);
     final isDark = s.isDark;
 
-    // Tema escuro: prata → branco → prata (metálico)
-    // Tema claro:  cor primária do app em gradiente suave
     final List<Color> gradientColors = isDark
         ? const [
             Color(0xFFB8BEC7),
@@ -176,7 +174,6 @@ class _AnimatedLogoState extends State<_AnimatedLogo>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Camada 1 — gradiente animado
           AnimatedBuilder(
             animation: _gradientCtrl,
             builder: (context, _) {
@@ -198,8 +195,6 @@ class _AnimatedLogoState extends State<_AnimatedLogo>
               );
             },
           ),
-
-          // Camada 2 — shimmer diagonal (mais intenso no escuro)
           AnimatedBuilder(
             animation: _shimmerCtrl,
             builder: (context, _) {
@@ -667,9 +662,7 @@ class _AuthErrorBanner extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOGIN SCREEN — fundo s.pageBackground (igual ao settings),
-// logo adaptado ao tema, botões no estilo settings, teclado
-// sobe a tela suavemente.
+// LOGIN SCREEN
 // ══════════════════════════════════════════════════════════════
 
 class LoginScreen extends StatefulWidget {
@@ -699,8 +692,12 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _continueWithGoogle() async {
     if (_googleLoading) return;
     setState(() => _googleLoading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
+    final ok = await authController.loginWithGoogle();
     if (mounted) setState(() => _googleLoading = false);
+    if (!ok && mounted) {
+      // Se falhou, o authController.lastError já tem a mensagem
+      setState(() {});
+    }
   }
 
   @override
@@ -720,14 +717,12 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Scaffold(
         backgroundColor: s.pageBackground,
-        // Sobe TUDO quando o teclado aparece
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: AnimatedBuilder(
             animation: authController,
             builder: (context, _) {
               return SingleChildScrollView(
-                // Padding bottom reativo ao teclado para subida suave
                 padding: EdgeInsets.only(
                   left: 28,
                   right: 28,
@@ -746,12 +741,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: IntrinsicHeight(
                     child: Column(
                       children: [
-                        // ── Logo ──────────────────────────────────
                         const SizedBox(height: 16),
                         const _AnimatedLogo(size: 88),
                         const SizedBox(height: 28),
 
-                        // ── Saudação ──────────────────────────────
                         Text(
                           'Bem-vindo',
                           textAlign: TextAlign.center,
@@ -764,7 +757,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 10),
 
-                        // ── Frases streaming ──────────────────────
                         const SizedBox(
                           height: 52,
                           child: Center(child: _StreamingPhrases()),
@@ -772,14 +764,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const Spacer(),
 
-                        // ── Erro global ───────────────────────────
                         if (authController.lastError != null) ...[
                           _AuthErrorBanner(
                               s: s, message: authController.lastError!),
                           const SizedBox(height: 4),
                         ],
 
-                        // ── Subtítulo ─────────────────────────────
                         Text(
                           'Entre na sua conta para continuar.',
                           textAlign: TextAlign.center,
@@ -791,7 +781,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // ── Botão Google ──────────────────────────
                         _AuthSecondaryButton(
                           icon: const _GoogleIcon(size: 20),
                           label: 'Continuar com Google',
@@ -800,7 +789,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // ── Botão Email ───────────────────────────
                         _AuthSecondaryButton(
                           icon: AppIcon('mail',
                               size: 20, color: s.onSurface),
@@ -809,7 +797,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 28),
 
-                        // ── Criar conta ───────────────────────────
                         GestureDetector(
                           onTap: _goRegister,
                           child: RichText(
@@ -896,8 +883,8 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
     FocusScope.of(context).unfocus();
     if (!_validate()) return;
     authController.clearError();
-    final ok =
-        await authController.login(_emailCtrl.text.trim(), _passCtrl.text);
+    final ok = await authController.loginWithEmail(
+        _emailCtrl.text.trim(), _passCtrl.text);
     if (!ok && mounted) setState(() {});
   }
 
@@ -931,118 +918,129 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
               AnimatedBuilder(
                 animation: authController,
                 builder: (context, _) {
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        padding: EdgeInsets.only(
-                          left: 28,
-                          right: 28,
-                          top: 92,
-                          bottom:
-                              24 + MediaQuery.of(context).viewInsets.bottom,
-                        ),
-                        physics: const BouncingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight - 92 - 24,
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      left: 28,
+                      right: 28,
+                      top: 92,
+                      bottom:
+                          24 + MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Iniciar sessão',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: s.onSurface,
+                            letterSpacing: -0.4,
                           ),
-                          child: IntrinsicHeight(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Título centrado bold
-                                Text(
-                                  'Iniciar sessão',
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.spaceGrotesk(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                    color: s.onSurface,
-                                    letterSpacing: -0.4,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Bem-vindo de volta.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: s.onSurfaceVariant),
-                                ),
-                                const SizedBox(height: 36),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Introduz os teus dados para continuar.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: s.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 36),
 
-                                if (authController.lastError != null)
-                                  _AuthErrorBanner(
-                                      s: s,
-                                      message: authController.lastError!),
+                        if (authController.lastError != null)
+                          _AuthErrorBanner(
+                              s: s, message: authController.lastError!),
 
-                                _AuthField(
-                                  ctrl: _emailCtrl,
-                                  hint: 'Email',
-                                  keyboardType: TextInputType.emailAddress,
-                                  errorText: _emailError,
-                                  textInputAction: TextInputAction.next,
-                                  onSubmitted: (_) =>
-                                      _passFocus.requestFocus(),
-                                ),
-                                const SizedBox(height: 12),
-                                _AuthField(
-                                  ctrl: _passCtrl,
-                                  hint: 'Password',
-                                  obscure: _obscure,
-                                  errorText: _passError,
-                                  focusNode: _passFocus,
-                                  textInputAction: TextInputAction.done,
-                                  onSubmitted: (_) => _submit(),
-                                  suffix: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () =>
-                                        setState(() => _obscure = !_obscure),
-                                    child: AppIcon(
-                                      _obscure ? 'eye.svg' : 'eye_off.svg',
-                                      size: 16,
-                                      color: s.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 28),
-                                _AuthPrimaryButton(
-                                  label: 'Iniciar sessão',
-                                  loading: authController.busy,
-                                  onTap: _submit,
-                                ),
-
-                                const Spacer(),
-
-                                // Esqueceste a password — sempre visível na base
-                                Center(
-                                  child: GestureDetector(
-                                    onTap: _goForgot,
-                                    child: Padding(
-                                      padding:
-                                          const EdgeInsets.symmetric(vertical: 12),
-                                      child: Text(
-                                        'Esqueceste-te da password?',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: s.primary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                        _AuthField(
+                          ctrl: _emailCtrl,
+                          hint: 'Email',
+                          keyboardType: TextInputType.emailAddress,
+                          errorText: _emailError,
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) => _passFocus.requestFocus(),
+                        ),
+                        const SizedBox(height: 12),
+                        _AuthField(
+                          ctrl: _passCtrl,
+                          hint: 'Password',
+                          obscure: _obscure,
+                          errorText: _passError,
+                          focusNode: _passFocus,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _submit(),
+                          suffix: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () =>
+                                setState(() => _obscure = !_obscure),
+                            child: AppIcon(
+                              _obscure ? 'eye.svg' : 'eye_off.svg',
+                              size: 16,
+                              color: s.onSurfaceVariant,
                             ),
                           ),
                         ),
-                      );
-                    },
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: GestureDetector(
+                            onTap: _goForgot,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6),
+                              child: Text(
+                                'Esqueceste-te da password?',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: s.primary),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _AuthPrimaryButton(
+                          label: 'Entrar',
+                          loading: authController.busy,
+                          onTap: _submit,
+                        ),
+                        const SizedBox(height: 24),
+                        Center(
+                          child: GestureDetector(
+                            onTap: () {
+                              authController.clearError();
+                              Navigator.of(context).pushReplacement(
+                                AppPageRoute(
+                                    builder: (_) =>
+                                        const RegisterScreen()),
+                              );
+                            },
+                            child: RichText(
+                              text: TextSpan(
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    color: s.onSurfaceVariant),
+                                children: [
+                                  const TextSpan(
+                                      text: 'Ainda não tens conta? '),
+                                  TextSpan(
+                                    text: 'Cria uma',
+                                    style: TextStyle(
+                                        color: s.primary,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
-
-              // Botão voltar circular
               Positioned(
                 top: 8,
                 left: 12,
@@ -1072,14 +1070,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
-
   final _emailFocus = FocusNode();
   final _passFocus = FocusNode();
   final _confirmFocus = FocusNode();
-
   bool _obscurePass = true;
   bool _obscureConfirm = true;
-
   String? _nameError;
   String? _emailError;
   String? _passError;
@@ -1104,9 +1099,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _passError = null;
       _confirmError = null;
     });
-    var ok = true;
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim();
+    var ok = true;
     final pass = _passCtrl.text;
     final confirm = _confirmCtrl.text;
 
@@ -1143,11 +1138,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     FocusScope.of(context).unfocus();
     if (!_validate()) return;
     authController.clearError();
-    final ok = await authController.register(
-      name: _nameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      password: _passCtrl.text,
-    );
+    final ok = await authController.registerWithEmail(
+        _emailCtrl.text.trim(), _passCtrl.text);
     if (!ok && mounted) setState(() {});
   }
 
@@ -1330,6 +1322,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
 // ══════════════════════════════════════════════════════════════
 // FORGOT PASSWORD SCREEN
+// Passo 1: pede o email e dispara o código de 6 dígitos.
 // ══════════════════════════════════════════════════════════════
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -1364,9 +1357,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       return;
     }
     authController.clearError();
-    final ok = await authController.forgotPassword(email);
+    final ok = await authController.requestPasswordResetCode(email);
     if (ok && mounted) setState(() => _sent = true);
     if (!ok && mounted) setState(() {});
+  }
+
+  void _goEnterCode() {
+    Navigator.of(context).push(
+      AppPageRoute(
+        builder: (_) => ResetPasswordCodeScreen(email: _emailCtrl.text.trim()),
+      ),
+    );
   }
 
   @override
@@ -1419,8 +1420,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         const SizedBox(height: 8),
                         Text(
                           _sent
-                              ? 'Se existir uma conta com esse email, vais receber instruções.'
-                              : 'Introduz o teu email para receberes instruções.',
+                              ? 'Se existir uma conta com esse email, enviámos um código de 6 dígitos.'
+                              : 'Introduz o teu email para receberes um código de verificação.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               fontSize: 14,
@@ -1443,7 +1444,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 28),
                           _AuthPrimaryButton(
-                            label: 'Enviar instruções',
+                            label: 'Enviar código',
                             loading: authController.busy,
                             onTap: _submit,
                           ),
@@ -1467,14 +1468,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 16),
                           _AuthPrimaryButton(
-                            label: 'Voltar ao início de sessão',
+                            label: 'Já tenho o código',
                             loading: false,
-                            onTap: () => Navigator.of(context)
-                                .popUntil((r) => r.isFirst),
+                            onTap: _goEnterCode,
                           ),
                         ],
 
-                        // Esqueceste a password — sempre fixo na base
                         const SizedBox(height: 48),
                         if (!_sent)
                           Center(
@@ -1504,6 +1503,341 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               ),
                             ),
                           ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                top: 8,
+                left: 12,
+                child: _AuthBackButton(s: s),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RESET PASSWORD CODE SCREEN
+// Passo 2: 6 caixas de dígito + nova password. Confirma o código
+// e a nova password diretamente contra o Worker.
+// ══════════════════════════════════════════════════════════════
+
+class ResetPasswordCodeScreen extends StatefulWidget {
+  final String email;
+  const ResetPasswordCodeScreen({super.key, required this.email});
+
+  @override
+  State<ResetPasswordCodeScreen> createState() =>
+      _ResetPasswordCodeScreenState();
+}
+
+class _ResetPasswordCodeScreenState extends State<ResetPasswordCodeScreen> {
+  static const _codeLength = 6;
+  late final List<TextEditingController> _digitCtrls =
+      List.generate(_codeLength, (_) => TextEditingController());
+  late final List<FocusNode> _digitFocus =
+      List.generate(_codeLength, (_) => FocusNode());
+  final _passCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  final _passFocus = FocusNode();
+  final _confirmFocus = FocusNode();
+  bool _obscurePass = true;
+  bool _obscureConfirm = true;
+  String? _codeError;
+  String? _passError;
+  String? _confirmError;
+  bool _done = false;
+
+  String get _code => _digitCtrls.map((c) => c.text).join();
+
+  @override
+  void dispose() {
+    for (final c in _digitCtrls) c.dispose();
+    for (final f in _digitFocus) f.dispose();
+    _passCtrl.dispose();
+    _confirmCtrl.dispose();
+    _passFocus.dispose();
+    _confirmFocus.dispose();
+    super.dispose();
+  }
+
+  void _onDigitChanged(int index, String value) {
+    // Suporta colar o código completo numa das caixas.
+    if (value.length > 1) {
+      final digits = value.replaceAll(RegExp(r'\D'), '');
+      for (var i = 0; i < _codeLength; i++) {
+        _digitCtrls[i].text = i < digits.length ? digits[i] : '';
+      }
+      final nextIndex =
+          digits.length >= _codeLength ? _codeLength - 1 : digits.length;
+      _digitFocus[nextIndex].requestFocus();
+      setState(() {});
+      return;
+    }
+    if (value.isNotEmpty && index < _codeLength - 1) {
+      _digitFocus[index + 1].requestFocus();
+    } else if (value.isEmpty && index > 0) {
+      _digitFocus[index - 1].requestFocus();
+    }
+    setState(() {});
+  }
+
+  bool _validate() {
+    setState(() {
+      _codeError = null;
+      _passError = null;
+      _confirmError = null;
+    });
+    var ok = true;
+    if (_code.length != _codeLength) {
+      setState(() => _codeError = 'Introduz o código completo');
+      ok = false;
+    }
+    final pass = _passCtrl.text;
+    final confirm = _confirmCtrl.text;
+    if (pass.isEmpty) {
+      setState(() => _passError = 'Cria uma nova password');
+      ok = false;
+    } else if (pass.length < 6) {
+      setState(
+          () => _passError = 'A password deve ter pelo menos 6 caracteres');
+      ok = false;
+    }
+    if (confirm.isEmpty) {
+      setState(() => _confirmError = 'Confirma a nova password');
+      ok = false;
+    } else if (confirm != pass) {
+      setState(() => _confirmError = 'As passwords não coincidem');
+      ok = false;
+    }
+    return ok;
+  }
+
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+    if (!_validate()) return;
+    authController.clearError();
+    final ok = await authController.confirmPasswordReset(
+      email: widget.email,
+      code: _code,
+      newPassword: _passCtrl.text,
+    );
+    if (ok && mounted) {
+      setState(() => _done = true);
+    } else if (!ok && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _backToLogin() {
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  Widget _buildDigitBox(int index, AppColorScheme s) {
+    return SizedBox(
+      width: 46,
+      height: 56,
+      child: Focus(
+        child: TextField(
+          controller: _digitCtrls[index],
+          focusNode: _digitFocus[index],
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          maxLength: _codeLength, // permite colar o código inteiro
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: s.onSurface,
+          ),
+          cursorColor: s.primary,
+          decoration: InputDecoration(
+            counterText: '',
+            filled: true,
+            fillColor: s.cardBackground,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                  color: _codeError != null
+                      ? s.error
+                      : s.outline.withOpacity(0.45)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                  color: _codeError != null
+                      ? s.error
+                      : s.outline.withOpacity(0.45)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: s.primary, width: 1.5),
+            ),
+          ),
+          onChanged: (v) => _onDigitChanged(index, v),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            s.isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: s.isDark ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness:
+            s.isDark ? Brightness.light : Brightness.dark,
+      ),
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        backgroundColor: s.pageBackground,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              AnimatedBuilder(
+                animation: authController,
+                builder: (context, _) {
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      left: 28,
+                      right: 28,
+                      top: 92,
+                      bottom:
+                          24 + MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          _done ? 'Password atualizada' : 'Introduz o código',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: s.onSurface,
+                            letterSpacing: -0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _done
+                              ? 'A tua password foi alterada com sucesso. Já podes iniciar sessão.'
+                              : 'Enviámos um código de 6 dígitos para ${widget.email}.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 14,
+                              color: s.onSurfaceVariant,
+                              height: 1.4),
+                        ),
+                        const SizedBox(height: 32),
+
+                        if (!_done) ...[
+                          if (authController.lastError != null)
+                            _AuthErrorBanner(
+                                s: s,
+                                message: authController.lastError!),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: List.generate(
+                              _codeLength,
+                              (i) => _buildDigitBox(i, s),
+                            ),
+                          ),
+                          if (_codeError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(_codeError!,
+                                  style: TextStyle(
+                                      fontSize: 12, color: s.error)),
+                            ),
+                          const SizedBox(height: 24),
+
+                          _AuthField(
+                            ctrl: _passCtrl,
+                            hint: 'Nova password',
+                            obscure: _obscurePass,
+                            errorText: _passError,
+                            focusNode: _passFocus,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) =>
+                                _confirmFocus.requestFocus(),
+                            suffix: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => setState(
+                                  () => _obscurePass = !_obscurePass),
+                              child: AppIcon(
+                                _obscurePass ? 'eye.svg' : 'eye_off.svg',
+                                size: 16,
+                                color: s.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _AuthField(
+                            ctrl: _confirmCtrl,
+                            hint: 'Confirmar nova password',
+                            obscure: _obscureConfirm,
+                            errorText: _confirmError,
+                            focusNode: _confirmFocus,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                            suffix: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => setState(() =>
+                                  _obscureConfirm = !_obscureConfirm),
+                              child: AppIcon(
+                                _obscureConfirm
+                                    ? 'eye.svg'
+                                    : 'eye_off.svg',
+                                size: 16,
+                                color: s.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          _AuthPrimaryButton(
+                            label: 'Alterar password',
+                            loading: authController.busy,
+                            onTap: _submit,
+                          ),
+                        ] else ...[
+                          Center(
+                            child: Container(
+                              width: 72,
+                              height: 72,
+                              margin:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: s.success
+                                    .withOpacity(s.isDark ? 0.18 : 0.10),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: AppIcon('check.svg',
+                                    color: s.success, size: 26),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _AuthPrimaryButton(
+                            label: 'Iniciar sessão',
+                            loading: false,
+                            onTap: _backToLogin,
+                          ),
+                        ],
                       ],
                     ),
                   );

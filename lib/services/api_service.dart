@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-const String kApiBase = 'https://ipc.alfredopjonas.workers.dev';
+const String kApiBase = 'https://nexaai.alfredopjonas.workers.dev';
 
 // ── Providers reais suportados pelo worker. O backend é DeepSeek —
 //    os 3 modelos (flash/pro/reasoning) são todos provider "deepseek",
@@ -296,102 +296,6 @@ class CanvasParser {
     if (tag == 'whiteboard') return CanvasKind.whiteboard;
     if (tag == 'doc') return CanvasKind.doc;
     return null;
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// AUTH API
-// ══════════════════════════════════════════════════════════════
-class AuthApiService {
-  static Future<Map<String, dynamic>> login(String email, String password) async {
-    final res = await http.post(
-      Uri.parse('$kApiBase/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    final data = _decode(res.body);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw ApiException(data['error']?.toString() ?? 'Erro ao iniciar sessão', statusCode: res.statusCode);
-    }
-    return data;
-  }
-
-  static Future<Map<String, dynamic>> register({
-    required String name,
-    required String email,
-    required String password,
-    int? age,
-    String? country,
-    String? state,
-    String? city,
-    String? occupation,
-    String? occupationDetail,
-  }) async {
-    final body = <String, dynamic>{'name': name, 'email': email, 'password': password};
-    if (age != null) body['age'] = age;
-    if (country != null) body['country'] = country;
-    if (state != null) body['state'] = state;
-    if (city != null) body['city'] = city;
-    if (occupation != null) body['occupation'] = occupation;
-    if (occupationDetail != null) body['occupationDetail'] = occupationDetail;
-
-    final res = await http.post(
-      Uri.parse('$kApiBase/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    final data = _decode(res.body);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw ApiException(data['error']?.toString() ?? 'Erro ao criar conta', statusCode: res.statusCode);
-    }
-    return data;
-  }
-
-  static Future<void> logout(String token) async {
-    try {
-      await http.post(
-        Uri.parse('$kApiBase/auth/logout'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-    } catch (_) {}
-  }
-
-  static Future<bool> logoutAll(String token) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$kApiBase/auth/logout-all'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      return res.statusCode >= 200 && res.statusCode < 300;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<Map<String, dynamic>> forgotPassword(String email) async {
-    final res = await http.post(
-      Uri.parse('$kApiBase/auth/forgot-password'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
-    );
-    final data = _decode(res.body);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw ApiException(data['error']?.toString() ?? 'Erro ao pedir recuperação', statusCode: res.statusCode);
-    }
-    return data;
-  }
-
-  static Future<Map<String, dynamic>> resetPassword(String token, String password) async {
-    final res = await http.post(
-      Uri.parse('$kApiBase/auth/reset-password'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'token': token, 'password': password}),
-    );
-    final data = _decode(res.body);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw ApiException(data['error']?.toString() ?? 'Erro ao repor password', statusCode: res.statusCode);
-    }
-    return data;
   }
 }
 
@@ -1287,10 +1191,6 @@ const List<ToolDefinition> kAllTools = [
   ),
 
   // ── Documentos (4) ───────────────────────────────────────────
-  // Parameters sincronizados com documents.py (fonte de verdade),
-  // não com o testador HTML. create_pdf_structured foi removida:
-  // create_pdf agora absorve os dois modos (sections OU campos
-  // soltos na raiz).
   ToolDefinition(
     name: 'create_pdf',
     description: 'Gera um PDF completo via reportlab, a partir de uma lista de secções ("sections") ou de campos soltos na raiz (title/paragraphs/bullet_list — tratados como 1 secção só, para pedidos simples). Suporta capa customizada ("cover"), índice automático ("toc"), múltiplas colunas ("columns"), marca d\'água ("watermark"), rodapé customizado ("footer") e faixa lateral colorida ("side_bar_color"). Cada secção pode conter: heading/heading_level, texto simples (runs — com bold/italic/underline/strike/color/link por trecho), paragraphs, bullet_list, numbered_list, quote (citação com autor), callout (caixa de destaque com ícone), progress_bar, badges (etiquetas coloridas), chart ou charts (gráfico bar/line/pie nativo), shapes (formas livres: rect/circle/ellipse/line/polygon/text), qrcode, barcode, table (com merge de células, alinhamento por coluna, estilos por célula), image_url, images_grid. Usa esta tool para qualquer PDF, de relatório simples a documento com gráficos e imagens. Devolve pdf_base64 — mostra botão de download no chat.',

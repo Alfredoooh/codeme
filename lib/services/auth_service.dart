@@ -1,13 +1,11 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/auth_service.dart
+// FILE: lib/services/auth_service.dart
 // ══════════════════════════════════════════════════════════════
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-// TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
-import 'api_service.dart';
-
 
 // ══════════════════════════════════════════════════════════════
 // USER MODEL
@@ -17,6 +15,7 @@ class AppUser {
   final String id;
   final String name;
   final String? email;
+  final String? phone;
   final String? avatar;
   final String provider;
   final int credits;
@@ -28,8 +27,9 @@ class AppUser {
     required this.id,
     required this.name,
     this.email,
+    this.phone,
     this.avatar,
-    this.provider = 'email',
+    this.provider = 'password',
     this.credits = 0,
     this.preferences = const {},
     this.profile = const {},
@@ -39,6 +39,7 @@ class AppUser {
   AppUser copyWith({
     String? name,
     String? email,
+    String? phone,
     String? avatar,
     int? credits,
     Map<String, dynamic>? preferences,
@@ -48,6 +49,7 @@ class AppUser {
         id: id,
         name: name ?? this.name,
         email: email ?? this.email,
+        phone: phone ?? this.phone,
         avatar: avatar ?? this.avatar,
         provider: provider,
         credits: credits ?? this.credits,
@@ -60,10 +62,12 @@ class AppUser {
         id: j['id']?.toString() ?? '',
         name: j['name']?.toString() ?? 'Utilizador',
         email: j['email']?.toString(),
+        phone: j['phone']?.toString(),
         avatar: j['avatar']?.toString(),
-        provider: j['provider']?.toString() ?? 'email',
+        provider: j['provider']?.toString() ?? 'password',
         credits: (j['credits'] is num) ? (j['credits'] as num).toInt() : 0,
-        preferences: (j['preferences'] is Map) ? Map<String, dynamic>.from(j['preferences']) : {},
+        preferences:
+            (j['preferences'] is Map) ? Map<String, dynamic>.from(j['preferences']) : {},
         profile: (j['profile'] is Map) ? Map<String, dynamic>.from(j['profile']) : {},
         isAdmin: j['isAdmin'] == true,
       );
@@ -72,6 +76,7 @@ class AppUser {
         'id': id,
         'name': name,
         'email': email,
+        'phone': phone,
         'avatar': avatar,
         'provider': provider,
         'credits': credits,
@@ -127,7 +132,12 @@ class SessionManager {
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
+/// Identificador de login: ou email, ou número de telemóvel.
+enum LoginIdentifierType { email, phone }
+
 class AuthController extends ChangeNotifier {
+  static const String _baseUrl = 'https://nexaai.alfredopjonas.workers.dev';
+
   AuthStatus status = AuthStatus.unknown;
   String? token;
   AppUser? user;
@@ -144,7 +154,6 @@ class AuthController extends ChangeNotifier {
       token = saved.$1;
       user = saved.$2;
       status = AuthStatus.authenticated;
-      // Refresca dados do utilizador em segundo plano, sem bloquear a UI.
       _refreshMeSilently();
     } else {
       status = AuthStatus.unauthenticated;
@@ -155,122 +164,182 @@ class AuthController extends ChangeNotifier {
   Future<void> _refreshMeSilently() async {
     if (token == null) return;
     try {
-      final me = await ProfileApiService.getMe(token!);
-      user = AppUser.fromJson(me);
-      await SessionManager.updateUser(user!);
-      notifyListeners();
-    } catch (_) {
-      // Token pode ter expirado ou sessão foi revogada — não força logout
-      // aqui automaticamente para não interromper o utilizador a meio de
-      // um uso offline; o próximo pedido autenticado que falhar trata disso.
-    }
-  }
-
-  Future<bool> login(String email, String password) async {
-    busy = true;
-    lastError = null;
-    notifyListeners();
-    try {
-      final data = await AuthApiService.login(email.trim(), password);
-      token = data['token']?.toString();
-      user = AppUser(
-        id: data['id']?.toString() ?? '',
-        name: data['name']?.toString() ?? 'Utilizador',
-        email: data['email']?.toString(),
-        credits: (data['credits'] is num) ? (data['credits'] as num).toInt() : 0,
-        preferences: (data['preferences'] is Map) ? Map<String, dynamic>.from(data['preferences']) : {},
+      final response = await http.get(
+        Uri.parse('$_baseUrl/user/me'),
+        headers: {'Authorization': 'Bearer $token'},
       );
-      if (token == null || token!.isEmpty) {
-        lastError = 'Resposta inválida do servidor';
-        busy = false;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        user = AppUser.fromJson(data);
+        await SessionManager.updateUser(user!);
         notifyListeners();
-        return false;
+      } else {
+        await _forceLogout();
       }
-      await SessionManager.save(token!, user!);
-      status = AuthStatus.authenticated;
-      busy = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      lastError = e is ApiException ? e.message : 'Erro ao iniciar sessão';
-      busy = false;
-      notifyListeners();
-      return false;
-    }
+    } catch (_) {}
   }
 
+  Future<void> _forceLogout() async {
+    token = null;
+    user = null;
+    status = AuthStatus.unauthenticated;
+    await SessionManager.clear();
+    notifyListeners();
+  }
+
+  /// Deteta automaticamente se o identificador parece email ou
+  /// telemóvel, para decidir que campo mandar ao Worker.
+  LoginIdentifierType _detectIdentifierType(String identifier) {
+    return identifier.contains('@') ? LoginIdentifierType.email : LoginIdentifierType.phone;
+  }
+
+  /// Registo com email OU telemóvel + password. O Worker guarda
+  /// tudo — não há nenhum serviço externo envolvido.
   Future<bool> register({
-    required String name,
-    required String email,
+    required String identifier,
     required String password,
-    int? age,
-    String? country,
-    String? state,
-    String? city,
-    String? occupation,
-    String? occupationDetail,
+    required String name,
   }) async {
     busy = true;
     lastError = null;
     notifyListeners();
     try {
-      final data = await AuthApiService.register(
-        name: name.trim(),
-        email: email.trim(),
-        password: password,
-        age: age,
-        country: country,
-        state: state,
-        city: city,
-        occupation: occupation,
-        occupationDetail: occupationDetail,
+      final type = _detectIdentifierType(identifier);
+      final body = <String, dynamic>{
+        'password': password,
+        'name': name.trim(),
+      };
+      if (type == LoginIdentifierType.email) {
+        body['email'] = identifier.trim().toLowerCase();
+      } else {
+        body['phone'] = identifier.trim();
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
       );
-      token = data['token']?.toString();
-      user = AppUser(
-        id: data['id']?.toString() ?? '',
-        name: data['name']?.toString() ?? name.trim(),
-        email: data['email']?.toString() ?? email.trim(),
-        credits: (data['credits'] is num) ? (data['credits'] as num).toInt() : 0,
-      );
-      if (token == null || token!.isEmpty) {
-        lastError = 'Resposta inválida do servidor';
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200) {
+        lastError = data['error']?.toString() ?? 'Erro ao registar.';
         busy = false;
         notifyListeners();
         return false;
       }
-      await SessionManager.save(token!, user!);
+
+      final workerToken = data['token'] as String;
+      final appUser = AppUser.fromJson(data);
+      token = workerToken;
+      user = appUser;
       status = AuthStatus.authenticated;
+      await SessionManager.save(workerToken, appUser);
       busy = false;
       notifyListeners();
       return true;
     } catch (e) {
-      lastError = e is ApiException ? e.message : 'Erro ao criar conta';
+      lastError = 'Erro de rede. Verifica a tua ligação.';
       busy = false;
       notifyListeners();
       return false;
     }
   }
 
-  Future<bool> forgotPassword(String email) async {
+  /// Login com email OU telemóvel + password.
+  Future<bool> login({
+    required String identifier,
+    required String password,
+  }) async {
     busy = true;
     lastError = null;
     notifyListeners();
     try {
-      await AuthApiService.forgotPassword(email.trim());
+      final type = _detectIdentifierType(identifier);
+      final body = <String, dynamic>{'password': password};
+      if (type == LoginIdentifierType.email) {
+        body['email'] = identifier.trim().toLowerCase();
+      } else {
+        body['phone'] = identifier.trim();
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200) {
+        lastError = data['error']?.toString() ?? 'Email/telemóvel ou password incorretos.';
+        busy = false;
+        notifyListeners();
+        return false;
+      }
+
+      final workerToken = data['token'] as String;
+      final appUser = AppUser.fromJson(data);
+      token = workerToken;
+      user = appUser;
+      status = AuthStatus.authenticated;
+      await SessionManager.save(workerToken, appUser);
       busy = false;
       notifyListeners();
       return true;
     } catch (e) {
-      lastError = e is ApiException ? e.message : 'Erro ao pedir recuperação';
+      lastError = 'Erro de rede. Verifica a tua ligação.';
       busy = false;
       notifyListeners();
       return false;
     }
   }
 
+  /// Troca a password atual por uma nova, exigindo a password
+  /// antiga por segurança. Não depende de nenhum serviço externo.
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (token == null) return false;
+    busy = true;
+    lastError = null;
+    notifyListeners();
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/user/me'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+          'password': newPassword,
+        }),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode != 200) {
+        lastError = data['error']?.toString() ?? 'Erro ao alterar password.';
+        busy = false;
+        notifyListeners();
+        return false;
+      }
+      busy = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      lastError = 'Erro de rede. Verifica a tua ligação.';
+      busy = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Termina sessão apenas neste dispositivo.
   Future<void> logout() async {
     if (token != null) {
-      await AuthApiService.logout(token!);
+      try {
+        await http.post(
+          Uri.parse('$_baseUrl/auth/logout'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      } catch (_) {}
     }
     token = null;
     user = null;
@@ -279,26 +348,43 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Termina sessão em todos os dispositivos.
   Future<void> logoutAllDevices() async {
     if (token == null) return;
-    await AuthApiService.logoutAll(token!);
-    await logout();
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/auth/logout-all'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (_) {}
+    token = null;
+    user = null;
+    status = AuthStatus.unauthenticated;
+    await SessionManager.clear();
+    notifyListeners();
   }
 
-  Future<void> refreshBalance() async {
-    if (token == null) return;
-    final balance = await CreditsApiService.getBalance(token!);
-    if (balance != null && balance['credits'] is num) {
-      user = user?.copyWith(credits: (balance['credits'] as num).toInt());
-      if (user != null) await SessionManager.updateUser(user!);
-      notifyListeners();
-    }
+  /// Devolve o header Authorization pronto a usar noutras chamadas.
+  Future<Map<String, String>> authHeaders() async {
+    if (token == null) throw AuthException('Utilizador não autenticado.');
+    return {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
   }
 
+  /// Limpa o último erro.
   void clearError() {
     lastError = null;
     notifyListeners();
   }
+}
+
+class AuthException implements Exception {
+  final String message;
+  AuthException(this.message);
+  @override
+  String toString() => message;
 }
 
 final AuthController authController = AuthController();
