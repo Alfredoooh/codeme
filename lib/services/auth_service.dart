@@ -252,7 +252,18 @@ class AuthController extends ChangeNotifier {
         body: jsonEncode(body),
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      debugPrint(
+          '[NEXA AUTH] register status=${response.statusCode} body=${response.body}');
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        lastError = 'Resposta inesperada do servidor.';
+        busy = false;
+        notifyListeners();
+        return false;
+      }
+      final data = decoded;
+
       if (response.statusCode != 200) {
         lastError = data['error']?.toString() ?? 'Erro ao registar.';
         busy = false;
@@ -260,7 +271,14 @@ class AuthController extends ChangeNotifier {
         return false;
       }
 
-      final workerToken = data['token'] as String;
+      final workerToken = data['token']?.toString();
+      if (workerToken == null || workerToken.isEmpty) {
+        lastError = 'O servidor não devolveu um token válido.';
+        busy = false;
+        notifyListeners();
+        return false;
+      }
+
       final appUser = AppUser.fromJson(data);
       token = workerToken;
       user = appUser;
@@ -269,8 +287,10 @@ class AuthController extends ChangeNotifier {
       busy = false;
       notifyListeners();
       return true;
-    } catch (e) {
-      lastError = 'Erro de rede. Verifica a tua ligação.';
+    } catch (e, st) {
+      debugPrint('[NEXA AUTH] register EXCEPTION: $e');
+      debugPrint('[NEXA AUTH] register STACKTRACE: $st');
+      lastError = 'Erro de rede: $e';
       busy = false;
       notifyListeners();
       return false;
@@ -300,7 +320,18 @@ class AuthController extends ChangeNotifier {
         body: jsonEncode(body),
       );
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      debugPrint(
+          '[NEXA AUTH] login status=${response.statusCode} body=${response.body}');
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        lastError = 'Resposta inesperada do servidor.';
+        busy = false;
+        notifyListeners();
+        return false;
+      }
+      final data = decoded;
+
       if (response.statusCode != 200) {
         lastError = data['error']?.toString() ??
             'Email/telemóvel ou password incorretos.';
@@ -309,7 +340,14 @@ class AuthController extends ChangeNotifier {
         return false;
       }
 
-      final workerToken = data['token'] as String;
+      final workerToken = data['token']?.toString();
+      if (workerToken == null || workerToken.isEmpty) {
+        lastError = 'O servidor não devolveu um token válido.';
+        busy = false;
+        notifyListeners();
+        return false;
+      }
+
       final appUser = AppUser.fromJson(data);
       token = workerToken;
       user = appUser;
@@ -318,8 +356,10 @@ class AuthController extends ChangeNotifier {
       busy = false;
       notifyListeners();
       return true;
-    } catch (e) {
-      lastError = 'Erro de rede. Verifica a tua ligação.';
+    } catch (e, st) {
+      debugPrint('[NEXA AUTH] login EXCEPTION: $e');
+      debugPrint('[NEXA AUTH] login STACKTRACE: $st');
+      lastError = 'Erro de rede: $e';
       busy = false;
       notifyListeners();
       return false;
@@ -347,7 +387,7 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      lastError = 'Erro de rede. Verifica a tua ligação.';
+      lastError = 'Erro de rede: $e';
       busy = false;
       notifyListeners();
       return false;
@@ -383,7 +423,7 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      lastError = 'Erro de rede. Verifica a tua ligação.';
+      lastError = 'Erro de rede: $e';
       busy = false;
       notifyListeners();
       return false;
@@ -423,7 +463,7 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      lastError = 'Erro de rede. Verifica a tua ligação.';
+      lastError = 'Erro de rede: $e';
       busy = false;
       notifyListeners();
       return false;
