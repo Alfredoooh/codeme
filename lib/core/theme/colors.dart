@@ -94,9 +94,9 @@ class AppColorScheme {
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF9F7F4);
+  Color get pageBackground     => isDark ? const Color(0xFF0D0D0D) : const Color(0xFFFFFFFF);
 
-  Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
+  Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF5F5F5);
   Color get floatingSurface    => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
 
   Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFDCDCE0);
@@ -129,20 +129,20 @@ class AppColorScheme {
   Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
 
   List<BoxShadow> get cardShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 7, offset: const Offset(0, 1))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 7, offset: const Offset(0, 1))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1))];
 
   List<BoxShadow> get floatingShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.38), blurRadius: 14, offset: const Offset(0, 5))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.09), blurRadius: 16, offset: const Offset(0, 5))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 5))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))];
 
   List<BoxShadow> get cardShadowSoft => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.16), blurRadius: 4, offset: const Offset(0, 1))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 5, offset: const Offset(0, 1))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 3, offset: const Offset(0, 1))];
 
   List<BoxShadow> get navBarShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 12, offset: const Offset(0, 3))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 2))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 3))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2))];
 
   Color get incognitoBackground => const Color(0xFF121212);
   Color get incognitoSurface    => const Color(0xFF1C1C1E);
