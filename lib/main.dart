@@ -226,7 +226,7 @@ class _RootShellState extends State<RootShell>
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final _screenWidth = MediaQuery.of(context).size.width;
-    final _drawerWidth = _screenWidth * 0.75;
+    final _drawerWidth = _screenWidth;
 
     final bodyContent = Stack(children: [
       Positioned.fill(
@@ -592,18 +592,16 @@ class _AppHeader extends StatelessWidget {
       return Container(color: headerBackground, child: content);
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            headerBackground,
-            headerBackground.withOpacity(0.4),
-          ],
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: headerBackground.withOpacity(0.62),
+          ),
+          child: content,
         ),
       ),
-      child: content,
     );
   }
 }

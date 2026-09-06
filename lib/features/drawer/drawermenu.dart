@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/drawer/drawermenu.dart
 // ══════════════════════════════════════════════════════════════
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -78,6 +79,32 @@ class ConversationItem {
       archived: j['archived'] == true,
       updatedAt: (j['updatedAt'] is num) ? (j['updatedAt'] as num).toInt() : 0,
     );
+  }
+
+  /// Rótulo de data/hora amigável para a linha da conversa.
+  /// Regra: hoje -> "HH:mm"; ontem -> "Ontem"; últimos 7 dias -> nome do dia;
+  /// mais antigo -> "dd/MM/aa".
+  String get timeLabel {
+    if (updatedAt <= 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(updatedAt);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final thatDay = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = today.difference(thatDay).inDays;
+
+    String two(int v) => v.toString().padLeft(2, '0');
+
+    if (diffDays == 0) {
+      return '${two(dt.hour)}:${two(dt.minute)}';
+    } else if (diffDays == 1) {
+      return 'Ontem';
+    } else if (diffDays > 1 && diffDays < 7) {
+      const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+      return dias[dt.weekday - 1];
+    } else {
+      final yy = (dt.year % 100).toString().padLeft(2, '0');
+      return '${two(dt.day)}/${two(dt.month)}/$yy';
+    }
   }
 }
 
@@ -165,7 +192,7 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER
+// DRAWER (agora full-screen, cobre o ecrã inteiro)
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -237,31 +264,16 @@ class _AppDrawerState extends State<AppDrawer> {
     widget.onCloseAnimated();
   }
 
-  void _openSearch(BuildContext context) {
-    HapticFeedback.lightImpact();
-    _closeThenRun(() {
-      Navigator.of(context).push(_FadePageRoute(
-        builder: (_) => ChatSearchScreen(
-          s: widget.s,
-          onOpenConversation: (id) {
-            widget.onOpenConversation?.call(id);
-          },
-        ),
-      ));
-    });
-  }
-
   void _openConversation(ConversationItem item) {
     widget.onOpenConversation?.call(item.id);
     widget.onCloseAnimated();
   }
 
-  void _openConvPopupAt(BuildContext context, Offset globalPos, ConversationItem item) {
+  void _openConvModal(BuildContext context, ConversationItem item) {
     HapticFeedback.lightImpact();
-    showConversationOptionsPopupAt(
+    showConversationOptionsModal(
       context,
       widget.s,
-      position: globalPos,
       item: item,
       onOpen: () => _openConversation(item),
       onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
@@ -321,15 +333,33 @@ class _AppDrawerState extends State<AppDrawer> {
     });
   }
 
+  Uint8List? _decodeAvatar(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return null;
+    try {
+      final commaIdx = raw.indexOf(',');
+      final b64 = raw.startsWith('data:') && commaIdx != -1
+          ? raw.substring(commaIdx + 1)
+          : raw;
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     final pinned = conversationsController.items.where((c) => c.pinned && !c.archived).toList();
     final others = conversationsController.items.where((c) => !c.pinned && !c.archived).toList();
     final screenWidth = MediaQuery.of(context).size.width;
+    final user = authController.user;
+    final name = user?.name ?? 'Utilizador';
+    final avatarBytes = _decodeAvatar(user?.avatar);
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
 
     return SizedBox(
-      width: screenWidth * 0.75,
+      width: screenWidth,
       child: Material(
         color: s.pageBackground,
         child: SafeArea(
@@ -337,85 +367,90 @@ class _AppDrawerState extends State<AppDrawer> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 48),
+                const SizedBox(height: 64),
                 Expanded(
                   child: _buildConversationsPage(context, s, pinned, others),
                 ),
-                // Reduzido de 112 -> 88 para acompanhar a bottom bar mais baixa.
-                const SizedBox(height: 88),
+                const SizedBox(height: 96),
               ],
             ),
 
-            // ── AppBar transparente com gradiente, mesmos valores do _SettingsAppBar ──
+            // ── Topbar blur estilo iOS: avatar (topo-esquerdo) + fechar (double chevron) ──
             Positioned(
               top: 0, left: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    // Mesmos valores do _SettingsAppBar: nunca chega a 0,
-                    // fica sempre com um mínimo de opacidade.
-                    colors: [
-                      s.pageBackground,
-                      s.pageBackground.withOpacity(0.4),
-                    ],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SelectionContainer.disabled(
-                        child: Text(
-                          'Nexa',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                          ).copyWith(color: s.onSurface),
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                    decoration: BoxDecoration(
+                      color: s.pageBackground.withOpacity(0.62),
+                    ),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: widget.onSettings,
+                          child: Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: s.primary,
+                            ),
+                            child: ClipOval(
+                              child: avatarBytes != null
+                                  ? Image.memory(avatarBytes, fit: BoxFit.cover)
+                                  : Center(
+                                      child: Text(
+                                        initial,
+                                        style: TextStyle(
+                                          color: s.onPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SelectionContainer.disabled(
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: s.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _CircleIconButton(
+                          s: s,
+                          assetName: 'double_chevron_right',
+                          size: 40,
+                          iconSize: 18,
+                          onTap: widget.onCloseAnimated,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    _CircleIconButton(
-                      s: s,
-                      assetName: 'search',
-                      size: 40,
-                      iconSize: 18,
-                      onTap: () => _openSearch(context),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
 
-            // ── Bottom bar transparente com gradiente, mesmos valores do _SettingsAppBar ──
+            // ── Bottom floating bar estilo iOS: input + settings + nova conversa ──
             Positioned(
               left: 0, right: 0, bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      s.pageBackground,
-                      s.pageBackground.withOpacity(0.4),
-                    ],
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _NewChatPill(s: s, onTap: widget.onNewChat != null ? _handleNewChat : null),
-                    const Spacer(),
-                    _AvatarCircleButton(
-                      s: s,
-                      onTap: widget.onSettings,
-                    ),
-                  ],
-                ),
+              child: DrawerBottomFloatingBar(
+                s: s,
+                onSearchTap: () {},
+                onSettingsTap: widget.onSettings,
+                onNewChatTap: widget.onNewChat != null ? _handleNewChat : null,
               ),
             ),
           ]),
@@ -430,7 +465,6 @@ class _AppDrawerState extends State<AppDrawer> {
     List<ConversationItem> pinned,
     List<ConversationItem> others,
   ) {
-    // ── Skeleton loader no lugar do CupertinoActivityIndicator ──
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(12, 56, 12, 8),
@@ -456,28 +490,32 @@ class _AppDrawerState extends State<AppDrawer> {
 
     final sections = <Widget>[];
 
-    sections.add(_LooseRows(
-      s: s,
-      children: [
-        _MenuOptionTile(
+    // ── As 3 opções em cards de lista (mesmo padrão do SettingsGroup) ──
+    sections.add(Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: SettingsGroup(s: s, rows: [
+        SettingsRow(
           s: s,
-          assetName: 'plugins',
+          iconAsset: 'plugins',
           label: 'Apps e plugins',
           onTap: () => _openAllApps(context),
+          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-        _MenuOptionTile(
+        SettingsRow(
           s: s,
-          assetName: 'library',
+          iconAsset: 'library',
           label: 'Biblioteca',
           onTap: () => _openLibrary(context),
+          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-        _MenuOptionTile(
+        SettingsRow(
           s: s,
-          assetName: 'clock',
+          iconAsset: 'clock',
           label: 'Tarefas agendadas',
           onTap: () => _openScheduledTasks(context),
+          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-      ],
+      ]),
     ));
 
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
@@ -509,7 +547,7 @@ class _AppDrawerState extends State<AppDrawer> {
               item: item,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
-              onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+              onOptionsTap: () => _openConvModal(context, item),
             ),
         ],
       ));
@@ -532,15 +570,14 @@ class _AppDrawerState extends State<AppDrawer> {
               item: item,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
-              onOptionsAt: (pos) => _openConvPopupAt(context, pos, item),
+              onOptionsTap: () => _openConvModal(context, item),
             ),
         ],
       ));
     }
 
-    // ── Lista simples, sem pull-to-refresh (nem iOS nem Android) ──
     return ListView(
-      padding: const EdgeInsets.fromLTRB(4, 56, 4, 8),
+      padding: const EdgeInsets.fromLTRB(4, 64, 4, 8),
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       children: sections,
     );
@@ -691,67 +728,6 @@ class _StaggeredItemState extends State<_StaggeredItem> with SingleTickerProvide
   }
 }
 
-// ── Opção de menu (Apps e plugins / Biblioteca / Tarefas agendadas) ──
-
-class _MenuOptionTile extends StatefulWidget {
-  final AppColorScheme s;
-  final String assetName;
-  final String label;
-  final VoidCallback onTap;
-  const _MenuOptionTile({
-    required this.s,
-    required this.assetName,
-    required this.label,
-    required this.onTap,
-  });
-  @override State<_MenuOptionTile> createState() => _MenuOptionTileState();
-}
-
-class _MenuOptionTileState extends State<_MenuOptionTile> {
-  bool _h = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap: () {
-        HapticFeedback.lightImpact();
-        widget.onTap();
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: _h ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        child: Row(children: [
-          AppIcon(widget.assetName, size: 20, color: s.onSurface),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SelectionContainer.disabled(
-              child: Text(
-                widget.label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: s.onSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
 // ── Cabeçalho de grupo expansível ─────────────────────────────
 
 class _ConversationGroupHeader extends StatelessWidget {
@@ -803,148 +779,6 @@ class _ConversationGroupHeader extends StatelessWidget {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Avatar circular com anel ────────────────────────────────
-
-class _AvatarCircleButton extends StatefulWidget {
-  final AppColorScheme s;
-  final VoidCallback onTap;
-  const _AvatarCircleButton({required this.s, required this.onTap});
-  @override State<_AvatarCircleButton> createState() => _AvatarCircleButtonState();
-}
-
-class _AvatarCircleButtonState extends State<_AvatarCircleButton> {
-  bool _p = false;
-
-  static const double _buttonSize = 52;
-  static const double _ringWidth = 3;
-  static const double _fontSize = 17;
-
-  Uint8List? _decodeAvatar(String raw) {
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      return null;
-    }
-    try {
-      final commaIdx = raw.indexOf(',');
-      final b64 = raw.startsWith('data:') && commaIdx != -1
-          ? raw.substring(commaIdx + 1)
-          : raw;
-      return base64Decode(b64);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Widget _buildAvatarContent(
-    AppColorScheme s,
-    String? avatar,
-    String initial, {
-    required double size,
-    required double fontSize,
-  }) {
-    final fallback = Text(initial,
-        style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: fontSize));
-
-    if (avatar == null || avatar.isEmpty) {
-      return Container(
-        color: s.primary,
-        alignment: Alignment.center,
-        child: fallback,
-      );
-    }
-
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-      return Image.network(
-        avatar,
-        width: size, height: size,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => Container(
-          color: s.primary,
-          alignment: Alignment.center,
-          child: fallback,
-        ),
-        loadingBuilder: (_, child, progress) => progress == null
-            ? child
-            : Container(color: s.primary, alignment: Alignment.center, child: fallback),
-      );
-    }
-
-    final bytes = _decodeAvatar(avatar);
-    if (bytes == null) {
-      return Container(
-        color: s.primary,
-        alignment: Alignment.center,
-        child: fallback,
-      );
-    }
-    return Image.memory(
-      bytes,
-      width: size, height: size,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => Container(
-        color: s.primary,
-        alignment: Alignment.center,
-        child: fallback,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    final user = authController.user;
-    final name = user?.name ?? 'Utilizador';
-    final avatar = user?.avatar;
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
-
-    final innerSize = _buttonSize - (_ringWidth * 2) - 2;
-
-    // Anel neutro e discreto — baseado em onSurface com opacidade baixa
-    // em vez de s.outline (que ficava com uma cor de superfície muito
-    // marcada/feia). Se adapta bem a claro e escuro.
-    final ringColor = s.isDark
-        ? Colors.white.withOpacity(_p ? 0.22 : 0.14)
-        : Colors.black.withOpacity(_p ? 0.16 : 0.09);
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _p = true),
-      onTapCancel: ()  => setState(() => _p = false),
-      onTapUp:     (_) => setState(() => _p = false),
-      onTap:       () {
-        HapticFeedback.lightImpact();
-        widget.onTap();
-      },
-      child: AnimatedScale(
-        scale: _p ? 0.92 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: _buttonSize, height: _buttonSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: ringColor,
-              width: _ringWidth,
-            ),
-            boxShadow: s.cardShadow,
-          ),
-          child: ClipOval(
-            child: SizedBox(
-              width: innerSize,
-              height: innerSize,
-              child: _buildAvatarContent(s, avatar, initial, size: innerSize, fontSize: _fontSize),
-            ),
-          ),
         ),
       ),
     );
@@ -1034,33 +868,20 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
   }
 }
 
-// ── Grupo de linhas soltas ────────────────────────────────────
-
-class _LooseRows extends StatelessWidget {
-  final AppColorScheme s;
-  final List<Widget> children;
-  const _LooseRows({required this.s, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: children);
-  }
-}
-
-// ── Conversa individual ───────────────────────────────────────
+// ── Conversa individual (agora com timestamp e onLongPress -> modal) ──
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
   final ConversationItem item;
   final bool active;
   final VoidCallback onTap;
-  final ValueChanged<Offset> onOptionsAt;
+  final VoidCallback onOptionsTap;
   const _ConvTile({
     required this.s,
     required this.item,
     required this.active,
     required this.onTap,
-    required this.onOptionsAt,
+    required this.onOptionsTap,
   });
   @override State<_ConvTile> createState() => _ConvTileState();
 }
@@ -1073,9 +894,9 @@ class _ConvTileState extends State<_ConvTile> {
     widget.onTap();
   }
 
-  void _handleLongPressStart(LongPressStartDetails d) {
+  void _handleLongPress() {
     HapticFeedback.lightImpact();
-    widget.onOptionsAt(d.globalPosition);
+    widget.onOptionsTap();
   }
 
   @override
@@ -1084,7 +905,7 @@ class _ConvTileState extends State<_ConvTile> {
 
     final Color bg;
     if (widget.active) {
-      bg = s.isDark ? s.hover : s.primary.withOpacity(0.1); // tema claro: primária fraca
+      bg = s.isDark ? s.hover : s.primary.withOpacity(0.1);
     } else if (_h) {
       bg = s.hover;
     } else {
@@ -1097,7 +918,7 @@ class _ConvTileState extends State<_ConvTile> {
       onTapCancel: ()  => setState(() => _h = false),
       onTapUp:     (_) => setState(() => _h = false),
       onTap: _handleTap,
-      onLongPressStart: _handleLongPressStart,
+      onLongPress: _handleLongPress,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
@@ -1120,185 +941,52 @@ class _ConvTileState extends State<_ConvTile> {
               ),
             ),
           ),
+          if (widget.item.timeLabel.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            SelectionContainer.disabled(
+              child: Text(
+                widget.item.timeLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: s.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ]),
       ),
     );
   }
 }
 
-// ── Popup nativo com animação estilo iOS (spring suave) ────────
-//
-// showMenu() do Flutter usa, por omissão, uma curva bem seca
-// (fastOutSlowIn instantânea, sem "settle"). Para dar a sensação
-// de suavidade iOS mantendo o showMenu nativo (que já ancora
-// corretamente na posição do toque via RelativeRect), envolvemos
-// a apresentação numa PopupRoute customizada com curva
-// Curves.easeOutBack suavizada — dá o leve "overshoot" e assentar
-// suave típico do iOS, sem alterar nada do design dos itens.
+// ══════════════════════════════════════════════════════════════
+// MODAL de opções da conversa — estilo iOS, curvas mínimas
+// (substitui o antigo popup ancorado no ponto de toque)
+// ══════════════════════════════════════════════════════════════
 
-Future<T?> _showAnchoredPopup<T>({
-  required BuildContext context,
-  required RelativeRect position,
-  required List<PopupMenuEntry<T>> items,
-  required Color color,
-  required ShapeBorder shape,
-}) {
-  return Navigator.of(context, rootNavigator: true).push<T>(
-    _SpringMenuRoute<T>(
-      position: position,
-      items: items,
-      color: color,
-      shape: shape,
-    ),
-  );
-}
+// Raio de borda mínimo, propositadamente pouco arredondado
+// (bem menos curvo que o padrão Android/Material dos bottom sheets).
+const double _kMinimalModalRadius = 6.0;
 
-class _SpringMenuRoute<T> extends PopupRoute<T> {
-  final RelativeRect position;
-  final List<PopupMenuEntry<T>> items;
-  final Color color;
-  final ShapeBorder shape;
-
-  _SpringMenuRoute({
-    required this.position,
-    required this.items,
-    required this.color,
-    required this.shape,
-  });
-
-  @override
-  Color? get barrierColor => Colors.transparent;
-
-  @override
-  bool get barrierDismissible => true;
-
-  @override
-  String? get barrierLabel => 'Dismiss';
-
-  @override
-  Duration get transitionDuration => const Duration(milliseconds: 260);
-
-  @override
-  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-    return CustomSingleChildLayout(
-      delegate: _PopupMenuRouteLayout(position),
-      child: Material(
-        color: color,
-        elevation: 8,
-        shape: shape,
-        clipBehavior: Clip.antiAlias,
-        child: IntrinsicWidth(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: items.whereType<PopupMenuItem<T>>().map<Widget>((entry) {
-              return InkWell(
-                onTap: () => Navigator.of(context).pop(entry.value),
-                child: entry.child ?? const SizedBox.shrink(),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
-    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
-    final fade = CurvedAnimation(parent: animation, curve: const Interval(0.0, 0.55, curve: Curves.easeOut));
-    return FadeTransition(
-      opacity: fade,
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
-        alignment: Alignment.topLeft,
-        child: child,
-      ),
-    );
-  }
-}
-
-class _PopupMenuRouteLayout extends SingleChildLayoutDelegate {
-  final RelativeRect position;
-  _PopupMenuRouteLayout(this.position);
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(constraints.biggest);
-  }
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    double x = position.left;
-    double y = position.top;
-    if (x + childSize.width > size.width) x = size.width - childSize.width - 8;
-    if (x < 8) x = 8;
-    if (y + childSize.height > size.height) y = size.height - childSize.height - 8;
-    if (y < 8) y = 8;
-    return Offset(x, y);
-  }
-
-  @override
-  bool shouldRelayout(_PopupMenuRouteLayout oldDelegate) => position != oldDelegate.position;
-}
-
-// ── Popup de opções da conversa (ancorado no ponto exato do toque) ──
-
-void showConversationOptionsPopupAt(
+void showConversationOptionsModal(
   BuildContext context,
   AppColorScheme s, {
-  required Offset position,
   required ConversationItem item,
   required VoidCallback onOpen,
   required VoidCallback onTogglePin,
   required VoidCallback onRename,
   required VoidCallback onDelete,
 }) async {
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final screenSize = overlayBox.size;
-
-  // Ancoragem exata no ponto onde o dedo tocou (position = globalPosition
-  // do onTapDown/onLongPressStart, já capturado pelo chamador).
-  final RelativeRect menuPosition = RelativeRect.fromLTRB(
-    position.dx,
-    position.dy,
-    screenSize.width - position.dx,
-    screenSize.height - position.dy,
-  );
-
-  final result = await _showAnchoredPopup<_ConversationPopupAction>(
+  final result = await showModalBottomSheet<_ConversationPopupAction>(
     context: context,
-    position: menuPosition,
-    color: s.cardBackground, // cor do card de settings
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(
-        color: s.outline.withOpacity(0.25),
-        width: 1.0,
-      ),
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kMinimalModalRadius)),
     ),
-    items: [
-      PopupMenuItem(
-        value: _ConversationPopupAction.open,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, 'open', 'Abrir conversa'),
-      ),
-      PopupMenuItem(
-        value: _ConversationPopupAction.togglePin,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, item.pinned ? 'pin_slash' : 'pin', item.pinned ? 'Desafixar' : 'Fixar'),
-      ),
-      PopupMenuItem(
-        value: _ConversationPopupAction.rename,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, 'pencil', 'Renomear'),
-      ),
-      PopupMenuItem(
-        value: _ConversationPopupAction.delete,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, 'trash', 'Eliminar', destructive: true),
-      ),
-    ],
+    builder: (sheetContext) => _ConversationOptionsModalContent(s: s, item: item),
   );
 
   if (result == null) return;
@@ -1318,35 +1006,93 @@ void showConversationOptionsPopupAt(
   }
 }
 
-Widget _buildPopupItem(AppColorScheme s, String iconAsset, String label, {bool destructive = false}) {
-  final color = destructive ? s.error : s.onSurface;
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(999),
-      color: Colors.transparent,
-    ),
-    child: Row(
-      children: [
-        AppIcon(iconAsset, size: 18, color: color),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SelectionContainer.disabled(
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500),
-            ),
-          ),
+class _ConversationOptionsModalContent extends StatelessWidget {
+  final AppColorScheme s;
+  final ConversationItem item;
+  const _ConversationOptionsModalContent({required this.s, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(_kMinimalModalRadius),
+          border: Border.all(color: s.outline.withOpacity(0.2), width: 1),
         ),
-      ],
-    ),
-  );
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: SelectionContainer.disabled(
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+            Divider(height: 1, color: s.outline.withOpacity(0.15)),
+            _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
+            _modalItem(
+              context,
+              item.pinned ? 'pin_slash' : 'pin',
+              item.pinned ? 'Desafixar' : 'Fixar',
+              _ConversationPopupAction.togglePin,
+            ),
+            _modalItem(context, 'pencil', 'Renomear', _ConversationPopupAction.rename),
+            _modalItem(context, 'trash', 'Eliminar', _ConversationPopupAction.delete, destructive: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modalItem(
+    BuildContext context,
+    String iconAsset,
+    String label,
+    _ConversationPopupAction action, {
+    bool destructive = false,
+  }) {
+    final color = destructive ? s.error : s.onSurface;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.pop(context, action);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            AppIcon(iconAsset, size: 18, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SelectionContainer.disabled(
+                child: Text(
+                  label,
+                  style: TextStyle(fontSize: 15, color: color, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 enum _ConversationPopupAction { open, togglePin, rename, delete }
 
-// ── Popup de opções da conta (ancorado no ponto exato do toque) ────
+// ── Popup de opções da conta (mesmo tratamento minimalista) ────
 
 void showAccountOptionsPopupAt(
   BuildContext context,
@@ -1356,45 +1102,61 @@ void showAccountOptionsPopupAt(
   required VoidCallback onOpenSettings,
   required VoidCallback onLogout,
 }) async {
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final screenSize = overlayBox.size;
-
-  final RelativeRect menuPosition = RelativeRect.fromLTRB(
-    position.dx,
-    position.dy,
-    screenSize.width - position.dx,
-    screenSize.height - position.dy,
-  );
-
-  final result = await _showAnchoredPopup<_AccountPopupAction>(
+  final result = await showModalBottomSheet<_AccountPopupAction>(
     context: context,
-    position: menuPosition,
-    color: s.cardBackground,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(
-        color: s.outline.withOpacity(0.25),
-        width: 1.0,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(_kMinimalModalRadius),
+          border: Border.all(color: s.outline.withOpacity(0.2), width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.toggleTheme),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(children: [
+                  AppIcon(s.isDark ? 'sun' : 'moon', size: 18, color: s.onSurface),
+                  const SizedBox(width: 12),
+                  Text(s.isDark ? 'Modo claro' : 'Modo escuro',
+                      style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
+                ]),
+              ),
+            ),
+            InkWell(
+              onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.openSettings),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(children: [
+                  AppIcon('settings', size: 18, color: s.onSurface),
+                  const SizedBox(width: 12),
+                  Text('Definições', style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
+                ]),
+              ),
+            ),
+            InkWell(
+              onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.logout),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(children: [
+                  AppIcon('logout', size: 18, color: s.error),
+                  const SizedBox(width: 12),
+                  Text('Terminar sessão', style: TextStyle(fontSize: 15, color: s.error, fontWeight: FontWeight.w500)),
+                ]),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
-    items: [
-      PopupMenuItem(
-        value: _AccountPopupAction.toggleTheme,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, s.isDark ? 'sun' : 'moon', s.isDark ? 'Modo claro' : 'Modo escuro'),
-      ),
-      PopupMenuItem(
-        value: _AccountPopupAction.openSettings,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, 'settings', 'Definições'),
-      ),
-      PopupMenuItem(
-        value: _AccountPopupAction.logout,
-        padding: EdgeInsets.zero,
-        child: _buildPopupItem(s, 'logout', 'Terminar sessão', destructive: true),
-      ),
-    ],
   );
 
   if (result == null) return;
@@ -1505,7 +1267,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: widget.filled ? s.error : s.hover,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(_kMinimalModalRadius),
           ),
           child: SelectionContainer.disabled(
             child: Text(
@@ -1600,16 +1362,105 @@ Future<void> showRenameSheet(
   );
 }
 
-// ── NEW CHAT PILL (compacto, cor primária, texto branco) ──────
+// ══════════════════════════════════════════════════════════════
+// BOTTOM FLOATING BAR — estilo iOS, blur + pill, como na imagem
+// referência: input de pesquisa + ícone settings + ícone nova conversa
+// ══════════════════════════════════════════════════════════════
 
-class _NewChatPill extends StatefulWidget {
+class DrawerBottomFloatingBar extends StatelessWidget {
   final AppColorScheme s;
-  final VoidCallback? onTap;
-  const _NewChatPill({required this.s, required this.onTap});
-  @override State<_NewChatPill> createState() => _NewChatPillState();
+  final VoidCallback? onSearchTap;
+  final VoidCallback? onSettingsTap;
+  final VoidCallback? onNewChatTap;
+
+  const DrawerBottomFloatingBar({
+    super.key,
+    required this.s,
+    this.onSearchTap,
+    this.onSettingsTap,
+    this.onNewChatTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        12, 8, 12, 8 + MediaQuery.of(context).padding.bottom,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: s.cardBackground.withOpacity(0.72),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
+              boxShadow: s.cardShadow,
+            ),
+            child: Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    onSearchTap?.call();
+                  },
+                  child: Container(
+                    height: 40,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: s.hover,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(children: [
+                      AppIcon('search', size: 16, color: s.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SelectionContainer.disabled(
+                          child: Text(
+                            'Pesquisar',
+                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              _BottomBarIconButton(
+                s: s,
+                assetName: 'settings',
+                onTap: onSettingsTap,
+              ),
+              const SizedBox(width: 2),
+              _BottomBarIconButton(
+                s: s,
+                assetName: 'new_chat',
+                onTap: onNewChatTap,
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _NewChatPillState extends State<_NewChatPill> {
+class _BottomBarIconButton extends StatefulWidget {
+  final AppColorScheme s;
+  final String assetName;
+  final VoidCallback? onTap;
+  const _BottomBarIconButton({required this.s, required this.assetName, this.onTap});
+  @override State<_BottomBarIconButton> createState() => _BottomBarIconButtonState();
+}
+
+class _BottomBarIconButtonState extends State<_BottomBarIconButton> {
   bool _p = false;
 
   @override
@@ -1620,38 +1471,23 @@ class _NewChatPillState extends State<_NewChatPill> {
       onTapDown:   (_) => setState(() => _p = true),
       onTapCancel: ()  => setState(() => _p = false),
       onTapUp:     (_) => setState(() => _p = false),
-      onTap:       () {
+      onTap: () {
         HapticFeedback.lightImpact();
         widget.onTap?.call();
       },
       child: AnimatedScale(
-        scale: _p ? 0.98 : 1.0,
+        scale: _p ? 0.9 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
-        child: IntrinsicWidth(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            height: 52,
-            decoration: BoxDecoration(
-              color: s.primary,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: s.cardShadow,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const AppIcon('new_chat', color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                const SelectionContainer.disabled(
-                  child: Text(
-                    'Conversar',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _p ? s.hover : Colors.transparent,
+            shape: BoxShape.circle,
           ),
+          child: AppIcon(widget.assetName, size: 19, color: s.onSurface),
         ),
       ),
     );
