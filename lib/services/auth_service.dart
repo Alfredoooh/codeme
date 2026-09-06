@@ -66,9 +66,12 @@ class AppUser {
         avatar: j['avatar']?.toString(),
         provider: j['provider']?.toString() ?? 'password',
         credits: (j['credits'] is num) ? (j['credits'] as num).toInt() : 0,
-        preferences:
-            (j['preferences'] is Map) ? Map<String, dynamic>.from(j['preferences']) : {},
-        profile: (j['profile'] is Map) ? Map<String, dynamic>.from(j['profile']) : {},
+        preferences: (j['preferences'] is Map)
+            ? Map<String, dynamic>.from(j['preferences'])
+            : {},
+        profile: (j['profile'] is Map)
+            ? Map<String, dynamic>.from(j['profile'])
+            : {},
         isAdmin: j['isAdmin'] == true,
       );
 
@@ -190,11 +193,12 @@ class AuthController extends ChangeNotifier {
   /// Deteta automaticamente se o identificador parece email ou
   /// telemóvel, para decidir que campo mandar ao Worker.
   LoginIdentifierType _detectIdentifierType(String identifier) {
-    return identifier.contains('@') ? LoginIdentifierType.email : LoginIdentifierType.phone;
+    return identifier.contains('@')
+        ? LoginIdentifierType.email
+        : LoginIdentifierType.phone;
   }
 
-  /// Registo com email OU telemóvel + password. O Worker guarda
-  /// tudo — não há nenhum serviço externo envolvido.
+  /// Registo com email OU telemóvel + password.
   Future<bool> register({
     required String identifier,
     required String password,
@@ -271,7 +275,8 @@ class AuthController extends ChangeNotifier {
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode != 200) {
-        lastError = data['error']?.toString() ?? 'Email/telemóvel ou password incorretos.';
+        lastError = data['error']?.toString() ??
+            'Email/telemóvel ou password incorretos.';
         busy = false;
         notifyListeners();
         return false;
@@ -294,8 +299,72 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Solicita código de 6 dígitos para reset de password.
+  Future<bool> requestPasswordResetCode(String email) async {
+    busy = true;
+    lastError = null;
+    notifyListeners();
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim().toLowerCase()}),
+      );
+      busy = false;
+      if (response.statusCode != 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        lastError = data['error']?.toString() ?? 'Erro ao enviar código.';
+        notifyListeners();
+        return false;
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      lastError = 'Erro de rede. Verifica a tua ligação.';
+      busy = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Confirma o código de reset e define a nova password.
+  Future<bool> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    busy = true;
+    lastError = null;
+    notifyListeners();
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'code': code,
+          'password': newPassword,
+        }),
+      );
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      busy = false;
+      if (response.statusCode != 200) {
+        lastError = data['error']?.toString() ?? 'Código inválido.';
+        notifyListeners();
+        return false;
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      lastError = 'Erro de rede. Verifica a tua ligação.';
+      busy = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Troca a password atual por uma nova, exigindo a password
-  /// antiga por segurança. Não depende de nenhum serviço externo.
+  /// antiga por segurança.
   Future<bool> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -307,7 +376,10 @@ class AuthController extends ChangeNotifier {
     try {
       final response = await http.put(
         Uri.parse('$_baseUrl/user/me'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
         body: jsonEncode({
           'currentPassword': currentPassword,
           'password': newPassword,
