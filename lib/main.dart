@@ -5,8 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart'; // gerado pelo flutterfire configure
 import 'core/theme/colors.dart';
 import 'core/widgets/widgets.dart';
 import 'core/navigation/app_page_route.dart';
@@ -25,9 +23,6 @@ import 'features/apps/slides/slides_app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   if (!kIsWeb) {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -602,7 +597,6 @@ class _AppHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          // Igualado ao _SettingsAppBar: nunca chega a 0, mínimo de 0.4.
           colors: [
             headerBackground,
             headerBackground.withOpacity(0.4),

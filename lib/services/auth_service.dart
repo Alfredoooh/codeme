@@ -182,6 +182,33 @@ class AuthController extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Vai buscar apenas o saldo de créditos ao backend (rota dedicada
+  /// /credits/balance) e atualiza o AppUser em memória + persistido.
+  /// Usado, por exemplo, depois de um erro de créditos esgotados,
+  /// para refletir o valor mais recente sem re-buscar o /user/me todo.
+  Future<void> refreshBalance() async {
+    if (token == null || user == null) return;
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/credits/balance'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final newCredits = (data['credits'] is num)
+            ? (data['credits'] as num).toInt()
+            : user!.credits;
+        user = user!.copyWith(credits: newCredits);
+        await SessionManager.updateUser(user!);
+        notifyListeners();
+      } else if (response.statusCode == 401) {
+        await _forceLogout();
+      }
+    } catch (_) {
+      // Falha de rede silenciosa: mantém o saldo em cache.
+    }
+  }
+
   Future<void> _forceLogout() async {
     token = null;
     user = null;
