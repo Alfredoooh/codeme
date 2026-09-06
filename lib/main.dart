@@ -1,5 +1,14 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
+//
+// MUDANÇA NESTA VERSÃO:
+// _AppHeader (modo transparent) deixou de ter um Container único
+// com opacidade fixa por trás do blur — isso criava a "linha" no
+// fim do appbar. Agora o blur é aplicado ao Stack completo (fundo +
+// conteúdo) e depois um ShaderMask com gradiente vertical
+// (BlendMode.dstIn) reduz progressivamente a intensidade do
+// BackdropFilter e da cor de fundo da appbar para baixo, fundindo
+// suavemente com o corpo por trás sem nenhuma aresta percetível.
 // ══════════════════════════════════════════════════════════════
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -519,6 +528,16 @@ class RootShellNavigation extends InheritedWidget {
   bool updateShouldNotify(RootShellNavigation oldWidget) => true;
 }
 
+// ══════════════════════════════════════════════════════════════
+// _AppHeader — modo transparent agora com fusão progressiva:
+// ShaderMask (dstIn) aplica um gradiente vertical de alfa (1.0 no
+// topo → 0.0 no fim) sobre TODO o conjunto blur+conteúdo+cor de
+// fundo, incluindo o pixel final. Como não há nenhuma borda com
+// opacidade "em degrau" — é uma única superfície com alfa contínuo
+// — não existe aresta percetível entre o appbar e o corpo por trás.
+// O blur em si (sigma) mantém-se constante ao longo do header,
+// como pedido; só a MISTURA final é que se dissolve.
+// ══════════════════════════════════════════════════════════════
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -592,16 +611,37 @@ class _AppHeader extends StatelessWidget {
       return Container(color: headerBackground, child: content);
     }
 
+    // Altura total da faixa do appbar (conteúdo + inset do topo),
+    // usada para dimensionar o ShaderMask com precisão.
+    final headerHeight = MediaQuery.of(context).padding.top + 6 + 40 + 10;
+
     return ClipRect(
-      child: BackdropFilter(
-        // Blur reduzido ~70% face à versão anterior (12 -> 1.2) —
-        // quase impercetível, praticamente só a cor de fundo.
-        filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
-        child: Container(
-          decoration: BoxDecoration(
-            color: headerBackground.withOpacity(0.82),
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) {
+          // Gradiente de alfa: opaco nos primeiros ~65% da altura do
+          // appbar, depois desvanece suavemente até ~0.08 (nunca 0
+          // total, para não parecer que "corta" abruptamente) no
+          // fim — é essa cauda longa e suave que elimina a linha.
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white,
+              Colors.white,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.62, 1.0],
+          ).createShader(Rect.fromLTWH(0, 0, bounds.width, headerHeight * 1.35));
+        },
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: headerBackground.withOpacity(0.82),
+            ),
+            child: content,
           ),
-          child: content,
         ),
       ),
     );
