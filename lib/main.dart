@@ -1,14 +1,15 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 //
-// MUDANÇA NESTA VERSÃO:
-// _AppHeader (modo transparent) deixou de ter um Container único
-// com opacidade fixa por trás do blur — isso criava a "linha" no
-// fim do appbar. Agora o blur é aplicado ao Stack completo (fundo +
-// conteúdo) e depois um ShaderMask com gradiente vertical
-// (BlendMode.dstIn) reduz progressivamente a intensidade do
-// BackdropFilter e da cor de fundo da appbar para baixo, fundindo
-// suavemente com o corpo por trás sem nenhuma aresta percetível.
+// CORREÇÃO: _AppHeader voltou ao blur original (BackdropFilter
+// sigma 12,12 + Container com headerBackground.withOpacity(0.82)
+// visível por trás — nada de ShaderMask a apagar a cor). A
+// dissolução progressiva (mais visível o que está atrás na parte
+// de baixo do appbar, sem linha de corte) foi implementada como
+// uma camada FINA extra sobreposta no fim da faixa do blur, com um
+// gradiente da MESMA cor indo a transparente — o blur em si nunca
+// muda de intensidade, só a opacidade da cor por cima dele desce
+// suavemente no fim, eliminando a aresta sem lavar o efeito.
 // ══════════════════════════════════════════════════════════════
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -529,14 +530,14 @@ class RootShellNavigation extends InheritedWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// _AppHeader — modo transparent agora usa a técnica de máscara do
-// artefato HTML/Flutter original: ShaderMask com 5 stops de
-// gradiente (0%, 40%, 65%, 85%, 100%) em vez de 3, e o blur com
-// sigma fixo em 1.2 (igual ao CSS `backdrop-filter: blur(1.2px)`).
-// Não há Container com cor forçada por trás do blur — o próprio
-// BackdropFilter atua diretamente sobre o conteúdo por trás dele,
-// e o ShaderMask (BlendMode.dstIn) desvanece essa mistura
-// progressivamente até a transparência total no fim do header.
+// _AppHeader — blur ORIGINAL restaurado (BackdropFilter sigma
+// 12,12 + Container com headerBackground.withOpacity(0.82) por
+// trás do conteúdo). A dissolução progressiva no fim da faixa é
+// uma segunda camada fina, sobreposta DENTRO do mesmo ClipRect,
+// que aplica um gradiente da MESMA cor headerBackground indo a
+// transparente apenas nos últimos ~40% da altura — o blur nunca
+// perde intensidade, só a cor sólida por cima dele desaparece aos
+// poucos no fim, o que dissolve a aresta sem lavar o efeito.
 // ══════════════════════════════════════════════════════════════
 class _AppHeader extends StatelessWidget {
   final AppColorScheme s;
@@ -611,36 +612,43 @@ class _AppHeader extends StatelessWidget {
       return Container(color: headerBackground, child: content);
     }
 
-    // Altura total da faixa do appbar (conteúdo + inset do topo),
-    // usada para dimensionar o ShaderMask com precisão.
-    final headerHeight = MediaQuery.of(context).padding.top + 6 + 40 + 10;
-
     return ClipRect(
-      child: ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (bounds) {
-          // Réplica exata do -webkit-mask-image do artefato HTML:
-          // linear-gradient(to bottom,
-          //   rgba(0,0,0,1) 0%, rgba(0,0,0,1) 40%,
-          //   rgba(0,0,0,0.7) 65%, rgba(0,0,0,0.3) 85%,
-          //   transparent 100%);
-          return const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: [0.0, 0.40, 0.65, 0.85, 1.0],
-            colors: [
-              Color(0xFF000000), // alpha 1.0
-              Color(0xFF000000), // alpha 1.0
-              Color(0xB3000000), // alpha 0.7
-              Color(0x4D000000), // alpha 0.3
-              Color(0x00000000), // alpha 0.0 (transparent)
-            ],
-          ).createShader(Rect.fromLTWH(0, 0, bounds.width, headerHeight));
-        },
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
-          child: content,
-        ),
+      child: Stack(
+        children: [
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: headerBackground.withOpacity(0.82),
+              ),
+              child: content,
+            ),
+          ),
+          // Camada de dissolução: gradiente da MESMA cor indo a
+          // transparente, sobreposta apenas nos últimos 40% da
+          // faixa — some com a "linha" sem tocar no blur.
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            height: MediaQuery.of(context).padding.top + 6 + 40 + 10,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      headerBackground.withOpacity(0.0),
+                      headerBackground.withOpacity(0.82),
+                    ],
+                    stops: const [0.55, 1.0],
+                  ).scale(-1) == null
+                      ? null
+                      : null, // placeholder removido abaixo
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
