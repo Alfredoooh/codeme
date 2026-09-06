@@ -1,20 +1,12 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_widgets_shared.dart
 // Loaders reutilizáveis, popups genéricos, e o card simples de canvas.
-//
-// MUDANÇA NESTA VERSÃO:
-// _HeaderMenuButton (o botão "more_vert" do header da AiTab) deixou
-// de usar showMenu (animação genérica do Material, subindo do
-// ponto calculado sem controlo de curva) e passou a usar
-// showAnchoredPopup — nasce com scale+fade a partir do próprio
-// botão, ficando sempre "sobre" ele, nunca por baixo.
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/animated_canvas_icon.dart';
-import '../../core/widgets/anchored_popup.dart';
 import '../apps/app_types.dart';
 import 'aitab_models.dart';
 
@@ -424,8 +416,7 @@ class _ShimmerBrainIconState extends State<ShimmerBrainIcon>
 }
 
 // ══════════════════════════════════════════════════════════════
-// POPUP MENU GENÉRICO (showMenu nativo — mantido para os outros
-// pontos de uso que não foram pedidos para mudar nesta ronda)
+// POPUP MENU GENÉRICO
 // ══════════════════════════════════════════════════════════════
 
 class PopupMenuEntry<T> {
@@ -557,13 +548,6 @@ class PopupMenu<T> extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// BOTÃO DE MENU DO HEADER (more_vert) — ATUALIZADO
-// Passou de showMenu (nativo, sem controlo de animação) para
-// showAnchoredPopup: nasce com scale+fade a partir do próprio
-// botão, ficando sempre sobre ele.
-// ══════════════════════════════════════════════════════════════
-
 class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
@@ -586,7 +570,7 @@ class AiConversationMenuButton extends StatelessWidget {
   }
 }
 
-class _HeaderMenuButton extends StatefulWidget {
+class _HeaderMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final bool hasMessages;
   final ValueChanged<ConversationAction> onSelect;
@@ -598,58 +582,101 @@ class _HeaderMenuButton extends StatefulWidget {
   });
 
   @override
-  State<_HeaderMenuButton> createState() => _HeaderMenuButtonState();
-}
-
-class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
-  final GlobalKey _anchorKey = GlobalKey();
-
-  Future<void> _open() async {
-    final s = widget.s;
-    final result = await showAnchoredPopup<ConversationAction>(
-      context,
-      anchorKey: _anchorKey,
-      s: s,
-      menuWidth: 210,
-      items: [
-        AnchoredPopupItem(
-          value: ConversationAction.newChat,
-          label: ConversationAction.newChat.label,
-          assetName: ConversationAction.newChat.assetName,
-        ),
-        AnchoredPopupItem(
-          value: ConversationAction.incognito,
-          label: ConversationAction.incognito.label,
-          assetName: ConversationAction.incognito.assetName,
-          disabled: widget.hasMessages,
-        ),
-        AnchoredPopupItem(
-          value: ConversationAction.rename,
-          label: ConversationAction.rename.label,
-          assetName: ConversationAction.rename.assetName,
-        ),
-        AnchoredPopupItem(
-          value: ConversationAction.delete,
-          label: ConversationAction.delete.label,
-          assetName: ConversationAction.delete.assetName,
-          destructive: true,
-        ),
-      ],
-    );
-    if (result != null) widget.onSelect(result);
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final GlobalKey anchorKey = GlobalKey();
     return GestureDetector(
-      key: _anchorKey,
+      key: anchorKey,
       behavior: HitTestBehavior.opaque,
-      onTap: _open,
+      onTap: () async {
+        final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+        if (box == null) return;
+        final overlayState = Overlay.of(context);
+        final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+        final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+        final anchorSize = box.size;
+
+        final RelativeRect position = RelativeRect.fromLTRB(
+          anchorTopLeft.dx,
+          anchorTopLeft.dy + anchorSize.height,
+          overlayBox.size.width - (anchorTopLeft.dx + anchorSize.width),
+          overlayBox.size.height - (anchorTopLeft.dy + anchorSize.height),
+        );
+
+        final result = await showMenu<ConversationAction>(
+          context: context,
+          position: position,
+          color: s.floatingSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: s.outline.withOpacity(0.25)),
+          ),
+          items: [
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.newChat,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.newChat, false, false),
+            ),
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.incognito,
+              enabled: !hasMessages,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.incognito, false, hasMessages),
+            ),
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.rename,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.rename, false, false),
+            ),
+            PopupMenuItem<ConversationAction>(
+              value: ConversationAction.delete,
+              padding: EdgeInsets.zero,
+              child: _buildMenuItem(s, ConversationAction.delete, true, false),
+            ),
+          ],
+        );
+
+        if (result != null) onSelect(result);
+      },
       child: Container(
         width: 40,
         height: 40,
         alignment: Alignment.center,
-        child: AppIcon('more_vert', color: widget.s.onSurface, size: 20),
+        child: AppIcon('more_vert', color: s.onSurface, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildMenuItem(
+    AppColorScheme s,
+    ConversationAction action,
+    bool destructive,
+    bool disabled,
+  ) {
+    final color = disabled
+        ? s.onSurfaceVariant.withOpacity(0.4)
+        : destructive
+            ? s.error
+            : s.onSurface;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          AppIcon(action.assetName, size: 18, color: color),
+          const SizedBox(width: 10),
+          Text(
+            action.label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

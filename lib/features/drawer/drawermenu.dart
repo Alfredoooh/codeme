@@ -1,31 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/drawer/drawermenu.dart
-//
-// CORREÇÕES DESTA VERSÃO (revertendo erros anteriores):
-// 1) Topbar do drawer: blur ORIGINAL restaurado (mesmo padrão do
-//    _AppHeader do main.dart) — BackdropFilter sigma 12,12 visível
-//    por trás do conteúdo, com uma camada fina de dissolução por
-//    cima (mesma cor, indo a transparente) só no fim da faixa.
-// 2) DrawerBottomFloatingBar: voltou a ser DOIS pills SEPARADOS
-//    lado a lado (não um único container a envolver tudo) — pill 1
-//    = pesquisa sozinha; pill 2 = os dois botões (nova conversa +
-//    settings) juntos. Cada pill tem o seu próprio
-//    ClipRRect+BackdropFilter+cor, exatamente como estava antes,
-//    usando s.cardBackground/s.hover/s.outline/s.cardShadow — as
-//    MESMAS cores que os cards e botões do resto da app usam, não
-//    Colors.black/white inventados.
-// 3) AnchoredPopupTile (ficheiro anchored_popup.dart, ver nota no
-//    fim): a cor de fundo do popup passou de s.floatingSurface para
-//    s.cardBackground, para bater com a cor que os outros cards da
-//    app (incluindo os do PersonalizationScreen) já usam — isso
-//    resolve a "cor esquisita" do popup.
-// 4) Modal de opções da conversa: reorganizado no card style do
-//    PersonalizationScreen — grupo com CANTOS EXTERNOS arredondados
-//    e cantos internos quase retos entre linhas (mesma técnica de
-//    _PersonalizationGroup._radiusFor), com um SizedBox de 2px de
-//    separação real entre o item e o resto — não é mais uma lista
-//    contínua com Divider fininho, é literalmente o mesmo padrão de
-//    "cards empilhados com pequeno respiro" do personalization.
 // ══════════════════════════════════════════════════════════════
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -36,7 +10,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
-import '../../core/widgets/anchored_popup.dart';
 import '../../core/navigation/app_page_route.dart';
 import '../../services/auth_service.dart';
 // TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
@@ -245,7 +218,7 @@ class _AppDrawerState extends State<AppDrawer> {
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
 
-  static const double _topBarContentHeight = 56.0;
+  static const double _topBarContentHeight = 52.0;
   static const double _bottomBarReserve = 84.0;
 
   @override
@@ -296,12 +269,11 @@ class _AppDrawerState extends State<AppDrawer> {
     widget.onCloseAnimated();
   }
 
-  void _openConvModal(BuildContext context, GlobalKey anchorKey, ConversationItem item) {
+  void _openConvModal(BuildContext context, ConversationItem item) {
     HapticFeedback.lightImpact();
     showConversationOptionsModal(
       context,
       widget.s,
-      anchorKey: anchorKey,
       item: item,
       onOpen: () => _openConversation(item),
       onTogglePin: () => conversationsController.togglePin(item.id, !item.pinned),
@@ -385,131 +357,106 @@ class _AppDrawerState extends State<AppDrawer> {
     final name = user?.name ?? 'Utilizador';
     final avatarBytes = _decodeAvatar(user?.avatar);
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
-    final topInset = MediaQuery.of(context).padding.top;
-    final fullTopBarHeight = topInset + _topBarContentHeight;
 
     return SizedBox(
       width: screenWidth,
       child: Material(
         color: s.pageBackground,
-        child: Stack(children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: fullTopBarHeight),
-              Expanded(
-                child: _buildConversationsPage(context, s, pinned, others),
-              ),
-              SizedBox(height: _bottomBarReserve + MediaQuery.of(context).padding.bottom),
-            ],
-          ),
+        child: SafeArea(
+          child: Stack(children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: _topBarContentHeight),
+                Expanded(
+                  child: _buildConversationsPage(context, s, pinned, others),
+                ),
+                SizedBox(height: _bottomBarReserve),
+              ],
+            ),
 
-          // ── Topbar: blur ORIGINAL (sigma 12,12 + cor visível por
-          // trás) com camada fina de dissolução no fim, igual ao
-          // _AppHeader do main.dart. ──
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: ClipRect(
-              child: Stack(
-                children: [
-                  BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      height: fullTopBarHeight,
-                      padding: EdgeInsets.only(top: topInset, left: 16, right: 16),
-                      decoration: BoxDecoration(
-                        color: s.pageBackground.withOpacity(0.82),
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                  child: Container(
+                    height: _topBarContentHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: s.pageBackground.withOpacity(0.78),
+                      border: Border(
+                        bottom: BorderSide(color: s.outline.withOpacity(0.10), width: 1),
                       ),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: widget.onSettings,
-                            child: Container(
-                              width: 40, height: 40,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: s.primary,
-                                boxShadow: s.cardShadow,
-                              ),
-                              child: ClipOval(
-                                child: avatarBytes != null
-                                    ? Image.memory(avatarBytes, fit: BoxFit.cover)
-                                    : Center(
-                                        child: Text(
-                                          initial,
-                                          style: TextStyle(
-                                            color: s.onPrimary,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 15,
-                                          ),
+                    ),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: widget.onSettings,
+                          child: Container(
+                            width: 34, height: 34,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: s.primary,
+                            ),
+                            child: ClipOval(
+                              child: avatarBytes != null
+                                  ? Image.memory(avatarBytes, fit: BoxFit.cover)
+                                  : Center(
+                                      child: Text(
+                                        initial,
+                                        style: TextStyle(
+                                          color: s.onPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
                                         ),
                                       ),
-                              ),
+                                    ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: SelectionContainer.disabled(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: s.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          _CircleIconButton(
-                            s: s,
-                            assetName: 'double_chevron_right',
-                            size: 40,
-                            iconSize: 18,
-                            onTap: widget.onCloseAnimated,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0, right: 0, bottom: 0,
-                    height: fullTopBarHeight,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              s.pageBackground.withOpacity(0.0),
-                              s.pageBackground.withOpacity(0.0),
-                              s.pageBackground.withOpacity(0.55),
-                            ],
-                            stops: const [0.0, 0.55, 1.0],
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SelectionContainer.disabled(
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: s.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _CircleIconButton(
+                          s: s,
+                          assetName: 'double_chevron_right',
+                          size: 34,
+                          iconSize: 16,
+                          onTap: widget.onCloseAnimated,
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
 
-          Positioned(
-            left: 0, right: 0, bottom: 0,
-            child: DrawerBottomFloatingBar(
-              s: s,
-              onSearchTap: () {},
-              onSettingsTap: widget.onSettings,
-              onNewChatTap: widget.onNewChat != null ? _handleNewChat : null,
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: DrawerBottomFloatingBar(
+                s: s,
+                onSearchTap: () {},
+                onSettingsTap: widget.onSettings,
+                onNewChatTap: widget.onNewChat != null ? _handleNewChat : null,
+              ),
             ),
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
@@ -601,7 +548,7 @@ class _AppDrawerState extends State<AppDrawer> {
               item: item,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
-              onOptionsTap: (key) => _openConvModal(context, key, item),
+              onOptionsTap: () => _openConvModal(context, item),
             ),
         ],
       ));
@@ -624,7 +571,7 @@ class _AppDrawerState extends State<AppDrawer> {
               item: item,
               active: item.id == widget.activeConversationId,
               onTap: () => _openConversation(item),
-              onOptionsTap: (key) => _openConvModal(context, key, item),
+              onOptionsTap: () => _openConvModal(context, item),
             ),
         ],
       ));
@@ -1021,7 +968,7 @@ class _ConvTile extends StatefulWidget {
   final ConversationItem item;
   final bool active;
   final VoidCallback onTap;
-  final ValueChanged<GlobalKey> onOptionsTap;
+  final VoidCallback onOptionsTap;
   const _ConvTile({
     required this.s,
     required this.item,
@@ -1034,7 +981,6 @@ class _ConvTile extends StatefulWidget {
 
 class _ConvTileState extends State<_ConvTile> {
   bool _h = false;
-  final GlobalKey _optionsKey = GlobalKey();
 
   void _handleTap() {
     HapticFeedback.lightImpact();
@@ -1043,7 +989,7 @@ class _ConvTileState extends State<_ConvTile> {
 
   void _handleLongPress() {
     HapticFeedback.lightImpact();
-    widget.onOptionsTap(_optionsKey);
+    widget.onOptionsTap();
   }
 
   @override
@@ -1060,7 +1006,6 @@ class _ConvTileState extends State<_ConvTile> {
     }
 
     return GestureDetector(
-      key: _optionsKey,
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _h = true),
       onTapCancel: ()  => setState(() => _h = false),
@@ -1109,50 +1054,30 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL de opções da conversa — ancorado ao botão (long-press na
-// linha), reorganizado no estilo do PersonalizationScreen: grupo
-// com cantos externos arredondados e internos quase retos, exato
-// padrão de _PersonalizationGroup._radiusFor.
+// MODAL de opções da conversa — Android bottom sheet, curva reduzida
+// (toca as bordas laterais e o fundo, curva pequena só no topo)
 // ══════════════════════════════════════════════════════════════
+
+const double _kFlatModalRadius = 10.0;
 
 void showConversationOptionsModal(
   BuildContext context,
   AppColorScheme s, {
-  required GlobalKey anchorKey,
   required ConversationItem item,
   required VoidCallback onOpen,
   required VoidCallback onTogglePin,
   required VoidCallback onRename,
   required VoidCallback onDelete,
 }) async {
-  final result = await showAnchoredPopup<_ConversationPopupAction>(
-    context,
-    anchorKey: anchorKey,
-    s: s,
-    menuWidth: 230,
-    items: [
-      AnchoredPopupItem(
-        value: _ConversationPopupAction.open,
-        label: 'Abrir conversa',
-        assetName: 'open',
-      ),
-      AnchoredPopupItem(
-        value: _ConversationPopupAction.togglePin,
-        label: item.pinned ? 'Desafixar' : 'Fixar',
-        assetName: item.pinned ? 'pin_slash' : 'pin',
-      ),
-      AnchoredPopupItem(
-        value: _ConversationPopupAction.rename,
-        label: 'Renomear',
-        assetName: 'pencil',
-      ),
-      AnchoredPopupItem(
-        value: _ConversationPopupAction.delete,
-        label: 'Eliminar',
-        assetName: 'trash',
-        destructive: true,
-      ),
-    ],
+  final result = await showModalBottomSheet<_ConversationPopupAction>(
+    context: context,
+    backgroundColor: s.cardBackground,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+    ),
+    builder: (sheetContext) => _ConversationOptionsModalContent(s: s, item: item),
   );
 
   if (result == null) return;
@@ -1172,9 +1097,85 @@ void showConversationOptionsModal(
   }
 }
 
+class _ConversationOptionsModalContent extends StatelessWidget {
+  final AppColorScheme s;
+  final ConversationItem item;
+  const _ConversationOptionsModalContent({required this.s, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: SelectionContainer.disabled(
+              child: Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          Divider(height: 1, color: s.outline.withOpacity(0.15)),
+          _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
+          _modalItem(
+            context,
+            item.pinned ? 'pin_slash' : 'pin',
+            item.pinned ? 'Desafixar' : 'Fixar',
+            _ConversationPopupAction.togglePin,
+          ),
+          _modalItem(context, 'pencil', 'Renomear', _ConversationPopupAction.rename),
+          _modalItem(context, 'trash', 'Eliminar', _ConversationPopupAction.delete, destructive: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _modalItem(
+    BuildContext context,
+    String iconAsset,
+    String label,
+    _ConversationPopupAction action, {
+    bool destructive = false,
+  }) {
+    final color = destructive ? s.error : s.onSurface;
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.pop(context, action);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            AppIcon(iconAsset, size: 18, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SelectionContainer.disabled(
+                child: Text(
+                  label,
+                  style: TextStyle(fontSize: 15, color: color, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 enum _ConversationPopupAction { open, togglePin, rename, delete }
 
-// ── Popup de opções da conta (inalterado, fora do pedido) ────
+// ── Popup de opções da conta ────
 
 void showAccountOptionsPopupAt(
   BuildContext context,
@@ -1190,7 +1191,7 @@ void showAccountOptionsPopupAt(
     barrierColor: Colors.black.withOpacity(0.35),
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
     ),
     builder: (sheetContext) => SafeArea(
       top: false,
@@ -1344,7 +1345,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: widget.filled ? s.error : s.hover,
-            borderRadius: BorderRadius.circular(10.0),
+            borderRadius: BorderRadius.circular(_kFlatModalRadius),
           ),
           child: SelectionContainer.disabled(
             child: Text(
@@ -1440,17 +1441,7 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// BOTTOM FLOATING BAR — DOIS PILLS SEPARADOS
-//
-// Pill 1: campo de pesquisa sozinho.
-// Pill 2: os dois botões (nova conversa + settings) juntos.
-// Cada pill tem o seu PRÓPRIO ClipRRect + BackdropFilter + cor —
-// exatamente como estava na versão original antes de eu ter
-// errado e fundido tudo num container único. As cores usadas são
-// as mesmas do resto do design system: s.cardBackground (fundo dos
-// pills, igual aos cards), s.hover (estado do campo de pesquisa,
-// igual aos outros campos/hover states da app), s.outline
-// (contorno), s.cardShadow (sombra) — nada inventado.
+// BOTTOM FLOATING BAR
 // ══════════════════════════════════════════════════════════════
 
 class DrawerBottomFloatingBar extends StatelessWidget {
@@ -1473,99 +1464,65 @@ class DrawerBottomFloatingBar extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(
         12, 8, 12, 8 + MediaQuery.of(context).padding.bottom,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── PILL 1: pesquisa ──
-          Expanded(
-            child: _BlurPill(
-              s: s,
-              height: 56,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  onSearchTap?.call();
-                },
-                child: Container(
-                  margin: const EdgeInsets.all(6),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: s.hover,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(children: [
-                    AppIcon('search', size: 16, color: s.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: SelectionContainer.disabled(
-                        child: Text(
-                          'Pesquisar',
-                          style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
-                          overflow: TextOverflow.ellipsis,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: s.cardBackground.withOpacity(0.88),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
+              boxShadow: s.cardShadow,
+            ),
+            child: Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    onSearchTap?.call();
+                  },
+                  child: Container(
+                    height: 40,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: s.hover,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(children: [
+                      AppIcon('search', size: 16, color: s.onSurfaceVariant),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SelectionContainer.disabled(
+                          child: Text(
+                            'Pesquisar',
+                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
-                    ),
-                  ]),
+                    ]),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 4),
+              _BottomBarIconButton(
+                s: s,
+                assetName: 'settings',
+                onTap: onSettingsTap,
+              ),
+              const SizedBox(width: 2),
+              _BottomBarIconButton(
+                s: s,
+                assetName: 'new_chat',
+                onTap: onNewChatTap,
+              ),
+            ]),
           ),
-          const SizedBox(width: 10),
-          // ── PILL 2: botões de ação ──
-          _BlurPill(
-            s: s,
-            height: 56,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(width: 4),
-                _BottomBarIconButton(
-                  s: s,
-                  assetName: 'new_chat',
-                  onTap: onNewChatTap,
-                ),
-                const SizedBox(width: 2),
-                _BottomBarIconButton(
-                  s: s,
-                  assetName: 'settings',
-                  onTap: onSettingsTap,
-                ),
-                const SizedBox(width: 4),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Container-base para um "pill" flutuante com blur próprio —
-/// exatamente o padrão original (ClipRRect + BackdropFilter +
-/// s.cardBackground.withOpacity + border + cardShadow), extraído
-/// para reutilizar nos dois pills sem duplicar o blur setup.
-class _BlurPill extends StatelessWidget {
-  final AppColorScheme s;
-  final double height;
-  final Widget child;
-  const _BlurPill({required this.s, required this.height, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: s.cardBackground.withOpacity(0.88),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
-            boxShadow: s.cardShadow,
-          ),
-          child: child,
         ),
       ),
     );
@@ -1600,14 +1557,14 @@ class _BottomBarIconButtonState extends State<_BottomBarIconButton> {
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
         child: Container(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: _p ? s.hover : Colors.transparent,
             shape: BoxShape.circle,
           ),
-          child: AppIcon(widget.assetName, size: 20, color: s.onSurface),
+          child: AppIcon(widget.assetName, size: 19, color: s.onSurface),
         ),
       ),
     );
