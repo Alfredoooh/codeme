@@ -58,9 +58,11 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOGIN SCREEN (tela inicial — Google / Email)
-// Botões ficam mais acima, texto de boas-vindas fica por baixo
-// do logo (sem título "Bem-vindo" no topo).
+// LOGIN SCREEN (tela inicial)
+// 3 botões: Google, Entrar, Criar conta. Sem tabs, sem "iniciar
+// sessão com email" — é a raiz do fluxo. Saudação/streaming fica
+// ACIMA dos botões, logo por baixo do logo. Botões descem um
+// pouco mais (não colados ao texto).
 // ══════════════════════════════════════════════════════════════
 
 class LoginScreen extends StatefulWidget {
@@ -71,7 +73,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  void _goEmailEntry() async {
+  void _goLogin() async {
     authController.clearError();
     final accounts = await LocalAccountsService.load();
 
@@ -86,12 +88,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (chosen != null) {
         Navigator.of(context).push(
           AppPageRoute(
-            builder: (_) => EmailLoginScreen(prefillIdentifier: chosen.identifier),
+            builder: (_) =>
+                EmailLoginScreen(prefillIdentifier: chosen.identifier),
           ),
         );
         return;
       }
-      // "Usar outra conta" -> vai para o login normal, vazio.
       Navigator.of(context).push(
         AppPageRoute(builder: (_) => const EmailLoginScreen()),
       );
@@ -112,7 +114,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onGoogleTap() {
     // Integração Google temporariamente indisponível.
-    // Não chama authController.loginWithGoogle() de propósito.
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -179,25 +180,24 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 12),
-                      const Center(child: AnimatedAuthLogo(size: 72)),
-                      const SizedBox(height: 24),
+                      const Spacer(flex: 3),
+
+                      const Center(child: AnimatedAuthLogo(size: 76)),
+                      const SizedBox(height: 20),
+
+                      // Saudação/frases SEMPRE acima dos botões.
+                      const SizedBox(
+                        height: 52,
+                        child: Center(child: StreamingPhrases()),
+                      ),
+
+                      const SizedBox(height: 40),
 
                       if (authController.lastError != null) ...[
                         AuthErrorBanner(
                             s: s, message: authController.lastError!),
+                        const SizedBox(height: 4),
                       ],
-
-                      Text(
-                        'Entra na tua conta para continuar.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: s.onSurfaceVariant,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 22),
 
                       AuthSecondaryButton(
                         icon: const GoogleIcon(size: 20),
@@ -209,40 +209,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       AuthSecondaryButton(
                         icon: AppIcon('mail', size: 20, color: s.onSurface),
-                        label: 'Continuar com email',
-                        onTap: _goEmailEntry,
+                        label: 'Entrar',
+                        onTap: _goLogin,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
-                      Center(
-                        child: GestureDetector(
-                          onTap: _goRegister,
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                  fontSize: 14, color: s.onSurfaceVariant),
-                              children: [
-                                const TextSpan(
-                                    text: 'Ainda não tens conta? '),
-                                TextSpan(
-                                  text: 'Cria uma',
-                                  style: TextStyle(
-                                      color: s.primary,
-                                      fontWeight: FontWeight.w700),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      AuthPrimaryButton(
+                        label: 'Criar conta',
+                        loading: false,
+                        onTap: _goRegister,
                       ),
 
-                      const Spacer(),
-
-                      const SizedBox(
-                        height: 52,
-                        child: Center(child: StreamingPhrases()),
-                      ),
-                      const SizedBox(height: 8),
+                      const Spacer(flex: 2),
                     ],
                   ),
                 ),
@@ -257,8 +235,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
 // ══════════════════════════════════════════════════════════════
 // EMAIL LOGIN SCREEN
-// Agora com botão de Registar visível no topo (não só no rodapé).
-// Aceita email OU telemóvel, como o backend já suporta.
+// Acedida só a partir do botão "Entrar" da tela principal.
+// Sem tabs Entrar/Registar aqui — link simples para registo.
 // ══════════════════════════════════════════════════════════════
 
 class EmailLoginScreen extends StatefulWidget {
@@ -408,28 +386,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                           style: TextStyle(
                               fontSize: 14, color: s.onSurfaceVariant),
                         ),
-                        const SizedBox(height: 28),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _TabPill(
-                                label: 'Entrar',
-                                active: true,
-                                onTap: () {},
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _TabPill(
-                                label: 'Registar',
-                                active: false,
-                                onTap: _goRegister,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
 
                         if (authController.lastError != null)
                           AuthErrorBanner(
@@ -528,50 +485,10 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
   }
 }
 
-// Pequeno "tab pill" Entrar/Registar usado no topo do login e registo.
-class _TabPill extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _TabPill({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? s.primary : s.cardBackground,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: active ? s.primary : s.outline.withOpacity(0.45),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: active ? s.onPrimary : s.onSurface,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ══════════════════════════════════════════════════════════════
 // REGISTER SCREEN
-// Agora com o mesmo par de tabs Entrar/Registar no topo.
-// Suporta email OU telemóvel (o backend já aceita ambos).
+// Acedida só a partir do botão "Criar conta" da tela principal.
+// Sem tabs — link simples para login.
 // ══════════════════════════════════════════════════════════════
 
 class RegisterScreen extends StatefulWidget {
@@ -742,28 +659,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           style: TextStyle(
                               fontSize: 14, color: s.onSurfaceVariant),
                         ),
-                        const SizedBox(height: 28),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _TabPill(
-                                label: 'Entrar',
-                                active: false,
-                                onTap: _goLogin,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _TabPill(
-                                label: 'Registar',
-                                active: true,
-                                onTap: () {},
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
 
                         if (authController.lastError != null)
                           AuthErrorBanner(
@@ -877,7 +773,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
 // ══════════════════════════════════════════════════════════════
 // FORGOT PASSWORD SCREEN
-// Passo 1: pede o email e dispara o código de 6 dígitos.
 // ══════════════════════════════════════════════════════════════
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -1077,7 +972,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
 // ══════════════════════════════════════════════════════════════
 // RESET PASSWORD CODE SCREEN
-// Passo 2: 6 caixas de dígito + nova password.
 // ══════════════════════════════════════════════════════════════
 
 class ResetPasswordCodeScreen extends StatefulWidget {

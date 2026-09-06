@@ -28,24 +28,106 @@ workflows:
           EOF
           echo "✅ key.properties gerado"
 
+      - name: Ensure INTERNET permission in AndroidManifest
+        script: |
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
+            exit 1
+          fi
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            echo "⚠️  Permissão INTERNET ausente — adicionando..."
+            python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          permission_line = '    <uses-permission android:name="android.permission.INTERNET" />\n'
+
+          if "<manifest" in content:
+              content = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n' + permission_line.rstrip('\n'),
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+              print("✅ Permissão INTERNET adicionada ao AndroidManifest.xml")
+          else:
+              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
+          PYEOF
+          else
+            echo "✅ Permissão INTERNET já presente no AndroidManifest.xml"
+          fi
+          echo "--- Permissões atuais ---"
+          grep "uses-permission" "$MANIFEST" || echo "(nenhuma encontrada)"
+
+      - name: Ensure network access XML (cleartext + config)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+
+          mkdir -p "${RES}/xml"
+          cat > "${RES}/xml/network_security_config.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="false">
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </base-config>
+          </network-security-config>
+          EOF
+          echo "✅ res/xml/network_security_config.xml criado"
+
+          if ! grep -q 'networkSecurityConfig' "$MANIFEST"; then
+            python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          if "<application" in content and "networkSecurityConfig" not in content:
+              content = re.sub(
+                  r'(<application)',
+                  r'\1\n        android:networkSecurityConfig="@xml/network_security_config"',
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+              print("✅ networkSecurityConfig referenciado no AndroidManifest.xml")
+          PYEOF
+          else
+            echo "✅ networkSecurityConfig já referenciado"
+          fi
+
       - name: Install Pillow
         script: pip3 install Pillow --quiet
 
-      - name: Process launcher icons + dual splash (light/dark)
+      - name: Process launcher icons + dual splash (light/dark) — SEM fallback
         script: |
           python3 << 'PYEOF'
           import os
           from PIL import Image, ImageDraw
 
-          CM      = os.environ["CM_BUILD_DIR"]
-          RES     = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
-          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
-          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
-          SPLASH_FALLBACK = LAUNCHER
+          CM   = os.environ["CM_BUILD_DIR"]
+          RES  = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER     = os.path.join(CM, "ic_launcher.png")
+          SPLASH_LIGHT = os.path.join(CM, "splash_icon_light.png")
+          SPLASH_DARK  = os.path.join(CM, "splash_icon_dark.png")
 
-          if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
+          # Falha o build explicitamente se os ícones reais não existirem —
+          # nunca deve cair em fallback para o ic_launcher.
+          missing = [p for p in (LAUNCHER, SPLASH_LIGHT, SPLASH_DARK) if not os.path.exists(p)]
+          if missing:
+              raise FileNotFoundError(
+                  "Ficheiro(s) obrigatório(s) em falta na raiz do repo: " + ", ".join(missing)
+              )
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -54,6 +136,15 @@ workflows:
           FG_SIZES = {
               "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
               "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
+          }
+          # Densidades usadas para o splash "legacy" (Android < 12), em px,
+          # para que o ícone real apareça nítido em qualquer versão do SO.
+          SPLASH_DENSITIES = {
+              "drawable-mdpi": 192,
+              "drawable-hdpi": 288,
+              "drawable-xhdpi": 384,
+              "drawable-xxhdpi": 576,
+              "drawable-xxxhdpi": 768,
           }
 
           def fluent_rounded(img, size, ratio=0.22):
@@ -83,42 +174,111 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          # ── Splash icon LIGHT ───────────────────────────────────────────
-          def make_splash(source_path, dest_path):
-              CANVAS, ICON = 288, 288
+          # ── Splash icon — SEMPRE usa o PNG real do repo, redimensionado
+          #    para cada densidade, sem qualquer fallback. Isto garante que
+          #    o Android 12+ (SplashScreen API) E versões anteriores (via
+          #    launch_background.xml) mostram o ícone verdadeiro.
+          def make_splash_variants(source_path, drawable_prefix):
               src_img = Image.open(source_path).convert("RGBA")
-              if src_img.size != (CANVAS, CANVAS):
-                  ICON = 160
-                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
-                  off    = (CANVAS - ICON) // 2
+              for density_dir, target_px in SPLASH_DENSITIES.items():
+                  full_dir = f"{drawable_prefix}-{density_dir.split('-')[1]}" if False else None
+              # Gera um bitmap único por densidade, mantendo proporção do
+              # ícone original dentro de uma tela quadrada transparente.
+              for density_dir, target_px in SPLASH_DENSITIES.items():
+                  canvas_size = target_px
+                  icon_size = int(canvas_size * 0.55)
+                  canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+                  icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
+                  off = (canvas_size - icon_size) // 2
                   canvas.paste(icon, (off, off), icon)
+                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
+                  dest_path = os.path.join(dest_dir, "splash_icon.png")
+                  os.makedirs(dest_dir, exist_ok=True)
                   canvas.save(dest_path, "PNG", optimize=True)
-              else:
-                  src_img.save(dest_path, "PNG", optimize=True)
-              print(f"  -> {dest_path}")
+                  print(f"  -> {dest_path}")
+              # Também grava uma cópia em drawable/ e drawable-night/ (sem
+              # sufixo de densidade) para telas que caem no default bucket.
+              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
+              os.makedirs(default_dir, exist_ok=True)
+              default_size = 480
+              icon_size = int(default_size * 0.55)
+              canvas = Image.new("RGBA", (default_size, default_size), (0, 0, 0, 0))
+              icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
+              off = (default_size - icon_size) // 2
+              canvas.paste(icon, (off, off), icon)
+              default_path = os.path.join(default_dir, "splash_icon.png")
+              canvas.save(default_path, "PNG", optimize=True)
+              print(f"  -> {default_path}")
 
-          drawable_light = os.path.join(RES, "drawable")
-          drawable_dark  = os.path.join(RES, "drawable-night")
-          os.makedirs(drawable_light, exist_ok=True)
-          os.makedirs(drawable_dark,  exist_ok=True)
+          make_splash_variants(SPLASH_LIGHT, "drawable")
+          make_splash_variants(SPLASH_DARK, "drawable-night")
 
-          # Light splash
-          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
-          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
-          if light_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
-
-          # Dark splash
-          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
-          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
-          if dark_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
-
-          print("✅ Ícones e splash (light/dark) processados com sucesso!")
+          print("✅ Ícones e splash (light/dark), sem fallback, processados com sucesso!")
           PYEOF
 
-      - name: Write launch_background XMLs (light + dark)
+      - name: Write Android 12+ splash screen (values/styles + themes)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          # Android 12+ usa a SplashScreen API nativa via tema, não mais
+          # apenas o launch_background.xml. Configuramos os dois caminhos
+          # para que o ícone real apareça em qualquer versão (incluindo
+          # Android 13, testado pelo utilizador).
+          mkdir -p "${RES}/values-v31"
+          cat > "${RES}/values-v31/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowSplashScreenBackground">@android:color/white</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ values-v31/styles.xml (Android 12+ splash nativo, light) criado"
+
+          mkdir -p "${RES}/values-night-v31"
+          cat > "${RES}/values-night-v31/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowSplashScreenBackground">#0d0d0d</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">#0d0d0d</item>
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">#0d0d0d</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+          echo "✅ values-night-v31/styles.xml (Android 12+ splash nativo, dark) criado"
+
+      - name: Write launch_background XMLs (light + dark) — pré Android 12
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -152,7 +312,7 @@ workflows:
           EOF
           echo "✅ drawable-night/launch_background.xml (dark) criado"
 
-      - name: Write styles XMLs (light + dark)
+      - name: Write styles XMLs (light + dark + v27) — pré Android 12
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -254,12 +414,27 @@ workflows:
               </style>
           </resources>
           EOF
-          echo "✅ Todos os styles.xml (light/dark/v27) escritos"
+          echo "✅ Todos os styles.xml (light/dark/v27/v31) escritos"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |
           rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
           echo "✅ mipmap-anydpi-v26 removido (se existia)"
+
+      - name: Remove any leftover Google Services config
+        script: |
+          find "${CM_BUILD_DIR}/android" -iname "google-services.json" -type f -print -delete || true
+          BUILD_GRADLE_APP="${CM_BUILD_DIR}/android/app/build.gradle"
+          BUILD_GRADLE_ROOT="${CM_BUILD_DIR}/android/build.gradle"
+          for f in "$BUILD_GRADLE_APP" "$BUILD_GRADLE_ROOT"; do
+            if [ -f "$f" ] && grep -q "google-services" "$f"; then
+              sed -i "/apply plugin: 'com.google.gms.google-services'/d" "$f"
+              sed -i "/id 'com.google.gms.google-services'/d" "$f"
+              sed -i "/classpath 'com.google.gms:google-services/d" "$f"
+              echo "✅ Referências ao plugin google-services removidas de $f"
+            fi
+          done
+          echo "✅ Verificação de resíduos do Firebase/Google Services concluída"
 
       - name: Set applicationId and app label
         script: |
@@ -348,8 +523,6 @@ workflows:
 
           original = content
 
-          # Cobre compileSdk / compileSdkVersion, com ou sem '=', número fixo
-          # ou referência a flutter.compileSdkVersion — tanto Groovy quanto Kotlin DSL.
           content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
           content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
           content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
@@ -423,24 +596,99 @@ workflows:
             echo "Pasta android/ já existe, pulando geração."
           fi
 
+      - name: Ensure INTERNET permission in AndroidManifest
+        script: |
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
+            exit 1
+          fi
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            echo "⚠️  Permissão INTERNET ausente — adicionando..."
+            python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          permission_line = '    <uses-permission android:name="android.permission.INTERNET" />\n'
+
+          if "<manifest" in content:
+              content = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n' + permission_line.rstrip('\n'),
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+              print("✅ Permissão INTERNET adicionada ao AndroidManifest.xml")
+          else:
+              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
+          PYEOF
+          else
+            echo "✅ Permissão INTERNET já presente no AndroidManifest.xml"
+          fi
+
+      - name: Ensure network access XML (cleartext + config)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+
+          mkdir -p "${RES}/xml"
+          cat > "${RES}/xml/network_security_config.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="false">
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </base-config>
+          </network-security-config>
+          EOF
+
+          if ! grep -q 'networkSecurityConfig' "$MANIFEST"; then
+            python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          if "<application" in content and "networkSecurityConfig" not in content:
+              content = re.sub(
+                  r'(<application)',
+                  r'\1\n        android:networkSecurityConfig="@xml/network_security_config"',
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+              print("✅ networkSecurityConfig referenciado no AndroidManifest.xml")
+          PYEOF
+          fi
+
       - name: Install Pillow
         script: pip3 install Pillow --quiet
 
-      - name: Process launcher icons + dual splash (light/dark)
+      - name: Process launcher icons + dual splash (light/dark) — SEM fallback
         script: |
           python3 << 'PYEOF'
           import os
           from PIL import Image, ImageDraw
 
-          CM      = os.environ["CM_BUILD_DIR"]
-          RES     = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
-          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
-          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
-          SPLASH_FALLBACK = LAUNCHER
+          CM   = os.environ["CM_BUILD_DIR"]
+          RES  = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER     = os.path.join(CM, "ic_launcher.png")
+          SPLASH_LIGHT = os.path.join(CM, "splash_icon_light.png")
+          SPLASH_DARK  = os.path.join(CM, "splash_icon_dark.png")
 
-          if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
+          missing = [p for p in (LAUNCHER, SPLASH_LIGHT, SPLASH_DARK) if not os.path.exists(p)]
+          if missing:
+              raise FileNotFoundError(
+                  "Ficheiro(s) obrigatório(s) em falta na raiz do repo: " + ", ".join(missing)
+              )
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -449,6 +697,13 @@ workflows:
           FG_SIZES = {
               "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
               "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
+          }
+          SPLASH_DENSITIES = {
+              "drawable-mdpi": 192,
+              "drawable-hdpi": 288,
+              "drawable-xhdpi": 384,
+              "drawable-xxhdpi": 576,
+              "drawable-xxxhdpi": 768,
           }
 
           def fluent_rounded(img, size, ratio=0.22):
@@ -477,39 +732,95 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          def make_splash(source_path, dest_path):
-              CANVAS, ICON = 288, 288
+          def make_splash_variants(source_path, drawable_prefix):
               src_img = Image.open(source_path).convert("RGBA")
-              if src_img.size != (CANVAS, CANVAS):
-                  ICON = 160
-                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
-                  off    = (CANVAS - ICON) // 2
+              for density_dir, target_px in SPLASH_DENSITIES.items():
+                  canvas_size = target_px
+                  icon_size = int(canvas_size * 0.55)
+                  canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+                  icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
+                  off = (canvas_size - icon_size) // 2
                   canvas.paste(icon, (off, off), icon)
+                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
+                  dest_path = os.path.join(dest_dir, "splash_icon.png")
+                  os.makedirs(dest_dir, exist_ok=True)
                   canvas.save(dest_path, "PNG", optimize=True)
-              else:
-                  src_img.save(dest_path, "PNG", optimize=True)
-              print(f"  -> {dest_path}")
+                  print(f"  -> {dest_path}")
+              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
+              os.makedirs(default_dir, exist_ok=True)
+              default_size = 480
+              icon_size = int(default_size * 0.55)
+              canvas = Image.new("RGBA", (default_size, default_size), (0, 0, 0, 0))
+              icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
+              off = (default_size - icon_size) // 2
+              canvas.paste(icon, (off, off), icon)
+              default_path = os.path.join(default_dir, "splash_icon.png")
+              canvas.save(default_path, "PNG", optimize=True)
+              print(f"  -> {default_path}")
 
-          drawable_light = os.path.join(RES, "drawable")
-          drawable_dark  = os.path.join(RES, "drawable-night")
-          os.makedirs(drawable_light, exist_ok=True)
-          os.makedirs(drawable_dark,  exist_ok=True)
+          make_splash_variants(SPLASH_LIGHT, "drawable")
+          make_splash_variants(SPLASH_DARK, "drawable-night")
 
-          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
-          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
-          if light_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
-
-          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
-          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
-          if dark_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
-
-          print("✅ Ícones e splash (light/dark) processados com sucesso!")
+          print("✅ Ícones e splash (light/dark), sem fallback, processados com sucesso!")
           PYEOF
 
-      - name: Write launch_background XMLs (light + dark)
+      - name: Write Android 12+ splash screen (values/styles + themes)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          mkdir -p "${RES}/values-v31"
+          cat > "${RES}/values-v31/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowSplashScreenBackground">@android:color/white</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+                  <item name="android:windowBackground">@android:color/white</item>
+                  <item name="android:statusBarColor">@android:color/white</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:navigationBarColor">@android:color/white</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+
+          mkdir -p "${RES}/values-night-v31"
+          cat > "${RES}/values-night-v31/styles.xml" << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowSplashScreenBackground">#0d0d0d</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">#0d0d0d</item>
+                  <item name="android:windowBackground">@drawable/launch_background</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+                  <item name="android:windowBackground">#0d0d0d</item>
+                  <item name="android:statusBarColor">#0d0d0d</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:navigationBarColor">#0d0d0d</item>
+                  <item name="android:windowLightNavigationBar">false</item>
+                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: Write launch_background XMLs (light + dark) — pré Android 12
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -542,7 +853,7 @@ workflows:
           EOF
           echo "✅ launch_background XMLs (light/dark) criados"
 
-      - name: Write styles XMLs (light + dark)
+      - name: Write styles XMLs (light + dark + v27) — pré Android 12
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -641,12 +952,26 @@ workflows:
               </style>
           </resources>
           EOF
-          echo "✅ Todos os styles.xml (light/dark/v27) escritos"
+          echo "✅ Todos os styles.xml (light/dark/v27/v31) escritos"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |
           rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
           echo "✅ mipmap-anydpi-v26 removido (se existia)"
+
+      - name: Remove any leftover Google Services config
+        script: |
+          find "${CM_BUILD_DIR}/android" -iname "google-services.json" -type f -print -delete || true
+          BUILD_GRADLE_APP="${CM_BUILD_DIR}/android/app/build.gradle"
+          BUILD_GRADLE_ROOT="${CM_BUILD_DIR}/android/build.gradle"
+          for f in "$BUILD_GRADLE_APP" "$BUILD_GRADLE_ROOT"; do
+            if [ -f "$f" ] && grep -q "google-services" "$f"; then
+              sed -i "/apply plugin: 'com.google.gms.google-services'/d" "$f"
+              sed -i "/id 'com.google.gms.google-services'/d" "$f"
+              sed -i "/classpath 'com.google.gms:google-services/d" "$f"
+              echo "✅ Referências ao plugin google-services removidas de $f"
+            fi
+          done
 
       - name: Set applicationId and app label
         script: |
