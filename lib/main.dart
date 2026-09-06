@@ -758,15 +758,18 @@ class HomePage extends StatelessWidget {
                     colors: [
                       Colors.white,
                       Colors.white,
+                      Color(0xE6FFFFFF), // ~85% branco
+                      Color(0x8CFFFFFF), // ~55% branco
+                      Color(0x38FFFFFF), // ~22% branco
                       Colors.transparent,
                     ],
-                    stops: [0.0, 0.55, 1.0],
+                    stops: [0.0, 0.45, 0.62, 0.78, 0.91, 1.0],
                   ).createShader(rect);
                 },
                 blendMode: BlendMode.dstIn,
                 child: ClipRect(
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+                    filter: ImageFilter.blur(sigmaX: 1.5, sigmaY: 1.5),
                     child: Container(
                       color: Colors.white.withOpacity(0.7),
                     ),
