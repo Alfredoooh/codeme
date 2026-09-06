@@ -10,7 +10,7 @@
 // BackdropFilter e da cor de fundo da appbar para baixo, fundindo
 // suavemente com o corpo por trás sem nenhuma aresta percetível.
 // ══════════════════════════════════════════════════════════════
-import 'dart:ui';
+/*import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -643,6 +643,167 @@ class _AppHeader extends StatelessWidget {
             child: content,
           ),
         ),
+      ),
+    );
+  }
+}*/
+
+import 'dart:ui';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'CraftLab',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        scaffoldBackgroundColor: Colors.white,
+        fontFamily: 'SF Pro Display', // fallback automático
+        useMaterial3: true,
+      ),
+      home: const HomePage(),
+    );
+  }
+}
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Conteúdo rolável
+          ListView(
+            padding: const EdgeInsets.fromLTRB(20, 100, 20, 50),
+            children: [
+              const Text(
+                'Texto deslizável',
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -1,
+                  height: 1.1,
+                  color: Color(0xFF111111),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Este texto pode ser deslizado verticalmente pela tela. A AppBar permanece fixa enquanto o conteúdo passa por baixo dela.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'O efeito visual da AppBar utiliza um blur extremamente discreto, semelhante ao utilizado no seu código Flutter.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 30),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'O fundo da AppBar permanece predominantemente branco, com apenas uma pequena transparência para permitir que o conteúdo abaixo apareça de forma muito suave.',
+                  style: TextStyle(fontSize: 17, height: 1.65, color: Color(0xFF111111)),
+                ),
+              ),
+              const SizedBox(height: 30),
+              const Text(
+                'Continue deslizando para baixo para testar o comportamento da página. O conteúdo passa por trás da AppBar sem criar nenhuma linha ou borda.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer tincidunt velit vitae suscipit consequat.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'Suspendisse potenti. Donec tincidunt neque at tincidunt vulputate. Vestibulum ante ipsum primis in faucibus orci.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 30),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Mais conteúdo para permitir testar o scroll vertical.',
+                  style: TextStyle(fontSize: 17, height: 1.65, color: Color(0xFF111111)),
+                ),
+              ),
+              const SizedBox(height: 30),
+              const Text(
+                'Curabitur non neque sed lorem elementum tincidunt. Integer aliquet justo sed lectus tincidunt.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'Sed vitae consequat nisl. Integer aliquet justo sed lectus tincidunt, vitae facilisis magna volutpat.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 26),
+              const Text(
+                'O conteúdo continua normalmente até ao final da página.',
+                style: TextStyle(fontSize: 18, height: 1.75, color: Color(0xFF4A4A4A)),
+              ),
+              const SizedBox(height: 30),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Fim do conteúdo.',
+                  style: TextStyle(fontSize: 17, height: 1.65, color: Color(0xFF111111)),
+                ),
+              ),
+            ],
+          ),
+
+          // AppBar customizada com blur e sem linha divisória
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 100, // altura total incluindo a transição
+            child: IgnorePointer(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withOpacity(0.7), // branco menos intenso
+                          Colors.white.withOpacity(0.55),
+                          Colors.white.withOpacity(0.2),
+                          Colors.white.withOpacity(0.0),
+                        ],
+                        stops: const [0.0, 0.4, 0.65, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
