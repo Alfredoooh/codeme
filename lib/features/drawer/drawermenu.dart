@@ -490,30 +490,28 @@ class _AppDrawerState extends State<AppDrawer> {
 
     final sections = <Widget>[];
 
-    // ── As 3 opções em cards de lista (mesmo padrão do SettingsGroup) ──
+    // ── As 3 opções em cards de lista (mesmo padrão visual do settings,
+    // recriado localmente para não depender de um import externo) ──
     sections.add(Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-      child: SettingsGroup(s: s, rows: [
-        SettingsRow(
+      child: _DrawerOptionsGroup(s: s, rows: [
+        _DrawerOptionRow(
           s: s,
           iconAsset: 'plugins',
           label: 'Apps e plugins',
           onTap: () => _openAllApps(context),
-          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-        SettingsRow(
+        _DrawerOptionRow(
           s: s,
           iconAsset: 'library',
           label: 'Biblioteca',
           onTap: () => _openLibrary(context),
-          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-        SettingsRow(
+        _DrawerOptionRow(
           s: s,
           iconAsset: 'clock',
           label: 'Tarefas agendadas',
           onTap: () => _openScheduledTasks(context),
-          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
       ]),
     ));
@@ -580,6 +578,90 @@ class _AppDrawerState extends State<AppDrawer> {
       padding: const EdgeInsets.fromLTRB(4, 64, 4, 8),
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       children: sections,
+    );
+  }
+}
+
+// ── Card de lista local para as 3 opções do topo do drawer ─────
+// (Apps e plugins / Biblioteca / Tarefas agendadas). Visualmente
+// segue o mesmo padrão do settings (grupo com fundo cardBackground,
+// cantos arredondados, linhas com ícone + label + trailing), mas
+// definido aqui para não depender do import de settings_widgets.dart.
+
+class _DrawerOptionsGroup extends StatelessWidget {
+  final AppColorScheme s;
+  final List<Widget> rows;
+  const _DrawerOptionsGroup({required this.s, required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (int i = 0; i < rows.length; i++) ...[
+            rows[i],
+            if (i != rows.length - 1)
+              Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12), indent: 48),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DrawerOptionRow extends StatefulWidget {
+  final AppColorScheme s;
+  final String iconAsset;
+  final String label;
+  final VoidCallback onTap;
+  const _DrawerOptionRow({
+    required this.s,
+    required this.iconAsset,
+    required this.label,
+    required this.onTap,
+  });
+  @override State<_DrawerOptionRow> createState() => _DrawerOptionRowState();
+}
+
+class _DrawerOptionRowState extends State<_DrawerOptionRow> {
+  bool _h = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _h = true),
+      onTapCancel: ()  => setState(() => _h = false),
+      onTapUp:     (_) => setState(() => _h = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: Container(
+        color: _h ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(children: [
+          AppIcon(widget.iconAsset, size: 20, color: s.onSurface),
+          const SizedBox(width: 14),
+          Expanded(
+            child: SelectionContainer.disabled(
+              child: Text(
+                widget.label,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.onSurface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
+        ]),
+      ),
     );
   }
 }
