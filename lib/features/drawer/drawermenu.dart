@@ -3,7 +3,6 @@
 // ══════════════════════════════════════════════════════════════
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:mime/mime.dart';
 import 'package:file_picker/file_picker.dart';
@@ -82,8 +81,6 @@ class ConversationItem {
   }
 
   /// Rótulo de data/hora amigável para a linha da conversa.
-  /// Regra: hoje -> "HH:mm"; ontem -> "Ontem"; últimos 7 dias -> nome do dia;
-  /// mais antigo -> "dd/MM/aa".
   String get timeLabel {
     if (updatedAt <= 0) return '';
     final dt = DateTime.fromMillisecondsSinceEpoch(updatedAt);
@@ -192,7 +189,7 @@ class ConversationsController extends ChangeNotifier {
 final ConversationsController conversationsController = ConversationsController();
 
 // ══════════════════════════════════════════════════════════════
-// DRAWER (agora full-screen, cobre o ecrã inteiro)
+// DRAWER (full-screen)
 // ══════════════════════════════════════════════════════════════
 
 class AppDrawer extends StatefulWidget {
@@ -220,6 +217,9 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer> {
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
+
+  static const double _topBarContentHeight = 52.0;
+  static const double _bottomBarReserve = 84.0;
 
   @override
   void initState() {
@@ -367,31 +367,34 @@ class _AppDrawerState extends State<AppDrawer> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 64),
+                SizedBox(height: _topBarContentHeight),
                 Expanded(
                   child: _buildConversationsPage(context, s, pinned, others),
                 ),
-                const SizedBox(height: 96),
+                SizedBox(height: _bottomBarReserve),
               ],
             ),
 
-            // ── Topbar blur estilo iOS: avatar (topo-esquerdo) + fechar (double chevron) ──
             Positioned(
               top: 0, left: 0, right: 0,
               child: ClipRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                    height: _topBarContentHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: s.pageBackground.withOpacity(0.62),
+                      color: s.pageBackground.withOpacity(0.78),
+                      border: Border(
+                        bottom: BorderSide(color: s.outline.withOpacity(0.10), width: 1),
+                      ),
                     ),
                     child: Row(
                       children: [
                         GestureDetector(
                           onTap: widget.onSettings,
                           child: Container(
-                            width: 40, height: 40,
+                            width: 34, height: 34,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: s.primary,
@@ -405,21 +408,21 @@ class _AppDrawerState extends State<AppDrawer> {
                                         style: TextStyle(
                                           color: s.onPrimary,
                                           fontWeight: FontWeight.w700,
-                                          fontSize: 16,
+                                          fontSize: 14,
                                         ),
                                       ),
                                     ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: SelectionContainer.disabled(
                             child: Text(
                               name,
                               style: TextStyle(
                                 fontFamily: 'Inter',
-                                fontSize: 17,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w600,
                                 color: s.onSurface,
                               ),
@@ -428,12 +431,12 @@ class _AppDrawerState extends State<AppDrawer> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         _CircleIconButton(
                           s: s,
                           assetName: 'double_chevron_right',
-                          size: 40,
-                          iconSize: 18,
+                          size: 34,
+                          iconSize: 16,
                           onTap: widget.onCloseAnimated,
                         ),
                       ],
@@ -443,7 +446,6 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
 
-            // ── Bottom floating bar estilo iOS: input + settings + nova conversa ──
             Positioned(
               left: 0, right: 0, bottom: 0,
               child: DrawerBottomFloatingBar(
@@ -467,7 +469,7 @@ class _AppDrawerState extends State<AppDrawer> {
   ) {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 56, 12, 8),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
         physics: const NeverScrollableScrollPhysics(),
         children: [
           for (int i = 0; i < 7; i++)
@@ -490,28 +492,29 @@ class _AppDrawerState extends State<AppDrawer> {
 
     final sections = <Widget>[];
 
-    // ── As 3 opções em cards de lista (mesmo padrão visual do settings,
-    // recriado localmente para não depender de um import externo) ──
     sections.add(Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-      child: _DrawerOptionsGroup(s: s, rows: [
-        _DrawerOptionRow(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: DrawerSettingsGroup(s: s, rows: [
+        DrawerSettingsRow(
           s: s,
           iconAsset: 'plugins',
           label: 'Apps e plugins',
           onTap: () => _openAllApps(context),
+          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-        _DrawerOptionRow(
+        DrawerSettingsRow(
           s: s,
           iconAsset: 'library',
           label: 'Biblioteca',
           onTap: () => _openLibrary(context),
+          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
-        _DrawerOptionRow(
+        DrawerSettingsRow(
           s: s,
           iconAsset: 'clock',
           label: 'Tarefas agendadas',
           onTap: () => _openScheduledTasks(context),
+          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
         ),
       ]),
     ));
@@ -575,38 +578,40 @@ class _AppDrawerState extends State<AppDrawer> {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(4, 64, 4, 8),
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       children: sections,
     );
   }
 }
 
-// ── Card de lista local para as 3 opções do topo do drawer ─────
-// (Apps e plugins / Biblioteca / Tarefas agendadas). Visualmente
-// segue o mesmo padrão do settings (grupo com fundo cardBackground,
-// cantos arredondados, linhas com ícone + label + trailing), mas
-// definido aqui para não depender do import de settings_widgets.dart.
+// ══════════════════════════════════════════════════════════════
+// Cards de lista das opções do drawer
+// ══════════════════════════════════════════════════════════════
 
-class _DrawerOptionsGroup extends StatelessWidget {
+class DrawerSettingsGroup extends StatelessWidget {
   final AppColorScheme s;
   final List<Widget> rows;
-  const _DrawerOptionsGroup({required this.s, required this.rows});
+  const DrawerSettingsGroup({super.key, required this.s, required this.rows});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: s.cardBackground,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
-      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (int i = 0; i < rows.length; i++) ...[
             rows[i],
             if (i != rows.length - 1)
-              Divider(height: 1, thickness: 1, color: s.outline.withOpacity(0.12), indent: 48),
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 52,
+                color: s.outline.withOpacity(0.12),
+              ),
           ],
         ],
       ),
@@ -614,41 +619,47 @@ class _DrawerOptionsGroup extends StatelessWidget {
   }
 }
 
-class _DrawerOptionRow extends StatefulWidget {
+class DrawerSettingsRow extends StatefulWidget {
   final AppColorScheme s;
   final String iconAsset;
   final String label;
   final VoidCallback onTap;
-  const _DrawerOptionRow({
+  final Widget trailing;
+  const DrawerSettingsRow({
+    super.key,
     required this.s,
     required this.iconAsset,
     required this.label,
     required this.onTap,
+    required this.trailing,
   });
-  @override State<_DrawerOptionRow> createState() => _DrawerOptionRowState();
+  @override State<DrawerSettingsRow> createState() => _DrawerSettingsRowState();
 }
 
-class _DrawerOptionRowState extends State<_DrawerOptionRow> {
-  bool _h = false;
+class _DrawerSettingsRowState extends State<DrawerSettingsRow> {
+  bool _p = false;
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
       onTap: () {
         HapticFeedback.lightImpact();
         widget.onTap();
       },
       child: Container(
-        color: _h ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        color: _p ? s.hover : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(children: [
-          AppIcon(widget.iconAsset, size: 20, color: s.onSurface),
-          const SizedBox(width: 14),
+          SizedBox(
+            width: 28,
+            child: AppIcon(widget.iconAsset, size: 20, color: s.onSurface),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: SelectionContainer.disabled(
               child: Text(
@@ -659,14 +670,14 @@ class _DrawerOptionRowState extends State<_DrawerOptionRow> {
               ),
             ),
           ),
-          AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
+          widget.trailing,
         ]),
       ),
     );
   }
 }
 
-// ── Skeleton loader (linha fantasma com shimmer suave) ─────────
+// ── Skeleton loader ─────────
 
 class _ConversationSkeletonRow extends StatefulWidget {
   final AppColorScheme s;
@@ -739,7 +750,7 @@ class _ConversationSkeletonRowState extends State<_ConversationSkeletonRow>
   }
 }
 
-// ── Grupo com revelação progressiva (stagger) ao expandir/carregar ──
+// ── Grupo com revelação progressiva ──
 
 class _StaggeredRevealGroup extends StatelessWidget {
   final bool visible;
@@ -950,7 +961,7 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
   }
 }
 
-// ── Conversa individual (agora com timestamp e onLongPress -> modal) ──
+// ── Conversa individual ──
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -1043,13 +1054,11 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL de opções da conversa — estilo iOS, curvas mínimas
-// (substitui o antigo popup ancorado no ponto de toque)
+// MODAL de opções da conversa — Android bottom sheet, curva reduzida
+// (toca as bordas laterais e o fundo, curva pequena só no topo)
 // ══════════════════════════════════════════════════════════════
 
-// Raio de borda mínimo, propositadamente pouco arredondado
-// (bem menos curvo que o padrão Android/Material dos bottom sheets).
-const double _kMinimalModalRadius = 6.0;
+const double _kFlatModalRadius = 10.0;
 
 void showConversationOptionsModal(
   BuildContext context,
@@ -1062,11 +1071,11 @@ void showConversationOptionsModal(
 }) async {
   final result = await showModalBottomSheet<_ConversationPopupAction>(
     context: context,
-    backgroundColor: Colors.transparent,
+    backgroundColor: s.cardBackground,
     barrierColor: Colors.black.withOpacity(0.35),
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kMinimalModalRadius)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
     ),
     builder: (sheetContext) => _ConversationOptionsModalContent(s: s, item: item),
   );
@@ -1097,43 +1106,35 @@ class _ConversationOptionsModalContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(_kMinimalModalRadius),
-          border: Border.all(color: s.outline.withOpacity(0.2), width: 1),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: SelectionContainer.disabled(
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: s.onSurfaceVariant,
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: SelectionContainer.disabled(
+              child: Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurfaceVariant,
                 ),
               ),
             ),
-            Divider(height: 1, color: s.outline.withOpacity(0.15)),
-            _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
-            _modalItem(
-              context,
-              item.pinned ? 'pin_slash' : 'pin',
-              item.pinned ? 'Desafixar' : 'Fixar',
-              _ConversationPopupAction.togglePin,
-            ),
-            _modalItem(context, 'pencil', 'Renomear', _ConversationPopupAction.rename),
-            _modalItem(context, 'trash', 'Eliminar', _ConversationPopupAction.delete, destructive: true),
-          ],
-        ),
+          ),
+          Divider(height: 1, color: s.outline.withOpacity(0.15)),
+          _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
+          _modalItem(
+            context,
+            item.pinned ? 'pin_slash' : 'pin',
+            item.pinned ? 'Desafixar' : 'Fixar',
+            _ConversationPopupAction.togglePin,
+          ),
+          _modalItem(context, 'pencil', 'Renomear', _ConversationPopupAction.rename),
+          _modalItem(context, 'trash', 'Eliminar', _ConversationPopupAction.delete, destructive: true),
+        ],
       ),
     );
   }
@@ -1174,7 +1175,7 @@ class _ConversationOptionsModalContent extends StatelessWidget {
 
 enum _ConversationPopupAction { open, togglePin, rename, delete }
 
-// ── Popup de opções da conta (mesmo tratamento minimalista) ────
+// ── Popup de opções da conta ────
 
 void showAccountOptionsPopupAt(
   BuildContext context,
@@ -1186,57 +1187,52 @@ void showAccountOptionsPopupAt(
 }) async {
   final result = await showModalBottomSheet<_AccountPopupAction>(
     context: context,
-    backgroundColor: Colors.transparent,
+    backgroundColor: s.cardBackground,
     barrierColor: Colors.black.withOpacity(0.35),
     isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+    ),
     builder: (sheetContext) => SafeArea(
       top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(_kMinimalModalRadius),
-          border: Border.all(color: s.outline.withOpacity(0.2), width: 1),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InkWell(
-              onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.toggleTheme),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(children: [
-                  AppIcon(s.isDark ? 'sun' : 'moon', size: 18, color: s.onSurface),
-                  const SizedBox(width: 12),
-                  Text(s.isDark ? 'Modo claro' : 'Modo escuro',
-                      style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
-                ]),
-              ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.toggleTheme),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(children: [
+                AppIcon(s.isDark ? 'sun' : 'moon', size: 18, color: s.onSurface),
+                const SizedBox(width: 12),
+                Text(s.isDark ? 'Modo claro' : 'Modo escuro',
+                    style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
+              ]),
             ),
-            InkWell(
-              onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.openSettings),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(children: [
-                  AppIcon('settings', size: 18, color: s.onSurface),
-                  const SizedBox(width: 12),
-                  Text('Definições', style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
-                ]),
-              ),
+          ),
+          InkWell(
+            onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.openSettings),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(children: [
+                AppIcon('settings', size: 18, color: s.onSurface),
+                const SizedBox(width: 12),
+                Text('Definições', style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
+              ]),
             ),
-            InkWell(
-              onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.logout),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(children: [
-                  AppIcon('logout', size: 18, color: s.error),
-                  const SizedBox(width: 12),
-                  Text('Terminar sessão', style: TextStyle(fontSize: 15, color: s.error, fontWeight: FontWeight.w500)),
-                ]),
-              ),
+          ),
+          InkWell(
+            onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.logout),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(children: [
+                AppIcon('logout', size: 18, color: s.error),
+                const SizedBox(width: 12),
+                Text('Terminar sessão', style: TextStyle(fontSize: 15, color: s.error, fontWeight: FontWeight.w500)),
+              ]),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ),
   );
@@ -1349,7 +1345,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: widget.filled ? s.error : s.hover,
-            borderRadius: BorderRadius.circular(_kMinimalModalRadius),
+            borderRadius: BorderRadius.circular(_kFlatModalRadius),
           ),
           child: SelectionContainer.disabled(
             child: Text(
@@ -1445,8 +1441,7 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// BOTTOM FLOATING BAR — estilo iOS, blur + pill, como na imagem
-// referência: input de pesquisa + ícone settings + ícone nova conversa
+// BOTTOM FLOATING BAR
 // ══════════════════════════════════════════════════════════════
 
 class DrawerBottomFloatingBar extends StatelessWidget {
@@ -1472,12 +1467,12 @@ class DrawerBottomFloatingBar extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
           child: Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 6),
             decoration: BoxDecoration(
-              color: s.cardBackground.withOpacity(0.72),
+              color: s.cardBackground.withOpacity(0.88),
               borderRadius: BorderRadius.circular(28),
               border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
               boxShadow: s.cardShadow,

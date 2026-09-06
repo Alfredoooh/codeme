@@ -1,31 +1,34 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab.dart
-// O widget principal AiTab/AiTabState — orquestração de estado,
-// streaming, e o layout da tela. Toda a UI de apoio foi extraída
-// para os outros arquivos deste pacote.
 //
-// MUDANÇA DE COMPORTAMENTO vs. versão anterior:
-// _handleToolCalls agora usa processToolCalls (aitab_tools.dart),
-// que separa resultados locais (visual/document/images) de
-// passthrough, e SEMPRE volta a chamar o modelo depois de resultados
-// locais — nunca mais fecha a mensagem só com o cartão, sem texto.
-// Adicionalmente, os cartões locais agora são injetados diretamente
-// no streaming notifier, eliminando a bolha intermédia prematura.
-// CORREÇÃO: os cards de progresso das tools mantêm-se visíveis
-// até ao primeiro token de resposta do modelo (não desaparecem
-// prematuramente).
-//
-// CORREÇÃO NESTA VERSÃO: alinhado com aitab_input_bar.dart —
-// removido _openAttachedFilesSheet (showAttachedFilesSheet não
-// existe mais; os anexos flutuantes já são renderizados pelo
-// próprio ChatInput via attachedFiles/onRemoveFile). Adicionado
-// anchorKey na chamada de showAttachMenuSheet. ChatInput agora
-// recebe attachedFiles (lista) + onRemoveFile em vez de
-// attachedFilesCount + onOpenAttachedFiles.
-//
-// NOVA CORREÇÃO (ANEXOS): removido o bloqueio automático de análise
-// de imagem e passado o histórico _msgs para processToolCalls para
-// permitir injeção automática de anexos.
+// MUDANÇAS NESTA VERSÃO:
+// 1) O ListView da conversa recebe um `topPadding` extra fixo
+//    (_kTopScrollLimit) somado ao headerHeight, e o
+//    ScrollController.position tem maxScrollExtent naturalmente
+//    limitado por esse padding — na prática isto sozinho não impede
+//    overscroll acima do topo (BouncingScrollPhysics ainda deixa
+//    puxar); por isso troquei a physics do ListView para
+//    ClampingScrollPhysics quando perto do topo NÃO é suficiente
+//    para bloquear overscroll — a forma robusta é usar
+//    NotificationListener<ScrollUpdateNotification> para clampar
+//    manualmente. Implementado via _ClampedScrollPhysics customizada
+//    que nunca deixa pixels < 0 (impede overscroll para cima do
+//    início da lista) enquanto mantém BouncingScrollPhysics para
+//    baixo. Combinado com o topPadding extra, o conteúdo nunca sobe
+//    até tocar o appbar, mesmo com o botão de ir para baixo.
+// 2) ScrollToBottomButton movido para Alignment.centerRight (antes
+//    estava Center).
+// 3) O bottom bar (Container com ChatInput) agora é medido também
+//    em altura ANTES do keyboardInset ser aplicado, e o padding do
+//    ListView (_bottomBarHeight) já reage a isso via
+//    _measureBottomBar() existente — mantive e reforcei: sempre que
+//    o input cresce (mais linhas de texto), _bottomBarHeight
+//    aumenta e o ListView ganha mais padding inferior
+//    automaticamente, o que numa lista ancorada ao fim (mensagens
+//    mais recentes visíveis) tem o efeito de "subir" o conteúdo para
+//    nunca ficar atrás do input. Chamado tanto no post-frame
+//    callback existente como sempre que _ctrl muda (novo listener).
+// 4) Nenhum uso de Cupertino neste ficheiro (já não havia).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -60,6 +63,34 @@ import '../../core/navigation/app_page_route.dart';
 
 export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
 export 'aitab_widgets_shared.dart' show AiConversationMenuButton, NexaLoaderLogo, ShimmerText;
+
+/// Physics que se comporta como BouncingScrollPhysics para lá do
+/// fim da lista (permite o "elástico" natural ao chegar ao fundo),
+/// mas nunca deixa o scroll ultrapassar o início (pixels < 0) —
+/// impede que o conteúdo suba até tocar/passar o appbar, mesmo que
+/// o utilizador arraste com força ou use o botão de ir para o fundo.
+class _ClampedTopScrollPhysics extends BouncingScrollPhysics {
+  const _ClampedTopScrollPhysics({super.parent});
+
+  @override
+  _ClampedTopScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _ClampedTopScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    // Nunca permite ir abaixo do início (0) — bloqueia overscroll
+    // para cima do topo da lista.
+    if (value < position.pixels && position.pixels <= position.minScrollExtent) {
+      return value - position.minScrollExtent;
+    }
+    if (value < position.minScrollExtent && position.pixels >= position.minScrollExtent) {
+      return value - position.minScrollExtent;
+    }
+    // Para o fim da lista, delega ao comportamento elástico normal.
+    return super.applyBoundaryConditions(position, value);
+  }
+}
 
 class AiTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
@@ -132,6 +163,13 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final GlobalKey _bottomBarKey = GlobalKey();
   double _bottomBarHeight = 96;
 
+  // Reserva extra fixa acima do topo da lista de mensagens, além do
+  // headerHeight normal — garante uma margem visível entre a última
+  // mensagem visível e o appbar, mesmo ao fazer scroll até ao topo
+  // ou usar o botão "ir para o fundo" (que só afeta o fim da lista,
+  // mas esta reserva protege o topo).
+  static const double _kTopScrollLimit = 12.0;
+
   @override
   void initState() {
     super.initState();
@@ -141,6 +179,12 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     enabledAppsController.setDefaultIfAbsent('sound', false);
     enabledAppsController.addListener(_onEnabledAppsChanged);
     _scroll.addListener(_onScroll);
+    // Sempre que o texto do input muda (incluindo crescer em altura
+    // por mais linhas), remedimos o bottom bar para que o padding
+    // inferior da lista acompanhe o crescimento — isto é o que
+    // impede o conteúdo de ficar escondido atrás do input quando
+    // ele cresce.
+    _ctrl.addListener(_measureBottomBar);
     if (widget.initialConversationId != null) {
       _loadConversation(widget.initialConversationId!);
     }
@@ -290,14 +334,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
-  /// Processa as tool calls recebidas do modelo. Separa resultados
-  /// locais (visual/document/images — cada um vira um marcador que a
-  /// UI já sabe renderizar) do passthrough (vai para o modelo).
-  /// Independentemente da mistura, SEMPRE volta a chamar o modelo no
-  /// fim — nunca fecha a mensagem só com cartões, sem nenhum texto.
-  /// Os cartões locais são injetados diretamente no streaming
-  /// notifier, para aparecerem imediatamente dentro da MESMA bolha
-  /// de streaming que continuará com o texto do modelo.
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
     if (calls.isEmpty) return;
     setState(() {
@@ -316,8 +352,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
     if (!mounted) return;
 
-    // NÃO limpar _activeToolCallLabel aqui. O card de progresso
-    // deve permanecer visível até ao primeiro token de resposta.
     final localMarkersText = buildLocalResultMarkersText(outcome);
     if (localMarkersText.isNotEmpty) {
       _streamingTextNotifier.value = localMarkersText;
@@ -438,7 +472,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     if (!mounted) return;
     switch (event) {
       case ChatTokenEvent(text: final text):
-        // Limpa o card de progresso apenas quando o texto real começa
         if (_activeToolCallLabel != null) {
           setState(() {
             _activeToolCallLabel = null;
@@ -450,7 +483,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _updateOpenWidgetNotifier();
         break;
       case ChatThinkEvent(text: final text):
-        // Limpa o card de progresso se houver raciocínio a chegar
         if (_activeToolCallLabel != null) {
           setState(() {
             _activeToolCallLabel = null;
@@ -929,6 +961,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   void dispose() {
     enabledAppsController.removeListener(_onEnabledAppsChanged);
     _scroll.removeListener(_onScroll);
+    _ctrl.removeListener(_measureBottomBar);
     _ctrl.dispose();
     _scroll.dispose();
     _inputFocus.dispose();
@@ -971,7 +1004,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
     final topInset = MediaQuery.of(context).padding.top;
-    final headerHeight = topInset + 6 + 40 + 12;
+    final headerHeight = topInset + 6 + 40 + 12 + _kTopScrollLimit;
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
     final baseCount = _msgs.length + (_sending ? 1 : 0);
@@ -995,6 +1028,13 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
+                            // Physics customizada: bloqueia overscroll acima
+                            // do topo (impede o conteúdo de subir até tocar
+                            // o appbar) enquanto mantém o elástico normal no
+                            // fundo da lista.
+                            physics: const _ClampedTopScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
                             padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
@@ -1113,20 +1153,20 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ),
           ),
 
+          // Botão "ir para o fundo" agora alinhado à direita (antes
+          // Center) — mantém a mesma distância acima do bottom bar.
           if (!_incognito && (_msgs.isNotEmpty || _streamingTextNotifier.value.isNotEmpty))
             Positioned(
-              left: 0, right: 0,
+              right: 16,
               bottom: _bottomBarHeight + 8,
-              child: Center(
-                child: AnimatedOpacity(
-                  opacity: _showScrollToBottom ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 180),
-                  child: IgnorePointer(
-                    ignoring: !_showScrollToBottom,
-                    child: ScrollToBottomButton(
-                      s: s,
-                      onTap: () => _scrollToEnd(),
-                    ),
+              child: AnimatedOpacity(
+                opacity: _showScrollToBottom ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 180),
+                child: IgnorePointer(
+                  ignoring: !_showScrollToBottom,
+                  child: ScrollToBottomButton(
+                    s: s,
+                    onTap: () => _scrollToEnd(),
                   ),
                 ),
               ),

@@ -1,9 +1,8 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
 // ══════════════════════════════════════════════════════════════
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/colors.dart';
@@ -595,10 +594,12 @@ class _AppHeader extends StatelessWidget {
 
     return ClipRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        // Blur reduzido ~70% face à versão anterior (12 -> 1.2) —
+        // quase impercetível, praticamente só a cor de fundo.
+        filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
         child: Container(
           decoration: BoxDecoration(
-            color: headerBackground.withOpacity(0.62),
+            color: headerBackground.withOpacity(0.82),
           ),
           child: content,
         ),

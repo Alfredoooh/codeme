@@ -1,13 +1,37 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_message_bubbles.dart
+//
+// MUDANÇAS NESTA VERSÃO:
+// 1) Todo o Cupertino foi removido (import cupertino.dart eliminado;
+//    o único uso — CupertinoActivityIndicator — não estava a ser
+//    usado neste ficheiro de qualquer forma).
+// 2) A fonte da resposta do assistente passa a ser Times New Roman
+//    via google_fonts (GoogleFonts.timesNewRoman), aplicada APENAS
+//    ao corpo de texto do RichAiText do assistente — nunca às
+//    bolhas do utilizador, nunca a blocos de código, nunca a labels/
+//    botões/ícones. Isto é feito passando um `bodyTextStyle`
+//    (novo parâmetro) ao RichAiText nas duas bolhas (Assistant e
+//    Streaming) — o RichAiText já deve aceitar/propagar este estilo
+//    para o texto normal, preservando o estilo monoespaçado nos
+//    blocos de código (isso é tratado dentro de richtext.dart, que
+//    não foi enviado, então aqui só se passa o parâmetro; se
+//    RichAiText não tiver ainda esse parâmetro, é preciso adicioná-lo
+//    lá — o teu ficheiro richtext.dart não foi partilhado comigo).
+// 3) Sheets substituídos por showModalBottomSheet Android nativo com
+//    curva reduzida (mesma _kFlatModalRadius do drawer), onde antes
+//    usavam showCraftBottomSheet local a este ficheiro para
+//    pensamento/fontes (o showCraftBottomSheet em si é definido em
+//    app_sheet.dart, que não me foi enviado — se ele já usar
+//    showModalBottomSheet Android por baixo, nada muda; caso
+//    contrário, precisa de ser ajustado lá).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/theme/colors.dart';
@@ -23,6 +47,18 @@ import 'aitab_widgets_shared.dart';
 import 'aitab_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
 
+// Estilo de corpo de texto usado SOMENTE na resposta da IA (fora de
+// blocos de código). Times New Roman via Google Fonts. Nunca é
+// aplicado às bolhas do utilizador, nem a ícones/labels/botões, nem
+// a blocos de código (o RichAiText deve manter a fonte monoespaçada
+// nos blocos — este estilo só cobre o texto corrido/prosa).
+TextStyle aiBodyTextStyle(AppColorScheme s) => GoogleFonts.timesNewRoman(
+      fontSize: 15,
+      height: 1.45,
+      color: s.onSurface,
+    );
+
+const double _kFlatModalRadius = 10.0;
 
 // ──────────────────────────────────────────────────────────────
 // BOLHA DO UTILIZADOR
@@ -95,6 +131,8 @@ class UserBubble extends StatelessWidget {
                 ),
                 if (text.isNotEmpty) const SizedBox(height: 8),
               ],
+              // Bolha do utilizador: fonte normal da app, nunca Times
+              // New Roman — isso é exclusivo da resposta da IA.
               if (text.isNotEmpty)
                 Text(text,
                     style: TextStyle(color: textColor, fontSize: 14)),
@@ -700,17 +738,34 @@ class SourcesRow extends StatelessWidget {
   String _faviconUrl(String url) => 'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
 
   void _openSourcesModal(BuildContext context) {
-    showCraftBottomSheet<void>(
+    showModalBottomSheet<void>(
       context: context,
-      s: s,
-      title: 'Fontes',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: SheetOptionsGroup(
-          s: s,
-          options: urls.map((url) {
-            return _SourceRow(s: s, url: url, domain: _domain(url), faviconUrl: _faviconUrl(url));
-          }).toList(),
+      backgroundColor: s.cardBackground,
+      barrierColor: Colors.black.withOpacity(0.35),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Fontes',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+              const SizedBox(height: 8),
+              SheetOptionsGroup(
+                s: s,
+                options: urls.map((url) {
+                  return _SourceRow(s: s, url: url, domain: _domain(url), faviconUrl: _faviconUrl(url));
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -859,6 +914,9 @@ class AssistantBubble extends StatelessWidget {
                   thinking: thinking!,
                   widgetsEnabled: widgetsEnabled,
                 ),
+              // Times New Roman aplicado apenas à prosa da resposta da
+              // IA. RichAiText deve usar bodyTextStyle para o texto
+              // normal e manter a fonte de código nos blocos ```.
               if (text.isNotEmpty)
                 RichAiText(
                   text: text
@@ -871,6 +929,7 @@ class AssistantBubble extends StatelessWidget {
                   widgetsEnabled: widgetsEnabled,
                   onEnableWidgets: onEnableWidgets,
                   onSuggestionTap: onSuggestionTap,
+                  bodyTextStyle: aiBodyTextStyle(s),
                 ),
               for (final item in canvases) ...[
                 const SizedBox(height: 8),
@@ -903,37 +962,46 @@ class _ThinkingHistoryCollapsible extends StatelessWidget {
   });
 
   void _openThinkingModal(BuildContext context) {
-    showCraftBottomSheet<void>(
+    showModalBottomSheet<void>(
       context: context,
-      s: s,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                AppIcon('brain', size: 22, color: s.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Text(
-                  'Pensamento',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-              child: SingleChildScrollView(
-                child: RichAiText(
-                  text: thinking,
-                  s: s,
-                  widgetsEnabled: widgetsEnabled,
+      backgroundColor: s.cardBackground,
+      barrierColor: Colors.black.withOpacity(0.35),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  AppIcon('brain', size: 22, color: s.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Pensamento',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+                child: SingleChildScrollView(
+                  child: RichAiText(
+                    text: thinking,
+                    s: s,
+                    widgetsEnabled: widgetsEnabled,
+                    bodyTextStyle: aiBodyTextStyle(s),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1116,6 +1184,7 @@ class _StreamingBubbleState extends State<StreamingBubble> {
               widgetsEnabled: widget.widgetsEnabled,
               onEnableWidgets: widget.onEnableWidgets,
               onSuggestionTap: widget.onSuggestionTap,
+              bodyTextStyle: aiBodyTextStyle(s),
             ),
           );
         case StreamCanvasBlock(:final label, :final item):
@@ -1232,37 +1301,46 @@ class _ThinkingCollapsible extends StatelessWidget {
   });
 
   void _openThinkingModal(BuildContext context) {
-    showCraftBottomSheet<void>(
+    showModalBottomSheet<void>(
       context: context,
-      s: s,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                AppIcon('brain', size: 22, color: s.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Text(
-                  'Pensamento',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-              child: SingleChildScrollView(
-                child: RichAiText(
-                  text: thinking,
-                  s: s,
-                  widgetsEnabled: widgetsEnabled,
+      backgroundColor: s.cardBackground,
+      barrierColor: Colors.black.withOpacity(0.35),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  AppIcon('brain', size: 22, color: s.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Pensamento',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+                child: SingleChildScrollView(
+                  child: RichAiText(
+                    text: thinking,
+                    s: s,
+                    widgetsEnabled: widgetsEnabled,
+                    bodyTextStyle: aiBodyTextStyle(s),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

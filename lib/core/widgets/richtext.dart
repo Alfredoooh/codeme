@@ -889,12 +889,21 @@ class MathBlockParseResult {
   const MathBlockParseResult({required this.textWithMarkers, required this.blocks});
 }
 
+// ══════════════════════════════════════════════════════════════
+// RichAiText — ponto de entrada. Aceita bodyTextStyle opcional que
+// sobrepõe cor/fontFamily/etc. do texto de PROSA normal (nunca é
+// aplicado a: código, matemática, tabela, ícones, labels). Isto é
+// o que permite ao aitab_message_bubbles.dart injetar Times New
+// Roman apenas na prosa da resposta da IA.
+// ══════════════════════════════════════════════════════════════
+
 class RichAiText extends StatelessWidget {
   final String text;
   final AppColorScheme s;
   final bool widgetsEnabled;
   final VoidCallback? onEnableWidgets;
   final ValueChanged<String>? onSuggestionTap;
+  final TextStyle? bodyTextStyle;
   const RichAiText({
     super.key,
     required this.text,
@@ -902,6 +911,7 @@ class RichAiText extends StatelessWidget {
     this.widgetsEnabled = true,
     this.onEnableWidgets,
     this.onSuggestionTap,
+    this.bodyTextStyle,
   });
 
   @override
@@ -912,7 +922,7 @@ class RichAiText extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
-        children: _RichTextBlockParser.parse(text, s),
+        children: _RichTextBlockParser.parse(text, s, bodyTextStyle: bodyTextStyle),
       );
     }
 
@@ -922,7 +932,9 @@ class RichAiText extends StatelessWidget {
     for (final m in markerRe.allMatches(widgetParse.textWithMarkers)) {
       if (m.start > last) {
         final segment = widgetParse.textWithMarkers.substring(last, m.start);
-        if (segment.trim().isNotEmpty) children.addAll(_RichTextBlockParser.parse(segment, s));
+        if (segment.trim().isNotEmpty) {
+          children.addAll(_RichTextBlockParser.parse(segment, s, bodyTextStyle: bodyTextStyle));
+        }
       }
       final idx = int.parse(m.group(1)!);
       if (idx < widgetParse.blocks.length) {
@@ -935,7 +947,9 @@ class RichAiText extends StatelessWidget {
     }
     if (last < widgetParse.textWithMarkers.length) {
       final segment = widgetParse.textWithMarkers.substring(last);
-      if (segment.trim().isNotEmpty) children.addAll(_RichTextBlockParser.parse(segment, s));
+      if (segment.trim().isNotEmpty) {
+        children.addAll(_RichTextBlockParser.parse(segment, s, bodyTextStyle: bodyTextStyle));
+      }
     }
 
     return Column(
@@ -947,11 +961,11 @@ class RichAiText extends StatelessWidget {
 }
 
 class _RichTextBlockParser {
-  static List<Widget> parse(String raw, AppColorScheme s) {
+  static List<Widget> parse(String raw, AppColorScheme s, {TextStyle? bodyTextStyle}) {
     final normalized = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     final mathExtract = _extractMathBlocks(normalized);
     if (mathExtract.blocks.isEmpty) {
-      return _parseStructural(normalized, s);
+      return _parseStructural(normalized, s, bodyTextStyle: bodyTextStyle);
     }
 
     final markerRe = RegExp(r'\u0000MB(\d+)\u0000');
@@ -960,7 +974,9 @@ class _RichTextBlockParser {
     for (final m in markerRe.allMatches(mathExtract.textWithMarkers)) {
       if (m.start > last) {
         final segment = mathExtract.textWithMarkers.substring(last, m.start);
-        if (segment.trim().isNotEmpty) widgets.addAll(_parseStructural(segment, s));
+        if (segment.trim().isNotEmpty) {
+          widgets.addAll(_parseStructural(segment, s, bodyTextStyle: bodyTextStyle));
+        }
       }
       final idx = int.parse(m.group(1)!);
       if (idx < mathExtract.blocks.length) {
@@ -973,12 +989,14 @@ class _RichTextBlockParser {
     }
     if (last < mathExtract.textWithMarkers.length) {
       final segment = mathExtract.textWithMarkers.substring(last);
-      if (segment.trim().isNotEmpty) widgets.addAll(_parseStructural(segment, s));
+      if (segment.trim().isNotEmpty) {
+        widgets.addAll(_parseStructural(segment, s, bodyTextStyle: bodyTextStyle));
+      }
     }
     return widgets;
   }
 
-  static List<Widget> _parseStructural(String raw, AppColorScheme s) {
+  static List<Widget> _parseStructural(String raw, AppColorScheme s, {TextStyle? bodyTextStyle}) {
     final lines = raw.split('\n');
     final widgets = <Widget>[];
     int i = 0;
@@ -1028,7 +1046,7 @@ class _RichTextBlockParser {
           i++;
         }
         if (i < lines.length) i++;
-        widgets.add(_buildDetailsBlock(detailLines.join('\n'), s));
+        widgets.add(_buildDetailsBlock(detailLines.join('\n'), s, bodyTextStyle: bodyTextStyle));
         continue;
       }
 
@@ -1039,21 +1057,22 @@ class _RichTextBlockParser {
         final content = headerMatch.group(2)!.trim();
         widgets.add(Padding(
           padding: EdgeInsets.only(
-            top: widgets.isEmpty ? 0 : (level <= 2 ? 11 : 7),
-            bottom: level <= 2 ? 6 : 4,
+            top: widgets.isEmpty ? 0 : (level <= 2 ? 13 : 9),
+            bottom: level <= 2 ? 7 : 5,
           ),
           child: _formattedText(
             content,
             s,
             fontSize: switch (level) {
-              1 => 22,
-              2 => 19,
-              3 => 17.5,
-              4 => 16.5,
-              5 => 15.75,
-              _ => 15.25,
+              1 => 25,
+              2 => 22,
+              3 => 20,
+              4 => 18.5,
+              5 => 17.5,
+              _ => 17,
             },
             fontWeight: FontWeight.w700,
+            bodyTextStyle: bodyTextStyle,
           ),
         ));
         i++;
@@ -1071,12 +1090,13 @@ class _RichTextBlockParser {
             !trimmed.startsWith('>')) {
           flushTable();
           widgets.add(Padding(
-            padding: EdgeInsets.only(top: widgets.isEmpty ? 0 : 10, bottom: 5),
+            padding: EdgeInsets.only(top: widgets.isEmpty ? 0 : 12, bottom: 6),
             child: _formattedText(
               trimmed,
               s,
-              fontSize: isH1 ? 21 : 18,
+              fontSize: isH1 ? 24 : 20,
               fontWeight: FontWeight.w700,
+              bodyTextStyle: bodyTextStyle,
             ),
           ));
           i += 2;
@@ -1204,14 +1224,14 @@ class _RichTextBlockParser {
         final quoteText = quoteLines.join('\n').trim();
         final label = admonitionType == null ? null : _admonitionLabel(admonitionType!);
         widgets.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
                   width: 3,
-                  margin: const EdgeInsets.only(right: 9),
+                  margin: const EdgeInsets.only(right: 11),
                   decoration: BoxDecoration(
                     color: s.outline,
                     borderRadius: BorderRadius.circular(2),
@@ -1222,18 +1242,22 @@ class _RichTextBlockParser {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (label != null) ...[
+                        // Rótulo (Nota/Aviso/Cuidado/...) — mesmo
+                        // tamanho do corpo de texto (15.5), só com
+                        // peso maior para se distinguir; sem cor
+                        // nem fundo destacado, como pedido.
                         Text(
                           label,
-                          style: TextStyle(
-                            fontSize: 12.5,
+                          style: (bodyTextStyle ?? const TextStyle()).copyWith(
+                            fontSize: 15.5,
                             fontWeight: FontWeight.w700,
-                            color: s.onSurfaceVariant,
-                            letterSpacing: 0.2,
+                            color: s.onSurface,
+                            letterSpacing: 0.1,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 5),
                       ],
-                      _formattedText(quoteText, s),
+                      _formattedText(quoteText, s, bodyTextStyle: bodyTextStyle),
                     ],
                   ),
                 ),
@@ -1262,37 +1286,37 @@ class _RichTextBlockParser {
           final marker = match.group(2)!;
           final checked = match.group(3);
           final content = match.group(4)!;
-          final left = (indent ~/ 2) * 16.0;
+          final left = (indent ~/ 2) * 18.0;
           final isOrdered = RegExp(r'^(?:\d+[.)]|[a-zA-Z][.)])$').hasMatch(marker);
           final markerText = isOrdered ? marker : null;
 
           rendered.add(Padding(
-            padding: EdgeInsets.only(left: left, bottom: 4),
+            padding: EdgeInsets.only(left: left, bottom: 5),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 24,
+                  width: 26,
                   child: checked != null
                       ? Padding(
-                          padding: const EdgeInsets.only(top: 1),
+                          padding: const EdgeInsets.only(top: 2),
                           child: AppIcon(
                             checked.toLowerCase() == 'x'
                                 ? 'check_box.svg'
                                 : 'check_box_outline_blank.svg',
-                            size: 16,
+                            size: 17,
                             color: checked.toLowerCase() == 'x'
                                 ? s.primary
                                 : s.onSurfaceVariant,
                           ),
                         )
                       : Padding(
-                          padding: const EdgeInsets.only(top: 1),
+                          padding: const EdgeInsets.only(top: 2),
                           child: markerText == null
                               ? Container(
-                                  width: 5,
-                                  height: 5,
-                                  margin: const EdgeInsets.only(top: 7, left: 4),
+                                  width: 5.5,
+                                  height: 5.5,
+                                  margin: const EdgeInsets.only(top: 8, left: 4),
                                   decoration: BoxDecoration(
                                     color: s.onSurfaceVariant,
                                     shape: BoxShape.circle,
@@ -1300,8 +1324,8 @@ class _RichTextBlockParser {
                                 )
                               : Text(
                                   markerText,
-                                  style: TextStyle(
-                                    fontSize: 14.5,
+                                  style: (bodyTextStyle ?? const TextStyle()).copyWith(
+                                    fontSize: 15.5,
                                     color: s.onSurfaceVariant,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1313,6 +1337,7 @@ class _RichTextBlockParser {
                     content,
                     s,
                     fontWeight: checked?.toLowerCase() == 'x' ? FontWeight.normal : null,
+                    bodyTextStyle: bodyTextStyle,
                   ),
                 ),
               ],
@@ -1335,15 +1360,15 @@ class _RichTextBlockParser {
           i++;
         }
         widgets.add(Padding(
-          padding: const EdgeInsets.only(bottom: 7),
+          padding: const EdgeInsets.only(bottom: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _formattedText(term, s, fontWeight: FontWeight.w700),
+              _formattedText(term, s, fontWeight: FontWeight.w700, bodyTextStyle: bodyTextStyle),
               for (final def in defs)
                 Padding(
-                  padding: const EdgeInsets.only(left: 16, top: 2),
-                  child: _formattedText(def, s),
+                  padding: const EdgeInsets.only(left: 18, top: 2),
+                  child: _formattedText(def, s, bodyTextStyle: bodyTextStyle),
                 ),
             ],
           ),
@@ -1357,7 +1382,7 @@ class _RichTextBlockParser {
           : trimmed;
       widgets.add(Padding(
         padding: const EdgeInsets.only(bottom: 4),
-        child: _formattedText(content, s, forceLineBreak: hardBreak),
+        child: _formattedText(content, s, forceLineBreak: hardBreak, bodyTextStyle: bodyTextStyle),
       ));
       i++;
     }
@@ -1366,7 +1391,7 @@ class _RichTextBlockParser {
     return widgets;
   }
 
-  static Widget _buildDetailsBlock(String content, AppColorScheme s) {
+  static Widget _buildDetailsBlock(String content, AppColorScheme s, {TextStyle? bodyTextStyle}) {
     String summary = 'Detalhes';
     var body = content;
     final summaryMatch = RegExp(r'<summary>(.*?)</summary>', dotAll: true).firstMatch(content);
@@ -1377,7 +1402,7 @@ class _RichTextBlockParser {
     return Theme(
       data: ThemeData.light(useMaterial3: true),
       child: ExpansionTile(
-        title: Text(summary, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: s.onSurface)),
+        title: Text(summary, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: s.onSurface)),
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 8),
         iconColor: s.onSurfaceVariant,
@@ -1387,7 +1412,7 @@ class _RichTextBlockParser {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _formattedText(body, s),
+            child: _formattedText(body, s, bodyTextStyle: bodyTextStyle),
           ),
         ],
       ),
@@ -1540,7 +1565,28 @@ class _RichTextBlockParser {
           style: const TextStyle(decoration: TextDecoration.lineThrough),
         ));
       } else if (token.startsWith('==')) {
-        spans.add(TextSpan(text: token.substring(2, token.length - 2)));
+        // Highlight: pílula curva na cor primária, sem outras
+        // variações de cor — apenas primary como pedido.
+        final value = token.substring(2, token.length - 2);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: s.primary.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: fontSize,
+                color: s.primary,
+                fontWeight: FontWeight.w600,
+                height: 1.0,
+              ),
+            ),
+          ),
+        ));
       } else if (token.startsWith('++')) {
         spans.add(TextSpan(
           text: token.substring(2, token.length - 2),
@@ -1645,15 +1691,29 @@ class _RichTextBlockParser {
     double fontSize = 15.5,
     FontWeight? fontWeight,
     bool forceLineBreak = false,
+    TextStyle? bodyTextStyle,
   }) {
+    // bodyTextStyle (ex.: Times New Roman vindo de aitab_message_bubbles)
+    // sobrepõe-se ao estilo base do texto de PROSA. fontSize/fontWeight
+    // locais (usados por títulos, listas, quotes) continuam a poder
+    // sobrepor o tamanho/peso vindos de bodyTextStyle quando explicitados
+    // aqui, já que copyWith só troca o que passamos.
+    final base = TextStyle(
+      color: s.onSurface,
+      fontSize: fontSize,
+      fontWeight: fontWeight ?? FontWeight.normal,
+      height: 1.45,
+    );
+    final merged = bodyTextStyle != null
+        ? base.merge(bodyTextStyle).copyWith(
+              fontSize: fontSize,
+              fontWeight: fontWeight ?? bodyTextStyle.fontWeight ?? FontWeight.normal,
+            )
+        : base;
+
     return SelectableText.rich(
       TextSpan(
-        style: TextStyle(
-          color: s.onSurface,
-          fontSize: fontSize,
-          fontWeight: fontWeight ?? FontWeight.normal,
-          height: 1.45,
-        ),
+        style: merged,
         children: inlineSpans(
           raw,
           s,
@@ -1766,6 +1826,11 @@ Widget buildAiTableFromWidgetJson(Map<String, dynamic> json, AppColorScheme s) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// SYNTAX HIGHLIGHTING — dois conjuntos de tokens (escuro / claro),
+// escolhidos em runtime via AppColorScheme.isDark.
+// ══════════════════════════════════════════════════════════════
+
 class _TokenPattern {
   final RegExp regex;
   final Color? color;
@@ -1775,24 +1840,102 @@ class _TokenPattern {
   const _TokenPattern(this.regex, {this.color, this.fontStyle, this.fontWeight});
 }
 
-const Color _tokTag = Color(0xFFFF6BB3);
-const Color _tokAttr = Color(0xFF9CDCFE);
-const Color _tokString = Color(0xFFE3B341);
-const Color _tokStringEscape = Color(0xFFFFD866);
-const Color _tokComment = Color(0xFF6A737D);
-const Color _tokDoctype = Color(0xFF6CC7F5);
-const Color _tokPunct = Color(0xFF9198A1);
-const Color _tokKeyword = Color(0xFFFF7B93);
-const Color _tokKeywordImport = Color(0xFFFF9E64);
-const Color _tokNumber = Color(0xFF79C0FF);
-const Color _tokFunction = Color(0xFFDCBDFB);
-const Color _tokType = Color(0xFFFFB454);
-const Color _tokConstant = Color(0xFF56C7FF);
-const Color _tokOperator = Color(0xFFF97BE0);
-const Color _tokSelf = Color(0xFFE06C75);
-const Color _tokDecorator = Color(0xFF9ED072);
-const Color _tokBuiltin = Color(0xFF6FE3C4);
-const Color _tokProperty = Color(0xFF7EE7FC);
+class _CodeTokenColors {
+  final Color background;
+  final Color baseText;
+  final Color tag;
+  final Color attr;
+  final Color string;
+  final Color stringEscape;
+  final Color comment;
+  final Color doctype;
+  final Color punct;
+  final Color keyword;
+  final Color keywordImport;
+  final Color number;
+  final Color function;
+  final Color type;
+  final Color constant;
+  final Color operatorColor;
+  final Color self;
+  final Color decorator;
+  final Color builtin;
+  final Color property;
+
+  const _CodeTokenColors({
+    required this.background,
+    required this.baseText,
+    required this.tag,
+    required this.attr,
+    required this.string,
+    required this.stringEscape,
+    required this.comment,
+    required this.doctype,
+    required this.punct,
+    required this.keyword,
+    required this.keywordImport,
+    required this.number,
+    required this.function,
+    required this.type,
+    required this.constant,
+    required this.operatorColor,
+    required this.self,
+    required this.decorator,
+    required this.builtin,
+    required this.property,
+  });
+
+  // Paleta escura — igual à original.
+  static const dark = _CodeTokenColors(
+    background: Color(0xFF161616),
+    baseText: Color(0xFFE8E8E8),
+    tag: Color(0xFFFF6BB3),
+    attr: Color(0xFF9CDCFE),
+    string: Color(0xFFE3B341),
+    stringEscape: Color(0xFFFFD866),
+    comment: Color(0xFF6A737D),
+    doctype: Color(0xFF6CC7F5),
+    punct: Color(0xFF9198A1),
+    keyword: Color(0xFFFF7B93),
+    keywordImport: Color(0xFFFF9E64),
+    number: Color(0xFF79C0FF),
+    function: Color(0xFFDCBDFB),
+    type: Color(0xFFFFB454),
+    constant: Color(0xFF56C7FF),
+    operatorColor: Color(0xFFF97BE0),
+    self: Color(0xFFE06C75),
+    decorator: Color(0xFF9ED072),
+    builtin: Color(0xFF6FE3C4),
+    property: Color(0xFF7EE7FC),
+  );
+
+  // Paleta clara — nova, pensada para fundo quase-branco com
+  // contraste suficiente para leitura de código.
+  static const light = _CodeTokenColors(
+    background: Color(0xFFF6F6F7),
+    baseText: Color(0xFF1F2328),
+    tag: Color(0xFFB3268C),
+    attr: Color(0xFF0B6FB0),
+    string: Color(0xFF8A5A00),
+    stringEscape: Color(0xFF9A6A00),
+    comment: Color(0xFF6E7781),
+    doctype: Color(0xFF0B6FB0),
+    punct: Color(0xFF57606A),
+    keyword: Color(0xFFCF222E),
+    keywordImport: Color(0xFFB35900),
+    number: Color(0xFF0550AE),
+    function: Color(0xFF6639BA),
+    type: Color(0xFF9A5B00),
+    constant: Color(0xFF0B6FB0),
+    operatorColor: Color(0xFFB3268C),
+    self: Color(0xFFB3272D),
+    decorator: Color(0xFF3F7D20),
+    builtin: Color(0xFF116B5C),
+    property: Color(0xFF0B6FB0),
+  );
+
+  static _CodeTokenColors of(bool isDark) => isDark ? dark : light;
+}
 
 class AiCodeBlock extends StatefulWidget {
   final String code;
@@ -1849,29 +1992,35 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _CodeTokenColors.of(widget.s.isDark);
     final baseStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 15.0,
       height: 1.7,
-      color: const Color(0xFFE8E8E8),
+      color: tokens.baseText,
     );
 
-    final codeSpans = _highlightCode(widget.code, widget.language, baseStyle);
+    final codeSpans = _highlightCode(widget.code, widget.language, baseStyle, tokens);
 
+    // Sem "card" fechado: cantos discretos (14, não 32), sem altura
+    // máxima nem scroll vertical interno — o bloco cresce com o
+    // conteúdo (markdown e streaming) e o scroll vertical passa a
+    // pertencer à lista de mensagens, não ao bloco. Scroll horizontal
+    // mantém-se para linhas compridas.
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(32),
+        color: tokens.background,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Stack(
         children: [
           _buildCodeBody(codeSpans, baseStyle),
           Positioned(
-            top: 12,
-            right: 12,
-            child: _buildActions(),
+            top: 8,
+            right: 8,
+            child: _buildActions(tokens),
           ),
         ],
       ),
@@ -1879,27 +2028,29 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
   }
 
   Widget _buildCodeBody(List<TextSpan> spans, TextStyle baseStyle) {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 420),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.vertical,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(18, 48, 18, 20),
-          child: SelectableText.rich(
-            TextSpan(style: baseStyle, children: spans),
-            textAlign: TextAlign.left,
-          ),
-        ),
+    // Apenas scroll horizontal — sem constraints de altura máxima e
+    // sem SingleChildScrollView vertical, para que o gesto de arrastar
+    // verticalmente seja sempre entregue ao scroll da conversa por trás.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 42, 16, 16),
+      child: SelectableText.rich(
+        TextSpan(style: baseStyle, children: spans),
+        textAlign: TextAlign.left,
       ),
     );
   }
 
-  Widget _buildActions() {
+  Widget _buildActions(_CodeTokenColors tokens) {
+    final iconBg = widget.s.isDark ? const Color(0xFF232323) : const Color(0xFFE6E6E8);
+    final iconBgHover = widget.s.isDark ? const Color(0xFF2C2C2C) : const Color(0xFFDCDCDF);
+    final iconHoverBg = widget.s.isDark ? const Color(0xFF383838) : const Color(0xFFCFCFD3);
+    final iconColor = widget.s.isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6B6B70);
+
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF232323),
+        color: iconBg,
         borderRadius: BorderRadius.circular(9999),
       ),
       child: Row(
@@ -1908,16 +2059,18 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
           if (_canPreview) ...[
             _ActionButton(
               svgAsset: 'play.svg',
-              color: const Color(0xFF9A9A9A),
-              backgroundColor: const Color(0xFF2C2C2C),
+              color: iconColor,
+              backgroundColor: iconBgHover,
+              hoverBackgroundColor: iconHoverBg,
               onTap: _openPreview,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
           ],
           _ActionButton(
             svgAsset: _copied ? 'check.svg' : 'copy.svg',
-            color: _copied ? const Color(0xFF4ADE80) : const Color(0xFF9A9A9A),
-            backgroundColor: const Color(0xFF2C2C2C),
+            color: _copied ? const Color(0xFF4ADE80) : iconColor,
+            backgroundColor: iconBgHover,
+            hoverBackgroundColor: iconHoverBg,
             onTap: _copy,
           ),
         ],
@@ -1930,12 +2083,14 @@ class _ActionButton extends StatefulWidget {
   final String svgAsset;
   final Color color;
   final Color backgroundColor;
+  final Color hoverBackgroundColor;
   final VoidCallback? onTap;
 
   const _ActionButton({
     required this.svgAsset,
     required this.color,
     required this.backgroundColor,
+    required this.hoverBackgroundColor,
     this.onTap,
   });
 
@@ -1948,22 +2103,23 @@ class _ActionButtonState extends State<_ActionButton> {
 
   @override
   Widget build(BuildContext context) {
+    // Botões encolhidos: 32 → 26, ícone 17 → 14.
     return GestureDetector(
       onTapDown: widget.onTap == null ? null : (_) => setState(() => _hover = true),
       onTapCancel: widget.onTap == null ? null : () => setState(() => _hover = false),
       onTapUp: widget.onTap == null ? null : (_) => setState(() => _hover = false),
       onTap: widget.onTap,
       child: Container(
-        width: 32,
-        height: 32,
+        width: 26,
+        height: 26,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _hover ? const Color(0xFF383838) : widget.backgroundColor,
+          color: _hover ? widget.hoverBackgroundColor : widget.backgroundColor,
           borderRadius: BorderRadius.circular(9999),
         ),
         child: AppIcon(
           widget.svgAsset,
-          size: 17,
+          size: 14,
           color: widget.color,
         ),
       ),
@@ -1971,14 +2127,14 @@ class _ActionButtonState extends State<_ActionButton> {
   }
 }
 
-List<TextSpan> _highlightCode(String code, String language, TextStyle baseStyle) {
+List<TextSpan> _highlightCode(String code, String language, TextStyle baseStyle, _CodeTokenColors tokens) {
   final lang = language.toLowerCase();
 
   if (lang == 'html' || lang == 'htm' || lang == 'xml' || lang == 'svg') {
-    return _highlightHtml(code, baseStyle);
+    return _highlightHtml(code, baseStyle, tokens);
   }
 
-  final patterns = _patternsForLanguage(lang);
+  final patterns = _patternsForLanguage(lang, tokens);
   final lines = code.split('\n');
   final spans = <TextSpan>[];
 
@@ -1990,10 +2146,10 @@ List<TextSpan> _highlightCode(String code, String language, TextStyle baseStyle)
   return spans;
 }
 
-List<TextSpan> _highlightHtml(String code, TextStyle baseStyle) {
+List<TextSpan> _highlightHtml(String code, TextStyle baseStyle, _CodeTokenColors tokens) {
   final styleBlockPattern = RegExp(r'<style[^>]*>([\s\S]*?)</style>', caseSensitive: false);
   if (styleBlockPattern.hasMatch(code)) {
-    return _highlightHtmlWithCss(code, baseStyle);
+    return _highlightHtmlWithCss(code, baseStyle, tokens);
   }
 
   final lines = code.split('\n');
@@ -2001,35 +2157,35 @@ List<TextSpan> _highlightHtml(String code, TextStyle baseStyle) {
 
   for (int i = 0; i < lines.length; i++) {
     if (i > 0) spans.add(TextSpan(text: '\n', style: baseStyle));
-    spans.addAll(_highlightHtmlLine(lines[i], baseStyle));
+    spans.addAll(_highlightHtmlLine(lines[i], baseStyle, tokens));
   }
 
   return spans;
 }
 
-List<TextSpan> _highlightHtmlWithCss(String code, TextStyle baseStyle) {
+List<TextSpan> _highlightHtmlWithCss(String code, TextStyle baseStyle, _CodeTokenColors tokens) {
   final spans = <TextSpan>[];
   int last = 0;
   final cssPattern = RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false);
   for (final m in cssPattern.allMatches(code)) {
     if (m.start > last) {
-      spans.addAll(_highlightHtmlLine(code.substring(last, m.start), baseStyle));
+      spans.addAll(_highlightHtmlLine(code.substring(last, m.start), baseStyle, tokens));
     }
     final cssContent = code.substring(m.start, m.end);
     final cssInnerMatch = RegExp(r'<style[^>]*>([\s\S]*?)</style>', caseSensitive: false).firstMatch(cssContent);
     if (cssInnerMatch != null) {
       spans.add(TextSpan(
         text: '<style>',
-        style: baseStyle.copyWith(color: _tokTag, fontWeight: FontWeight.w600),
+        style: baseStyle.copyWith(color: tokens.tag, fontWeight: FontWeight.w600),
       ));
       final cssLines = cssInnerMatch.group(1)!.split('\n');
       for (final line in cssLines) {
-        spans.addAll(_highlightLineGeneric(line, _patternsForLanguage('css'), baseStyle));
+        spans.addAll(_highlightLineGeneric(line, _patternsForLanguage('css', tokens), baseStyle));
         spans.add(TextSpan(text: '\n', style: baseStyle));
       }
       spans.add(TextSpan(
         text: '</style>',
-        style: baseStyle.copyWith(color: _tokTag, fontWeight: FontWeight.w600),
+        style: baseStyle.copyWith(color: tokens.tag, fontWeight: FontWeight.w600),
       ));
     } else {
       spans.add(TextSpan(text: cssContent, style: baseStyle));
@@ -2037,12 +2193,12 @@ List<TextSpan> _highlightHtmlWithCss(String code, TextStyle baseStyle) {
     last = m.end;
   }
   if (last < code.length) {
-    spans.addAll(_highlightHtmlLine(code.substring(last), baseStyle));
+    spans.addAll(_highlightHtmlLine(code.substring(last), baseStyle, tokens));
   }
   return spans;
 }
 
-List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle) {
+List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle, _CodeTokenColors tokens) {
   final spans = <TextSpan>[];
 
   final commentMatch = RegExp(r'^(\s*)(<!--.*-->)(\s*)$').firstMatch(line);
@@ -2050,7 +2206,7 @@ List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle) {
     spans.add(TextSpan(text: commentMatch.group(1), style: baseStyle));
     spans.add(TextSpan(
       text: commentMatch.group(2),
-      style: baseStyle.copyWith(color: _tokComment, fontStyle: FontStyle.italic),
+      style: baseStyle.copyWith(color: tokens.comment, fontStyle: FontStyle.italic),
     ));
     spans.add(TextSpan(text: commentMatch.group(3), style: baseStyle));
     return spans;
@@ -2061,7 +2217,7 @@ List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle) {
     spans.add(TextSpan(text: doctypeMatch.group(1), style: baseStyle));
     spans.add(TextSpan(
       text: doctypeMatch.group(2),
-      style: baseStyle.copyWith(color: _tokDoctype),
+      style: baseStyle.copyWith(color: tokens.doctype),
     ));
     spans.add(TextSpan(text: doctypeMatch.group(3), style: baseStyle));
     return spans;
@@ -2079,7 +2235,7 @@ List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle) {
       int end = line.indexOf('>', i);
       if (end == -1) end = line.length - 1;
       final tagContent = line.substring(i, end + 1);
-      spans.addAll(_highlightHtmlTag(tagContent, baseStyle));
+      spans.addAll(_highlightHtmlTag(tagContent, baseStyle, tokens));
       i = end + 1;
     } else {
       buffer.write(line[i]);
@@ -2094,7 +2250,7 @@ List<TextSpan> _highlightHtmlLine(String line, TextStyle baseStyle) {
   return spans;
 }
 
-List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
+List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle, _CodeTokenColors tokens) {
   final spans = <TextSpan>[];
   final isClosing = tag.startsWith('</');
   final innerStart = isClosing ? 2 : 1;
@@ -2108,13 +2264,13 @@ List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
 
   spans.add(TextSpan(
     text: isClosing ? '</' : '<',
-    style: baseStyle.copyWith(color: _tokPunct),
+    style: baseStyle.copyWith(color: tokens.punct),
   ));
 
   if (tagName.isNotEmpty) {
     spans.add(TextSpan(
       text: tagName,
-      style: baseStyle.copyWith(color: _tokTag, fontWeight: FontWeight.w600),
+      style: baseStyle.copyWith(color: tokens.tag, fontWeight: FontWeight.w600),
     ));
   }
 
@@ -2125,16 +2281,16 @@ List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
     if (m.start > lastIndex) {
       spans.add(TextSpan(
         text: rest.substring(lastIndex, m.start),
-        style: baseStyle.copyWith(color: _tokPunct),
+        style: baseStyle.copyWith(color: tokens.punct),
       ));
     }
 
     if (m.group(1) != null) {
-      spans.add(TextSpan(text: m.group(1)!, style: baseStyle.copyWith(color: _tokAttr)));
-      spans.add(TextSpan(text: m.group(2)!, style: baseStyle.copyWith(color: _tokPunct)));
-      spans.add(TextSpan(text: m.group(3)!, style: baseStyle.copyWith(color: _tokString)));
+      spans.add(TextSpan(text: m.group(1)!, style: baseStyle.copyWith(color: tokens.attr)));
+      spans.add(TextSpan(text: m.group(2)!, style: baseStyle.copyWith(color: tokens.punct)));
+      spans.add(TextSpan(text: m.group(3)!, style: baseStyle.copyWith(color: tokens.string)));
     } else if (m.group(6) != null) {
-      spans.add(TextSpan(text: m.group(6)!, style: baseStyle.copyWith(color: _tokAttr)));
+      spans.add(TextSpan(text: m.group(6)!, style: baseStyle.copyWith(color: tokens.attr)));
     }
     lastIndex = m.end;
   }
@@ -2142,13 +2298,13 @@ List<TextSpan> _highlightHtmlTag(String tag, TextStyle baseStyle) {
   if (lastIndex < rest.length) {
     spans.add(TextSpan(
       text: rest.substring(lastIndex),
-      style: baseStyle.copyWith(color: _tokPunct),
+      style: baseStyle.copyWith(color: tokens.punct),
     ));
   }
 
   spans.add(TextSpan(
     text: tag.endsWith('/>') ? '/>' : '>',
-    style: baseStyle.copyWith(color: _tokPunct),
+    style: baseStyle.copyWith(color: tokens.punct),
   ));
 
   return spans;
@@ -2188,53 +2344,53 @@ List<TextSpan> _highlightLineGeneric(String line, List<_TokenPattern> patterns, 
   return spans;
 }
 
-List<_TokenPattern> _patternsForLanguage(String language) {
+List<_TokenPattern> _patternsForLanguage(String language, _CodeTokenColors tokens) {
   switch (language) {
     case 'dart':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\\[nrt"\047\\$]'), color: _tokStringEscape),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\bthis\b|\bsuper\b'), color: _tokSelf, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'\b(?:import|export|library|part|show|hide|deferred|as)\b'), color: _tokKeywordImport),
-        _TokenPattern(RegExp(r'\b(?:abstract|assert|async|await|break|case|catch|class|const|continue|covariant|default|do|dynamic|else|enum|extends|extension|external|factory|final|finally|for|Function|get|if|implements|in|interface|is|late|mixin|new|null|on|operator|required|rethrow|return|set|static|switch|sync|throw|try|typedef|var|void|while|with|yield)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:int|double|String|bool|List|Map|Set|Object|void|dynamic|Future|Stream|Widget|BuildContext|Duration|Color|Offset|Size|Rect)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\bprint\b(?=\()'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|&&|\|\||\?\?|\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\\[nrt"\047\\$]'), color: tokens.stringEscape),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\bthis\b|\bsuper\b'), color: tokens.self, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'\b(?:import|export|library|part|show|hide|deferred|as)\b'), color: tokens.keywordImport),
+        _TokenPattern(RegExp(r'\b(?:abstract|assert|async|await|break|case|catch|class|const|continue|covariant|default|do|dynamic|else|enum|extends|extension|external|factory|final|finally|for|Function|get|if|implements|in|interface|is|late|mixin|new|null|on|operator|required|rethrow|return|set|static|switch|sync|throw|try|typedef|var|void|while|with|yield)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:int|double|String|bool|List|Map|Set|Object|void|dynamic|Future|Stream|Widget|BuildContext|Duration|Color|Offset|Size|Rect)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\bprint\b(?=\()'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|&&|\|\||\?\?|\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'python':
       return [
-        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'@[a-zA-Z_][\w.]*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'"""[\s\S]*?"""'), color: _tokString),
-        _TokenPattern(RegExp(r"'''[\s\S]*?'''"), color: _tokString),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\\[nrt"\047\\]'), color: _tokStringEscape),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\bself\b|\bcls\b'), color: _tokSelf, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'\b(?:import|from|as)\b'), color: _tokKeywordImport),
-        _TokenPattern(RegExp(r'\b(?:and|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|global|if|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:int|float|str|bool|list|dict|set|tuple|object|bytes|frozenset)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:print|len|range|enumerate|zip|map|filter|sorted|sum|min|max|abs|isinstance|super|open|input|type)\b(?=\()'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'\b(?:True|False|None)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'==|!=|<=|>=|\*\*|//|->|[+\-*/%=<>!&|^~:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'#[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'@[a-zA-Z_][\w.]*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'"""[\s\S]*?"""'), color: tokens.string),
+        _TokenPattern(RegExp(r"'''[\s\S]*?'''"), color: tokens.string),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\\[nrt"\047\\]'), color: tokens.stringEscape),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\bself\b|\bcls\b'), color: tokens.self, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'\b(?:import|from|as)\b'), color: tokens.keywordImport),
+        _TokenPattern(RegExp(r'\b(?:and|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|global|if|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:int|float|str|bool|list|dict|set|tuple|object|bytes|frozenset)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:print|len|range|enumerate|zip|map|filter|sorted|sum|min|max|abs|isinstance|super|open|input|type)\b(?=\()'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'\b(?:True|False|None)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'==|!=|<=|>=|\*\*|//|->|[+\-*/%=<>!&|^~:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'javascript':
@@ -2244,263 +2400,263 @@ List<_TokenPattern> _patternsForLanguage(String language) {
     case 'ts':
     case 'tsx':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'`(?:\\`|[^`])*`'), color: _tokString),
-        _TokenPattern(RegExp(r'\\[nrt"\047\\`]'), color: _tokStringEscape),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\bthis\b'), color: _tokSelf, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'\b(?:import|export|from|default)\b'), color: _tokKeywordImport),
-        _TokenPattern(RegExp(r'\b(?:var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|typeof|instanceof|in|of|async|await|try|catch|finally|throw|static|get|set|yield|interface|type|enum|implements|public|private|protected|readonly|namespace|declare)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:string|number|boolean|any|void|never|unknown|object|Array|Promise|Map|Set)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:console|Math|JSON|Object|Array|parseInt|parseFloat|setTimeout|setInterval)\b'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b(?:true|false|null|undefined)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_$]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_$]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'=>|===|!==|==|!=|<=|>=|&&|\|\||\?\?|\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'`(?:\\`|[^`])*`'), color: tokens.string),
+        _TokenPattern(RegExp(r'\\[nrt"\047\\`]'), color: tokens.stringEscape),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\bthis\b'), color: tokens.self, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'\b(?:import|export|from|default)\b'), color: tokens.keywordImport),
+        _TokenPattern(RegExp(r'\b(?:var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|typeof|instanceof|in|of|async|await|try|catch|finally|throw|static|get|set|yield|interface|type|enum|implements|public|private|protected|readonly|namespace|declare)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:string|number|boolean|any|void|never|unknown|object|Array|Promise|Map|Set)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:console|Math|JSON|Object|Array|parseInt|parseFloat|setTimeout|setInterval)\b'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b(?:true|false|null|undefined)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_$]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_$]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'=>|===|!==|==|!=|<=|>=|&&|\|\||\?\?|\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'css':
     case 'scss':
       return [
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'#[0-9a-fA-F]{3,8}\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_-][\w-]*'), color: _tokFunction),
-        _TokenPattern(RegExp(r'#[a-zA-Z_-][\w-]*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'[a-zA-Z-]+(?=\s*:)'), color: _tokAttr),
-        _TokenPattern(RegExp(r'\b(?:a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)\b'), color: _tokTag),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'#[0-9a-fA-F]{3,8}\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_-][\w-]*'), color: tokens.function),
+        _TokenPattern(RegExp(r'#[a-zA-Z_-][\w-]*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'[a-zA-Z-]+(?=\s*:)'), color: tokens.attr),
+        _TokenPattern(RegExp(r'\b(?:a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|slot|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)\b'), color: tokens.tag),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'bash':
     case 'shell':
     case 'sh':
       return [
-        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\$\{?[a-zA-Z_]\w*\}?'), color: _tokProperty),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|export|readonly|local|return|exit)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:echo|printf|source|cd|ls|grep|awk|sed|curl|wget|cat|mkdir|rm|cp|mv|chmod|pip|npm|flutter|dart|git)\b'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'--?[a-zA-Z-]+'), color: _tokAttr),
-        _TokenPattern(RegExp(r'[|&;><]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'#[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\$\{?[a-zA-Z_]\w*\}?'), color: tokens.property),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|export|readonly|local|return|exit)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:echo|printf|source|cd|ls|grep|awk|sed|curl|wget|cat|mkdir|rm|cp|mv|chmod|pip|npm|flutter|dart|git)\b'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'--?[a-zA-Z-]+'), color: tokens.attr),
+        _TokenPattern(RegExp(r'[|&;><]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'sql':
       return [
-        _TokenPattern(RegExp(r'--[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|DELETE|CREATE|TABLE|ALTER|DROP|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|PRIMARY|KEY|FOREIGN|REFERENCES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|DISTINCT)\b', caseSensitive: false), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:COUNT|SUM|AVG|MIN|MAX|COALESCE|CAST|NOW|CURRENT_DATE)\b', caseSensitive: false), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b(?:int|varchar|char|text|date|datetime|timestamp|decimal|float|double|boolean|bool)\b', caseSensitive: false), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'=|<>|!=|<=|>=|[+\-*/<>]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'--[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|DELETE|CREATE|TABLE|ALTER|DROP|INDEX|VIEW|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|PRIMARY|KEY|FOREIGN|REFERENCES|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|UNION|DISTINCT)\b', caseSensitive: false), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:COUNT|SUM|AVG|MIN|MAX|COALESCE|CAST|NOW|CURRENT_DATE)\b', caseSensitive: false), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b(?:int|varchar|char|text|date|datetime|timestamp|decimal|float|double|boolean|bool)\b', caseSensitive: false), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'=|<>|!=|<=|>=|[+\-*/<>]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'markdown':
     case 'md':
       return [
-        _TokenPattern(RegExp(r'\[([^\]]+)\]\(([^)]+)\)'), color: _tokString),
-        _TokenPattern(RegExp(r'(\*\*|__)(.*?)\1'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'(\*|_)(.*?)\1'), color: _tokTag),
-        _TokenPattern(RegExp(r'^\s{0,3}#{1,6}\s.*$'), color: _tokType),
-        _TokenPattern(RegExp(r'^\s{0,3}>.*$'), color: _tokComment),
-        _TokenPattern(RegExp(r'`[^`]+`'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'\[([^\]]+)\]\(([^)]+)\)'), color: tokens.string),
+        _TokenPattern(RegExp(r'(\*\*|__)(.*?)\1'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'(\*|_)(.*?)\1'), color: tokens.tag),
+        _TokenPattern(RegExp(r'^\s{0,3}#{1,6}\s.*$'), color: tokens.type),
+        _TokenPattern(RegExp(r'^\s{0,3}>.*$'), color: tokens.comment),
+        _TokenPattern(RegExp(r'`[^`]+`'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'go':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'`[^`]*`'), color: _tokString),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:func|package|import|return|if|else|for|range|go|defer|select|case|default|break|continue|switch|type|struct|interface|map|chan|var|const|nil|true|false)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:string|int|float64|bool|byte|rune|error|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:fmt|len|cap|print|println|append|copy|make|new)\b'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'==|!=|<=|>=|:=|\+\+|--|[+\-*/%=<>!&|^~]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'`[^`]*`'), color: tokens.string),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:func|package|import|return|if|else|for|range|go|defer|select|case|default|break|continue|switch|type|struct|interface|map|chan|var|const|nil|true|false)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:string|int|float64|bool|byte|rune|error|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:fmt|len|cap|print|println|append|copy|make|new)\b'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'==|!=|<=|>=|:=|\+\+|--|[+\-*/%=<>!&|^~]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'rust':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'#\[[^\]]+\]'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:fn|let|mut|const|static|if|else|for|while|loop|match|return|impl|trait|struct|enum|pub|use|mod|self|super|crate|where|async|await)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:u8|u16|u32|u64|usize|i8|i16|i32|i64|isize|f32|f64|bool|String|Vec|Option|Result|Box|HashMap)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:println|print|format|vec|panic|assert|Some|None|Ok|Err)\b'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|::|\+\+|--|[+\-*/%=<>!&|^~]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'#\[[^\]]+\]'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:fn|let|mut|const|static|if|else|for|while|loop|match|return|impl|trait|struct|enum|pub|use|mod|self|super|crate|where|async|await)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:u8|u16|u32|u64|usize|i8|i16|i32|i64|isize|f32|f64|bool|String|Vec|Option|Result|Box|HashMap)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:println|print|format|vec|panic|assert|Some|None|Ok|Err)\b'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|::|\+\+|--|[+\-*/%=<>!&|^~]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'kotlin':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:fun|val|var|class|object|interface|enum|data|sealed|if|else|for|while|do|return|when|in|is|as|new|this|super|companion|init|constructor)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:String|Int|Double|Boolean|Float|Long|Short|Byte|Char|Unit|Any|List|Map|Set)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:print|println|require|assert|run|let|apply|also|with)\b'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\?\?|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:fun|val|var|class|object|interface|enum|data|sealed|if|else|for|while|do|return|when|in|is|as|new|this|super|companion|init|constructor)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:String|Int|Double|Boolean|Float|Long|Short|Byte|Char|Unit|Any|List|Map|Set)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:print|println|require|assert|run|let|apply|also|with)\b'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\?\?|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'swift':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:func|var|let|class|struct|enum|protocol|extension|if|else|for|while|repeat|return|guard|switch|case|default|break|continue|import|init|self|super|where|as|is|try|catch|throw)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:String|Int|Double|Bool|Float|Character|Array|Dictionary|Set|Optional|Any)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:print|assert|map|filter|reduce|first|last|append|count)\b'), color: _tokBuiltin),
-        _TokenPattern(RegExp(r'\b(?:true|false|nil)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:func|var|let|class|struct|enum|protocol|extension|if|else|for|while|repeat|return|guard|switch|case|default|break|continue|import|init|self|super|where|as|is|try|catch|throw)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:String|Int|Double|Bool|Float|Character|Array|Dictionary|Set|Optional|Any)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:print|assert|map|filter|reduce|first|last|append|count)\b'), color: tokens.builtin),
+        _TokenPattern(RegExp(r'\b(?:true|false|nil)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'c':
     case 'cpp':
     case 'c++':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])'"), color: _tokString),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:int|float|double|char|void|bool|auto|long|short|unsigned|signed|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|goto|typedef|struct|union|enum|static|const|volatile|extern|inline|sizeof|new|delete|this|class|namespace|using|template|typename)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:true|false|null|NULL|nullptr)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:int|float|double|char|void|bool|auto|long|short|unsigned|signed|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|goto|typedef|struct|union|enum|static|const|volatile|extern|inline|sizeof|new|delete|this|class|namespace|using|template|typename)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null|NULL|nullptr)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'csharp':
     case 'cs':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:int|long|short|byte|float|double|decimal|char|string|bool|void|object|var|dynamic)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|goto|class|struct|enum|interface|namespace|using|public|private|protected|internal|static|readonly|const|virtual|override|abstract|sealed|async|await|try|catch|finally|throw|new|this|base|is|as|in|out|ref)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:int|long|short|byte|float|double|decimal|char|string|bool|void|object|var|dynamic)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|goto|class|struct|enum|interface|namespace|using|public|private|protected|internal|static|readonly|const|virtual|override|abstract|sealed|async|await|try|catch|finally|throw|new|this|base|is|as|in|out|ref)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'=>|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'java':
       return [
-        _TokenPattern(RegExp(r'//[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: _tokDecorator),
-        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:int|long|short|byte|float|double|char|boolean|void|String|Object)\b'), color: _tokType, fontWeight: FontWeight.w500),
-        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|class|interface|enum|package|import|public|private|protected|static|final|abstract|synchronized|transient|volatile|try|catch|finally|throw|new|this|super|extends|implements|instanceof)\b'), color: _tokKeyword),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: _tokType),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: _tokProperty),
-        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'@[a-zA-Z_]\w*'), color: tokens.decorator),
+        _TokenPattern(RegExp(r'\b0[xX][0-9a-fA-F]+\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:int|long|short|byte|float|double|char|boolean|void|String|Object)\b'), color: tokens.type, fontWeight: FontWeight.w500),
+        _TokenPattern(RegExp(r'\b(?:if|else|for|while|do|return|break|continue|switch|case|default|class|interface|enum|package|import|public|private|protected|static|final|abstract|synchronized|transient|volatile|try|catch|finally|throw|new|this|super|extends|implements|instanceof)\b'), color: tokens.keyword),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\b[A-Z]\w*(?=\()'), color: tokens.type),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'\.[a-zA-Z_]\w*(?!\()'), color: tokens.property),
+        _TokenPattern(RegExp(r'->|==|!=|<=|>=|&&|\|\||\.\.\.|\+\+|--|[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'json':
       return [
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'[{}[\]\,:]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'[{}[\]\,:]'), color: tokens.punct),
       ];
 
     case 'yaml':
     case 'yml':
       return [
-        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'[:\-]'), color: _tokPunct),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'#[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'[:\-]'), color: tokens.punct),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'toml':
       return [
-        _TokenPattern(RegExp(r'#[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: _tokConstant),
-        _TokenPattern(RegExp(r'\[\[?.*?\]\]?'), color: _tokType),
-        _TokenPattern(RegExp(r'='), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'#[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b(?:true|false|null)\b'), color: tokens.constant),
+        _TokenPattern(RegExp(r'\[\[?.*?\]\]?'), color: tokens.type),
+        _TokenPattern(RegExp(r'='), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     case 'ini':
       return [
-        _TokenPattern(RegExp(r'#[^\n]*|;[^\n]*'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\[([^\]]+)\]'), color: _tokType),
-        _TokenPattern(RegExp(r'='), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'#[^\n]*|;[^\n]*'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\[([^\]]+)\]'), color: tokens.type),
+        _TokenPattern(RegExp(r'='), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
 
     default:
       return [
-        _TokenPattern(RegExp(r'//[^\n]*|#[^\n]*|/\*.*?\*/'), color: _tokComment, fontStyle: FontStyle.italic),
-        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: _tokString),
-        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: _tokString),
-        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: _tokNumber),
-        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: _tokFunction),
-        _TokenPattern(RegExp(r'[+\-*/%=<>!&|^~?:]'), color: _tokOperator),
-        _TokenPattern(RegExp(r'[^\s\w]'), color: _tokPunct),
+        _TokenPattern(RegExp(r'//[^\n]*|#[^\n]*|/\*.*?\*/'), color: tokens.comment, fontStyle: FontStyle.italic),
+        _TokenPattern(RegExp(r'"(?:\\.|[^"\\])*"'), color: tokens.string),
+        _TokenPattern(RegExp(r"'(?:\\.|[^'\\])*'"), color: tokens.string),
+        _TokenPattern(RegExp(r'\b\d+(?:\.\d+)?\b'), color: tokens.number),
+        _TokenPattern(RegExp(r'\b[a-zA-Z_]\w*(?=\()'), color: tokens.function),
+        _TokenPattern(RegExp(r'[+\-*/%=<>!&|^~?:]'), color: tokens.operatorColor),
+        _TokenPattern(RegExp(r'[^\s\w]'), color: tokens.punct),
       ];
   }
 }
@@ -2733,7 +2889,7 @@ class _CodeTabView extends StatelessWidget {
       height: 1.7,
       color: Color(0xFF1F1F1F),
     );
-    final spans = _highlightCode(code, language, baseStyle);
+    final spans = _highlightCode(code, language, baseStyle, _CodeTokenColors.light);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
