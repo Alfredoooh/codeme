@@ -6,17 +6,25 @@
 //    o único uso — CupertinoActivityIndicator — não estava a ser
 //    usado neste ficheiro de qualquer forma).
 // 2) A fonte da resposta do assistente passa a ser Times New Roman
-//    via google_fonts (GoogleFonts.timesNewRoman), aplicada APENAS
-//    ao corpo de texto do RichAiText do assistente — nunca às
-//    bolhas do utilizador, nunca a blocos de código, nunca a labels/
-//    botões/ícones. Isto é feito passando um `bodyTextStyle`
-//    (novo parâmetro) ao RichAiText nas duas bolhas (Assistant e
-//    Streaming) — o RichAiText já deve aceitar/propagar este estilo
-//    para o texto normal, preservando o estilo monoespaçado nos
-//    blocos de código (isso é tratado dentro de richtext.dart, que
-//    não foi enviado, então aqui só se passa o parâmetro; se
-//    RichAiText não tiver ainda esse parâmetro, é preciso adicioná-lo
-//    lá — o teu ficheiro richtext.dart não foi partilhado comigo).
+//    via fonte LOCAL registada no pubspec.yaml (família
+//    'TimesNewRoman', assets em assets/fonts/Times New Roman/),
+//    aplicada APENAS ao corpo de texto do RichAiText do assistente
+//    — nunca às bolhas do utilizador, nunca a blocos de código,
+//    nunca a labels/botões/ícones. Isto é feito passando um
+//    `bodyTextStyle` (parâmetro já suportado por RichAiText em
+//    richtext.dart) nas quatro chamadas de RichAiText deste
+//    ficheiro (Assistant, Thinking histórico, Streaming, Thinking
+//    em streaming).
+//    NOTA: GoogleFonts.timesNewRoman() NÃO existe — Times New Roman
+//    é fonte da Microsoft, não faz parte do catálogo do Google
+//    Fonts. Por isso aiBodyTextStyle usa TextStyle(fontFamily:
+//    'TimesNewRoman', ...) apontando para a fonte local, e não
+//    GoogleFonts.*. O import de google_fonts mantém-se neste
+//    ficheiro apenas porque outras partes do projeto (fora deste
+//    ficheiro) continuam a usar GoogleFonts.xxx() — se este
+//    ficheiro específico não usar mais nenhuma chamada GoogleFonts,
+//    o import está tecnicamente por usar aqui, mas isso não quebra
+//    a compilação.
 // 3) Sheets substituídos por showModalBottomSheet Android nativo com
 //    curva reduzida (mesma _kFlatModalRadius do drawer), onde antes
 //    usavam showCraftBottomSheet local a este ficheiro para
@@ -48,11 +56,13 @@ import 'aitab_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
 
 // Estilo de corpo de texto usado SOMENTE na resposta da IA (fora de
-// blocos de código). Times New Roman via Google Fonts. Nunca é
-// aplicado às bolhas do utilizador, nem a ícones/labels/botões, nem
-// a blocos de código (o RichAiText deve manter a fonte monoespaçada
-// nos blocos — este estilo só cobre o texto corrido/prosa).
-TextStyle aiBodyTextStyle(AppColorScheme s) => GoogleFonts.timesNewRoman(
+// blocos de código). Times New Roman via fonte LOCAL registada no
+// pubspec.yaml (família 'TimesNewRoman'). Nunca é aplicado às
+// bolhas do utilizador, nem a ícones/labels/botões, nem a blocos de
+// código (o RichAiText mantém a fonte monoespaçada nos blocos —
+// este estilo só cobre o texto corrido/prosa).
+TextStyle aiBodyTextStyle(AppColorScheme s) => TextStyle(
+      fontFamily: 'TimesNewRoman',
       fontSize: 15,
       height: 1.45,
       color: s.onSurface,
@@ -915,8 +925,8 @@ class AssistantBubble extends StatelessWidget {
                   widgetsEnabled: widgetsEnabled,
                 ),
               // Times New Roman aplicado apenas à prosa da resposta da
-              // IA. RichAiText deve usar bodyTextStyle para o texto
-              // normal e manter a fonte de código nos blocos ```.
+              // IA. RichAiText usa bodyTextStyle para o texto normal e
+              // mantém a fonte de código nos blocos ```.
               if (text.isNotEmpty)
                 RichAiText(
                   text: text
