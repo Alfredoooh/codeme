@@ -26,6 +26,15 @@ const CREDIT_PACKAGES = {
   premium: { credits: 1500, price: 7500, name: "Premium", productId: "db3b0e10-d3da-439b-9c0c-06c112ba524b" },
 };
 
+// ═══ Limite de avatar — espelha kAvatarMaxImageBytes em
+// lib/features/settings/avatar_upload_utils.dart. Base: 1MB de
+// imagem binária, expandido para o tamanho equivalente em base64
+// (overhead de ~33.3%, arredondado para cima com uma pequena
+// margem para o prefixo "data:image/jpeg;base64,"). Se subires o
+// valor aqui, sobe também kAvatarMaxImageBytes no Flutter. ═══
+const AVATAR_MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1MB
+const AVATAR_MAX_BASE64_CHARS = Math.ceil(AVATAR_MAX_IMAGE_BYTES * 4 / 3) + 100;
+
 // ═══ Password hashing — PBKDF2 nativo do Web Crypto, sem libs externas ═══
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_SALT_BYTES = 16;
@@ -582,7 +591,10 @@ async function handleUpdateAvatar(request, env) {
   if (!payload) return error("Não autenticado", 401);
   const body = await request.json().catch(() => null);
   if (!body || !body.avatar) return error("avatar obrigatório");
-  if (body.avatar.length > 270000) return error("Imagem demasiado grande (máx ~200KB)");
+  // Limite subido de ~200KB para ~1MB de imagem — ver
+  // AVATAR_MAX_BASE64_CHARS no topo deste ficheiro, espelhado em
+  // kAvatarMaxImageBytes no Flutter (avatar_upload_utils.dart).
+  if (body.avatar.length > AVATAR_MAX_BASE64_CHARS) return error("Imagem demasiado grande (máx ~1MB)");
   const userData = await env.NEXA_USERS.get("user:" + payload.id);
   if (!userData) return error("Utilizador não encontrado", 404);
   const user = JSON.parse(userData);

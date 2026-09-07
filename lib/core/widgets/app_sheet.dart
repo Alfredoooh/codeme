@@ -1,67 +1,65 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/app_sheet.dart
-// Ponto único de modais da app — CupertinoSheetRoute (iOS 13+
-// "paper sheet"). Substitui showModalBottomSheet, showCraftBottomSheet
-// e showCupertinoDialog em toda a app.
+// Ponto único de modais da app — bottom sheet Material padrão,
+// mesma curva (20px no topo) e handlebar do modal de opções da
+// conversa em drawermenu.dart. Substitui showModalBottomSheet
+// "cru", showCraftBottomSheet e o antigo CupertinoSheetRoute em
+// toda a app.
 // ══════════════════════════════════════════════════════════════
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 
+const double _kAppSheetRadius = 20.0;
 
-/// Abre um modal no estilo Cupertino "paper sheet" — a tela por trás
-/// encolhe e fica visível, o novo conteúdo desliza por cima com
-/// cantos arredondados no topo. Substitui showModalBottomSheet em
-/// toda a app. Devolve o valor passado a Navigator.pop(context, valor),
-/// tal como um showModalBottomSheet normal.
-///
-/// CupertinoSheetRoute desenha só a MOLDURA do sheet (cantos
-/// arredondados, sombra, efeito de encolher a tela anterior) — não
-/// pinta nenhum fundo dentro da área de conteúdo. Sem isto, qualquer
-/// builder que devolva só Padding/Column (sem Container/ColoredBox
-/// própria) fica com o conteúdo transparente, mostrando só o texto
-/// "flutuando". Por isso o builder do chamador é envolvido aqui, uma
-/// única vez, com a cor de superfície do tema atual — nenhum dos
-/// pontos de chamada precisa de se preocupar com isto.
+class _AppSheetHandlebar extends StatelessWidget {
+  final AppColorScheme s;
+  const _AppSheetHandlebar({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: s.onSurfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Abre um modal padrão da app — bottom sheet Material com cantos
+/// arredondados no topo (mesma curva usada no modal de opções da
+/// conversa) e handlebar cinzenta no topo. Substitui qualquer uso
+/// direto de showModalBottomSheet em toda a app. Devolve o valor
+/// passado a Navigator.pop(context, valor), tal como um
+/// showModalBottomSheet normal.
 Future<T?> showAppSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
 }) {
-  return Navigator.of(context, rootNavigator: true).push<T>(
-    CupertinoSheetRoute<T>(
-      builder: (sheetContext) => ColoredBox(
-        color: AppTheme.of(sheetContext).surface,
-        // DefaultTextStyle força fonte default de plataforma (Roboto
-        // no Android) em vez da fonte de sistema iOS (San Francisco),
-        // que é a que o corretor ortográfico do iOS sublinha a
-        // amarelo. fontFamily: null diz ao Flutter para não impor
-        // nenhuma família específica — cai na default da plataforma.
-        child: DefaultTextStyle(
-          style: const TextStyle(
-            fontFamily: null,
-            color: CupertinoColors.label,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar: mesma barra cinzenta que a Apple usa nos
-              // seus próprios sheets (Maps, Apple Music). 36×5,
-              // radius 2.5 é o tamanho padrão que a Apple usa.
-              Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 4),
-                child: Container(
-                  width: 36,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemGrey4.resolveFrom(sheetContext),
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
-                ),
-              ),
-              Flexible(child: builder(sheetContext)),
-            ],
-          ),
-        ),
+  final s = AppTheme.of(context);
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: s.surface,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kAppSheetRadius)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AppSheetHandlebar(s: AppTheme.of(sheetContext)),
+          Flexible(child: builder(sheetContext)),
+        ],
       ),
     ),
   );
@@ -85,7 +83,9 @@ Future<String?> showAiEditModal(
         bottom: MediaQuery.of(ctx).viewInsets.bottom,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(ctx).padding.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

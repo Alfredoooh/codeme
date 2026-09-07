@@ -1460,7 +1460,7 @@ class _ScrollToBottomButtonState extends State<ScrollToBottomButton> {
             shape: BoxShape.circle,
             boxShadow: s.floatingShadow,
           ),
-          child: AppIcon('double_arrow_down', color: s.onSurface, size: 18),
+          child: AppIcon('double_chevron_down', color: s.onSurface, size: 18),
         ),
       ),
     );

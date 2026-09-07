@@ -18,6 +18,7 @@ import 'memory_screen.dart';
 import 'workspace_screen.dart';
 import 'avatar_viewer_screen.dart';
 import 'webview_screen.dart';
+import 'avatar_upload_utils.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
@@ -32,6 +33,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen>
     with ThemeReactive<SettingsScreen> {
   bool _refreshing = false;
+  bool _avatarUploading = false;
 
   double _scrollOffset = 0.0;
   final ScrollController _scrollController = ScrollController();
@@ -214,10 +216,14 @@ class _SettingsScreenState extends State<SettingsScreen>
     ));
   }
 
+  /// Escolhe, corta e envia um novo avatar diretamente a partir do
+  /// botão de lápis no bloco de avatar (sem passar pelo viewer).
+  /// A imagem é comprimida automaticamente (ver avatar_upload_utils.dart)
+  /// até caber no limite real aceite pelo servidor.
   Future<void> _pickAvatarDirectly() async {
     final picker = ImagePicker();
     final picked =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 95);
     if (picked == null || !mounted) return;
 
     final cropped = await ImageCropper().cropImage(
@@ -243,16 +249,24 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (cropped == null || !mounted) return;
 
-    final bytes = await cropped.readAsBytes();
-    final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    final token = authController.token;
-    if (token == null) return;
-    await ProfileApiService.updateAvatar(token, b64);
-    authController.user = authController.user?.copyWith(avatar: b64);
-    if (authController.user != null) {
-      await SessionManager.updateUser(authController.user!);
+    setState(() => _avatarUploading = true);
+    try {
+      final b64 = await compressImageFileToBase64DataUrl(cropped.path);
+      final token = authController.token;
+      if (token == null) return;
+      await ProfileApiService.updateAvatar(token, b64);
+      authController.user = authController.user?.copyWith(avatar: b64);
+      if (authController.user != null) {
+        await SessionManager.updateUser(authController.user!);
+      }
+      authController.notifyListeners();
+    } catch (_) {
+      // Falha silenciosa aqui é consistente com o comportamento anterior
+      // deste botão (sem feedback de erro dedicado); o viewer tem o seu
+      // próprio tratamento de erro visível.
+    } finally {
+      if (mounted) setState(() => _avatarUploading = false);
     }
-    authController.notifyListeners();
   }
 
   void _openAvatarViewer(BuildContext context, AppColorScheme s) {
@@ -276,6 +290,11 @@ class _SettingsScreenState extends State<SettingsScreen>
             authController.notifyListeners();
           },
         ),
+        // Fade simples: sem Hero, sem "voar" a imagem do settings até
+        // ao viewer. O container transform (scale 0.92 → 1.0) é
+        // mantido — só a componente de Hero/slide foi removida (o
+        // Hero foi retirado tanto daqui como do próprio
+        // AvatarViewerScreen, ver esse ficheiro).
         transitionsBuilder: (ctx, anim, _, child) {
           final curved =
               CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
@@ -324,7 +343,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   physics: const BouncingScrollPhysics(
                       parent: AlwaysScrollableScrollPhysics()),
                   slivers: [
-                    const SliverToBoxAdapter(child: SizedBox(height: 60)),
+                    // Reservado para o novo appbar sólido, mais baixo
+                    // que o anterior (ver _SettingsAppBar).
+                    const SliverToBoxAdapter(child: SizedBox(height: 48)),
 
                     SliverToBoxAdapter(
                       child: Padding(
@@ -333,7 +354,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         child: _AvatarBlock(
                           s: s,
                           user: user,
-                          loading: _refreshing,
+                          loading: _refreshing || _avatarUploading,
                           onAvatarTap: () =>
                               _openAvatarViewer(context, s),
                           onEditTap: _pickAvatarDirectly,
@@ -545,7 +566,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 }
 
 // ══════════════════════════════════════════════════════════════
-// APPBAR DO SETTINGS — transparência progressiva
+// APPBAR DO SETTINGS — sólido, sem gradiente/transparência, e
+// mais baixo que a versão anterior (padding vertical reduzido).
 // ══════════════════════════════════════════════════════════════
 
 class _SettingsAppBar extends StatelessWidget {
@@ -561,20 +583,8 @@ class _SettingsAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          // ANTES: colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)]
-          // AGORA: nunca chega a 0 — fica sempre com um mínimo de opacidade,
-          // uniforme com scheduled_tasks e chat_search.
-          colors: [
-            s.pageBackground,
-            s.pageBackground.withOpacity(0.4),
-          ],
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+      color: s.pageBackground,
       child: Row(
         children: [
           CircularBackButton(
@@ -634,7 +644,6 @@ class _AvatarBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = user?.name ?? 'Utilizador';
     final avatarBytes = _decodeAvatar(user?.avatar);
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
     const avatarSize = 88.0;
     const ringWidth = 3.0;
     final innerSize = avatarSize - ringWidth * 2 - 2;
@@ -646,37 +655,29 @@ class _AvatarBlock extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: onAvatarTap,
-              child: Hero(
-                tag: 'avatar',
-                child: Container(
-                  width: avatarSize,
-                  height: avatarSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border:
-                        Border.all(color: s.outline, width: ringWidth),
-                  ),
-                  child: ClipOval(
-                    child: SizedBox(
-                      width: innerSize,
-                      height: innerSize,
-                      child: avatarBytes != null
-                          ? Image.memory(
-                              avatarBytes,
-                              width: innerSize,
-                              height: innerSize,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  _AvatarInitial(
-                                      s: s,
-                                      initial: initial,
-                                      size: avatarSize),
-                            )
-                          : _AvatarInitial(
-                              s: s,
-                              initial: initial,
-                              size: avatarSize),
-                    ),
+              child: Container(
+                width: avatarSize,
+                height: avatarSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border:
+                      Border.all(color: s.outline, width: ringWidth),
+                ),
+                child: ClipOval(
+                  child: SizedBox(
+                    width: innerSize,
+                    height: innerSize,
+                    child: avatarBytes != null
+                        ? Image.memory(
+                            avatarBytes,
+                            width: innerSize,
+                            height: innerSize,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _AvatarFallback(
+                                    s: s, size: avatarSize),
+                          )
+                        : _AvatarFallback(s: s, size: avatarSize),
                   ),
                 ),
               ),
@@ -754,24 +755,23 @@ class _AvatarBlock extends StatelessWidget {
   }
 }
 
-class _AvatarInitial extends StatelessWidget {
+/// Fallback quando o utilizador não tem avatar definido — usa o
+/// ícone genérico assets/icons/png/avatar.png em vez da inicial do
+/// nome.
+class _AvatarFallback extends StatelessWidget {
   final AppColorScheme s;
-  final String initial;
   final double size;
-  const _AvatarInitial(
-      {required this.s, required this.initial, required this.size});
+  const _AvatarFallback({required this.s, required this.size});
 
   @override
   Widget build(BuildContext context) => Container(
         color: s.primary,
         alignment: Alignment.center,
-        child: Text(
-          initial,
-          style: TextStyle(
-            color: s.onPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: size * 0.35,
-          ),
+        child: Image.asset(
+          'assets/icons/png/avatar.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
         ),
       );
 }

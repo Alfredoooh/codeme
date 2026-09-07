@@ -221,6 +221,11 @@ class _AppDrawerState extends State<AppDrawer> {
   static const double _topBarContentHeight = 52.0;
   static const double _bottomBarReserve = 84.0;
 
+  // Tamanho de referência para avatar e botão de fechar do topo do
+  // drawer — igualado aos botões circulares padrão usados em
+  // aitab_widgets_shared.dart (ex.: _HeaderMenuButton).
+  static const double _topCircleSize = 40.0;
+
   @override
   void initState() {
     super.initState();
@@ -292,17 +297,17 @@ class _AppDrawerState extends State<AppDrawer> {
   }
 
   void _confirmDeletePopup(BuildContext context, ConversationItem item) {
-    showCraftBottomSheet(
+    showFlatBottomSheet(
       context: context,
       s: widget.s,
-      child: Builder(builder: (sheetContext) => _DeleteConversationSheet(
+      builder: (sheetContext) => _DeleteConversationSheet(
         s: widget.s,
         title: item.title,
         onConfirm: () {
           Navigator.pop(sheetContext);
           conversationsController.delete(item.id);
         },
-      )),
+      ),
     );
   }
 
@@ -347,7 +352,7 @@ class _AppDrawerState extends State<AppDrawer> {
     });
   }
 
-  Uint8List? _decodeAvatar(String? raw) {
+  Uint8List? _decodeAvatarBytes(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     if (raw.startsWith('http://') || raw.startsWith('https://')) return null;
     try {
@@ -369,8 +374,12 @@ class _AppDrawerState extends State<AppDrawer> {
     final screenWidth = MediaQuery.of(context).size.width;
     final user = authController.user;
     final name = user?.name ?? 'Utilizador';
-    final avatarBytes = _decodeAvatar(user?.avatar);
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+    final avatarUrl = (user?.avatar != null &&
+            (user!.avatar!.startsWith('http://') || user.avatar!.startsWith('https://')))
+        ? user.avatar
+        : null;
+    final avatarBytes = _decodeAvatarBytes(user?.avatar);
+    final hasCustomAvatar = avatarUrl != null || avatarBytes != null;
 
     return SizedBox(
       width: screenWidth,
@@ -408,23 +417,19 @@ class _AppDrawerState extends State<AppDrawer> {
                         GestureDetector(
                           onTap: widget.onSettings,
                           child: Container(
-                            width: 34, height: 34,
+                            width: _topCircleSize, height: _topCircleSize,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: s.primary,
                             ),
                             child: ClipOval(
-                              child: avatarBytes != null
-                                  ? Image.memory(avatarBytes, fit: BoxFit.cover)
-                                  : Center(
-                                      child: Text(
-                                        initial,
-                                        style: TextStyle(
-                                          color: s.onPrimary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                        ),
-                                      ),
+                              child: hasCustomAvatar
+                                  ? (avatarBytes != null
+                                      ? Image.memory(avatarBytes, fit: BoxFit.cover)
+                                      : Image.network(avatarUrl!, fit: BoxFit.cover))
+                                  : Image.asset(
+                                      'assets/icons/png/avatar.png',
+                                      fit: BoxFit.cover,
                                     ),
                             ),
                           ),
@@ -449,7 +454,7 @@ class _AppDrawerState extends State<AppDrawer> {
                         _CircleIconButton(
                           s: s,
                           assetName: 'double_chevron_right',
-                          size: 34,
+                          size: _topCircleSize,
                           iconSize: 16,
                           onTap: widget.onCloseAnimated,
                         ),
@@ -827,6 +832,8 @@ class _StaggeredItemState extends State<_StaggeredItem> with SingleTickerProvide
 }
 
 // ── Cabeçalho de grupo expansível ─────────────────────────────
+// O chevron fica encostado à direita (Spacer entre o label e o
+// ícone), mantendo o label alinhado à esquerda como antes.
 
 class _ConversationGroupHeader extends StatelessWidget {
   final AppColorScheme s;
@@ -851,7 +858,7 @@ class _ConversationGroupHeader extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           children: [
             SelectionContainer.disabled(
               child: Text(
@@ -865,7 +872,7 @@ class _ConversationGroupHeader extends StatelessWidget {
               ),
             ),
             if (interactive) ...[
-              const SizedBox(width: 8),
+              const Spacer(),
               AnimatedRotation(
                 turns: expanded ? 0.5 : 0,
                 duration: const Duration(milliseconds: 200),
@@ -967,6 +974,8 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
 }
 
 // ── Conversa individual ──
+// Layout em coluna: título na linha de cima, data na linha de
+// baixo (alinhada à esquerda, abaixo do título).
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -1023,10 +1032,11 @@ class _ConvTileState extends State<_ConvTile> {
           color: bg,
           borderRadius: BorderRadius.circular(14),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        child: Row(children: [
-          Expanded(
-            child: SelectionContainer.disabled(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectionContainer.disabled(
               child: Text(
                 widget.item.title,
                 style: TextStyle(
@@ -1038,69 +1048,34 @@ class _ConvTileState extends State<_ConvTile> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
-          if (widget.item.timeLabel.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            SelectionContainer.disabled(
-              child: Text(
-                widget.item.timeLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: s.onSurfaceVariant,
+            if (widget.item.timeLabel.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              SelectionContainer.disabled(
+                child: Text(
+                  widget.item.timeLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: s.onSurfaceVariant,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ]),
+        ),
       ),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL de opções da conversa — bottom sheet com handlebar,
-// curva intermédia (nem quase-reta, nem muito arredondada)
+// SHEET GENÉRICO PLANO — substitui showCraftBottomSheet/Cupertino
+// em todos os modais deste ficheiro. Mesma curva (topo, radius
+// _kFlatModalRadius) e mesmo handlebar do modal de opções da
+// conversa, para que "tudo" use a mesma linguagem visual.
 // ══════════════════════════════════════════════════════════════
 
 const double _kFlatModalRadius = 20.0;
-
-void showConversationOptionsModal(
-  BuildContext context,
-  AppColorScheme s, {
-  required ConversationItem item,
-  required VoidCallback onOpen,
-  required VoidCallback onTogglePin,
-  required VoidCallback onRename,
-  required VoidCallback onDelete,
-}) async {
-  final result = await showModalBottomSheet<_ConversationPopupAction>(
-    context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (sheetContext) => _ConversationOptionsModalContent(s: s, item: item),
-  );
-
-  if (result == null) return;
-  switch (result) {
-    case _ConversationPopupAction.open:
-      onOpen();
-      break;
-    case _ConversationPopupAction.togglePin:
-      onTogglePin();
-      break;
-    case _ConversationPopupAction.rename:
-      onRename();
-      break;
-    case _ConversationPopupAction.delete:
-      onDelete();
-      break;
-  }
-}
 
 class _ModalHandlebar extends StatelessWidget {
   final AppColorScheme s;
@@ -1124,6 +1099,68 @@ class _ModalHandlebar extends StatelessWidget {
   }
 }
 
+Future<T?> showFlatBottomSheet<T>({
+  required BuildContext context,
+  required AppColorScheme s,
+  required WidgetBuilder builder,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: s.cardBackground,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ModalHandlebar(s: s),
+          Flexible(child: builder(sheetContext)),
+        ],
+      ),
+    ),
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODAL de opções da conversa
+// ══════════════════════════════════════════════════════════════
+
+void showConversationOptionsModal(
+  BuildContext context,
+  AppColorScheme s, {
+  required ConversationItem item,
+  required VoidCallback onOpen,
+  required VoidCallback onTogglePin,
+  required VoidCallback onRename,
+  required VoidCallback onDelete,
+}) async {
+  final result = await showFlatBottomSheet<_ConversationPopupAction>(
+    context: context,
+    s: s,
+    builder: (sheetContext) => _ConversationOptionsModalContent(s: s, item: item),
+  );
+
+  if (result == null) return;
+  switch (result) {
+    case _ConversationPopupAction.open:
+      onOpen();
+      break;
+    case _ConversationPopupAction.togglePin:
+      onTogglePin();
+      break;
+    case _ConversationPopupAction.rename:
+      onRename();
+      break;
+    case _ConversationPopupAction.delete:
+      onDelete();
+      break;
+  }
+}
+
 class _ConversationOptionsModalContent extends StatelessWidget {
   final AppColorScheme s;
   final ConversationItem item;
@@ -1131,39 +1168,36 @@ class _ConversationOptionsModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ModalHandlebar(s: s),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-            child: SelectionContainer.disabled(
-              child: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: s.onSurfaceVariant,
-                ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+          child: SelectionContainer.disabled(
+            child: Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: s.onSurfaceVariant,
               ),
             ),
           ),
-          Divider(height: 1, color: s.outline.withOpacity(0.15)),
-          _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
-          _modalItem(
-            context,
-            item.pinned ? 'pin_slash' : 'pin',
-            item.pinned ? 'Desafixar' : 'Fixar',
-            _ConversationPopupAction.togglePin,
-          ),
-          _modalItem(context, 'pencil', 'Renomear', _ConversationPopupAction.rename),
-          _modalItem(context, 'trash', 'Eliminar', _ConversationPopupAction.delete, destructive: true),
-        ],
-      ),
+        ),
+        Divider(height: 1, color: s.outline.withOpacity(0.15)),
+        _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
+        _modalItem(
+          context,
+          item.pinned ? 'pin_slash' : 'pin',
+          item.pinned ? 'Desafixar' : 'Fixar',
+          _ConversationPopupAction.togglePin,
+        ),
+        _modalItem(context, 'pencil', 'Renomear', _ConversationPopupAction.rename),
+        _modalItem(context, 'trash', 'Eliminar', _ConversationPopupAction.delete, destructive: true),
+        SizedBox(height: MediaQuery.of(context).padding.bottom),
+      ],
     );
   }
 
@@ -1213,56 +1247,48 @@ void showAccountOptionsPopupAt(
   required VoidCallback onOpenSettings,
   required VoidCallback onLogout,
 }) async {
-  final result = await showModalBottomSheet<_AccountPopupAction>(
+  final result = await showFlatBottomSheet<_AccountPopupAction>(
     context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ModalHandlebar(s: s),
-          InkWell(
-            onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.toggleTheme),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(children: [
-                AppIcon(s.isDark ? 'sun' : 'moon', size: 18, color: s.onSurface),
-                const SizedBox(width: 12),
-                Text(s.isDark ? 'Modo claro' : 'Modo escuro',
-                    style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
-              ]),
-            ),
+    s: s,
+    builder: (sheetContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.toggleTheme),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(children: [
+              AppIcon(s.isDark ? 'sun' : 'moon', size: 18, color: s.onSurface),
+              const SizedBox(width: 12),
+              Text(s.isDark ? 'Modo claro' : 'Modo escuro',
+                  style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
+            ]),
           ),
-          InkWell(
-            onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.openSettings),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(children: [
-                AppIcon('settings', size: 18, color: s.onSurface),
-                const SizedBox(width: 12),
-                Text('Definições', style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
-              ]),
-            ),
+        ),
+        InkWell(
+          onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.openSettings),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(children: [
+              AppIcon('settings', size: 18, color: s.onSurface),
+              const SizedBox(width: 12),
+              Text('Definições', style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500)),
+            ]),
           ),
-          InkWell(
-            onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.logout),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(children: [
-                AppIcon('logout', size: 18, color: s.error),
-                const SizedBox(width: 12),
-                Text('Terminar sessão', style: TextStyle(fontSize: 15, color: s.error, fontWeight: FontWeight.w500)),
-              ]),
-            ),
+        ),
+        InkWell(
+          onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.logout),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(children: [
+              AppIcon('logout', size: 18, color: s.error),
+              const SizedBox(width: 12),
+              Text('Terminar sessão', style: TextStyle(fontSize: 15, color: s.error, fontWeight: FontWeight.w500)),
+            ]),
           ),
-        ],
-      ),
+        ),
+        SizedBox(height: MediaQuery.of(sheetContext).padding.bottom),
+      ],
     ),
   );
 
@@ -1297,7 +1323,9 @@ class _DeleteConversationSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+        20, 12, 20, 20 + MediaQuery.of(context).padding.bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1374,7 +1402,7 @@ class _SheetActionButtonState extends State<_SheetActionButton> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: widget.filled ? s.error : s.hover,
-            borderRadius: BorderRadius.circular(_kFlatModalRadius),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: SelectionContainer.disabled(
             child: Text(
@@ -1403,13 +1431,15 @@ Future<void> showRenameSheet(
   String hint = 'Título da conversa',
 }) {
   final ctrl = TextEditingController(text: currentTitle);
-  return showCraftBottomSheet<void>(
+  return showFlatBottomSheet<void>(
     context: context,
     s: s,
-    child: Builder(builder: (ctx) => Padding(
+    builder: (ctx) => Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(ctx).padding.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1465,13 +1495,15 @@ Future<void> showRenameSheet(
           ],
         ),
       ),
-    )),
+    ),
   );
 }
 
 // ══════════════════════════════════════════════════════════════
-// BOTTOM FLOATING BAR — searchbar (bordas curvas) + FAB circular
-// de nova conversa ao lado direito
+// BOTTOM FLOATING BAR — searchbar no mesmo tamanho/cor do chat
+// search (altura 48, s.cardBackground, radius 999, s.cardShadow)
+// + FAB circular de nova conversa em 48×48, igual ao botão de
+// fechar (X) do chat search.
 // ══════════════════════════════════════════════════════════════
 
 class DrawerBottomFloatingBar extends StatelessWidget {
@@ -1486,6 +1518,8 @@ class DrawerBottomFloatingBar extends StatelessWidget {
     this.onNewChatTap,
   });
 
+  static const double _barHeight = 48.0;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1496,40 +1530,33 @@ class DrawerBottomFloatingBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    onSearchTap?.call();
-                  },
-                  child: Container(
-                    height: 56,
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    decoration: BoxDecoration(
-                      color: s.cardBackground.withOpacity(0.88),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
-                      boxShadow: s.cardShadow,
-                    ),
-                    child: Row(children: [
-                      AppIcon('search', size: 18, color: s.onSurfaceVariant),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: SelectionContainer.disabled(
-                          child: Text(
-                            'Pesquisar',
-                            style: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ]),
-                  ),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                onSearchTap?.call();
+              },
+              child: Container(
+                height: _barHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: s.cardBackground,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: s.cardShadow,
                 ),
+                child: Row(children: [
+                  AppIcon('search', size: 20, color: s.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SelectionContainer.disabled(
+                      child: Text(
+                        'Pesquisar',
+                        style: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ]),
               ),
             ),
           ),
@@ -1551,6 +1578,8 @@ class _NewChatFab extends StatefulWidget {
 class _NewChatFabState extends State<_NewChatFab> {
   bool _p = false;
 
+  static const double _size = 48.0;
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -1568,15 +1597,15 @@ class _NewChatFabState extends State<_NewChatFab> {
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
         child: Container(
-          width: 56,
-          height: 56,
+          width: _size,
+          height: _size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: s.primary,
             shape: BoxShape.circle,
             boxShadow: s.cardShadow,
           ),
-          child: AppIcon('new_chat', size: 22, color: s.onPrimary),
+          child: AppIcon('new_chat', size: 20, color: s.onPrimary),
         ),
       ),
     );

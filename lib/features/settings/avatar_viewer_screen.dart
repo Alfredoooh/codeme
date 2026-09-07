@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../core/theme/colors.dart';
 import '../../services/auth_service.dart';
+import 'avatar_upload_utils.dart';
 
 class AvatarViewerScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -38,7 +39,7 @@ class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
   Future<void> _pickAndEdit() async {
     final picker = ImagePicker();
     final picked =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 95);
     if (picked == null || !mounted) return;
 
     final cropped = await ImageCropper().cropImage(
@@ -66,8 +67,12 @@ class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
 
     setState(() => _uploading = true);
     try {
-      final bytes = await cropped.readAsBytes();
-      final b64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      // Corrige, redimensiona e comprime automaticamente em loop até
+      // caber no limite real aceite pelo servidor (ver
+      // avatar_upload_utils.dart) — antes disto, imagens de câmera a
+      // qualidade 90-95% facilmente passavam do limite e o upload
+      // era sempre recusado pelo worker.
+      final b64 = await compressImageFileToBase64DataUrl(cropped.path);
       await widget.onAvatarUpdated(b64);
       if (mounted) Navigator.pop(context);
     } catch (_) {
@@ -80,8 +85,6 @@ class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
     final s = widget.s;
     final user = authController.user;
     final avatarBytes = _decodeAvatar(user?.avatar);
-    final initial =
-        (user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'U';
     final squareSize = MediaQuery.of(context).size.width - 32;
 
     return GestureDetector(
@@ -94,40 +97,35 @@ class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Hero(
-                  tag: 'avatar',
-                  child: Container(
-                    width: squareSize,
-                    height: squareSize,
-                    decoration: BoxDecoration(
-                      color: s.primary,
-                      borderRadius: BorderRadius.zero,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.35),
-                          blurRadius: 40,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: avatarBytes != null
-                        ? Image.memory(avatarBytes, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Center(
-                              child: Text(initial,
-                                  style: TextStyle(
-                                      color: s.onPrimary,
-                                      fontSize: 72,
-                                      fontWeight: FontWeight.w700)),
-                            ))
-                        : Center(
-                            child: Text(initial,
-                                style: TextStyle(
-                                    color: s.onPrimary,
-                                    fontSize: 72,
-                                    fontWeight: FontWeight.w700)),
-                          ),
+                // Sem Hero: a abertura desta tela agora é um fade
+                // simples controlado pelo PageRouteBuilder em
+                // settingsscreen.dart — a imagem não "voa" mais do
+                // avatar do settings até aqui.
+                Container(
+                  width: squareSize,
+                  height: squareSize,
+                  decoration: BoxDecoration(
+                    color: s.primary,
+                    borderRadius: BorderRadius.zero,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.35),
+                        blurRadius: 40,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
                   ),
+                  clipBehavior: Clip.antiAlias,
+                  child: avatarBytes != null
+                      ? Image.memory(avatarBytes, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.asset(
+                            'assets/icons/png/avatar.png',
+                            fit: BoxFit.cover,
+                          ))
+                      : Image.asset(
+                          'assets/icons/png/avatar.png',
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 GestureDetector(
                   onTap: _uploading ? null : _pickAndEdit,
