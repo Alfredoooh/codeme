@@ -781,6 +781,7 @@ class _StaggeredRevealGroup extends StatelessWidget {
       secondCurve: Curves.easeOut,
       crossFadeState: visible ? CrossFadeState.showFirst : CrossFadeState.showSecond,
       firstChild: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (int i = 0; i < children.length; i++)
             _StaggeredItem(index: i, child: children[i]),
@@ -1541,8 +1542,7 @@ class DrawerBottomFloatingBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: s.cardBackground,
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: s.cardShadow,
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(children: [
                   AppIcon('search', size: 20, color: s.onSurfaceVariant),
