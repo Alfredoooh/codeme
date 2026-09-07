@@ -281,14 +281,87 @@ extension EmojiFrequencyX on EmojiFrequency {
   }
 }
 
+enum AppIconStyle { outline, filled }
+
+extension AppIconStyleX on AppIconStyle {
+  String get storageValue => const {
+        AppIconStyle.outline: 'outline',
+        AppIconStyle.filled:  'filled',
+      }[this]!;
+
+  static AppIconStyle fromStorage(String? raw) {
+    switch (raw) {
+      case 'filled': return AppIconStyle.filled;
+      case 'outline':
+      default:       return AppIconStyle.outline;
+    }
+  }
+}
+
+enum ChatBubbleStyle { bubble, flat }
+
+extension ChatBubbleStyleX on ChatBubbleStyle {
+  String get storageValue => const {
+        ChatBubbleStyle.bubble: 'bubble',
+        ChatBubbleStyle.flat:   'flat',
+      }[this]!;
+
+  static ChatBubbleStyle fromStorage(String? raw) {
+    switch (raw) {
+      case 'flat': return ChatBubbleStyle.flat;
+      case 'bubble':
+      default:     return ChatBubbleStyle.bubble;
+    }
+  }
+}
+
+enum ResponseStyle { concise, balanced, detailed }
+
+extension ResponseStyleX on ResponseStyle {
+  String get storageValue => const {
+        ResponseStyle.concise:  'concise',
+        ResponseStyle.balanced: 'balanced',
+        ResponseStyle.detailed: 'detailed',
+      }[this]!;
+
+  static ResponseStyle fromStorage(String? raw) {
+    switch (raw) {
+      case 'concise':  return ResponseStyle.concise;
+      case 'detailed': return ResponseStyle.detailed;
+      case 'balanced':
+      default:         return ResponseStyle.balanced;
+    }
+  }
+}
+
 class AppPreferencesNotifier extends ChangeNotifier {
   static const _kPromptKey = 'app_preferences_prompt';
   static const _kEmojiKey = 'app_preferences_emoji';
   static const _kFontScaleKey = 'app_preferences_font_scale';
+  static const _kFontFamilyKey = 'app_preferences_font_family';
+  static const _kIconStyleKey = 'app_preferences_icon_style';
+  static const _kChatBubbleStyleKey = 'app_preferences_chat_bubble_style';
+  static const _kReduceMotionKey = 'app_preferences_reduce_motion';
+  static const _kCustomInstructionsKey = 'app_preferences_custom_instructions';
+  static const _kAiTraitsKey = 'app_preferences_ai_traits';
+  static const _kKnownInfoKey = 'app_preferences_known_info';
+  static const _kResponseStyleKey = 'app_preferences_response_style';
+  static const _kAlwaysSearchWebKey = 'app_preferences_always_search_web';
+  static const _kRememberAcrossChatsKey = 'app_preferences_remember_across_chats';
 
   String prompt = '';
   EmojiFrequency emojiFrequency = EmojiFrequency.never;
   double fontScale = 0.35;
+  String fontFamily = 'Inter';
+  AppIconStyle iconStyle = AppIconStyle.outline;
+  ChatBubbleStyle chatBubbleStyle = ChatBubbleStyle.bubble;
+  bool reduceMotion = false;
+  String customInstructions = '';
+  String aiTraits = '';
+  String knownInfo = '';
+  ResponseStyle responseStyle = ResponseStyle.balanced;
+  bool alwaysSearchWeb = false;
+  bool rememberAcrossChats = true;
 
   Future<void> load() async {
     try {
@@ -299,6 +372,18 @@ class AppPreferencesNotifier extends ChangeNotifier {
         emojiFrequency = EmojiFrequencyX.fromStorage(emojiRaw);
       }
       fontScale = prefs.getDouble(_kFontScaleKey) ?? 0.35;
+      fontFamily = prefs.getString(_kFontFamilyKey) ?? 'Inter';
+      iconStyle = AppIconStyleX.fromStorage(prefs.getString(_kIconStyleKey));
+      chatBubbleStyle =
+          ChatBubbleStyleX.fromStorage(prefs.getString(_kChatBubbleStyleKey));
+      reduceMotion = prefs.getBool(_kReduceMotionKey) ?? false;
+      customInstructions = prefs.getString(_kCustomInstructionsKey) ?? '';
+      aiTraits = prefs.getString(_kAiTraitsKey) ?? '';
+      knownInfo = prefs.getString(_kKnownInfoKey) ?? '';
+      responseStyle =
+          ResponseStyleX.fromStorage(prefs.getString(_kResponseStyleKey));
+      alwaysSearchWeb = prefs.getBool(_kAlwaysSearchWebKey) ?? false;
+      rememberAcrossChats = prefs.getBool(_kRememberAcrossChatsKey) ?? true;
       notifyListeners();
     } catch (_) {}
   }
@@ -322,6 +407,55 @@ class AppPreferencesNotifier extends ChangeNotifier {
     fontScale = value;
     notifyListeners();
     _persistFontScale();
+  }
+
+  void setFontFamily(String value) {
+    if (fontFamily == value) return;
+    fontFamily = value;
+    notifyListeners();
+    _persistFontFamily();
+  }
+
+  void setIconStyle(AppIconStyle value) {
+    if (iconStyle == value) return;
+    iconStyle = value;
+    notifyListeners();
+    _persistIconStyle();
+  }
+
+  void setChatBubbleStyle(ChatBubbleStyle value) {
+    if (chatBubbleStyle == value) return;
+    chatBubbleStyle = value;
+    notifyListeners();
+    _persistChatBubbleStyle();
+  }
+
+  void setReduceMotion(bool value) {
+    if (reduceMotion == value) return;
+    reduceMotion = value;
+    notifyListeners();
+    _persistReduceMotion();
+  }
+
+  void setResponseStyle(ResponseStyle value) {
+    if (responseStyle == value) return;
+    responseStyle = value;
+    notifyListeners();
+    _persistResponseStyle();
+  }
+
+  void setAlwaysSearchWeb(bool value) {
+    if (alwaysSearchWeb == value) return;
+    alwaysSearchWeb = value;
+    notifyListeners();
+    _persistAlwaysSearchWeb();
+  }
+
+  void setRememberAcrossChats(bool value) {
+    if (rememberAcrossChats == value) return;
+    rememberAcrossChats = value;
+    notifyListeners();
+    _persistRememberAcrossChats();
   }
 
   /// Multiplicador real aplicado ao tamanho de fonte base — mapeia o
@@ -350,6 +484,45 @@ class AppPreferencesNotifier extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<void> setCustomInstructionsRemote(String value, String? token) async {
+    if (customInstructions == value) return;
+    customInstructions = value;
+    notifyListeners();
+    _persistCustomInstructions();
+    if (token == null) return;
+    try {
+      await ProfileApiService.updateAccount(token, preferences: {
+        'customInstructions': value,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> setAiTraitsRemote(String value, String? token) async {
+    if (aiTraits == value) return;
+    aiTraits = value;
+    notifyListeners();
+    _persistAiTraits();
+    if (token == null) return;
+    try {
+      await ProfileApiService.updateAccount(token, preferences: {
+        'aiTraits': value,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> setKnownInfoRemote(String value, String? token) async {
+    if (knownInfo == value) return;
+    knownInfo = value;
+    notifyListeners();
+    _persistKnownInfo();
+    if (token == null) return;
+    try {
+      await ProfileApiService.updateAccount(token, preferences: {
+        'knownInfo': value,
+      });
+    } catch (_) {}
+  }
+
   Future<void> _persistPrompt() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -368,6 +541,76 @@ class AppPreferencesNotifier extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble(_kFontScaleKey, fontScale);
+    } catch (_) {}
+  }
+
+  Future<void> _persistFontFamily() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kFontFamilyKey, fontFamily);
+    } catch (_) {}
+  }
+
+  Future<void> _persistIconStyle() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kIconStyleKey, iconStyle.storageValue);
+    } catch (_) {}
+  }
+
+  Future<void> _persistChatBubbleStyle() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kChatBubbleStyleKey, chatBubbleStyle.storageValue);
+    } catch (_) {}
+  }
+
+  Future<void> _persistReduceMotion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kReduceMotionKey, reduceMotion);
+    } catch (_) {}
+  }
+
+  Future<void> _persistCustomInstructions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kCustomInstructionsKey, customInstructions);
+    } catch (_) {}
+  }
+
+  Future<void> _persistAiTraits() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kAiTraitsKey, aiTraits);
+    } catch (_) {}
+  }
+
+  Future<void> _persistKnownInfo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kKnownInfoKey, knownInfo);
+    } catch (_) {}
+  }
+
+  Future<void> _persistResponseStyle() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kResponseStyleKey, responseStyle.storageValue);
+    } catch (_) {}
+  }
+
+  Future<void> _persistAlwaysSearchWeb() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kAlwaysSearchWebKey, alwaysSearchWeb);
+    } catch (_) {}
+  }
+
+  Future<void> _persistRememberAcrossChats() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kRememberAcrossChatsKey, rememberAcrossChats);
     } catch (_) {}
   }
 }

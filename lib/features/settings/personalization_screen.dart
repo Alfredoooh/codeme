@@ -663,7 +663,7 @@ class _ResponseStyleSheet extends StatelessWidget {
                   fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
           const SizedBox(height: 16),
           for (final (style, label) in options)
-            _SimpleOptionRow(
+            _PersSimpleOptionRow(
               s: s,
               label: label,
               selected: appPreferences.responseStyle == style,
@@ -678,12 +678,12 @@ class _ResponseStyleSheet extends StatelessWidget {
   }
 }
 
-class _SimpleOptionRow extends StatelessWidget {
+class _PersSimpleOptionRow extends StatelessWidget {
   final AppColorScheme s;
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _SimpleOptionRow({
+  const _PersSimpleOptionRow({
     required this.s,
     required this.label,
     required this.selected,
