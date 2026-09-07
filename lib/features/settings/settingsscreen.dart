@@ -6,9 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
+import '../../core/widgets/app_sheet.dart';
+import '../../core/language/language_controller.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
-import '../../core/widgets/app_sheet.dart';
 import '../apps/sheets/sheets.dart';
 import 'settings_widgets.dart';
 import '../../core/navigation/app_page_route.dart';
@@ -16,9 +17,10 @@ import 'appearance_screen.dart';
 import 'personalization_screen.dart';
 import 'memory_screen.dart';
 import 'workspace_screen.dart';
-import 'avatar_viewer_screen.dart';
+import 'avatar_viewer_overlay.dart';
 import 'webview_screen.dart';
 import 'avatar_upload_utils.dart';
+import 'language_picker_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SETTINGS SCREEN
@@ -35,44 +37,27 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _refreshing = false;
   bool _avatarUploading = false;
 
-  double _scrollOffset = 0.0;
-  final ScrollController _scrollController = ScrollController();
-
-  static const double _avatarBlockHeight = 200.0;
-  static const double _titleFadeStart = 140.0;
-  static const double _titleFadeEnd = 180.0;
-
   @override
   void initState() {
     super.initState();
     authController.addListener(_onAuthChanged);
-    _scrollController.addListener(_onScroll);
+    appLanguage.addListener(_onLanguageChanged);
     _refreshMe();
   }
 
   @override
   void dispose() {
     authController.removeListener(_onAuthChanged);
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
+    appLanguage.removeListener(_onLanguageChanged);
     super.dispose();
-  }
-
-  void _onScroll() {
-    final offset = _scrollController.offset;
-    if ((offset - _scrollOffset).abs() > 0.5) {
-      setState(() => _scrollOffset = offset);
-    }
   }
 
   void _onAuthChanged() {
     if (mounted) setState(() {});
   }
 
-  double get _titleOpacity {
-    if (_scrollOffset <= _titleFadeStart) return 0.0;
-    if (_scrollOffset >= _titleFadeEnd) return 1.0;
-    return (_scrollOffset - _titleFadeStart) / (_titleFadeEnd - _titleFadeStart);
+  void _onLanguageChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _refreshMe() async {
@@ -89,20 +74,17 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _confirmLogout(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: Builder(
-        builder: (sheetContext) => ConfirmActionSheet(
-          s: s,
-          message:
-              'Terminar sessão? Vais precisar de iniciar sessão novamente para continuar a usar a Nexa.',
-          confirmLabel: 'Terminar sessão',
-          onConfirm: () {
-            Navigator.pop(sheetContext);
-            _logoutNow(context);
-          },
-        ),
+    final t = appLanguage.strings;
+    showAppSheet(
+      context,
+      builder: (sheetContext) => ConfirmActionSheet(
+        s: s,
+        message: t.settingsLogoutConfirmMessage,
+        confirmLabel: t.settingsLogout,
+        onConfirm: () {
+          Navigator.pop(sheetContext);
+          _logoutNow(context);
+        },
       ),
     );
   }
@@ -115,14 +97,14 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _editName(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: EditFieldSheet(
+    final t = appLanguage.strings;
+    showAppSheet(
+      context,
+      builder: (sheetContext) => EditFieldSheet(
         s: s,
-        title: 'Alterar nome',
-        label: 'Nome',
-        hint: 'O teu nome completo',
+        title: t.settingsEditNameTitle,
+        label: t.settingsEditNameLabel,
+        hint: t.settingsEditNameHint,
         initialValue: authController.user?.name ?? '',
         onSave: (value) async {
           final token = authController.token;
@@ -142,31 +124,27 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _editPassword(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: ChangePasswordSheet(s: s),
+    showAppSheet(
+      context,
+      builder: (sheetContext) => ChangePasswordSheet(s: s),
     );
   }
 
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: Builder(
-        builder: (sheetContext) => ConfirmActionSheet(
-          s: s,
-          message:
-              'Eliminar todas as conversas? Esta ação não pode ser desfeita.',
-          confirmLabel: 'Eliminar tudo',
-          destructive: true,
-          onConfirm: () async {
-            Navigator.pop(sheetContext);
-            final token = authController.token;
-            if (token == null) return;
-            await ConversationsApiService.deleteAll(token);
-          },
-        ),
+    final t = appLanguage.strings;
+    showAppSheet(
+      context,
+      builder: (sheetContext) => ConfirmActionSheet(
+        s: s,
+        message: t.settingsDeleteAllConversationsConfirmMessage,
+        confirmLabel: t.settingsDeleteAllConversationsConfirmLabel,
+        destructive: true,
+        onConfirm: () async {
+          Navigator.pop(sheetContext);
+          final token = authController.token;
+          if (token == null) return;
+          await ConversationsApiService.deleteAll(token);
+        },
       ),
     );
   }
@@ -198,6 +176,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     ));
   }
 
+  void _openLanguagePicker(BuildContext context, AppColorScheme s) {
+    showLanguagePickerSheet(context, s);
+  }
+
   void _openTerms(BuildContext context) {
     Navigator.of(context).push(AppPageRoute(
       builder: (_) => const WebViewScreen(
@@ -216,10 +198,27 @@ class _SettingsScreenState extends State<SettingsScreen>
     ));
   }
 
-  /// Escolhe, corta e envia um novo avatar diretamente a partir do
-  /// botão de lápis no bloco de avatar (sem passar pelo viewer).
-  /// A imagem é comprimida automaticamente (ver avatar_upload_utils.dart)
-  /// até caber no limite real aceite pelo servidor.
+  /// Comprime e envia um novo avatar. Erro fica visível através da
+  /// exceção propagada — nenhum try/catch silencioso aqui.
+  Future<void> _uploadAvatar(String sourcePath) async {
+    setState(() => _avatarUploading = true);
+    try {
+      final b64 = await compressImageFileToBase64DataUrl(sourcePath);
+      final token = authController.token;
+      if (token == null) {
+        throw Exception('Sessão não encontrada. Inicia sessão novamente.');
+      }
+      await ProfileApiService.updateAvatar(token, b64);
+      authController.user = authController.user?.copyWith(avatar: b64);
+      if (authController.user != null) {
+        await SessionManager.updateUser(authController.user!);
+      }
+      authController.notifyListeners();
+    } finally {
+      if (mounted) setState(() => _avatarUploading = false);
+    }
+  }
+
   Future<void> _pickAvatarDirectly() async {
     final picker = ImagePicker();
     final picked =
@@ -249,70 +248,44 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (cropped == null || !mounted) return;
 
-    setState(() => _avatarUploading = true);
     try {
-      final b64 = await compressImageFileToBase64DataUrl(cropped.path);
-      final token = authController.token;
-      if (token == null) return;
-      await ProfileApiService.updateAvatar(token, b64);
-      authController.user = authController.user?.copyWith(avatar: b64);
-      if (authController.user != null) {
-        await SessionManager.updateUser(authController.user!);
+      await _uploadAvatar(cropped.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: AppTheme.of(context).error,
+          ),
+        );
       }
-      authController.notifyListeners();
-    } catch (_) {
-      // Falha silenciosa aqui é consistente com o comportamento anterior
-      // deste botão (sem feedback de erro dedicado); o viewer tem o seu
-      // próprio tratamento de erro visível.
-    } finally {
-      if (mounted) setState(() => _avatarUploading = false);
     }
   }
 
   void _openAvatarViewer(BuildContext context, AppColorScheme s) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.black.withOpacity(0.6),
-        transitionDuration: const Duration(milliseconds: 350),
-        reverseTransitionDuration: const Duration(milliseconds: 280),
-        pageBuilder: (ctx, anim, _) => AvatarViewerScreen(
-          s: s,
-          onAvatarUpdated: (newAvatar) async {
-            final token = authController.token;
-            if (token == null) return;
-            await ProfileApiService.updateAvatar(token, newAvatar);
-            authController.user =
-                authController.user?.copyWith(avatar: newAvatar);
-            if (authController.user != null) {
-              await SessionManager.updateUser(authController.user!);
-            }
-            authController.notifyListeners();
-          },
-        ),
-        // Fade simples: sem Hero, sem "voar" a imagem do settings até
-        // ao viewer. O container transform (scale 0.92 → 1.0) é
-        // mantido — só a componente de Hero/slide foi removida (o
-        // Hero foi retirado tanto daqui como do próprio
-        // AvatarViewerScreen, ver esse ficheiro).
-        transitionsBuilder: (ctx, anim, _, child) {
-          final curved =
-              CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: Tween(begin: 0.92, end: 1.0).animate(curved),
-              child: child,
-            ),
-          );
-        },
-      ),
+    showAvatarViewerOverlay(
+      context,
+      s: s,
+      onAvatarUpdated: (newAvatar) async {
+        final token = authController.token;
+        if (token == null) {
+          throw Exception('Sessão não encontrada. Inicia sessão novamente.');
+        }
+        await ProfileApiService.updateAvatar(token, newAvatar);
+        authController.user =
+            authController.user?.copyWith(avatar: newAvatar);
+        if (authController.user != null) {
+          await SessionManager.updateUser(authController.user!);
+        }
+        authController.notifyListeners();
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final t = appLanguage.strings;
     final user = authController.user;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -333,18 +306,14 @@ class _SettingsScreenState extends State<SettingsScreen>
           color: s.pageBackground,
           child: SafeArea(
             child: Stack(children: [
-
               RefreshIndicator(
                 color: s.primary,
                 backgroundColor: s.cardBackground,
                 onRefresh: _refreshMe,
                 child: CustomScrollView(
-                  controller: _scrollController,
                   physics: const BouncingScrollPhysics(
                       parent: AlwaysScrollableScrollPhysics()),
                   slivers: [
-                    // Reservado para o novo appbar sólido, mais baixo
-                    // que o anterior (ver _SettingsAppBar).
                     const SliverToBoxAdapter(child: SizedBox(height: 48)),
 
                     SliverToBoxAdapter(
@@ -369,13 +338,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 8),
-                            SectionLabel(s: s, label: 'Geral'),
+                            SectionLabel(
+                                s: s, label: t.settingsSectionGeneral),
                             const SizedBox(height: 10),
                             SettingsGroup(s: s, rows: [
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'paintbrush',
-                                label: 'Aparência',
+                                label: t.settingsAppearance,
                                 onTap: () =>
                                     _openAppearance(context, s),
                                 trailing: AppIcon('chevron_forward',
@@ -385,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'sliders',
-                                label: 'Personalização',
+                                label: t.settingsPersonalization,
                                 onTap: () =>
                                     _openPersonalization(context),
                                 trailing: AppIcon('chevron_forward',
@@ -395,7 +365,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'database',
-                                label: 'Memória',
+                                label: t.settingsMemory,
                                 onTap: () =>
                                     _openMemory(context, s),
                                 trailing: AppIcon('chevron_forward',
@@ -405,25 +375,54 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'briefcase',
-                                label: 'Área de trabalho',
+                                label: t.settingsWorkspace,
                                 onTap: () =>
                                     _openWorkspace(context),
                                 trailing: AppIcon('chevron_forward',
                                     size: 16,
                                     color: s.onSurfaceVariant),
                               ),
+                              SettingsRow(
+                                s: s,
+                                iconAsset: 'globe',
+                                label: t.settingsLanguage,
+                                onTap: () =>
+                                    _openLanguagePicker(context, s),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      appLanguage.language.flagEmoji,
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      appLanguage.language.nativeName,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: s.onSurfaceVariant),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    AppIcon('chevron_forward',
+                                        size: 16,
+                                        color: s.onSurfaceVariant),
+                                  ],
+                                ),
+                              ),
                             ]),
                             const SizedBox(height: 28),
-                            SectionLabel(s: s, label: 'Conta'),
+                            SectionLabel(
+                                s: s, label: t.settingsSectionAccount),
                             const SizedBox(height: 10),
                             SettingsGroup(s: s, rows: [
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'person',
-                                label: 'Nome',
+                                label: t.settingsName,
                                 onTap: () =>
                                     _editName(context, s),
-                                trailing: Text('Alterar',
+                                trailing: Text(t.commonChange,
                                     style: TextStyle(
                                         fontSize: 14,
                                         color: s.primary,
@@ -433,7 +432,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'mail',
-                                label: 'Email',
+                                label: t.settingsEmail,
                                 onTap: () {},
                                 trailing: Text(
                                   user?.email ?? '—',
@@ -446,10 +445,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'lock',
-                                label: 'Palavra-passe',
+                                label: t.settingsPassword,
                                 onTap: () =>
                                     _editPassword(context, s),
-                                trailing: Text('Alterar',
+                                trailing: Text(t.commonChange,
                                     style: TextStyle(
                                         fontSize: 14,
                                         color: s.primary,
@@ -459,7 +458,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'credit',
-                                label: 'Créditos',
+                                label: t.settingsCredits,
                                 onTap: () {},
                                 trailing: Text(
                                   '${user?.credits ?? 0}',
@@ -470,13 +469,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                               ),
                             ]),
                             const SizedBox(height: 28),
-                            SectionLabel(s: s, label: 'Sobre'),
+                            SectionLabel(s: s, label: t.settingsSectionAbout),
                             const SizedBox(height: 10),
                             SettingsGroup(s: s, rows: [
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'info',
-                                label: 'Versão',
+                                label: t.settingsVersion,
                                 onTap: () {},
                                 trailing: Text('1.0.0',
                                     style: TextStyle(
@@ -486,7 +485,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'license',
-                                label: 'Termos de serviço',
+                                label: t.settingsTerms,
                                 onTap: () => _openTerms(context),
                                 trailing: AppIcon('chevron_forward',
                                     size: 16,
@@ -495,7 +494,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'shield',
-                                label: 'Política de privacidade',
+                                label: t.settingsPrivacyPolicy,
                                 onTap: () => _openPrivacyPolicy(context),
                                 trailing: AppIcon('chevron_forward',
                                     size: 16,
@@ -504,14 +503,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'comment',
-                                label: 'Enviar feedback',
+                                label: t.settingsSendFeedback,
                                 onTap: () {},
                                 trailing: const SizedBox.shrink(),
                               ),
                               SettingsRow(
                                 s: s,
                                 iconAsset: 'question',
-                                label: 'Ajuda e suporte',
+                                label: t.settingsHelpSupport,
                                 onTap: () {},
                                 trailing: const SizedBox.shrink(),
                               ),
@@ -529,10 +528,24 @@ class _SettingsScreenState extends State<SettingsScreen>
                 top: 0,
                 left: 0,
                 right: 0,
-                child: _SettingsAppBar(
-                  s: s,
-                  titleOpacity: _titleOpacity,
-                  onBack: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                  color: s.pageBackground,
+                  child: Row(children: [
+                    CircularBackButton(
+                      s: s,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      t.settingsTitle,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: s.onSurface,
+                      ),
+                    ),
+                  ]),
                 ),
               ),
 
@@ -541,17 +554,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                 right: 0,
                 bottom: 0,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        s.pageBackground,
-                        s.pageBackground.withOpacity(0.0),
-                      ],
-                    ),
-                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  color: s.pageBackground,
                   child: LogoutButton(
                       s: s,
                       onTap: () => _confirmLogout(context, s)),
@@ -560,50 +564,6 @@ class _SettingsScreenState extends State<SettingsScreen>
             ]),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// APPBAR DO SETTINGS — sólido, sem gradiente/transparência, e
-// mais baixo que a versão anterior (padding vertical reduzido).
-// ══════════════════════════════════════════════════════════════
-
-class _SettingsAppBar extends StatelessWidget {
-  final AppColorScheme s;
-  final double titleOpacity;
-  final VoidCallback onBack;
-  const _SettingsAppBar({
-    required this.s,
-    required this.titleOpacity,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-      color: s.pageBackground,
-      child: Row(
-        children: [
-          CircularBackButton(
-            s: s,
-            onTap: onBack,
-          ),
-          const SizedBox(width: 12),
-          Opacity(
-            opacity: titleOpacity.clamp(0.0, 1.0),
-            child: Text(
-              'Configurações',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: s.onSurface,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -670,6 +630,10 @@ class _AvatarBlock extends StatelessWidget {
                     child: avatarBytes != null
                         ? Image.memory(
                             avatarBytes,
+                            // key baseada nos bytes: força repintar
+                            // quando o avatar muda, mesmo que este
+                            // widget não seja recriado do zero.
+                            key: ValueKey(avatarBytes.lengthInBytes),
                             width: innerSize,
                             height: innerSize,
                             fit: BoxFit.cover,
@@ -695,7 +659,6 @@ class _AvatarBlock extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: s.cardBackground,
                     shape: BoxShape.circle,
-                    boxShadow: s.cardShadow,
                     border:
                         Border.all(color: s.pageBackground, width: 2),
                   ),
@@ -755,9 +718,6 @@ class _AvatarBlock extends StatelessWidget {
   }
 }
 
-/// Fallback quando o utilizador não tem avatar definido — usa o
-/// ícone genérico assets/icons/png/avatar.png em vez da inicial do
-/// nome.
 class _AvatarFallback extends StatelessWidget {
   final AppColorScheme s;
   final double size;

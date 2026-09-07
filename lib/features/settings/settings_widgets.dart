@@ -33,9 +33,9 @@ class _CircularBackButtonState extends State<CircularBackButton> {
         height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(
+          // Sem sombra: cards e botões planos, sem boxShadow.
           color: _p ? s.pressed : s.cardBackground,
           shape: BoxShape.circle,
-          boxShadow: s.cardShadow,
         ),
         child: AppIcon('back', color: s.onSurface, size: 18),
       ),
@@ -44,14 +44,15 @@ class _CircularBackButtonState extends State<CircularBackButton> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// APPBAR TRANSPARENTE PROGRESSIVA — reutilizável em sub-telas
+// APPBAR — agora sólida em todas as sub-telas, sem gradiente nem
+// transparência progressiva (era TransparentFadeAppBar antes).
 // ══════════════════════════════════════════════════════════════
 
-class TransparentFadeAppBar extends StatelessWidget {
+class SolidAppBar extends StatelessWidget {
   final AppColorScheme s;
   final String title;
   final VoidCallback onBack;
-  const TransparentFadeAppBar({
+  const SolidAppBar({
     super.key,
     required this.s,
     required this.title,
@@ -65,18 +66,8 @@ class TransparentFadeAppBar extends StatelessWidget {
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            // Mesmo piso 0.4 usado no settings e no scheduled_tasks/chat_search.
-            colors: [
-              s.pageBackground,
-              s.pageBackground.withOpacity(0.4),
-            ],
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+        color: s.pageBackground,
         child: Row(children: [
           CircularBackButton(s: s, onTap: onBack),
           const SizedBox(width: 12),
@@ -96,6 +87,7 @@ class TransparentFadeAppBar extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // SECTION LABEL / GROUP / CARD / ROW (lista de definições)
+// Sem sombra: SettingsCard já não aplica boxShadow.
 // ══════════════════════════════════════════════════════════════
 
 class SectionLabel extends StatelessWidget {
@@ -157,9 +149,9 @@ class SettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
+            // Sem sombra nos cards, como pedido — só cor + curva.
             color: s.cardBackground,
-            borderRadius: radius,
-            boxShadow: s.cardShadowSoft),
+            borderRadius: radius),
         clipBehavior: Clip.antiAlias,
         child: child,
       );
@@ -288,7 +280,9 @@ class ConfirmActionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+        20, 12, 20, 20 + MediaQuery.of(context).padding.bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -449,7 +443,9 @@ class _EditFieldSheetState extends State<EditFieldSheet> {
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,7 +632,9 @@ class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

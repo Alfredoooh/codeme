@@ -1,14 +1,37 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
+import '../../core/language/language_controller.dart';
 import 'settings_widgets.dart';
 
-class MemoryScreen extends StatelessWidget {
+class MemoryScreen extends StatefulWidget {
   final VoidCallback onDeleteAllConversations;
   const MemoryScreen({super.key, required this.onDeleteAllConversations});
 
   @override
+  State<MemoryScreen> createState() => _MemoryScreenState();
+}
+
+class _MemoryScreenState extends State<MemoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    appLanguage.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    appLanguage.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final t = appLanguage.strings;
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
@@ -18,14 +41,14 @@ class MemoryScreen extends StatelessWidget {
             SingleChildScrollView(
               physics: const BouncingScrollPhysics(
                   parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.only(top: 62),
+              padding: const EdgeInsets.only(top: 56),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Text(
-                      'Gere os dados de conversas guardados na tua conta.',
+                      t.memoryDescription,
                       style: TextStyle(
                           fontSize: 13.5,
                           color: s.onSurfaceVariant,
@@ -39,9 +62,9 @@ class MemoryScreen extends StatelessWidget {
                       SettingsRow(
                         s: s,
                         iconAsset: 'trash',
-                        label: 'Eliminar todas as conversas',
+                        label: t.memoryDeleteAllConversations,
                         labelColor: s.error,
-                        onTap: onDeleteAllConversations,
+                        onTap: widget.onDeleteAllConversations,
                         trailing: const SizedBox.shrink(),
                       ),
                     ]),
@@ -50,9 +73,9 @@ class MemoryScreen extends StatelessWidget {
                 ],
               ),
             ),
-            TransparentFadeAppBar(
+            SolidAppBar(
               s: s,
-              title: 'Memória',
+              title: t.memoryTitle,
               onBack: () => Navigator.pop(context),
             ),
           ]),

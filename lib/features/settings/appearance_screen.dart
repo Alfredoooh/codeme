@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
+import '../../core/widgets/app_sheet.dart';
+import '../../core/language/language_controller.dart';
 import 'settings_widgets.dart';
 
 class AppearanceScreen extends StatefulWidget {
@@ -12,8 +14,53 @@ class AppearanceScreen extends StatefulWidget {
 class _AppearanceScreenState extends State<AppearanceScreen>
     with ThemeReactive<AppearanceScreen> {
   @override
+  void initState() {
+    super.initState();
+    appLanguage.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    appLanguage.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _PrimaryColorSheet(s: s),
+    );
+  }
+
+  void _openFontFamilyPicker(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _FontFamilySheet(s: s),
+    );
+  }
+
+  void _openIconStylePicker(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _IconStyleSheet(s: s),
+    );
+  }
+
+  void _openChatBubbleStylePicker(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _ChatBubbleStyleSheet(s: s),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final t = appLanguage.strings;
 
     return Material(
       type: MaterialType.transparency,
@@ -24,19 +71,19 @@ class _AppearanceScreenState extends State<AppearanceScreen>
             SingleChildScrollView(
               physics: const BouncingScrollPhysics(
                   parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.only(top: 62),
+              padding: const EdgeInsets.only(top: 56),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _ThemeSegmentedControl(s: s),
+                    child: _ThemeSegmentedControl(s: s, t: t),
                   ),
                   const SizedBox(height: 28),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                    child: Text('Tamanho do texto',
+                    child: Text(t.appearanceTextSize,
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -46,17 +93,101 @@ class _AppearanceScreenState extends State<AppearanceScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _FontSizeCard(
                       s: s,
+                      t: t,
                       value: appPreferences.fontScale,
                       onChanged: appPreferences.setFontScale,
                     ),
+                  ),
+                  const SizedBox(height: 28),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: SettingsGroup(s: s, rows: [
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'palette',
+                        label: t.appearancePrimaryColor,
+                        onTap: () => _openPrimaryColorPicker(context, s),
+                        trailing: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: s.isDark
+                                ? kPrimaryColorPairs[appTheme.primaryPairIndex]
+                                    .dark
+                                : kPrimaryColorPairs[appTheme.primaryPairIndex]
+                                    .light,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: s.outline),
+                          ),
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'text',
+                        label: t.appearanceFontFamily,
+                        onTap: () => _openFontFamilyPicker(context, s),
+                        trailing: Text(
+                          appPreferences.fontFamily,
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'shapes',
+                        label: t.appearanceIconStyle,
+                        onTap: () => _openIconStylePicker(context, s),
+                        trailing: Text(
+                          appPreferences.iconStyle ==
+                                  AppIconStyle.filled
+                              ? 'Preenchido'
+                              : 'Contorno',
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'message',
+                        label: t.appearanceChatBubbleStyle,
+                        onTap: () =>
+                            _openChatBubbleStylePicker(context, s),
+                        trailing: Text(
+                          appPreferences.chatBubbleStyle ==
+                                  ChatBubbleStyle.bubble
+                              ? 'Balão'
+                              : 'Plano',
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: SettingsGroup(s: s, rows: [
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'motion',
+                        label: t.appearanceReduceMotion,
+                        onTap: () => appPreferences.setReduceMotion(
+                            !appPreferences.reduceMotion),
+                        trailing: _MiniSwitch(
+                          s: s,
+                          value: appPreferences.reduceMotion,
+                          onChanged: appPreferences.setReduceMotion,
+                        ),
+                      ),
+                    ]),
                   ),
                   const SizedBox(height: 40),
                 ],
               ),
             ),
-            TransparentFadeAppBar(
+            SolidAppBar(
               s: s,
-              title: 'Aparência',
+              title: t.appearanceTitle,
               onBack: () => Navigator.pop(context),
             ),
           ]),
@@ -66,20 +197,54 @@ class _AppearanceScreenState extends State<AppearanceScreen>
   }
 }
 
-class _ThemeSegmentedControl extends StatelessWidget {
+class _MiniSwitch extends StatelessWidget {
   final AppColorScheme s;
-  const _ThemeSegmentedControl({required this.s});
-
-  static const _options = [
-    (AppThemeMode.light, 'Claro'),
-    (AppThemeMode.dark, 'Escuro'),
-    (AppThemeMode.system, 'Automático'),
-  ];
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _MiniSwitch(
+      {required this.s, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 42,
+        height: 24,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: value ? s.primary : s.hover,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeSegmentedControl extends StatelessWidget {
+  final AppColorScheme s;
+  final dynamic t;
+  const _ThemeSegmentedControl({required this.s, required this.t});
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      (AppThemeMode.light, t.appearanceThemeLight),
+      (AppThemeMode.dark, t.appearanceThemeDark),
+      (AppThemeMode.system, t.appearanceThemeSystem),
+    ];
     final selectedIndex =
-        _options.indexWhere((o) => o.$1 == appTheme.mode);
+        options.indexWhere((o) => o.$1 == appTheme.mode);
 
     return Container(
       height: 36,
@@ -89,13 +254,13 @@ class _ThemeSegmentedControl extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: LayoutBuilder(builder: (context, constraints) {
-        final segmentWidth = constraints.maxWidth / _options.length;
+        final segmentWidth = constraints.maxWidth / options.length;
         return Stack(children: [
           AnimatedPositioned(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             left:
-                segmentWidth * selectedIndex.clamp(0, _options.length - 1),
+                segmentWidth * selectedIndex.clamp(0, options.length - 1),
             top: 0,
             bottom: 0,
             width: segmentWidth,
@@ -103,13 +268,12 @@ class _ThemeSegmentedControl extends StatelessWidget {
               decoration: BoxDecoration(
                 color: s.primary,
                 borderRadius: BorderRadius.circular(999),
-                boxShadow: s.cardShadow,
               ),
             ),
           ),
           Row(
             children: [
-              for (final (mode, label) in _options)
+              for (final (mode, label) in options)
                 Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -140,10 +304,14 @@ class _ThemeSegmentedControl extends StatelessWidget {
 
 class _FontSizeCard extends StatelessWidget {
   final AppColorScheme s;
+  final dynamic t;
   final double value;
   final ValueChanged<double> onChanged;
   const _FontSizeCard(
-      {required this.s, required this.value, required this.onChanged});
+      {required this.s,
+      required this.t,
+      required this.value,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -153,7 +321,6 @@ class _FontSizeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.cardBackground,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: s.cardShadowSoft,
       ),
       child: Column(children: [
         _ExpressiveSlider(s: s, value: value, onChanged: onChanged),
@@ -167,7 +334,7 @@ class _FontSizeCard extends StatelessWidget {
               color: s.hover,
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text('Qual é a verdade do universo?',
+            child: Text(t.appearanceTextSizePreviewQuestion,
                 style:
                     TextStyle(fontSize: 14 * previewScale, color: s.onSurface)),
           ),
@@ -176,14 +343,14 @@ class _FontSizeCard extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-              'O Universo é um vasto sistema de leis e mistérios.',
+              t.appearanceTextSizePreviewAnswer,
               style: TextStyle(
                   fontSize: 14 * previewScale,
                   color: s.onSurface,
                   height: 1.35)),
         ),
         const SizedBox(height: 18),
-        Text('PRÉ-VISUALIZAR',
+        Text(t.appearanceTextSizePreviewLabel,
             style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
@@ -304,5 +471,266 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
         ),
       );
     });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PRIMARY COLOR PICKER — movido para Aparência (antes estava em
+// Personalização).
+// ══════════════════════════════════════════════════════════════
+
+class _PrimaryColorSheet extends StatelessWidget {
+  final AppColorScheme s;
+  const _PrimaryColorSheet({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = appLanguage.strings;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.appearancePrimaryColor,
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: List.generate(kPrimaryColorPairs.length, (i) {
+              final pair = kPrimaryColorPairs[i];
+              final displayColor = s.isDark ? pair.dark : pair.light;
+              final selected = appTheme.primaryPairIndex == i;
+              return GestureDetector(
+                onTap: () {
+                  appTheme.setPrimaryPairIndex(i);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: displayColor,
+                    shape: BoxShape.circle,
+                    border: selected
+                        ? Border.all(color: s.onSurface, width: 3)
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: selected
+                      ? const AppIcon('check',
+                          color: Colors.white, size: 20)
+                      : null,
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// FONT FAMILY — só guarda a preferência e mostra no preview desta
+// própria tela. NÃO aplica globalmente ainda (ThemeData/MaterialApp
+// não são tocados por isto).
+// ══════════════════════════════════════════════════════════════
+
+class _FontFamilySheet extends StatelessWidget {
+  final AppColorScheme s;
+  const _FontFamilySheet({required this.s});
+
+  static const _options = [
+    'Inter',
+    'Roboto',
+    'System',
+    'Poppins',
+    'Nunito',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final t = appLanguage.strings;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.appearanceFontFamily,
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 6),
+          Text(t.appearanceFontFamilyDescription,
+              style: TextStyle(
+                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
+          const SizedBox(height: 16),
+          for (final font in _options)
+            _SimpleOptionRow(
+              s: s,
+              label: font,
+              selected: appPreferences.fontFamily == font,
+              onTap: () {
+                appPreferences.setFontFamily(font);
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconStyleSheet extends StatelessWidget {
+  final AppColorScheme s;
+  const _IconStyleSheet({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = appLanguage.strings;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.appearanceIconStyle,
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 6),
+          Text(t.appearanceIconStyleDescription,
+              style: TextStyle(
+                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
+          const SizedBox(height: 16),
+          _SimpleOptionRow(
+            s: s,
+            label: 'Contorno',
+            selected: appPreferences.iconStyle == AppIconStyle.outline,
+            onTap: () {
+              appPreferences.setIconStyle(AppIconStyle.outline);
+              Navigator.pop(context);
+            },
+          ),
+          _SimpleOptionRow(
+            s: s,
+            label: 'Preenchido',
+            selected: appPreferences.iconStyle == AppIconStyle.filled,
+            onTap: () {
+              appPreferences.setIconStyle(AppIconStyle.filled);
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatBubbleStyleSheet extends StatelessWidget {
+  final AppColorScheme s;
+  const _ChatBubbleStyleSheet({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = appLanguage.strings;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.appearanceChatBubbleStyle,
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: s.onSurface)),
+          const SizedBox(height: 6),
+          Text(t.appearanceChatBubbleStyleDescription,
+              style: TextStyle(
+                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
+          const SizedBox(height: 16),
+          _SimpleOptionRow(
+            s: s,
+            label: 'Balão',
+            selected:
+                appPreferences.chatBubbleStyle == ChatBubbleStyle.bubble,
+            onTap: () {
+              appPreferences.setChatBubbleStyle(ChatBubbleStyle.bubble);
+              Navigator.pop(context);
+            },
+          ),
+          _SimpleOptionRow(
+            s: s,
+            label: 'Plano',
+            selected: appPreferences.chatBubbleStyle == ChatBubbleStyle.flat,
+            onTap: () {
+              appPreferences.setChatBubbleStyle(ChatBubbleStyle.flat);
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SimpleOptionRow extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SimpleOptionRow({
+    required this.s,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: selected ? s.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? s.onPrimaryContainer : s.onSurface,
+                ),
+              ),
+            ),
+            if (selected)
+              AppIcon('checkmark_circle',
+                  size: 20, color: s.onPrimaryContainer)
+            else
+              const SizedBox(width: 20),
+          ],
+        ),
+      ),
+    );
   }
 }

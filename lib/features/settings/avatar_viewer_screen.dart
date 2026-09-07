@@ -10,10 +10,14 @@ import 'avatar_upload_utils.dart';
 class AvatarViewerScreen extends StatefulWidget {
   final AppColorScheme s;
   final Future<void> Function(String base64Avatar) onAvatarUpdated;
+  /// Fecha o overlay com a animação reversa (fade+scale). Substitui
+  /// o antigo Navigator.pop — este widget já não é uma rota.
+  final Future<void> Function() onRequestClose;
   const AvatarViewerScreen({
     super.key,
     required this.s,
     required this.onAvatarUpdated,
+    required this.onRequestClose,
   });
 
   @override
@@ -22,6 +26,7 @@ class AvatarViewerScreen extends StatefulWidget {
 
 class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
   bool _uploading = false;
+  String? _error;
 
   Uint8List? _decodeAvatar(String? raw) {
     if (raw == null || raw.isEmpty) return null;
@@ -65,18 +70,26 @@ class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
 
     if (cropped == null || !mounted) return;
 
-    setState(() => _uploading = true);
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
     try {
-      // Corrige, redimensiona e comprime automaticamente em loop até
-      // caber no limite real aceite pelo servidor (ver
-      // avatar_upload_utils.dart) — antes disto, imagens de câmera a
-      // qualidade 90-95% facilmente passavam do limite e o upload
-      // era sempre recusado pelo worker.
       final b64 = await compressImageFileToBase64DataUrl(cropped.path);
       await widget.onAvatarUpdated(b64);
-      if (mounted) Navigator.pop(context);
-    } catch (_) {
-      if (mounted) setState(() => _uploading = false);
+      if (mounted) await widget.onRequestClose();
+    } catch (e) {
+      // Erro agora fica VISÍVEL em vez de falhar em silêncio — é
+      // isto que te vai dizer exatamente porque o upload não pega:
+      // se for o servidor a recusar (imagem grande demais mesmo
+      // após compressão), a rede, ou a sessão expirada, o texto
+      // abaixo do botão mostra a causa real.
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _error = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     }
   }
 
@@ -88,79 +101,87 @@ class _AvatarViewerScreenState extends State<AvatarViewerScreen> {
     final squareSize = MediaQuery.of(context).size.width - 32;
 
     return GestureDetector(
-      onTap: () => Navigator.pop(context),
+      onTap: widget.onRequestClose,
       child: Material(
         color: Colors.transparent,
-        child: Center(
-          child: GestureDetector(
-            onTap: () {},
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Sem Hero: a abertura desta tela agora é um fade
-                // simples controlado pelo PageRouteBuilder em
-                // settingsscreen.dart — a imagem não "voa" mais do
-                // avatar do settings até aqui.
-                Container(
-                  width: squareSize,
-                  height: squareSize,
-                  decoration: BoxDecoration(
-                    color: s.primary,
-                    borderRadius: BorderRadius.zero,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.35),
-                        blurRadius: 40,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: avatarBytes != null
-                      ? Image.memory(avatarBytes, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Image.asset(
-                            'assets/icons/png/avatar.png',
-                            fit: BoxFit.cover,
-                          ))
-                      : Image.asset(
+        child: GestureDetector(
+          onTap: () {},
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: squareSize,
+                height: squareSize,
+                decoration: BoxDecoration(
+                  color: s.primary,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 40,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: avatarBytes != null
+                    // key baseada nos próprios bytes: garante que o
+                    // Flutter repinta quando o avatar muda, mesmo
+                    // que o widget pai não tenha sido recriado.
+                    ? Image.memory(
+                        avatarBytes,
+                        key: ValueKey(avatarBytes.lengthInBytes),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Image.asset(
                           'assets/icons/png/avatar.png',
                           fit: BoxFit.cover,
                         ),
-                ),
-                GestureDetector(
-                  onTap: _uploading ? null : _pickAndEdit,
-                  child: Container(
-                    width: squareSize,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: s.isDark ? Colors.white : s.primary,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                    alignment: Alignment.center,
-                    child: _uploading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              year2023: false,
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(
-                                  s.isDark ? Colors.black : s.onPrimary),
-                            ),
-                          )
-                        : Text(
-                            'Carregar nova imagem',
-                            style: TextStyle(
-                              color:
-                                  s.isDark ? Colors.black : s.onPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                      )
+                    : Image.asset(
+                        'assets/icons/png/avatar.png',
+                        fit: BoxFit.cover,
+                      ),
+              ),
+              if (_error != null)
+                Container(
+                  width: squareSize,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  color: s.error.withOpacity(0.12),
+                  child: Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12.5, color: s.error),
                   ),
                 ),
-              ],
-            ),
+              GestureDetector(
+                onTap: _uploading ? null : _pickAndEdit,
+                child: Container(
+                  width: squareSize,
+                  height: 56,
+                  color: s.isDark ? Colors.white : s.primary,
+                  alignment: Alignment.center,
+                  child: _uploading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            year2023: false,
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(
+                                s.isDark ? Colors.black : s.onPrimary),
+                          ),
+                        )
+                      : Text(
+                          'Carregar nova imagem',
+                          style: TextStyle(
+                            color: s.isDark ? Colors.black : s.onPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

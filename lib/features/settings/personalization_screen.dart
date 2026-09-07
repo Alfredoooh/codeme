@@ -3,8 +3,8 @@ import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../services/auth_service.dart';
 import '../../core/widgets/app_sheet.dart';
+import '../../core/language/language_controller.dart';
 import 'settings_widgets.dart';
-import '../apps/sheets/sheets.dart';
 
 class PersonalizationScreen extends StatefulWidget {
   const PersonalizationScreen({super.key});
@@ -19,48 +19,88 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
   @override
   void initState() {
     super.initState();
-    appPreferences.addListener(_onPrefsChanged);
-    appTheme.addListener(_onPrefsChanged);
+    appPreferences.addListener(_onChanged);
+    appTheme.addListener(_onChanged);
+    appLanguage.addListener(_onChanged);
   }
 
   @override
   void dispose() {
-    appPreferences.removeListener(_onPrefsChanged);
-    appTheme.removeListener(_onPrefsChanged);
+    appPreferences.removeListener(_onChanged);
+    appTheme.removeListener(_onChanged);
+    appLanguage.removeListener(_onChanged);
     super.dispose();
   }
 
-  void _onPrefsChanged() {
+  void _onChanged() {
     if (mounted) setState(() {});
   }
 
   void _openPromptEditor(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _PromptEditorSheet(s: s),
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _PromptEditorSheet(s: s),
     );
   }
 
   void _openEmojiFrequency(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _EmojiFrequencySheet(s: s),
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _EmojiFrequencySheet(s: s),
     );
   }
 
-  void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
-    showCraftBottomSheet(
-      context: context,
-      s: s,
-      child: _PrimaryColorSheet(s: s),
+  void _openCustomInstructions(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _TextPreferenceSheet(
+        s: s,
+        title: appLanguage.strings.personalizationCustomInstructions,
+        description:
+            appLanguage.strings.personalizationCustomInstructionsDescription,
+        initialValue: appPreferences.customInstructions,
+        onSave: appPreferences.setCustomInstructionsRemote,
+      ),
+    );
+  }
+
+  void _openTraits(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _TextPreferenceSheet(
+        s: s,
+        title: appLanguage.strings.personalizationTraits,
+        description: appLanguage.strings.personalizationTraitsDescription,
+        initialValue: appPreferences.aiTraits,
+        onSave: appPreferences.setAiTraitsRemote,
+      ),
+    );
+  }
+
+  void _openKnownInfo(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _TextPreferenceSheet(
+        s: s,
+        title: appLanguage.strings.personalizationKnownInfo,
+        description: appLanguage.strings.personalizationKnownInfoDescription,
+        initialValue: appPreferences.knownInfo,
+        onSave: appPreferences.setKnownInfoRemote,
+      ),
+    );
+  }
+
+  void _openResponseStyle(BuildContext context, AppColorScheme s) {
+    showAppSheet(
+      context,
+      builder: (sheetContext) => _ResponseStyleSheet(s: s),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final t = appLanguage.strings;
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
@@ -70,52 +110,126 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
             SingleChildScrollView(
               physics: const BouncingScrollPhysics(
                   parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.only(top: 62),
+              padding: const EdgeInsets.only(top: 56),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _PersonalizationGroup(s: s, rows: [
-                  _PersonalizationRow(
-                    s: s,
-                    label: 'Preferências de prompt',
-                    onTap: () => _openPromptEditor(context, s),
-                    trailing: Text(
-                      appPreferences.prompt.isEmpty ? 'Nenhuma' : 'Editado',
-                      style: TextStyle(
-                          fontSize: 14, color: s.onSurfaceVariant),
-                    ),
-                  ),
-                  _PersonalizationRow(
-                    s: s,
-                    label: 'Frequência de emojis',
-                    onTap: () => _openEmojiFrequency(context, s),
-                    trailing: Text(
-                      appPreferences.emojiFrequency.displayName,
-                      style: TextStyle(
-                          fontSize: 14, color: s.onSurfaceVariant),
-                    ),
-                  ),
-                  _PersonalizationRow(
-                    s: s,
-                    label: 'Cor primária',
-                    onTap: () => _openPrimaryColorPicker(context, s),
-                    trailing: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: s.isDark
-                            ? kPrimaryColorPairs[appTheme.primaryPairIndex].dark
-                            : kPrimaryColorPairs[appTheme.primaryPairIndex].light,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: s.outline),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SettingsGroup(s: s, rows: [
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'text_bubble',
+                        label: t.personalizationPromptPreferences,
+                        onTap: () => _openPromptEditor(context, s),
+                        trailing: Text(
+                          appPreferences.prompt.isEmpty
+                              ? t.commonNone
+                              : t.commonEdited,
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
                       ),
-                    ),
-                  ),
-                ]),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'list_bullet',
+                        label: t.personalizationCustomInstructions,
+                        onTap: () => _openCustomInstructions(context, s),
+                        trailing: Text(
+                          appPreferences.customInstructions.isEmpty
+                              ? t.commonNone
+                              : t.commonEdited,
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'sparkle',
+                        label: t.personalizationTraits,
+                        onTap: () => _openTraits(context, s),
+                        trailing: Text(
+                          appPreferences.aiTraits.isEmpty
+                              ? t.commonNone
+                              : t.commonEdited,
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'id_badge',
+                        label: t.personalizationKnownInfo,
+                        onTap: () => _openKnownInfo(context, s),
+                        trailing: Text(
+                          appPreferences.knownInfo.isEmpty
+                              ? t.commonNone
+                              : t.commonEdited,
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    SettingsGroup(s: s, rows: [
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'align_left',
+                        label: t.personalizationResponseStyle,
+                        onTap: () => _openResponseStyle(context, s),
+                        trailing: Text(
+                          _responseStyleLabel(
+                              appPreferences.responseStyle, t),
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'emoji',
+                        label: t.personalizationEmojiFrequency,
+                        onTap: () => _openEmojiFrequency(context, s),
+                        trailing: Text(
+                          appPreferences.emojiFrequency.displayName,
+                          style: TextStyle(
+                              fontSize: 14, color: s.onSurfaceVariant),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    SettingsGroup(s: s, rows: [
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'globe_search',
+                        label: t.personalizationAlwaysSearchWeb,
+                        onTap: () => appPreferences.setAlwaysSearchWeb(
+                            !appPreferences.alwaysSearchWeb),
+                        trailing: _MiniSwitchInline(
+                          s: s,
+                          value: appPreferences.alwaysSearchWeb,
+                          onChanged: appPreferences.setAlwaysSearchWeb,
+                        ),
+                      ),
+                      SettingsRow(
+                        s: s,
+                        iconAsset: 'brain',
+                        label: t.personalizationRememberAcrossChats,
+                        onTap: () => appPreferences.setRememberAcrossChats(
+                            !appPreferences.rememberAcrossChats),
+                        trailing: _MiniSwitchInline(
+                          s: s,
+                          value: appPreferences.rememberAcrossChats,
+                          onChanged: appPreferences.setRememberAcrossChats,
+                        ),
+                      ),
+                    ]),
+                  ],
+                ),
               ),
             ),
-            TransparentFadeAppBar(
+            SolidAppBar(
               s: s,
-              title: 'Personalização',
+              title: t.personalizationTitle,
               onBack: () => Navigator.pop(context),
             ),
           ]),
@@ -123,89 +237,47 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
       ),
     );
   }
-}
 
-class _PersonalizationGroup extends StatelessWidget {
-  final AppColorScheme s;
-  final List<_PersonalizationRow> rows;
-  const _PersonalizationGroup(
-      {required this.s, required this.rows});
-
-  static const double _outerRadius = 20;
-  static const double _innerRadius = 6;
-
-  @override
-  Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (var i = 0; i < rows.length; i++) {
-      final radius = _radiusFor(i, rows.length);
-      children.add(Container(
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: radius,
-          boxShadow: s.cardShadowSoft,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: rows[i],
-      ));
-      if (i != rows.length - 1) children.add(const SizedBox(height: 2));
+  String _responseStyleLabel(ResponseStyle style, dynamic t) {
+    switch (style) {
+      case ResponseStyle.concise:
+        return t.personalizationResponseStyleConcise;
+      case ResponseStyle.balanced:
+        return t.personalizationResponseStyleBalanced;
+      case ResponseStyle.detailed:
+        return t.personalizationResponseStyleDetailed;
     }
-    return Column(children: children);
-  }
-
-  BorderRadius _radiusFor(int index, int count) {
-    if (count == 1) return BorderRadius.circular(_outerRadius);
-    final isFirst = index == 0;
-    final isLast = index == count - 1;
-    return BorderRadius.only(
-      topLeft: Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      topRight: Radius.circular(isFirst ? _outerRadius : _innerRadius),
-      bottomLeft: Radius.circular(isLast ? _outerRadius : _innerRadius),
-      bottomRight: Radius.circular(isLast ? _outerRadius : _innerRadius),
-    );
   }
 }
 
-class _PersonalizationRow extends StatefulWidget {
+class _MiniSwitchInline extends StatelessWidget {
   final AppColorScheme s;
-  final String label;
-  final Widget trailing;
-  final VoidCallback onTap;
-  const _PersonalizationRow({
-    required this.s,
-    required this.label,
-    required this.trailing,
-    required this.onTap,
-  });
-  @override
-  State<_PersonalizationRow> createState() => _PersonalizationRowState();
-}
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _MiniSwitchInline(
+      {required this.s, required this.value, required this.onChanged});
 
-class _PersonalizationRowState extends State<_PersonalizationRow> {
-  bool _p = false;
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _p = true),
-      onTapCancel: () => setState(() => _p = false),
-      onTapUp: (_) => setState(() => _p = false),
-      onTap: widget.onTap,
+      onTap: () => onChanged(!value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        color: _p ? s.hover : Colors.transparent,
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(widget.label,
-                  style:
-                      TextStyle(fontSize: 15, color: s.onSurface)),
-            ),
-            widget.trailing,
-          ],
+        duration: const Duration(milliseconds: 160),
+        width: 42,
+        height: 24,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: value ? s.primary : s.hover,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );
@@ -241,23 +313,25 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
+    final t = appLanguage.strings;
     return Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        padding: EdgeInsets.fromLTRB(
+            20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Preferências de prompt',
+            Text(t.personalizationPromptEditorTitle,
                 style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                     color: s.onSurface)),
             const SizedBox(height: 8),
             Text(
-              'Instruções que a IA deve seguir em todas as conversas. Ex.: "Responde sempre em português europeu".',
+              t.personalizationPromptEditorDescription,
               style: TextStyle(
                   fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4),
             ),
@@ -280,7 +354,7 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
                   isDense: true,
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.all(16),
-                  hintText: 'Escreve aqui as tuas preferências...',
+                  hintText: t.personalizationPromptEditorHint,
                   hintStyle: TextStyle(
                       fontSize: 15,
                       color: s.onSurfaceVariant.withOpacity(0.7)),
@@ -292,7 +366,7 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
               Expanded(
                 child: SheetActionButton(
                   s: s,
-                  label: 'Cancelar',
+                  label: t.commonCancel,
                   filled: false,
                   onTap: () => Navigator.pop(context),
                 ),
@@ -320,7 +394,142 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
                                   AlwaysStoppedAnimation(s.onPrimary),
                             ),
                           )
-                        : Text('Guardar',
+                        : Text(t.commonSave,
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: s.onPrimary)),
+                  ),
+                ),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sheet genérico reutilizado pelos 3 campos novos de texto livre:
+/// instruções personalizadas, traços de personalidade, informação
+/// conhecida sobre o utilizador.
+class _TextPreferenceSheet extends StatefulWidget {
+  final AppColorScheme s;
+  final String title;
+  final String description;
+  final String initialValue;
+  final void Function(String value, String? token) onSave;
+  const _TextPreferenceSheet({
+    required this.s,
+    required this.title,
+    required this.description,
+    required this.initialValue,
+    required this.onSave,
+  });
+
+  @override
+  State<_TextPreferenceSheet> createState() => _TextPreferenceSheetState();
+}
+
+class _TextPreferenceSheetState extends State<_TextPreferenceSheet> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.initialValue);
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    widget.onSave(_ctrl.text.trim(), authController.token);
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final t = appLanguage.strings;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title,
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: s.onSurface)),
+            const SizedBox(height: 8),
+            Text(
+              widget.description,
+              style: TextStyle(
+                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: s.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: s.outline.withOpacity(0.5)),
+              ),
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 6,
+                textCapitalization: TextCapitalization.sentences,
+                style: TextStyle(fontSize: 15, color: s.onSurface),
+                cursorColor: s.primary,
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: SheetActionButton(
+                  s: s,
+                  label: t.commonCancel,
+                  filled: false,
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _saving ? null : _save,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: s.primary.withOpacity(_saving ? 0.6 : 1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: _saving
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              year2023: false,
+                              strokeWidth: 2.2,
+                              valueColor:
+                                  AlwaysStoppedAnimation(s.onPrimary),
+                            ),
+                          )
+                        : Text(t.commonSave,
                             style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -342,13 +551,15 @@ class _EmojiFrequencySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = appLanguage.strings;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Frequência de emojis',
+          Text(t.personalizationEmojiFrequency,
               style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
@@ -422,56 +633,94 @@ class _FrequencyOption extends StatelessWidget {
   }
 }
 
-class _PrimaryColorSheet extends StatelessWidget {
+class _ResponseStyleSheet extends StatelessWidget {
   final AppColorScheme s;
-  const _PrimaryColorSheet({required this.s});
+  const _ResponseStyleSheet({required this.s});
 
   @override
   Widget build(BuildContext context) {
+    final t = appLanguage.strings;
+    final options = [
+      (ResponseStyle.concise, t.personalizationResponseStyleConcise),
+      (ResponseStyle.balanced, t.personalizationResponseStyleBalanced),
+      (ResponseStyle.detailed, t.personalizationResponseStyleDetailed),
+    ];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Cor primária',
+          Text(t.personalizationResponseStyle,
               style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                   color: s.onSurface)),
+          const SizedBox(height: 6),
+          Text(t.personalizationResponseStyleDescription,
+              style: TextStyle(
+                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 14,
-            runSpacing: 14,
-            children: List.generate(kPrimaryColorPairs.length, (i) {
-              final pair = kPrimaryColorPairs[i];
-              final displayColor = s.isDark ? pair.dark : pair.light;
-              final selected = appTheme.primaryPairIndex == i;
-              return GestureDetector(
-                onTap: () {
-                  appTheme.setPrimaryPairIndex(i);
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: displayColor,
-                    shape: BoxShape.circle,
-                    border: selected
-                        ? Border.all(color: s.onSurface, width: 3)
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: selected
-                      ? const AppIcon('check',
-                          color: Colors.white, size: 20)
-                      : null,
-                ),
-              );
-            }),
-          ),
+          for (final (style, label) in options)
+            _SimpleOptionRow(
+              s: s,
+              label: label,
+              selected: appPreferences.responseStyle == style,
+              onTap: () {
+                appPreferences.setResponseStyle(style);
+                Navigator.pop(context);
+              },
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _SimpleOptionRow extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SimpleOptionRow({
+    required this.s,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: selected ? s.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? s.onPrimaryContainer : s.onSurface,
+                ),
+              ),
+            ),
+            if (selected)
+              AppIcon('checkmark_circle',
+                  size: 20, color: s.onPrimaryContainer)
+            else
+              const SizedBox(width: 20),
+          ],
+        ),
       ),
     );
   }

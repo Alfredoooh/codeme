@@ -1,14 +1,37 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
+import '../../core/language/language_controller.dart';
 import 'settings_widgets.dart';
 
-class WorkspaceScreen extends StatelessWidget {
+class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
+
+  @override
+  State<WorkspaceScreen> createState() => _WorkspaceScreenState();
+}
+
+class _WorkspaceScreenState extends State<WorkspaceScreen> {
+  @override
+  void initState() {
+    super.initState();
+    appLanguage.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    appLanguage.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final t = appLanguage.strings;
     return Material(
       type: MaterialType.transparency,
       child: ColoredBox(
@@ -18,14 +41,14 @@ class WorkspaceScreen extends StatelessWidget {
             SingleChildScrollView(
               physics: const BouncingScrollPhysics(
                   parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.only(top: 62),
+              padding: const EdgeInsets.only(top: 56),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: SettingsGroup(s: s, rows: [
                   SettingsRow(
                     s: s,
                     iconAsset: 'person',
-                    label: 'Pessoal',
+                    label: t.workspacePersonal,
                     onTap: () {},
                     trailing: AppIcon('checkmark_circle',
                         size: 18, color: s.primary),
@@ -33,9 +56,9 @@ class WorkspaceScreen extends StatelessWidget {
                 ]),
               ),
             ),
-            TransparentFadeAppBar(
+            SolidAppBar(
               s: s,
-              title: 'Área de trabalho',
+              title: t.workspaceTitle,
               onBack: () => Navigator.pop(context),
             ),
           ]),

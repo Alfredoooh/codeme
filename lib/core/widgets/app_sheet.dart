@@ -1,15 +1,7 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/app_sheet.dart
-// Ponto único de modais da app — bottom sheet Material padrão,
-// mesma curva (20px no topo) e handlebar do modal de opções da
-// conversa em drawermenu.dart. Substitui showModalBottomSheet
-// "cru", showCraftBottomSheet e o antigo CupertinoSheetRoute em
-// toda a app.
-// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 
-const double _kAppSheetRadius = 20.0;
+const double _kAppSheetRadius = 28.0;
 
 class _AppSheetHandlebar extends StatelessWidget {
   final AppColorScheme s;
@@ -18,13 +10,13 @@ class _AppSheetHandlebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.only(top: 12, bottom: 6),
       child: Center(
         child: Container(
-          width: 36,
+          width: 32,
           height: 4,
           decoration: BoxDecoration(
-            color: s.onSurfaceVariant.withOpacity(0.35),
+            color: s.onSurfaceVariant.withOpacity(0.4),
             borderRadius: BorderRadius.circular(999),
           ),
         ),
@@ -33,35 +25,67 @@ class _AppSheetHandlebar extends StatelessWidget {
   }
 }
 
-/// Abre um modal padrão da app — bottom sheet Material com cantos
-/// arredondados no topo (mesma curva usada no modal de opções da
-/// conversa) e handlebar cinzenta no topo. Substitui qualquer uso
-/// direto de showModalBottomSheet em toda a app. Devolve o valor
-/// passado a Navigator.pop(context, valor), tal como um
-/// showModalBottomSheet normal.
+/// Abre o bottom sheet próprio do app. Devolve o valor passado a
+/// Navigator.pop(context, valor), tal como um showModalBottomSheet
+/// normal — mas sem usar essa API, e sem qualquer dependência de
+/// pacote de bottom sheet externo.
 Future<T?> showAppSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
+  bool isScrollControlled = true,
 }) {
   final s = AppTheme.of(context);
-  return showModalBottomSheet<T>(
+  final sheetBg = s.isDark ? s.cardBackground : Colors.white;
+
+  return showGeneralDialog<T>(
     context: context,
-    backgroundColor: s.surface,
+    barrierDismissible: true,
+    barrierLabel: 'Fechar',
     barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kAppSheetRadius)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _AppSheetHandlebar(s: AppTheme.of(sheetContext)),
-          Flexible(child: builder(sheetContext)),
-        ],
-      ),
-    ),
+    transitionDuration: const Duration(milliseconds: 260),
+    pageBuilder: (dialogContext, anim1, anim2) {
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+              ),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: sheetBg,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(_kAppSheetRadius),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _AppSheetHandlebar(s: AppTheme.of(dialogContext)),
+                    Flexible(child: builder(dialogContext)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+    transitionBuilder: (dialogContext, anim, secondaryAnim, child) {
+      final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 1),
+          end: Offset.zero,
+        ).animate(curved),
+        child: FadeTransition(opacity: anim, child: child),
+      );
+    },
   );
 }
 
