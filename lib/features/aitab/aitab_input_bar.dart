@@ -13,6 +13,8 @@
 //    bottom sheet Android pouco curvo, subindo do fundo do ecrã.
 // 3) _AnchoredPopupRoute, _AnimatedAnchoredMenu e toda a lógica de
 //    ancoragem ao botão foram removidas por deixarem de ser usadas.
+// 4) Adicionada handlebar (SheetHandlebar) no topo do sheet de menu
+//    "+" e curva atualizada para 20.0 (mesma do drawer).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -27,7 +29,7 @@ import '../apps/sheets/sheets.dart';
 import 'aitab_models.dart';
 import 'aitab_widgets_shared.dart';
 
-const double _kFlatModalRadius = 10.0;
+const double _kFlatModalRadius = 20.0;
 
 // ══════════════════════════════════════════════════════════════
 // CHAT INPUT
@@ -945,69 +947,75 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, anim) {
-          final isModelPage = child.key == const ValueKey('model_page');
-          final beginOffset = isModelPage
-              ? const Offset(0.06, 0)
-              : const Offset(-0.06, 0);
-          return FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
-                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-        child: _page == _AttachMenuPageKind.root
-            ? _RootPage(
-                key: const ValueKey('root_page'),
-                s: s,
-                selectedModel: _selectedModel,
-                webSearchEnabled: _localWeb,
-                widgetsEnabled: _localWidgets,
-                onModelTap: _goToModelSelect,
-                onCanvasTap: () {
-                  Navigator.pop(context);
-                  widget.onOpenCanvas();
-                },
-                onWebSearchChanged: (v) {
-                  setState(() => _localWeb = v);
-                  widget.onWebSearchChanged(v);
-                },
-                onWidgetsChanged: (v) {
-                  setState(() => _localWidgets = v);
-                  widget.onWidgetsChanged(v);
-                },
-                onCamera: () {
-                  Navigator.pop(context);
-                  widget.onCamera();
-                },
-                onPhotos: () {
-                  Navigator.pop(context);
-                  widget.onPhotos();
-                },
-                onLocalFile: () {
-                  Navigator.pop(context);
-                  widget.onLocalFile();
-                },
-              )
-            : _ModelSelectPage(
-                key: const ValueKey('model_page'),
-                s: s,
-                selectedModel: _selectedModel,
-                onBack: _backToRoot,
-                onPick: _pickModel,
-              ),
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SheetHandlebar(s: s),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) {
+              final isModelPage = child.key == const ValueKey('model_page');
+              final beginOffset = isModelPage
+                  ? const Offset(0.06, 0)
+                  : const Offset(-0.06, 0);
+              return FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
+                      .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+                  child: child,
+                ),
+              );
+            },
+            child: _page == _AttachMenuPageKind.root
+                ? _RootPage(
+                    key: const ValueKey('root_page'),
+                    s: s,
+                    selectedModel: _selectedModel,
+                    webSearchEnabled: _localWeb,
+                    widgetsEnabled: _localWidgets,
+                    onModelTap: _goToModelSelect,
+                    onCanvasTap: () {
+                      Navigator.pop(context);
+                      widget.onOpenCanvas();
+                    },
+                    onWebSearchChanged: (v) {
+                      setState(() => _localWeb = v);
+                      widget.onWebSearchChanged(v);
+                    },
+                    onWidgetsChanged: (v) {
+                      setState(() => _localWidgets = v);
+                      widget.onWidgetsChanged(v);
+                    },
+                    onCamera: () {
+                      Navigator.pop(context);
+                      widget.onCamera();
+                    },
+                    onPhotos: () {
+                      Navigator.pop(context);
+                      widget.onPhotos();
+                    },
+                    onLocalFile: () {
+                      Navigator.pop(context);
+                      widget.onLocalFile();
+                    },
+                  )
+                : _ModelSelectPage(
+                    key: const ValueKey('model_page'),
+                    s: s,
+                    selectedModel: _selectedModel,
+                    onBack: _backToRoot,
+                    onPick: _pickModel,
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

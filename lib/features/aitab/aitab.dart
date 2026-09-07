@@ -1,40 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab.dart
-//
-// MUDANÇAS NESTA VERSÃO:
-// 1) O ListView da conversa recebe um `topPadding` extra fixo
-//    (_kTopScrollLimit) somado ao headerHeight, e o
-//    ScrollController.position tem maxScrollExtent naturalmente
-//    limitado por esse padding — na prática isto sozinho não impede
-//    overscroll acima do topo (BouncingScrollPhysics ainda deixa
-//    puxar); por isso troquei a physics do ListView para
-//    ClampingScrollPhysics quando perto do topo NÃO é suficiente
-//    para bloquear overscroll — a forma robusta é usar
-//    NotificationListener<ScrollUpdateNotification> para clampar
-//    manualmente. Implementado via _ClampedScrollPhysics customizada
-//    que nunca deixa pixels < 0 (impede overscroll para cima do
-//    início da lista) enquanto mantém BouncingScrollPhysics para
-//    baixo. Combinado com o topPadding extra, o conteúdo nunca sobe
-//    até tocar o appbar, mesmo com o botão de ir para baixo.
-// 2) ScrollToBottomButton movido para Alignment.centerRight (antes
-//    estava Center).
-// 3) O bottom bar (Container com ChatInput) agora é medido também
-//    em altura ANTES do keyboardInset ser aplicado, e o padding do
-//    ListView (_bottomBarHeight) já reage a isso via
-//    _measureBottomBar() existente — mantive e reforcei: sempre que
-//    o input cresce (mais linhas de texto), _bottomBarHeight
-//    aumenta e o ListView ganha mais padding inferior
-//    automaticamente, o que numa lista ancorada ao fim (mensagens
-//    mais recentes visíveis) tem o efeito de "subir" o conteúdo para
-//    nunca ficar atrás do input. Chamado tanto no post-frame
-//    callback existente como sempre que _ctrl muda (novo listener).
-// 4) Nenhum uso de Cupertino neste ficheiro (já não havia).
-// 5) Adicionado `processSteps` ao ChatMessage final, passado ao
-//    AssistantBubble e StreamingBubble, e acumulado no estado
-//    `_currentProcessSteps` durante tool calls.
-// 6) Modal de anexar corrigido para nova assinatura de
-//    `showAttachPopup` com `onChooseModel`, e adicionado
-//    `_StandaloneModelSelectSheet`.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -44,16 +9,12 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
-// TODO: depende de richtext.dart (split/movimentação futura); manter este import para a etapa futura de split.
 import '../../core/widgets/richtext.dart';
-// TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
-// TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
 import '../drawer/drawermenu.dart' show conversationsController, ConversationItem, showRenameSheet;
 import '../apps/app_types.dart';
-// TODO: depende de apps/docs.dart (split futuro); manter este import para a etapa futura de split.
 import '../apps/docs/docs.dart';
 import '../apps/sheets/sheets_app.dart';
 import '../apps/slides/slides_app.dart';
@@ -66,15 +27,9 @@ import 'aitab_message_bubbles.dart';
 import 'aitab_input_bar.dart';
 import '../../core/navigation/app_page_route.dart';
 
-
 export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
 export 'aitab_widgets_shared.dart' show AiConversationMenuButton, NexaLoaderLogo, ShimmerText;
 
-/// Physics que se comporta como BouncingScrollPhysics para lá do
-/// fim da lista (permite o "elástico" natural ao chegar ao fundo),
-/// mas nunca deixa o scroll ultrapassar o início (pixels < 0) —
-/// impede que o conteúdo suba até tocar/passar o appbar, mesmo que
-/// o utilizador arraste com força ou use o botão de ir para o fundo.
 class _ClampedTopScrollPhysics extends BouncingScrollPhysics {
   const _ClampedTopScrollPhysics({super.parent});
 
@@ -85,15 +40,12 @@ class _ClampedTopScrollPhysics extends BouncingScrollPhysics {
 
   @override
   double applyBoundaryConditions(ScrollMetrics position, double value) {
-    // Nunca permite ir abaixo do início (0) — bloqueia overscroll
-    // para cima do topo da lista.
     if (value < position.pixels && position.pixels <= position.minScrollExtent) {
       return value - position.minScrollExtent;
     }
     if (value < position.minScrollExtent && position.pixels >= position.minScrollExtent) {
       return value - position.minScrollExtent;
     }
-    // Para o fim da lista, delega ao comportamento elástico normal.
     return super.applyBoundaryConditions(position, value);
   }
 }
@@ -152,10 +104,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   String? _activeToolCallName;
   String  _pendingLocalMarkers = '';
 
-  // NOVO — Acumula os passos do processo de trabalho da resposta
-  // atual em streaming. Nunca perde itens, só cresce — nunca é
-  // limpo a meio, apenas reiniciado no começo de um novo
-  // envio/conversa.
   List<ProcessStep> _currentProcessSteps = [];
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
@@ -175,11 +123,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   final GlobalKey _bottomBarKey = GlobalKey();
   double _bottomBarHeight = 96;
 
-  // Reserva extra fixa acima do topo da lista de mensagens, além do
-  // headerHeight normal — garante uma margem visível entre a última
-  // mensagem visível e o appbar, mesmo ao fazer scroll até ao topo
-  // ou usar o botão "ir para o fundo" (que só afeta o fim da lista,
-  // mas esta reserva protege o topo).
   static const double _kTopScrollLimit = 12.0;
 
   @override
@@ -191,11 +134,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     enabledAppsController.setDefaultIfAbsent('sound', false);
     enabledAppsController.addListener(_onEnabledAppsChanged);
     _scroll.addListener(_onScroll);
-    // Sempre que o texto do input muda (incluindo crescer em altura
-    // por mais linhas), remedimos o bottom bar para que o padding
-    // inferior da lista acompanhe o crescimento — isto é o que
-    // impede o conteúdo de ficar escondido atrás do input quando
-    // ele cresce.
     _ctrl.addListener(_measureBottomBar);
     if (widget.initialConversationId != null) {
       _loadConversation(widget.initialConversationId!);
@@ -276,7 +214,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _activeToolCallLabel = null;
     _activeToolCallName = null;
     _pendingLocalMarkers = '';
-    _currentProcessSteps = []; // NOVO
+    _currentProcessSteps = [];
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
     _notifyHeader();
@@ -350,8 +288,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
     if (calls.isEmpty) return;
     setState(() {
-      _activeToolCallLabel = labelForToolName(calls.first.name);
-      _activeToolCallName = calls.first.name;
+      _currentProcessSteps = [
+        ..._currentProcessSteps,
+        ...calls.map((c) => ProcessStep(
+              toolName: c.name,
+              label: labelForToolName(c.name),
+              done: false,
+            )),
+      ];
     });
     _notifyHeader();
 
@@ -365,10 +309,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
     if (!mounted) return;
 
-    // NOVO — acumula os passos concluídos desta rodada de tool
-    // calls, sem nunca substituir os anteriores.
     setState(() {
-      _currentProcessSteps = [..._currentProcessSteps, ...outcome.processSteps];
+      final n = outcome.processSteps.length;
+      if (n > 0 && _currentProcessSteps.length >= n) {
+        final head = _currentProcessSteps.sublist(0, _currentProcessSteps.length - n);
+        _currentProcessSteps = [...head, ...outcome.processSteps];
+      } else {
+        _currentProcessSteps = [..._currentProcessSteps, ...outcome.processSteps];
+      }
     });
 
     final localMarkersText = buildLocalResultMarkersText(outcome);
@@ -452,7 +400,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _activeToolCallLabel = null;
     _activeToolCallName = null;
     _pendingLocalMarkers = '';
-    _currentProcessSteps = []; // NOVO
+    _currentProcessSteps = [];
     if (isFirst) {
       widget.onFirstMessage();
       widget.onHasMessagesChanged?.call(true);
@@ -785,9 +733,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
   }
 
-  // NOVO — abre diretamente a página de seleção de modelo (reusa a
-  // mesma _ModelSelectPage já usada dentro de showAttachMenuSheet
-  // em aitab_input_bar.dart), sem passar pelo menu completo.
   void _openModelSelectSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -892,7 +837,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
-        _currentProcessSteps = []; // NOVO
+        _currentProcessSteps = [];
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -917,7 +862,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
-        _currentProcessSteps = []; // NOVO
+        _currentProcessSteps = [];
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -960,7 +905,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
-        _currentProcessSteps = []; // NOVO
+        _currentProcessSteps = [];
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -1085,10 +1030,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
-                            // Physics customizada: bloqueia overscroll acima
-                            // do topo (impede o conteúdo de subir até tocar
-                            // o appbar) enquanto mantém o elástico normal no
-                            // fundo da lista.
                             physics: const _ClampedTopScrollPhysics(
                               parent: AlwaysScrollableScrollPhysics(),
                             ),
@@ -1112,6 +1053,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                       s: s,
                                       elements: elements,
                                       thinking: thinking != null ? cleanAiText(thinking) : null,
+                                      isThinkingActive: text.isEmpty && _sending,
                                       showLogoLoader: isThinkingOnly,
                                       activeToolCallLabel: _activeToolCallLabel,
                                       activeToolCallName: _activeToolCallName,
@@ -1215,8 +1157,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ),
           ),
 
-          // Botão "ir para o fundo" agora alinhado à direita (antes
-          // Center) — mantém a mesma distância acima do bottom bar.
           if (!_incognito && (_msgs.isNotEmpty || _streamingTextNotifier.value.isNotEmpty))
             Positioned(
               right: 16,
@@ -1239,9 +1179,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 }
 
-// Versão standalone da seleção de modelo, para abrir diretamente a
-// partir do card "Modelo" do modal de anexar — sem depender do
-// fluxo completo de _AttachMenuSheetContent em aitab_input_bar.dart.
 class _StandaloneModelSelectSheet extends StatelessWidget {
   final AppColorScheme s;
   final AiModel currentModel;

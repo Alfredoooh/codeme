@@ -12,9 +12,9 @@ import 'aitab_models.dart';
 
 const double _kFlatModalRadius = 20.0;
 
-class _SheetHandlebar extends StatelessWidget {
+class SheetHandlebar extends StatelessWidget {
   final AppColorScheme s;
-  const _SheetHandlebar({required this.s});
+  const SheetHandlebar({super.key, required this.s});
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -811,7 +811,7 @@ void showAttachPopup(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _SheetHandlebar(s: s),
+            SheetHandlebar(s: s),
             const SizedBox(height: 8),
             Row(
               children: [

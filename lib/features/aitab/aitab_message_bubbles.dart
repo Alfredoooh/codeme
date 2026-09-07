@@ -1,41 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_message_bubbles.dart
-//
-// MUDANÇAS NESTA VERSÃO:
-// 1) Todo o Cupertino foi removido (import cupertino.dart eliminado;
-//    o único uso — CupertinoActivityIndicator — não estava a ser
-//    usado neste ficheiro de qualquer forma).
-// 2) A fonte da resposta do assistente passa a ser Times New Roman
-//    via fonte LOCAL registada no pubspec.yaml (família
-//    'TimesNewRoman', assets em assets/fonts/Times New Roman/),
-//    aplicada APENAS ao corpo de texto do RichAiText do assistente
-//    — nunca às bolhas do utilizador, nunca a blocos de código,
-//    nunca a labels/botões/ícones. Isto é feito passando um
-//    `bodyTextStyle` (parâmetro já suportado por RichAiText em
-//    richtext.dart) nas quatro chamadas de RichAiText deste
-//    ficheiro (Assistant, Thinking histórico, Streaming, Thinking
-//    em streaming).
-//    NOTA: GoogleFonts.timesNewRoman() NÃO existe — Times New Roman
-//    é fonte da Microsoft, não faz parte do catálogo do Google
-//    Fonts. Por isso aiBodyTextStyle usa TextStyle(fontFamily:
-//    'TimesNewRoman', ...) apontando para a fonte local, e não
-//    GoogleFonts.*. O import de google_fonts mantém-se neste
-//    ficheiro apenas porque outras partes do projeto (fora deste
-//    ficheiro) continuam a usar GoogleFonts.xxx() — se este
-//    ficheiro específico não usar mais nenhuma chamada GoogleFonts,
-//    o import está tecnicamente por usar aqui, mas isso não quebra
-//    a compilação.
-// 3) Sheets substituídos por showModalBottomSheet Android nativo com
-//    curva reduzida (mesma _kFlatModalRadius do drawer), onde antes
-//    usavam showCraftBottomSheet local a este ficheiro para
-//    pensamento/fontes (o showCraftBottomSheet em si é definido em
-//    app_sheet.dart, que não me foi enviado — se ele já usar
-//    showModalBottomSheet Android por baixo, nada muda; caso
-//    contrário, precisa de ser ajustado lá).
-// 4) ToolResultImageCard deixa de mostrar a imagem completa inline
-//    (exceto imagens de pesquisa via ImageSearchCarousel). Agora é
-//    um card "Visualizar gráfico" com miniatura, que abre um
-//    visualizador fullscreen escuro com zoom livre.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:io';
@@ -50,7 +14,6 @@ import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/richtext.dart';
 import '../../core/widgets/app_sheet.dart';
-// TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
 import '../apps/app_types.dart';
 import '../apps/sheets/sheets.dart';
@@ -59,12 +22,6 @@ import 'aitab_widgets_shared.dart';
 import 'aitab_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
 
-// Estilo de corpo de texto usado SOMENTE na resposta da IA (fora de
-// blocos de código). Times New Roman via fonte LOCAL registada no
-// pubspec.yaml (família 'TimesNewRoman'). Nunca é aplicado às
-// bolhas do utilizador, nem a ícones/labels/botões, nem a blocos de
-// código (o RichAiText mantém a fonte monoespaçada nos blocos —
-// este estilo só cobre o texto corrido/prosa).
 TextStyle aiBodyTextStyle(AppColorScheme s) => TextStyle(
       fontFamily: 'TimesNewRoman',
       fontSize: 15,
@@ -145,8 +102,6 @@ class UserBubble extends StatelessWidget {
                 ),
                 if (text.isNotEmpty) const SizedBox(height: 8),
               ],
-              // Bolha do utilizador: fonte normal da app, nunca Times
-              // New Roman — isso é exclusivo da resposta da IA.
               if (text.isNotEmpty)
                 Text(text,
                     style: TextStyle(color: textColor, fontSize: 14)),
@@ -266,12 +221,6 @@ class _ToolResultImageCardState extends State<ToolResultImageCard> {
   Widget build(BuildContext context) {
     final s = widget.s;
     final bytes = _cachedBytes;
-    // Card "Visualizar gráfico" — NÃO mostra a imagem completa
-    // inline na conversa. Só imagens de pesquisa web (search_images,
-    // via ImageSearchCarousel) aparecem diretamente. Gráficos,
-    // mapas mentais, QR codes, tabelas visuais, clima, etc. ficam
-    // atrás deste card e só se veem ao abrir o visualizador
-    // fullscreen.
     return GestureDetector(
       onTap: () => _openFullscreen(context),
       child: Container(
@@ -979,14 +928,12 @@ class AssistantBubble extends StatelessWidget {
               for (final d in extractDocumentResults(text))
                 ToolResultDownloadCard(s: s, base64Data: d.base64Data, filename: d.filename, mimeType: d.mimeType),
               ImageSearchCarousel(s: s, images: extractImages(text)),
-              // Sempre fechado por defeito ao reabrir histórico:
               if (processSteps.isNotEmpty)
                 ProcessCollapsible(s: s, steps: processSteps, isActive: false, startExpanded: false),
               if (thinking != null && thinking!.isNotEmpty)
                 _ThinkingHistoryCollapsible(
                   s: s,
                   thinking: thinking!,
-                  widgetsEnabled: widgetsEnabled,
                 ),
               if (text.isNotEmpty)
                 RichAiText(
@@ -1024,85 +971,18 @@ class AssistantBubble extends StatelessWidget {
 class _ThinkingHistoryCollapsible extends StatelessWidget {
   final AppColorScheme s;
   final String thinking;
-  final bool widgetsEnabled;
-
   const _ThinkingHistoryCollapsible({
     required this.s,
     required this.thinking,
-    required this.widgetsEnabled,
   });
-
-  void _openThinkingModal(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: s.cardBackground,
-      barrierColor: Colors.black.withOpacity(0.35),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  AppIcon('brain', size: 22, color: s.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Pensamento',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
-                child: SingleChildScrollView(
-                  child: RichAiText(
-                    text: thinking,
-                    s: s,
-                    widgetsEnabled: widgetsEnabled,
-                    bodyTextStyle: aiBodyTextStyle(s),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _openThinkingModal(context),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: s.pageBackground,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            AppIcon('brain', size: 16, color: s.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Pensamento',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
-              ),
-            ),
-            AppIcon('arrow_right', size: 14, color: s.onSurfaceVariant),
-          ],
-        ),
-      ),
+    return ThinkingCollapsible(
+      s: s,
+      thinking: thinking,
+      isActive: false,
+      startExpanded: false,
     );
   }
 }
@@ -1191,6 +1071,7 @@ class StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
   final List<StreamElement> elements;
   final String? thinking;
+  final bool isThinkingActive;
   final bool showLogoLoader;
   final String? activeToolCallLabel;
   final String? activeToolCallName;
@@ -1209,6 +1090,7 @@ class StreamingBubble extends StatefulWidget {
     required this.s,
     required this.elements,
     this.thinking,
+    this.isThinkingActive = false,
     this.showLogoLoader = false,
     this.activeToolCallLabel,
     this.activeToolCallName,
@@ -1235,22 +1117,25 @@ class _StreamingBubbleState extends State<StreamingBubble> {
     final thinking = widget.thinking;
     final children = <Widget>[];
 
-    // Processo de trabalho — sempre primeiro, ativo (shimmer) durante
-    // o streaming, nunca perde passos já adicionados.
-    if (widget.processSteps.isNotEmpty) {
-      children.add(ProcessCollapsible(
+    // Pensamento — agora um ThinkingCollapsible próprio, sem modal,
+    // sem ícone de cérebro, texto no mesmo tamanho do "Em processo".
+    if (thinking != null && thinking.isNotEmpty) {
+      children.add(ThinkingCollapsible(
         s: s,
-        steps: widget.processSteps,
-        isActive: true,
+        thinking: thinking,
+        isActive: widget.isThinkingActive,
         startExpanded: true,
       ));
     }
 
-    if (thinking != null && thinking.isNotEmpty) {
-      children.add(_ThinkingCollapsible(
+    // Processo de trabalho — todos os passos de tool calls vivem
+    // aqui dentro, nunca soltos na tela.
+    if (widget.processSteps.isNotEmpty) {
+      children.add(ProcessCollapsible(
         s: s,
-        thinking: thinking,
-        widgetsEnabled: widget.widgetsEnabled,
+        steps: widget.processSteps,
+        isActive: widget.processSteps.any((step) => !step.done),
+        startExpanded: true,
       ));
     }
 
@@ -1344,15 +1229,6 @@ class _StreamingBubbleState extends State<StreamingBubble> {
       }
     }
 
-    if (widget.activeToolCallLabel != null) {
-      anyContent = true;
-      children.add(ToolCallProgressCard(
-        s: s,
-        label: widget.activeToolCallLabel!,
-        toolName: widget.activeToolCallName ?? '',
-      ));
-    }
-
     if (!anyContent && thinking == null && widget.processSteps.isEmpty) {
       children.add(widget.showLogoLoader
           ? const NexaLoaderLogo(size: 28)
@@ -1373,88 +1249,97 @@ class _StreamingBubbleState extends State<StreamingBubble> {
   }
 }
 
-class _ThinkingCollapsible extends StatelessWidget {
+// ══════════════════════════════════════════════════════════════
+// PENSAMENTO — agora o mesmo formato visual do "Em processo":
+// sem modal, sem ícone de cérebro, texto no mesmo tamanho. Shimmer
+// ativo apenas enquanto isActive for true; assim que o pensamento
+// termina, o texto passa a estático.
+// ══════════════════════════════════════════════════════════════
+
+class ThinkingCollapsible extends StatefulWidget {
   final AppColorScheme s;
   final String thinking;
-  final bool widgetsEnabled;
+  final bool isActive;
+  final bool startExpanded;
 
-  const _ThinkingCollapsible({
+  const ThinkingCollapsible({
+    super.key,
     required this.s,
     required this.thinking,
-    required this.widgetsEnabled,
+    required this.isActive,
+    this.startExpanded = true,
   });
 
-  void _openThinkingModal(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: s.cardBackground,
-      barrierColor: Colors.black.withOpacity(0.35),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  AppIcon('brain', size: 22, color: s.onSurfaceVariant),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Pensamento',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
-                child: SingleChildScrollView(
-                  child: RichAiText(
-                    text: thinking,
-                    s: s,
-                    widgetsEnabled: widgetsEnabled,
-                    bodyTextStyle: aiBodyTextStyle(s),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  @override
+  State<ThinkingCollapsible> createState() => _ThinkingCollapsibleState();
+}
+
+class _ThinkingCollapsibleState extends State<ThinkingCollapsible> {
+  late bool _expanded = widget.startExpanded;
+  bool _userOverrode = false;
+  bool _wasActive = true;
+
+  @override
+  void didUpdateWidget(covariant ThinkingCollapsible old) {
+    super.didUpdateWidget(old);
+    if (_wasActive && !widget.isActive && !_userOverrode) {
+      _expanded = false;
+    }
+    _wasActive = widget.isActive;
+  }
+
+  void _toggle() {
+    setState(() {
+      _expanded = !_expanded;
+      _userOverrode = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _openThinkingModal(context),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: s.pageBackground,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            ShimmerBrainIcon(size: 16, color: s.onSurfaceVariant, active: true),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ShimmerText(
-                text: 'Pensando...',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
-                active: true,
+    final s = widget.s;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: _toggle,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                widget.isActive
+                    ? ShimmerText(
+                        text: 'Pensamento',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
+                        active: true,
+                      )
+                    : Text(
+                        'Pensamento',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
+                      ),
+                const SizedBox(width: 6),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 220),
+            crossFadeState: _expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                widget.thinking,
+                style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant, height: 1.4),
               ),
             ),
-            AppIcon('arrow_right', size: 14, color: s.onSurfaceVariant),
-          ],
-        ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
+        ],
       ),
     );
   }
