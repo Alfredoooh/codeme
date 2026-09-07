@@ -333,6 +333,20 @@ class _AppDrawerState extends State<AppDrawer> {
     });
   }
 
+  void _openChatSearch(BuildContext context) {
+    HapticFeedback.lightImpact();
+    _closeThenRun(() {
+      Navigator.of(context).push(_FadePageRoute(
+        builder: (_) => ChatSearchScreen(
+          s: widget.s,
+          onOpenConversation: (id) {
+            widget.onOpenConversation?.call(id);
+          },
+        ),
+      ));
+    });
+  }
+
   Uint8List? _decodeAvatar(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     if (raw.startsWith('http://') || raw.startsWith('https://')) return null;
@@ -450,8 +464,7 @@ class _AppDrawerState extends State<AppDrawer> {
               left: 0, right: 0, bottom: 0,
               child: DrawerBottomFloatingBar(
                 s: s,
-                onSearchTap: () {},
-                onSettingsTap: widget.onSettings,
+                onSearchTap: () => _openChatSearch(context),
                 onNewChatTap: widget.onNewChat != null ? _handleNewChat : null,
               ),
             ),
@@ -493,30 +506,37 @@ class _AppDrawerState extends State<AppDrawer> {
     final sections = <Widget>[];
 
     sections.add(Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: DrawerSettingsGroup(s: s, rows: [
-        DrawerSettingsRow(
-          s: s,
-          iconAsset: 'plugins',
-          label: 'Apps e plugins',
-          onTap: () => _openAllApps(context),
-          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
-        ),
-        DrawerSettingsRow(
-          s: s,
-          iconAsset: 'library',
-          label: 'Biblioteca',
-          onTap: () => _openLibrary(context),
-          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
-        ),
-        DrawerSettingsRow(
-          s: s,
-          iconAsset: 'clock',
-          label: 'Tarefas agendadas',
-          onTap: () => _openScheduledTasks(context),
-          trailing: AppIcon('chevron_forward', size: 16, color: s.onSurfaceVariant),
-        ),
-      ]),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: DrawerSquareAction(
+              s: s,
+              iconAsset: 'plugins',
+              label: 'Apps e\nplugins',
+              onTap: () => _openAllApps(context),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DrawerSquareAction(
+              s: s,
+              iconAsset: 'library',
+              label: 'Biblioteca',
+              onTap: () => _openLibrary(context),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DrawerSquareAction(
+              s: s,
+              iconAsset: 'clock',
+              label: 'Tarefas\nagendadas',
+              onTap: () => _openScheduledTasks(context),
+            ),
+          ),
+        ],
+      ),
     ));
 
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
@@ -586,57 +606,27 @@ class _AppDrawerState extends State<AppDrawer> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Cards de lista das opções do drawer
+// Cards quadrados de ação do drawer (Apps / Biblioteca / Tarefas)
 // ══════════════════════════════════════════════════════════════
 
-class DrawerSettingsGroup extends StatelessWidget {
-  final AppColorScheme s;
-  final List<Widget> rows;
-  const DrawerSettingsGroup({super.key, required this.s, required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        children: [
-          for (int i = 0; i < rows.length; i++) ...[
-            rows[i],
-            if (i != rows.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 52,
-                color: s.outline.withOpacity(0.12),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class DrawerSettingsRow extends StatefulWidget {
+class DrawerSquareAction extends StatefulWidget {
   final AppColorScheme s;
   final String iconAsset;
   final String label;
   final VoidCallback onTap;
-  final Widget trailing;
-  const DrawerSettingsRow({
+  const DrawerSquareAction({
     super.key,
     required this.s,
     required this.iconAsset,
     required this.label,
     required this.onTap,
-    required this.trailing,
   });
-  @override State<DrawerSettingsRow> createState() => _DrawerSettingsRowState();
+
+  @override
+  State<DrawerSquareAction> createState() => _DrawerSquareActionState();
 }
 
-class _DrawerSettingsRowState extends State<DrawerSettingsRow> {
+class _DrawerSquareActionState extends State<DrawerSquareAction> {
   bool _p = false;
 
   @override
@@ -651,27 +641,42 @@ class _DrawerSettingsRowState extends State<DrawerSettingsRow> {
         HapticFeedback.lightImpact();
         widget.onTap();
       },
-      child: Container(
-        color: _p ? s.hover : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(children: [
-          SizedBox(
-            width: 28,
-            child: AppIcon(widget.iconAsset, size: 20, color: s.onSurface),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SelectionContainer.disabled(
-              child: Text(
-                widget.label,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.onSurface),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+      child: AnimatedScale(
+        scale: _p ? 0.95 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _p ? s.hover : s.cardBackground,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                AppIcon(widget.iconAsset, size: 22, color: s.onSurface),
+                const SizedBox(height: 8),
+                SelectionContainer.disabled(
+                  child: Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 1.15,
+                      color: s.onSurface,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          widget.trailing,
-        ]),
+        ),
       ),
     );
   }
@@ -1054,11 +1059,11 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL de opções da conversa — Android bottom sheet, curva reduzida
-// (toca as bordas laterais e o fundo, curva pequena só no topo)
+// MODAL de opções da conversa — bottom sheet com handlebar,
+// curva intermédia (nem quase-reta, nem muito arredondada)
 // ══════════════════════════════════════════════════════════════
 
-const double _kFlatModalRadius = 10.0;
+const double _kFlatModalRadius = 20.0;
 
 void showConversationOptionsModal(
   BuildContext context,
@@ -1097,6 +1102,28 @@ void showConversationOptionsModal(
   }
 }
 
+class _ModalHandlebar extends StatelessWidget {
+  final AppColorScheme s;
+  const _ModalHandlebar({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: s.onSurfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ConversationOptionsModalContent extends StatelessWidget {
   final AppColorScheme s;
   final ConversationItem item;
@@ -1109,8 +1136,9 @@ class _ConversationOptionsModalContent extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _ModalHandlebar(s: s),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
             child: SelectionContainer.disabled(
               child: Text(
                 item.title,
@@ -1198,6 +1226,7 @@ void showAccountOptionsPopupAt(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _ModalHandlebar(s: s),
           InkWell(
             onTap: () => Navigator.pop(sheetContext, _AccountPopupAction.toggleTheme),
             child: Padding(
@@ -1441,20 +1470,19 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// BOTTOM FLOATING BAR
+// BOTTOM FLOATING BAR — searchbar (bordas curvas) + FAB circular
+// de nova conversa ao lado direito
 // ══════════════════════════════════════════════════════════════
 
 class DrawerBottomFloatingBar extends StatelessWidget {
   final AppColorScheme s;
   final VoidCallback? onSearchTap;
-  final VoidCallback? onSettingsTap;
   final VoidCallback? onNewChatTap;
 
   const DrawerBottomFloatingBar({
     super.key,
     required this.s,
     this.onSearchTap,
-    this.onSettingsTap,
     this.onNewChatTap,
   });
 
@@ -1464,21 +1492,14 @@ class DrawerBottomFloatingBar extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(
         12, 8, 12, 8 + MediaQuery.of(context).padding.bottom,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: s.cardBackground.withOpacity(0.88),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
-              boxShadow: s.cardShadow,
-            ),
-            child: Row(children: [
-              Expanded(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
@@ -1486,21 +1507,22 @@ class DrawerBottomFloatingBar extends StatelessWidget {
                     onSearchTap?.call();
                   },
                   child: Container(
-                    height: 40,
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    height: 56,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
                     decoration: BoxDecoration(
-                      color: s.hover,
-                      borderRadius: BorderRadius.circular(20),
+                      color: s.cardBackground.withOpacity(0.88),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: s.outline.withOpacity(0.15), width: 1),
+                      boxShadow: s.cardShadow,
                     ),
                     child: Row(children: [
-                      AppIcon('search', size: 16, color: s.onSurfaceVariant),
-                      const SizedBox(width: 8),
+                      AppIcon('search', size: 18, color: s.onSurfaceVariant),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: SelectionContainer.disabled(
                           child: Text(
                             'Pesquisar',
-                            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+                            style: TextStyle(fontSize: 15, color: s.onSurfaceVariant),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -1509,35 +1531,24 @@ class DrawerBottomFloatingBar extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
-              _BottomBarIconButton(
-                s: s,
-                assetName: 'settings',
-                onTap: onSettingsTap,
-              ),
-              const SizedBox(width: 2),
-              _BottomBarIconButton(
-                s: s,
-                assetName: 'new_chat',
-                onTap: onNewChatTap,
-              ),
-            ]),
+            ),
           ),
-        ),
+          const SizedBox(width: 10),
+          _NewChatFab(s: s, onTap: onNewChatTap),
+        ],
       ),
     );
   }
 }
 
-class _BottomBarIconButton extends StatefulWidget {
+class _NewChatFab extends StatefulWidget {
   final AppColorScheme s;
-  final String assetName;
   final VoidCallback? onTap;
-  const _BottomBarIconButton({required this.s, required this.assetName, this.onTap});
-  @override State<_BottomBarIconButton> createState() => _BottomBarIconButtonState();
+  const _NewChatFab({required this.s, this.onTap});
+  @override State<_NewChatFab> createState() => _NewChatFabState();
 }
 
-class _BottomBarIconButtonState extends State<_BottomBarIconButton> {
+class _NewChatFabState extends State<_NewChatFab> {
   bool _p = false;
 
   @override
@@ -1553,18 +1564,19 @@ class _BottomBarIconButtonState extends State<_BottomBarIconButton> {
         widget.onTap?.call();
       },
       child: AnimatedScale(
-        scale: _p ? 0.9 : 1.0,
+        scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
         child: Container(
-          width: 40,
-          height: 40,
+          width: 56,
+          height: 56,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _p ? s.hover : Colors.transparent,
+            color: s.primary,
             shape: BoxShape.circle,
+            boxShadow: s.cardShadow,
           ),
-          child: AppIcon(widget.assetName, size: 19, color: s.onSurface),
+          child: AppIcon('new_chat', size: 22, color: s.onPrimary),
         ),
       ),
     );

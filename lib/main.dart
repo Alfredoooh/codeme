@@ -588,22 +588,8 @@ class _AppHeader extends StatelessWidget {
       ]),
     );
 
-    if (!transparent) {
-      return Container(color: headerBackground, child: content);
-    }
-
-    return ClipRect(
-      child: BackdropFilter(
-        // Blur reduzido ~70% face à versão anterior (12 -> 1.2) —
-        // quase impercetível, praticamente só a cor de fundo.
-        filter: ImageFilter.blur(sigmaX: 1.2, sigmaY: 1.2),
-        child: Container(
-          decoration: BoxDecoration(
-            color: headerBackground.withOpacity(0.82),
-          ),
-          child: content,
-        ),
-      ),
-    );
+    // Appbar sempre sólido: sem blur, sem opacidade, mesma cor
+    // independentemente do valor de `transparent` recebido.
+    return Container(color: headerBackground, child: content);
   }
 }
