@@ -30,6 +30,8 @@ import '../../services/api_service.dart';
 import '../apps/app_types.dart';
 // TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
+// Import necessário para summaryForToolResult aceder a kVisualTools/kDocumentTools.
+import 'aitab_tools.dart';
 
 
 String iconForEditorType(EditorType type) {
@@ -802,4 +804,97 @@ bool endsWithPartialMarker(String text) {
     }
   }
   return false;
+}
+
+// ══════════════════════════════════════════════════════════════
+// PROCESSO DE TRABALHO — passos acumulados de tool calls, exibidos
+// no collapsible "Em processo" (separado do "Pensamento"). A lista
+// NUNCA perde itens nem oculta um processo já adicionado — só
+// acumula, do início ao fim de uma resposta, e persiste no
+// histórico salvo (sempre fechado por defeito ao reabrir).
+// ══════════════════════════════════════════════════════════════
+
+class ProcessStep {
+  final String toolName;
+  final String label;
+  final String? summary;
+  final bool done;
+
+  const ProcessStep({
+    required this.toolName,
+    required this.label,
+    this.summary,
+    this.done = false,
+  });
+
+  ProcessStep copyWith({String? summary, bool? done}) => ProcessStep(
+        toolName: toolName,
+        label: label,
+        summary: summary ?? this.summary,
+        done: done ?? this.done,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'toolName': toolName,
+        'label': label,
+        if (summary != null) 'summary': summary,
+        'done': done,
+      };
+
+  factory ProcessStep.fromJson(Map<String, dynamic> j) => ProcessStep(
+        toolName: j['toolName']?.toString() ?? '',
+        label: j['label']?.toString() ?? '',
+        summary: j['summary']?.toString(),
+        done: j['done'] == true,
+      );
+}
+
+/// Gera o resumo curto e automático mostrado ao lado de cada passo
+/// concluído do processo. Nunca usa texto bruto da tool — apenas
+/// contagens/estados simples por categoria.
+///
+/// NOTA DE IMPLEMENTAÇÃO: esta função referencia os conjuntos
+/// kVisualTools/kDocumentTools definidos em aitab_tools.dart. Se o
+/// compilador acusar import cíclico entre aitab_models.dart e
+/// aitab_tools.dart, mover esta função para aitab_tools.dart em vez
+/// de a deixar aqui — funcionalmente é equivalente, o importante é
+/// que exista e seja chamada a partir de processToolCalls.
+String summaryForToolResult(String toolName, Map<String, dynamic> resultJson) {
+  if (toolName == 'web_search') {
+    final results = resultJson['results'];
+    final count = results is List ? results.length : 0;
+    return count == 1 ? '1 resultado encontrado' : '$count resultados encontrados';
+  }
+  if (toolName == 'search_images') {
+    final images = resultJson['images'];
+    final count = images is List ? images.length : 0;
+    return count == 1 ? '1 imagem encontrada' : '$count imagens encontradas';
+  }
+  if (toolName == 'search_videos') {
+    final videos = resultJson['videos'];
+    final count = videos is List ? videos.length : 0;
+    return count == 1 ? '1 vídeo encontrado' : '$count vídeos encontrados';
+  }
+  if (toolName == 'search_books') {
+    final books = resultJson['books'];
+    final count = books is List ? books.length : 0;
+    return count == 1 ? '1 livro encontrado' : '$count livros encontrados';
+  }
+  const visualToolNames = {
+    'generate_chart', 'generate_function_plot', 'generate_math_sheet',
+    'generate_mindmap', 'generate_qrcode', 'generate_barcode',
+    'generate_table_image', 'download_image_for_project', 'get_weather',
+    'convert_image_format', 'resize_image', 'crop_image', 'watermark_image',
+  };
+  const documentToolNames = {
+    'create_pdf', 'create_docx', 'create_xlsx', 'create_pptx',
+    'create_file', 'csv_to_xlsx', 'merge_pdfs', 'split_pdf_pages',
+  };
+  if (visualToolNames.contains(toolName) || documentToolNames.contains(toolName)) {
+    return 'Ficheiro pronto';
+  }
+  if (toolName == 'get_weather' || toolName == 'search_market') {
+    return 'Dados obtidos';
+  }
+  return 'Concluído';
 }

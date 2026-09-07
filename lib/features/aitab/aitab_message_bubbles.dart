@@ -32,6 +32,10 @@
 //    app_sheet.dart, que não me foi enviado — se ele já usar
 //    showModalBottomSheet Android por baixo, nada muda; caso
 //    contrário, precisa de ser ajustado lá).
+// 4) ToolResultImageCard deixa de mostrar a imagem completa inline
+//    (exceto imagens de pesquisa via ImageSearchCarousel). Agora é
+//    um card "Visualizar gráfico" com miniatura, que abre um
+//    visualizador fullscreen escuro com zoom livre.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:io';
@@ -262,44 +266,64 @@ class _ToolResultImageCardState extends State<ToolResultImageCard> {
   Widget build(BuildContext context) {
     final s = widget.s;
     final bytes = _cachedBytes;
+    // Card "Visualizar gráfico" — NÃO mostra a imagem completa
+    // inline na conversa. Só imagens de pesquisa web (search_images,
+    // via ImageSearchCarousel) aparecem diretamente. Gráficos,
+    // mapas mentais, QR codes, tabelas visuais, clima, etc. ficam
+    // atrás deste card e só se veem ao abrir o visualizador
+    // fullscreen.
     return GestureDetector(
       onTap: () => _openFullscreen(context),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
-          color: s.pageBackground,
-          borderRadius: BorderRadius.zero,
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: s.cardShadow,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
           children: [
             if (bytes != null)
-              Image.memory(bytes, fit: BoxFit.contain)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Image.memory(bytes, fit: BoxFit.cover),
+                ),
+              )
             else
               Container(
-                height: 160,
-                color: s.hover,
-                alignment: Alignment.center,
-                child: Text(
-                  'Imagem inválida',
-                  style: TextStyle(color: s.onSurfaceVariant, fontSize: 12),
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: s.hover,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Icon(Icons.image_not_supported_outlined, size: 18, color: s.onSurfaceVariant),
               ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      widget.label,
-                      style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w500),
-                    ),
+                  Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface),
                   ),
-                  AppIcon('expand', size: 16, color: s.onSurfaceVariant),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Toque para visualizar',
+                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+                  ),
                 ],
               ),
             ),
+            AppIcon('expand', size: 18, color: s.onSurfaceVariant),
           ],
         ),
       ),
@@ -314,62 +338,97 @@ class _FullscreenImageScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    final topInset = MediaQuery.of(context).padding.top;
-    return Material(
-      type: MaterialType.transparency,
-      child: ColoredBox(
-        color: s.pageBackground,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  child: Image.memory(bytes, fit: BoxFit.contain),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 8.0,
+              boundaryMargin: const EdgeInsets.all(double.infinity),
+              clipBehavior: Clip.none,
+              child: Center(
+                child: Image.memory(
+                  bytes,
+                  fit: BoxFit.contain,
                 ),
               ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        s.pageBackground,
-                        s.pageBackground.withOpacity(0.0),
-                      ],
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      _CircularBackButton(
-                        s: s,
-                        onTap: () => Navigator.pop(context),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: s.onSurface,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.55),
+                      Colors.black.withOpacity(0.0),
                     ],
                   ),
                 ),
+                child: Row(
+                  children: [
+                    _CircularBackButtonDark(onTap: () => Navigator.pop(context)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircularBackButtonDark extends StatefulWidget {
+  final VoidCallback onTap;
+  const _CircularBackButtonDark({required this.onTap});
+  @override
+  State<_CircularBackButtonDark> createState() => _CircularBackButtonDarkState();
+}
+
+class _CircularBackButtonDarkState extends State<_CircularBackButtonDark> {
+  bool _p = false;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 110),
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _p ? Colors.white24 : Colors.white12,
+          shape: BoxShape.circle,
         ),
+        child: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
       ),
     );
   }
@@ -880,6 +939,7 @@ class AssistantBubble extends StatelessWidget {
   final String text;
   final String? thinking;
   final List<LocalCanvasItem> canvases;
+  final List<ProcessStep> processSteps;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
   final VoidCallback onThumbUp;
   final VoidCallback onThumbDown;
@@ -894,6 +954,7 @@ class AssistantBubble extends StatelessWidget {
     required this.text,
     this.thinking,
     required this.canvases,
+    this.processSteps = const [],
     required this.onOpenCanvas,
     required this.onThumbUp,
     required this.onThumbDown,
@@ -918,15 +979,15 @@ class AssistantBubble extends StatelessWidget {
               for (final d in extractDocumentResults(text))
                 ToolResultDownloadCard(s: s, base64Data: d.base64Data, filename: d.filename, mimeType: d.mimeType),
               ImageSearchCarousel(s: s, images: extractImages(text)),
+              // Sempre fechado por defeito ao reabrir histórico:
+              if (processSteps.isNotEmpty)
+                ProcessCollapsible(s: s, steps: processSteps, isActive: false, startExpanded: false),
               if (thinking != null && thinking!.isNotEmpty)
                 _ThinkingHistoryCollapsible(
                   s: s,
                   thinking: thinking!,
                   widgetsEnabled: widgetsEnabled,
                 ),
-              // Times New Roman aplicado apenas à prosa da resposta da
-              // IA. RichAiText usa bodyTextStyle para o texto normal e
-              // mantém a fonte de código nos blocos ```.
               if (text.isNotEmpty)
                 RichAiText(
                   text: text
@@ -1133,6 +1194,7 @@ class StreamingBubble extends StatefulWidget {
   final bool showLogoLoader;
   final String? activeToolCallLabel;
   final String? activeToolCallName;
+  final List<ProcessStep> processSteps;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
@@ -1150,6 +1212,7 @@ class StreamingBubble extends StatefulWidget {
     this.showLogoLoader = false,
     this.activeToolCallLabel,
     this.activeToolCallName,
+    this.processSteps = const [],
     required this.widgetsEnabled,
     required this.onEnableWidgets,
     required this.onSuggestionTap,
@@ -1171,6 +1234,17 @@ class _StreamingBubbleState extends State<StreamingBubble> {
     final s = widget.s;
     final thinking = widget.thinking;
     final children = <Widget>[];
+
+    // Processo de trabalho — sempre primeiro, ativo (shimmer) durante
+    // o streaming, nunca perde passos já adicionados.
+    if (widget.processSteps.isNotEmpty) {
+      children.add(ProcessCollapsible(
+        s: s,
+        steps: widget.processSteps,
+        isActive: true,
+        startExpanded: true,
+      ));
+    }
 
     if (thinking != null && thinking.isNotEmpty) {
       children.add(_ThinkingCollapsible(
@@ -1279,7 +1353,7 @@ class _StreamingBubbleState extends State<StreamingBubble> {
       ));
     }
 
-    if (!anyContent && thinking == null) {
+    if (!anyContent && thinking == null && widget.processSteps.isEmpty) {
       children.add(widget.showLogoLoader
           ? const NexaLoaderLogo(size: 28)
           : AiSmallDotsLoader(color: s.onSurfaceVariant));

@@ -36,6 +36,7 @@ class ChatMessage {
   final String? toolCallId; // usado em mensagens role:"tool" — id da chamada que este resultado responde
   final List<Map<String, dynamic>>? toolCalls; // usado em mensagens role:"assistant" que pediram tool calls
   final String? name; // nome da função, usado em mensagens role:"tool"
+  final List<Map<String, dynamic>>? processSteps; // passos do processo de trabalho
 
   const ChatMessage({
     required this.role,
@@ -44,6 +45,7 @@ class ChatMessage {
     this.toolCallId,
     this.toolCalls,
     this.name,
+    this.processSteps,
   });
 
   Map<String, dynamic> toJson() => {
@@ -53,6 +55,7 @@ class ChatMessage {
         if (toolCallId != null) 'tool_call_id': toolCallId,
         if (toolCalls != null) 'tool_calls': toolCalls,
         if (name != null) 'name': name,
+        if (processSteps != null && processSteps!.isNotEmpty) 'process_steps': processSteps,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -66,6 +69,9 @@ class ChatMessage {
             ? (j['tool_calls'] as List).whereType<Map<String, dynamic>>().toList()
             : null,
         name: j['name']?.toString(),
+        processSteps: (j['process_steps'] is List)
+            ? (j['process_steps'] as List).whereType<Map<String, dynamic>>().toList()
+            : null,
       );
 }
 

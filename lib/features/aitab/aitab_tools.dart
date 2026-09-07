@@ -211,12 +211,27 @@ class ToolExecutionOutcome {
   final List<DocumentToolResult> documents;
   final List<ImagesToolResult> images;
   final List<ChatMessage> toolResultMessages;
+  final List<ProcessStep> processSteps; // NOVO
+
   const ToolExecutionOutcome({
     required this.visuals,
     required this.documents,
     required this.images,
     required this.toolResultMessages,
+    required this.processSteps,
   });
+}
+
+/// Gera o ProcessStep concluído a partir do resultado bruto de uma
+/// tool — usado dentro de processToolCalls para acumular a lista
+/// "Em processo". Nunca remove ou substitui um passo já criado.
+ProcessStep buildCompletedProcessStep(String toolName, Map<String, dynamic> resultJson) {
+  return ProcessStep(
+    toolName: toolName,
+    label: labelForToolName(toolName),
+    summary: summaryForToolResult(toolName, resultJson),
+    done: true,
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -351,9 +366,15 @@ Future<ToolExecutionOutcome> processToolCalls(
   final documents = <DocumentToolResult>[];
   final images = <ImagesToolResult>[];
   final toolResultMsgs = <ChatMessage>[];
+  final processSteps = <ProcessStep>[]; // NOVO
 
   for (final call in calls) {
     final resultJson = await executeToolCall(call, history);
+
+    // NOVO — acumula sempre, antes de qualquer 'continue' abaixo,
+    // para que o processo nunca perca um passo mesmo que o
+    // resultado caia no passthrough genérico.
+    processSteps.add(buildCompletedProcessStep(call.name, resultJson));
 
     if (kImageSearchTools.contains(call.name)) {
       final marker = buildImagesMarker(resultJson);
@@ -422,6 +443,7 @@ Future<ToolExecutionOutcome> processToolCalls(
     documents: documents,
     images: images,
     toolResultMessages: toolResultMsgs,
+    processSteps: processSteps, // NOVO
   );
 }
 

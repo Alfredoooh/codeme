@@ -29,6 +29,12 @@
 //    nunca ficar atrás do input. Chamado tanto no post-frame
 //    callback existente como sempre que _ctrl muda (novo listener).
 // 4) Nenhum uso de Cupertino neste ficheiro (já não havia).
+// 5) Adicionado `processSteps` ao ChatMessage final, passado ao
+//    AssistantBubble e StreamingBubble, e acumulado no estado
+//    `_currentProcessSteps` durante tool calls.
+// 6) Modal de anexar corrigido para nova assinatura de
+//    `showAttachPopup` com `onChooseModel`, e adicionado
+//    `_StandaloneModelSelectSheet`.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -145,6 +151,12 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   String? _activeToolCallLabel;
   String? _activeToolCallName;
   String  _pendingLocalMarkers = '';
+
+  // NOVO — Acumula os passos do processo de trabalho da resposta
+  // atual em streaming. Nunca perde itens, só cresce — nunca é
+  // limpo a meio, apenas reiniciado no começo de um novo
+  // envio/conversa.
+  List<ProcessStep> _currentProcessSteps = [];
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
@@ -264,6 +276,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _activeToolCallLabel = null;
     _activeToolCallName = null;
     _pendingLocalMarkers = '';
+    _currentProcessSteps = []; // NOVO
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
     _notifyHeader();
@@ -352,6 +365,12 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
     if (!mounted) return;
 
+    // NOVO — acumula os passos concluídos desta rodada de tool
+    // calls, sem nunca substituir os anteriores.
+    setState(() {
+      _currentProcessSteps = [..._currentProcessSteps, ...outcome.processSteps];
+    });
+
     final localMarkersText = buildLocalResultMarkersText(outcome);
     if (localMarkersText.isNotEmpty) {
       _streamingTextNotifier.value = localMarkersText;
@@ -433,6 +452,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _activeToolCallLabel = null;
     _activeToolCallName = null;
     _pendingLocalMarkers = '';
+    _currentProcessSteps = []; // NOVO
     if (isFirst) {
       widget.onFirstMessage();
       widget.onHasMessagesChanged?.call(true);
@@ -510,7 +530,13 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
         setState(() {
           if (combined.trim().isNotEmpty || scan.items.isNotEmpty) {
-            _msgs.add(ChatMessage(role: 'assistant', content: combined));
+            _msgs.add(ChatMessage(
+              role: 'assistant',
+              content: combined,
+              processSteps: _currentProcessSteps.isEmpty
+                  ? null
+                  : _currentProcessSteps.map((p) => p.toJson()).toList(),
+            ));
           }
           _canvases.addAll(scan.items);
           _sending = false;
@@ -751,11 +777,39 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     showAttachPopup(
       context,
       AppTheme.of(context),
-      anchorKey: _attachButtonKey,
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
+      onChooseModel: _openModelSelectSheet,
       onSelectTool: _onToolSelected,
+    );
+  }
+
+  // NOVO — abre diretamente a página de seleção de modelo (reusa a
+  // mesma _ModelSelectPage já usada dentro de showAttachMenuSheet
+  // em aitab_input_bar.dart), sem passar pelo menu completo.
+  void _openModelSelectSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.of(context).isDark
+          ? AppTheme.of(context).cardBackground
+          : AppTheme.of(context).floatingSurface,
+      barrierColor: Colors.black.withOpacity(0.32),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: _StandaloneModelSelectSheet(
+          s: AppTheme.of(context),
+          currentModel: _model,
+          onPick: (model) {
+            _onModelSelected(model);
+            Navigator.pop(ctx);
+          },
+        ),
+      ),
     );
   }
 
@@ -838,6 +892,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
+        _currentProcessSteps = []; // NOVO
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -862,6 +917,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
+        _currentProcessSteps = []; // NOVO
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -904,6 +960,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
+        _currentProcessSteps = []; // NOVO
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -1049,7 +1106,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                     final thinking = _streamingThinkNotifier.value;
                                     final isThinkingOnly = text.isEmpty &&
                                         (thinking == null || thinking.isEmpty) &&
-                                        _activeToolCallLabel == null;
+                                        _activeToolCallLabel == null &&
+                                        _currentProcessSteps.isEmpty;
                                     return StreamingBubble(
                                       s: s,
                                       elements: elements,
@@ -1057,6 +1115,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                       showLogoLoader: isThinkingOnly,
                                       activeToolCallLabel: _activeToolCallLabel,
                                       activeToolCallName: _activeToolCallName,
+                                      processSteps: _currentProcessSteps,
                                       widgetsEnabled: _widgetsEnabled,
                                       onEnableWidgets: () => setWidgetsEnabled(true),
                                       onSuggestionTap: sendSuggestedMessage,
@@ -1090,6 +1149,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                     text: thinkScan.cleanText,
                                     thinking: thinkScan.thinking,
                                     canvases: msgCanvases,
+                                    processSteps: (msg.processSteps ?? [])
+                                        .map((j) => ProcessStep.fromJson(j))
+                                        .toList(),
                                     onOpenCanvas: _onOpenCanvas,
                                     onThumbUp: () => _onAssistantThumbUp(i),
                                     onThumbDown: () => _onAssistantThumbDown(i),
@@ -1172,6 +1234,74 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               ),
             ),
         ]),
+      ),
+    );
+  }
+}
+
+// Versão standalone da seleção de modelo, para abrir diretamente a
+// partir do card "Modelo" do modal de anexar — sem depender do
+// fluxo completo de _AttachMenuSheetContent em aitab_input_bar.dart.
+class _StandaloneModelSelectSheet extends StatelessWidget {
+  final AppColorScheme s;
+  final AiModel currentModel;
+  final ValueChanged<AiModel> onPick;
+  const _StandaloneModelSelectSheet({
+    required this.s,
+    required this.currentModel,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Modelo',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
+          const SizedBox(height: 10),
+          for (final model in AiModel.values)
+            GestureDetector(
+              onTap: () => onPick(model),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: model == currentModel ? s.primary.withOpacity(0.1) : s.surface,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            model.label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: model == currentModel ? FontWeight.w600 : FontWeight.w500,
+                              color: s.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            model.description,
+                            style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (model == currentModel)
+                      AppIcon('check', color: s.primary, size: 20),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

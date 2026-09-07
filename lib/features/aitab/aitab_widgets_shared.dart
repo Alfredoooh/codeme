@@ -10,6 +10,28 @@ import '../../core/widgets/animated_canvas_icon.dart';
 import '../apps/app_types.dart';
 import 'aitab_models.dart';
 
+const double _kFlatModalRadius = 20.0;
+
+class _SheetHandlebar extends StatelessWidget {
+  final AppColorScheme s;
+  const _SheetHandlebar({required this.s});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: s.onSurfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 // SHIMMER TEXT
@@ -768,87 +790,188 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
 void showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
-  required GlobalKey anchorKey,
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
+  required VoidCallback onChooseModel,
   required ValueChanged<EditorType> onSelectTool,
 }) async {
-  final anchorContext = anchorKey.currentContext;
-  if (anchorContext == null) return;
-  final box = anchorContext.findRenderObject() as RenderBox;
-  final anchorOffset = box.localToGlobal(Offset.zero);
-  final anchorSize = box.size;
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final screenSize = overlayBox.size;
-
-  final RelativeRect position = RelativeRect.fromLTRB(
-    anchorOffset.dx,
-    anchorOffset.dy,
-    screenSize.width - (anchorOffset.dx + anchorSize.width),
-    screenSize.height - (anchorOffset.dy + anchorSize.height),
-  );
-
-  final result = await showMenu<int>(
+  await showModalBottomSheet<void>(
     context: context,
-    position: position,
-    color: s.floatingSurface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: s.outline.withOpacity(0.25)),
+    backgroundColor: s.cardBackground,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
     ),
-    items: [
-      PopupMenuItem<int>(
-        value: 0,
-        padding: EdgeInsets.zero,
-        child: _buildAttachMenuItem(s, 'folder', 'Arquivos', 'Enviar qualquer tipo de arquivo'),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SheetHandlebar(s: s),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _AttachOptionCardShared(
+                    s: s,
+                    assetName: 'folder_upload',
+                    label: 'Arquivos',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      onFiles();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _AttachOptionCardShared(
+                    s: s,
+                    assetName: 'image',
+                    label: 'Fotos',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      onPhotos();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _AttachOptionCardShared(
+                    s: s,
+                    assetName: 'camera',
+                    label: 'Câmera',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      onCamera();
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _AttachSheetItem(
+              s: s,
+              iconAsset: 'sliders',
+              label: 'Modelo',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                onChooseModel();
+              },
+            ),
+          ],
+        ),
       ),
-      PopupMenuItem<int>(
-        value: 1,
-        padding: EdgeInsets.zero,
-        child: _buildAttachMenuItem(s, 'image', 'Fotos', 'Enviar fotos da galeria'),
-      ),
-      PopupMenuItem<int>(
-        value: 2,
-        padding: EdgeInsets.zero,
-        child: _buildAttachMenuItem(s, 'camera', 'Câmera', 'Tirar uma foto agora'),
-      ),
-    ],
+    ),
   );
+}
 
-  switch (result) {
-    case 0: onFiles(); break;
-    case 1: onPhotos(); break;
-    case 2: onCamera(); break;
+// Card quadrado, mesmo estilo visual do DrawerSquareAction do
+// drawer (fundo s.cardBackground/s.hover, ícone + label centrados).
+class _AttachOptionCardShared extends StatefulWidget {
+  final AppColorScheme s;
+  final String assetName;
+  final String label;
+  final VoidCallback onTap;
+  const _AttachOptionCardShared({
+    required this.s,
+    required this.assetName,
+    required this.label,
+    required this.onTap,
+  });
+  @override
+  State<_AttachOptionCardShared> createState() => _AttachOptionCardSharedState();
+}
+
+class _AttachOptionCardSharedState extends State<_AttachOptionCardShared> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _p = true),
+      onTapCancel: () => setState(() => _p = false),
+      onTapUp: (_) => setState(() => _p = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _p ? 0.95 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _p ? s.hover : s.cardBackground,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AppIcon(widget.assetName, size: 22, color: s.onSurface),
+                const SizedBox(height: 8),
+                Text(
+                  widget.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: s.onSurface),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-Widget _buildAttachMenuItem(AppColorScheme s, String assetName, String label, String subtitle) {
-  return Container(
-    margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.transparent,
+// Item de lista simples — usado só para a linha "Modelo" abaixo dos
+// cards.
+class _AttachSheetItem extends StatelessWidget {
+  final AppColorScheme s;
+  final String iconAsset;
+  final String label;
+  final VoidCallback onTap;
+  const _AttachSheetItem({
+    required this.s,
+    required this.iconAsset,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
       borderRadius: BorderRadius.circular(14),
-    ),
-    child: Row(
-      children: [
-        AppIcon(assetName, size: 18, color: s.onSurface),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurface)),
-              const SizedBox(height: 1),
-              Text(subtitle, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
-            ],
-          ),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(14),
         ),
-      ],
-    ),
-  );
+        child: Row(
+          children: [
+            AppIcon(iconAsset, size: 18, color: s.onSurface),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500),
+              ),
+            ),
+            AppIcon('chevron_forward', size: 14, color: s.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════

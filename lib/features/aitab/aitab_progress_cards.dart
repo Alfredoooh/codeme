@@ -595,3 +595,196 @@ Future<void> showWidgetStreamingModal(
     ),
   );
 }
+
+// ══════════════════════════════════════════════════════════════
+// COLLAPSIBLE "EM PROCESSO" — lista acumulada de passos de tool
+// calls. Sem fundo/card — texto no tom do corpo, como o
+// "Pensamento". Começa aberto, fecha sozinho no fim, mas o
+// utilizador pode abrir/fechar livremente a qualquer momento. Os
+// passos NUNCA são removidos ou ocultados individualmente — só a
+// visibilidade do bloco inteiro (expandido/colapsado) muda.
+// ══════════════════════════════════════════════════════════════
+
+class ProcessCollapsible extends StatefulWidget {
+  final AppColorScheme s;
+  final List<ProcessStep> steps;
+  final bool isActive;
+  final bool startExpanded;
+
+  const ProcessCollapsible({
+    super.key,
+    required this.s,
+    required this.steps,
+    required this.isActive,
+    this.startExpanded = true,
+  });
+
+  @override
+  State<ProcessCollapsible> createState() => _ProcessCollapsibleState();
+}
+
+class _ProcessCollapsibleState extends State<ProcessCollapsible> {
+  late bool _expanded = widget.startExpanded;
+  bool _userOverrode = false;
+  bool _wasActive = true;
+
+  @override
+  void didUpdateWidget(covariant ProcessCollapsible old) {
+    super.didUpdateWidget(old);
+    if (_wasActive && !widget.isActive && !_userOverrode) {
+      _expanded = false;
+    }
+    _wasActive = widget.isActive;
+  }
+
+  void _toggle() {
+    setState(() {
+      _expanded = !_expanded;
+      _userOverrode = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    if (widget.steps.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: _toggle,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                widget.isActive
+                    ? ShimmerText(
+                        text: 'Em processo',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
+                        active: true,
+                      )
+                    : Text(
+                        'Em processo',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurfaceVariant),
+                      ),
+                const SizedBox(width: 6),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 220),
+            crossFadeState: _expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _ProcessStepsList(s: s, steps: widget.steps, isActive: widget.isActive),
+            ),
+            secondChild: const SizedBox(width: double.infinity, height: 0),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProcessStepsList extends StatelessWidget {
+  final AppColorScheme s;
+  final List<ProcessStep> steps;
+  final bool isActive;
+  const _ProcessStepsList({required this.s, required this.steps, required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < steps.length; i++)
+          _ProcessStepRow(
+            s: s,
+            step: steps[i],
+            isLast: i == steps.length - 1,
+          ),
+      ],
+    );
+  }
+}
+
+class _ProcessStepRow extends StatelessWidget {
+  final AppColorScheme s;
+  final ProcessStep step;
+  final bool isLast;
+  const _ProcessStepRow({
+    required this.s,
+    required this.step,
+    required this.isLast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 18,
+            child: Column(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.only(top: 5),
+                  decoration: BoxDecoration(
+                    color: step.done ? s.onSurfaceVariant : s.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 1,
+                      margin: const EdgeInsets.only(top: 3, bottom: 3),
+                      color: s.outline.withOpacity(0.3),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  step.done
+                      ? Text(
+                          step.label.replaceAll('...', ''),
+                          style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant),
+                        )
+                      : ShimmerText(
+                          text: step.label,
+                          style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant),
+                          active: true,
+                        ),
+                  if (step.summary != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      step.summary!,
+                      style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant.withOpacity(0.75)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

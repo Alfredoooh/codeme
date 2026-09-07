@@ -1542,7 +1542,7 @@ class DrawerBottomFloatingBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: s.cardBackground,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(children: [
                   AppIcon('search', size: 20, color: s.onSurfaceVariant),
