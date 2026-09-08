@@ -24,19 +24,22 @@
   }
 
   body.dark {
-    --page-bg: #141414;
-    --page-text: #F2F2F2;
-    --page-border: #2A2A2C;
-    --page-shadow: rgba(0,0,0,0.55);
     --selection: #0A84FF;
-    --page-number: #6E6E73;
-    --placeholder-bg: #1F1F1F;
-    --placeholder-border: #3A3A3C;
-    --table-border: #2A2A2C;
-    --table-header-bg: rgba(10,132,255,0.12);
-    --table-stripe-bg: rgba(255,255,255,0.03);
-    --header-footer-text: #8E8E93;
-    --header-footer-border: #262626;
+    --page-number: #9A9A9A;
+    --placeholder-bg: #F2F2F2;
+    --placeholder-border: #CCCCCC;
+    --table-border: #D0D0D0;
+    --table-header-bg: rgba(47,123,246,0.10);
+    --table-stripe-bg: rgba(0,0,0,0.03);
+    --header-footer-text: #8A8A8E;
+    --header-footer-border: #E4E4E6;
+  }
+
+  body.paper-dark {
+    --page-bg: #1C1C1E;
+    --page-text: #F2F2F2;
+    --page-border: #3A3A3C;
+    --page-shadow: rgba(0,0,0,0.45);
   }
 
   * {
@@ -51,37 +54,46 @@
     background: transparent !important;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    touch-action: pan-x pan-y;
+    overscroll-behavior: none;
   }
 
-  /*
-   * O fundo por trás das folhas é sempre transparente. Quem decide
-   * a cor que aparece atrás (pageBackground escuro/claro do
-   * docs.dart) é o Flutter, não este HTML. Isto garante que nunca
-   * há um "flash" de cor errada nem uma cor duplicada/dessincronizada
-   * entre o WebView e o resto do ecrã.
-   */
+  /* Container principal com scroll em ambos os eixos */
   #canvasScroll {
     position: relative;
     width: 100%;
     height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: auto;                    /* permite scroll horizontal e vertical */
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior: none;
-    touch-action: pan-y;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    touch-action: pan-x pan-y;
     padding: 20px 0 100px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: block;
     background: transparent;
   }
 
+  /* Wrapper que cria espaço horizontal extra para permitir arrastar para os lados */
+  #scrollContent {
+    width: max-content;
+    min-width: 100%;
+    padding: 0 50vw;                   /* espaço igual à largura da viewport de cada lado */
+    box-sizing: content-box;
+  }
+
+  /* Stack das páginas, centralizado dentro do scrollContent */
   #pagesStack {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 24px;
+    width: max-content;
+    margin: 0 auto;                    /* centraliza no espaço total (incluindo paddings) */
     transform-origin: top center;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  #pagesStack.no-transform-transition {
+    transition: none;
   }
 
   .page-a4 {
@@ -101,9 +113,6 @@
     color: var(--page-text);
   }
 
-  /* A folha em si nunca é transparente — só o fundo à sua volta.
-     Isto garante que texto/tabelas/gráficos nunca ficam "vazados"
-     contra o fundo do ecrã por trás. */
   .page-a4,
   .conteudo,
   .doc-header,
@@ -129,9 +138,16 @@
   .conteudo a { color: var(--selection); text-decoration: underline; }
   .conteudo img { max-width: 100%; height: auto; }
 
-  /* ══════════════════════════════════════════════
-     CABEÇALHO E RODAPÉ
-     ══════════════════════════════════════════════ */
+  .external-html-block { position: relative; }
+  .external-html-block,
+  .external-html-block * {
+    pointer-events: none !important;
+    cursor: default !important;
+  }
+  .external-html-block a {
+    text-decoration: underline;
+    color: var(--selection);
+  }
 
   .doc-header,
   .doc-footer {
@@ -164,12 +180,8 @@
     pointer-events: none;
   }
   .doc-header.hidden,
-  .doc-footer.hidden {
-    display: none;
-  }
+  .doc-footer.hidden { display: none; }
 
-  /* Espaço reservado ao conteúdo quando header/footer estão ativos,
-     para nunca sobrepor texto. Aplicado via classe no .page-a4. */
   .page-a4.has-header { padding-top: 118px; }
   .page-a4.has-footer { padding-bottom: 118px; }
 
@@ -184,17 +196,8 @@
     pointer-events: none;
     transition: opacity 0.15s ease;
   }
-  .page-number.hidden {
-    display: none;
-  }
-  /* Quando há rodapé visível, o número de página sobe para não colidir */
-  .page-a4.has-footer .page-number {
-    bottom: 14px;
-  }
-
-  /* ══════════════════════════════════════════════
-     TABELAS — suporte a header / bordas / listras
-     ══════════════════════════════════════════════ */
+  .page-number.hidden { display: none; }
+  .page-a4.has-footer .page-number { bottom: 14px; }
 
   .doc-table { border-collapse: collapse; width: 100%; margin: 4px 0; }
   .doc-table td, .doc-table th {
@@ -205,9 +208,7 @@
     vertical-align: top;
   }
   .doc-table.no-border td,
-  .doc-table.no-border th {
-    border-color: transparent;
-  }
+  .doc-table.no-border th { border-color: transparent; }
   .doc-table th {
     background: var(--table-header-bg);
     font-weight: 700;
@@ -257,9 +258,7 @@
   }
   .doc-shape-wrap.shape-selected .resize-handle,
   .doc-img-wrap.img-selected .resize-handle,
-  .doc-chart-wrap.chart-selected .resize-handle {
-    display: block;
-  }
+  .doc-chart-wrap.chart-selected .resize-handle { display: block; }
 
   .doc-img-wrap {
     position: relative;
@@ -267,6 +266,12 @@
     margin: 6px 0;
     max-width: 100%;
   }
+  .doc-img-wrap.pos-front,
+  .doc-img-wrap.pos-back {
+    position: absolute;
+  }
+  .doc-img-wrap.pos-front { z-index: 50; }
+  .doc-img-wrap.pos-back { z-index: 0; }
   .doc-img-wrap img {
     display: block;
     max-width: 100%;
@@ -305,8 +310,6 @@
     overflow: hidden;
     pointer-events: none;
     padding: 0;
-    justify-content: flex-start;
-    align-items: center;
   }
   body.preview-mode .page-a4 {
     box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 6px 16px var(--page-shadow);
@@ -316,7 +319,9 @@
 <body>
 
 <div id="canvasScroll">
-  <div id="pagesStack"></div>
+  <div id="scrollContent">
+    <div id="pagesStack"></div>
+  </div>
 </div>
 
 <script>
@@ -328,6 +333,7 @@
 
   var pagesStack = document.getElementById('pagesStack');
   var canvasScroll = document.getElementById('canvasScroll');
+  var scrollContent = document.getElementById('scrollContent');
 
   var folhas = [];
   var nextFolhaId = 0;
@@ -342,15 +348,217 @@
   var chartInstances = {};
   var isPreviewMode = false;
 
-  // ══════════════════════════════════════════════
-  // ESTADO GLOBAL DE DOCUMENTO (header/footer/numeração)
-  // ══════════════════════════════════════════════
+  var FOCUS_ZOOM_FACTOR = 1.9;
+  var focusZoomActive = false;
+  var focusZoomTimeout = null;
+  var focusZoomFollowRaf = null;
+
+  var SUAVIZACAO_SEGUIR_CURSOR = 0.16;
+  var LIMIAR_PARAR_SEGUIR = 0.4;
+
+  // Função para centralizar horizontalmente a folha quando não há zoom de foco
+  function centralizarScrollHorizontal() {
+    if (focusZoomActive) return; // durante o foco, o scroll é controlado pelo follow-cursor
+    var maxScrollLeft = canvasScroll.scrollWidth - canvasScroll.clientWidth;
+    if (maxScrollLeft > 0) {
+      canvasScroll.scrollLeft = maxScrollLeft / 2;
+    } else {
+      canvasScroll.scrollLeft = 0;
+    }
+  }
+
+  function obterRetanguloDoCursor() {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    var range = sel.getRangeAt(0).cloneRange();
+    range.collapse(true);
+    var rects = range.getClientRects();
+    if (rects.length > 0) return rects[0];
+
+    var marcador = document.createElement('span');
+    marcador.textContent = '\u200b';
+    marcador.style.display = 'inline-block';
+    try {
+      range.insertNode(marcador);
+      var rectMarcador = marcador.getBoundingClientRect();
+      var pai = marcador.parentNode;
+      pai.removeChild(marcador);
+      pai.normalize();
+      if (rectMarcador && (rectMarcador.width > 0 || rectMarcador.height > 0 || rectMarcador.top !== 0 || rectMarcador.left !== 0)) {
+        return rectMarcador;
+      }
+    } catch (erroInsercao) {
+      try { if (marcador.parentNode) marcador.parentNode.removeChild(marcador); } catch (erroLimpeza) {}
+    }
+
+    var node = range.startContainer;
+    var el = node.nodeType === 3 ? node.parentElement : node;
+    return el ? el.getBoundingClientRect() : null;
+  }
+
+  var deslocamentoOrigemX = 0;
+
+  function aplicarTransformDeFoco() {
+    pagesStack.style.transformOrigin = (-deslocamentoOrigemX) + 'px top';
+    pagesStack.style.transform = 'scale(' + FOCUS_ZOOM_FACTOR + ')';
+  }
+
+  function calcularAlvoScroll(rect) {
+    var rectScroll = canvasScroll.getBoundingClientRect();
+    var escalaAtual = focusZoomActive ? FOCUS_ZOOM_FACTOR : fitScale;
+    var localX = (rect.left - rectScroll.left + canvasScroll.scrollLeft) / escalaAtual;
+    var localY = (rect.top - rectScroll.top + canvasScroll.scrollTop) / escalaAtual;
+    var alvoX = (localX * FOCUS_ZOOM_FACTOR) - (rectScroll.width / 2);
+    var alvoY = (localY * FOCUS_ZOOM_FACTOR) - (rectScroll.height / 2);
+    return { x: alvoX, y: alvoY };
+  }
+
+  function ajustarAlvoComOrigemFixa(alvo) {
+    alvo.x -= deslocamentoOrigemX;
+    return alvo;
+  }
+
+  function centrarScrollNoRetangulo(rect) {
+    if (!rect) return;
+    var alvo = ajustarAlvoComOrigemFixa(calcularAlvoScroll(rect));
+    canvasScroll.scrollLeft = Math.max(0, alvo.x);
+    canvasScroll.scrollTop = Math.max(0, alvo.y);
+  }
+
+  function ativarZoomDeFoco(clientX, clientY) {
+    if (isPreviewMode) return;
+
+    var escalaAntiga = fitScale;
+    var rectCursorAntesDoZoom = obterRetanguloDoCursor();
+    var rectScrollAntesDoZoom = canvasScroll.getBoundingClientRect();
+    var localX, localY;
+    if (rectCursorAntesDoZoom) {
+      localX = (rectCursorAntesDoZoom.left - rectScrollAntesDoZoom.left + canvasScroll.scrollLeft) / escalaAntiga;
+      localY = (rectCursorAntesDoZoom.top - rectScrollAntesDoZoom.top + canvasScroll.scrollTop) / escalaAntiga;
+    } else {
+      localX = (clientX - rectScrollAntesDoZoom.left + canvasScroll.scrollLeft) / escalaAntiga;
+      localY = (clientY - rectScrollAntesDoZoom.top + canvasScroll.scrollTop) / escalaAntiga;
+    }
+
+    focusZoomActive = true;
+    document.body.classList.add('focus-zoom-active');
+
+    var alvoBruto = {
+      x: (localX * FOCUS_ZOOM_FACTOR) - (rectScrollAntesDoZoom.width / 2),
+      y: (localY * FOCUS_ZOOM_FACTOR) - (rectScrollAntesDoZoom.height / 2)
+    };
+    deslocamentoOrigemX = alvoBruto.x < 0 ? -alvoBruto.x : 0;
+    aplicarTransformDeFoco();
+
+    var alvoInicial = ajustarAlvoComOrigemFixa(alvoBruto);
+    canvasScroll.scrollLeft = Math.max(0, alvoInicial.x);
+    canvasScroll.scrollTop = Math.max(0, alvoInicial.y);
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        var rectCursor = obterRetanguloDoCursor();
+        if (!rectCursor) { iniciarSeguirCursor(); return; }
+        var alvoRefinado = ajustarAlvoComOrigemFixa(calcularAlvoScroll(rectCursor));
+        canvasScroll.scrollLeft = Math.max(0, alvoRefinado.x);
+        canvasScroll.scrollTop = Math.max(0, alvoRefinado.y);
+        iniciarSeguirCursor();
+      });
+    });
+  }
+
+  function iniciarSeguirCursor() {
+    pararSeguirCursor();
+    pagesStack.classList.add('no-transform-transition');
+    function loop() {
+      if (!focusZoomActive) return;
+      var rect = obterRetanguloDoCursor();
+      if (rect) {
+        var alvo = ajustarAlvoComOrigemFixa(calcularAlvoScroll(rect));
+        var alvoX = Math.max(0, alvo.x);
+        var alvoY = Math.max(0, alvo.y);
+        var atualX = canvasScroll.scrollLeft;
+        var atualY = canvasScroll.scrollTop;
+        var distanciaX = alvoX - atualX;
+        var distanciaY = alvoY - atualY;
+
+        if (Math.abs(distanciaX) > LIMIAR_PARAR_SEGUIR || Math.abs(distanciaY) > LIMIAR_PARAR_SEGUIR) {
+          canvasScroll.scrollLeft = atualX + distanciaX * SUAVIZACAO_SEGUIR_CURSOR;
+          canvasScroll.scrollTop = atualY + distanciaY * SUAVIZACAO_SEGUIR_CURSOR;
+        } else {
+          canvasScroll.scrollLeft = alvoX;
+          canvasScroll.scrollTop = alvoY;
+        }
+      }
+      focusZoomFollowRaf = requestAnimationFrame(loop);
+    }
+    focusZoomFollowRaf = requestAnimationFrame(loop);
+  }
+
+  function pararSeguirCursor() {
+    if (focusZoomFollowRaf) {
+      cancelAnimationFrame(focusZoomFollowRaf);
+      focusZoomFollowRaf = null;
+    }
+    pagesStack.classList.remove('no-transform-transition');
+  }
+
+  function desativarZoomDeFoco() {
+    if (!focusZoomActive) return;
+    focusZoomActive = false;
+    pararSeguirCursor();
+    document.body.classList.remove('focus-zoom-active');
+    deslocamentoOrigemX = 0;
+    pagesStack.style.transformOrigin = 'top center';
+    pagesStack.style.transform = 'scale(' + fitScale + ')';
+    centralizarScrollHorizontal(); // volta ao centro após sair do foco
+  }
+
+  function agendarDesativacaoZoomDeFoco() {
+    clearTimeout(focusZoomTimeout);
+    focusZoomTimeout = setTimeout(desativarZoomDeFoco, 260);
+  }
+
+  function cancelarDesativacaoZoomDeFoco() {
+    clearTimeout(focusZoomTimeout);
+  }
+
+  function sanitizarHtmlExterno(htmlBruto) {
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = htmlBruto;
+    var scripts = wrapper.querySelectorAll('script');
+    scripts.forEach(function (s) { s.remove(); });
+    var todosOsElementos = wrapper.querySelectorAll('*');
+    todosOsElementos.forEach(function (el) {
+      var atributos = Array.prototype.slice.call(el.attributes);
+      atributos.forEach(function (attr) {
+        if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+      });
+      if (el.tagName === 'A' && el.getAttribute('href') && /^javascript:/i.test(el.getAttribute('href'))) {
+        el.removeAttribute('href');
+      }
+      if (el.tagName === 'FORM') {
+        el.removeAttribute('action');
+        el.removeAttribute('onsubmit');
+      }
+    });
+    return wrapper.innerHTML;
+  }
+
+  function inserirHtmlExterno(htmlBruto) {
+    focarSePreciso();
+    var limpo = sanitizarHtmlExterno(htmlBruto);
+    var html = '<div class="external-html-block" contenteditable="false">' + limpo + '</div><p><br></p>';
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+  }
+
   var docSettings = {
-    showPageNumbers: true,
+    showPageNumbers: false,
     showHeader: false,
     showFooter: false,
     headerHtml: '',
-    footerHtml: ''
+    footerHtml: '',
+    paperDark: false
   };
 
   function detectarModoPreview() {
@@ -362,11 +570,27 @@
   }
 
   function ajustarZoom() {
+    if (focusZoomActive) return;
     var margem = isPreviewMode ? 0 : 16;
     var larguraDisponivel = canvasScroll.clientWidth - margem;
     var escala = Math.min(larguraDisponivel / PAGE_W, 1);
     fitScale = (escala > 0 && isFinite(escala)) ? escala : 1;
+    pagesStack.style.transformOrigin = 'top center';
     pagesStack.style.transform = 'scale(' + fitScale + ')';
+    recalcularAlturaStackAposMudanca();
+    centralizarScrollHorizontal(); // centraliza após ajustar zoom
+  }
+
+  function recalcularAlturaStackAposMudanca() {
+    if (focusZoomActive) return;
+    var total = 0;
+    for (var i = 0; i < folhas.length; i++) {
+      total += folhas[i].pageEl.offsetHeight;
+    }
+    total += Math.max(0, folhas.length - 1) * 24;
+    total += 20;
+    pagesStack.style.height = (total * fitScale) + 'px';
+    // O scrollContent ajusta automaticamente sua altura ao conteúdo
   }
 
   function criarFolha() {
@@ -396,10 +620,25 @@
       contentEl.addEventListener('input', handleInput);
       contentEl.addEventListener('paste', aoColar);
       contentEl.addEventListener('click', aoClicarNoConteudo);
+      contentEl.addEventListener('focusin', function () {
+        cancelarDesativacaoZoomDeFoco();
+        ativarZoomDeFoco(ultimoClickX, ultimoClickY);
+      });
+      contentEl.addEventListener('focusout', agendarDesativacaoZoomDeFoco);
       headerEl.addEventListener('input', aoEditarHeaderFooter);
       footerEl.addEventListener('input', aoEditarHeaderFooter);
       headerEl.addEventListener('paste', aoColarSimples);
       footerEl.addEventListener('paste', aoColarSimples);
+      headerEl.addEventListener('focusin', function () {
+        cancelarDesativacaoZoomDeFoco();
+        ativarZoomDeFoco(ultimoClickX, ultimoClickY);
+      });
+      headerEl.addEventListener('focusout', agendarDesativacaoZoomDeFoco);
+      footerEl.addEventListener('focusin', function () {
+        cancelarDesativacaoZoomDeFoco();
+        ativarZoomDeFoco(ultimoClickX, ultimoClickY);
+      });
+      footerEl.addEventListener('focusout', agendarDesativacaoZoomDeFoco);
     }
 
     var pageNumberEl = document.createElement('div');
@@ -412,18 +651,22 @@
     pagesStack.appendChild(pageEl);
 
     var folha = {
-      id: id,
-      pageEl: pageEl,
-      contentEl: contentEl,
-      pageNumberEl: pageNumberEl,
-      headerEl: headerEl,
-      footerEl: footerEl
+      id: id, pageEl: pageEl, contentEl: contentEl,
+      pageNumberEl: pageNumberEl, headerEl: headerEl, footerEl: footerEl
     };
     folhas.push(folha);
     aplicarConfigDocAFolha(folha);
     atualizarNumerosPagina();
+    recalcularAlturaStackAposMudanca();
     return folha;
   }
+
+  var ultimoClickX = 0;
+  var ultimoClickY = 0;
+  document.addEventListener('pointerdown', function (ev) {
+    ultimoClickX = ev.clientX;
+    ultimoClickY = ev.clientY;
+  }, true);
 
   function atualizarNumerosPagina() {
     for (var i = 0; i < folhas.length; i++) {
@@ -448,19 +691,16 @@
   function aplicarConfigDocATodas() {
     for (var i = 0; i < folhas.length; i++) aplicarConfigDocAFolha(folhas[i]);
     atualizarNumerosPagina();
+    document.body.classList.toggle('paper-dark', docSettings.paperDark);
     setTimeout(reequilibrarDocumento, 0);
   }
 
   function aoEditarHeaderFooter(evento) {
-    // O cabeçalho/rodapé é replicado em todas as páginas — editar
-    // numa página atualiza o texto-modelo usado nas restantes e em
-    // páginas futuras. Evita ecos infinitos comparando innerHTML.
     var el = evento.target;
     var isHeader = el.classList.contains('doc-header');
     var novoHtml = el.innerHTML;
     if (isHeader) docSettings.headerHtml = novoHtml;
     else docSettings.footerHtml = novoHtml;
-
     for (var i = 0; i < folhas.length; i++) {
       var alvo = isHeader ? folhas[i].headerEl : folhas[i].footerEl;
       if (alvo !== el && alvo.innerHTML !== novoHtml) alvo.innerHTML = novoHtml;
@@ -475,9 +715,7 @@
     aoEditarHeaderFooter(evento);
   }
 
-  function getConteudoEl(idx) {
-    return folhas[idx] ? folhas[idx].contentEl : null;
-  }
+  function getConteudoEl(idx) { return folhas[idx] ? folhas[idx].contentEl : null; }
 
   function normalizarFilhosSoltos(conteudo) {
     var noAtual = conteudo.firstChild;
@@ -494,9 +732,7 @@
       }
       noAtual = proximo;
     }
-    if (!conteudo.firstElementChild) {
-      conteudo.innerHTML = '<p><br></p>';
-    }
+    if (!conteudo.firstElementChild) conteudo.innerHTML = '<p><br></p>';
   }
 
   function obterOuCriarProximaPagina(idxAtual) {
@@ -510,7 +746,6 @@
     var guarda = 0;
     var conteudo = getConteudoEl(idx);
     if (!conteudo) return false;
-
     while (conteudo.scrollHeight > conteudo.clientHeight + 1 && conteudo.children.length > 1 && guarda < 500) {
       var ultimoElemento = conteudo.lastElementChild;
       var proximoIdx = obterOuCriarProximaPagina(idx);
@@ -540,9 +775,7 @@
         if (proximaConteudo.firstChild) proximaConteudo.insertBefore(candidato, proximaConteudo.firstChild);
         else proximaConteudo.appendChild(candidato);
         break;
-      } else {
-        puxouAlgo = true;
-      }
+      } else { puxouAlgo = true; }
       guarda++;
     }
     return puxouAlgo;
@@ -600,6 +833,7 @@
     }
     removerPaginasVaziasNoFim();
     restaurarSelecao(posicaoSelecao);
+    recalcularAlturaStackAposMudanca();
     isRebalancing = false;
   }
 
@@ -613,8 +847,9 @@
     evento.preventDefault();
     var htmlColado = evento.clipboardData ? evento.clipboardData.getData('text/html') : '';
     var textoColado = evento.clipboardData ? evento.clipboardData.getData('text/plain') : '';
-    if (htmlColado) document.execCommand('insertHTML', false, htmlColado);
-    else {
+    if (htmlColado) {
+      document.execCommand('insertHTML', false, sanitizarHtmlExterno(htmlColado));
+    } else {
       var linhas = textoColado.split(/\n+/).filter(function (l) { return l.trim() !== ''; });
       var htmlParagrafos = linhas.map(function (l) { return '<p>' + l + '</p>'; }).join('');
       document.execCommand('insertHTML', false, htmlParagrafos || '<p>' + textoColado + '</p>');
@@ -638,13 +873,6 @@
     }, 500);
   }
 
-  /*
-   * getContent() continua a devolver só o HTML das páginas (para
-   * compatibilidade com quem já chama editorApi.getContent() a
-   * pedir um docx/pdf). getDocumentPayload() devolve tudo — HTML +
-   * config de header/footer/numeração — serializado como JSON, e é
-   * o que é gravado internamente e o que setContent() sabe ler.
-   */
   function getContent() {
     return folhas.map(function (f) { return f.contentEl.innerHTML; }).join('<div class="page-break-marker"></div>');
   }
@@ -657,7 +885,8 @@
         showHeader: docSettings.showHeader,
         showFooter: docSettings.showFooter,
         headerHtml: docSettings.headerHtml,
-        footerHtml: docSettings.footerHtml
+        footerHtml: docSettings.footerHtml,
+        paperDark: docSettings.paperDark
       }
     });
   }
@@ -675,15 +904,12 @@
     });
   }
 
-  /*
-   * setContent aceita três formatos, por ordem de prioridade:
-   *  1) JSON produzido por getDocumentPayload() — { pagesHtml, settings }
-   *  2) A string antiga com '<div class="page-break-marker"></div>'
-   *     entre páginas (compatibilidade com documentos já gravados)
-   *  3) HTML simples de uma única página
-   */
   function setContent(raw) {
     destruirTodosOsCharts();
+    pararSeguirCursor();
+    clearTimeout(saveTimeout);
+    clearTimeout(timeoutReequilibrio);
+
     folhas.forEach(function (f) { f.pageEl.remove(); });
     folhas = [];
     nextFolhaId = 0;
@@ -701,15 +927,16 @@
           pagesHtml = parsed.pagesHtml;
           parsedSettings = parsed.settings || null;
         }
-      } catch (e) { /* não era JSON válido; cai para o formato antigo */ }
+      } catch (e) {}
     }
 
     if (parsedSettings) {
-      docSettings.showPageNumbers = parsedSettings.showPageNumbers !== false;
+      docSettings.showPageNumbers = !!parsedSettings.showPageNumbers;
       docSettings.showHeader = !!parsedSettings.showHeader;
       docSettings.showFooter = !!parsedSettings.showFooter;
       docSettings.headerHtml = parsedSettings.headerHtml || '';
       docSettings.footerHtml = parsedSettings.footerHtml || '';
+      docSettings.paperDark = !!parsedSettings.paperDark;
     }
 
     if (!pagesHtml) {
@@ -719,13 +946,14 @@
 
     pagesHtml.forEach(function (h) {
       var folha = criarFolha();
-      folha.contentEl.innerHTML = h || '<p><br></p>';
+      folha.contentEl.innerHTML = sanitizarHtmlExterno(h || '<p><br></p>');
       monitorizarErrosDeImagem(folha.contentEl);
     });
     reativarHandlersDeFormasEImagens();
     reidratarGraficos();
     aplicarConfigDocATodas();
     reequilibrarDocumento();
+    centralizarScrollHorizontal(); // centraliza após carregar documento
   }
 
   function getActiveContentEl() {
@@ -811,11 +1039,6 @@
     handleInput();
   }
 
-  /*
-   * insertTable aceita:
-   *  - insertTable(rows, cols)                          [compatibilidade antiga]
-   *  - insertTable({rows, cols, header, bordered, striped}) [novo formato do docs.dart]
-   */
   function insertTable(a, b) {
     focarSePreciso();
     var opts = (a && typeof a === 'object') ? a : { rows: a, cols: b };
@@ -824,11 +1047,9 @@
     var comHeader = opts.header !== false && opts.header !== undefined ? !!opts.header : false;
     var comBordas = opts.bordered !== undefined ? !!opts.bordered : true;
     var comListras = !!opts.striped;
-
     var classes = 'doc-table';
     if (!comBordas) classes += ' no-border';
     if (comListras) classes += ' striped';
-
     var html = '<div class="doc-table-wrap" contenteditable="false"><table class="' + classes + '"><tbody>';
     var linhaInicial = 0;
     if (comHeader) {
@@ -849,7 +1070,7 @@
 
   function insertImageAtCursor(url) {
     focarSePreciso();
-    var html = '<span class="doc-img-wrap" contenteditable="false"><img src="' + url + '" /><div class="resize-handle"></div></span>&nbsp;';
+    var html = '<span class="doc-img-wrap pos-inline" data-img-pos="inline" contenteditable="false"><img src="' + url + '" /><div class="resize-handle"></div></span>&nbsp;';
     document.execCommand('insertHTML', false, html);
     handleInput();
     setTimeout(function () {
@@ -878,6 +1099,40 @@
     document.execCommand('insertHTML', false, html);
     handleInput();
     setTimeout(reativarHandlersDeFormasEImagens, 30);
+  }
+
+  function setSelectedImagePosition(posicao) {
+    if (!selectedImgEl) return;
+    var validas = ['inline', 'front', 'back'];
+    if (validas.indexOf(posicao) === -1) return;
+
+    selectedImgEl.classList.remove('pos-inline', 'pos-front', 'pos-back');
+    selectedImgEl.classList.add('pos-' + posicao);
+    selectedImgEl.setAttribute('data-img-pos', posicao);
+
+    if (posicao === 'inline') {
+      selectedImgEl.style.position = '';
+      selectedImgEl.style.left = '';
+      selectedImgEl.style.top = '';
+      selectedImgEl.style.zIndex = '';
+    } else {
+      var conteudo = selectedImgEl.closest('.conteudo');
+      if (conteudo) {
+        var rectImg = selectedImgEl.getBoundingClientRect();
+        var rectConteudo = conteudo.getBoundingClientRect();
+        var escalaAtual = focusZoomActive ? FOCUS_ZOOM_FACTOR : fitScale;
+        var left = (rectImg.left - rectConteudo.left) / escalaAtual;
+        var top = (rectImg.top - rectConteudo.top) / escalaAtual;
+        selectedImgEl.style.left = left + 'px';
+        selectedImgEl.style.top = top + 'px';
+      }
+    }
+    agendarGravacao();
+  }
+
+  function getSelectedImagePosition() {
+    if (!selectedImgEl) return null;
+    return selectedImgEl.getAttribute('data-img-pos') || 'inline';
   }
 
   function setSelectedShapeColor(hexColor) {
@@ -922,13 +1177,6 @@
     return textarea.value;
   }
 
-  /*
-   * insertChart aceita tanto uma config Chart.js "crua" (formato
-   * antigo) como o novo formato de preset do docs.dart:
-   *   {type, title, labels, values}
-   * Neste segundo caso, é convertida aqui para uma config Chart.js
-   * completa antes de desenhar.
-   */
   function insertChart(chartConfigInput) {
     focarSePreciso();
     var id = 'chart_' + (nextChartId++);
@@ -950,43 +1198,27 @@
       try { parsed = JSON.parse(input); } catch (e) { parsed = null; }
     }
     if (!parsed) return { type: 'bar', data: { labels: [], datasets: [] } };
-
-    // Já é uma config Chart.js completa (tem "data" com "datasets")
     if (parsed.data && parsed.data.datasets) return parsed;
-
-    // Formato de preset do docs.dart: {type, title, labels, values}
     if (Array.isArray(parsed.labels) && Array.isArray(parsed.values)) {
       var chartType = parsed.type === 'donut' ? 'doughnut' : (parsed.type || 'bar');
       var isCircular = chartType === 'pie' || chartType === 'doughnut';
       var isScatter = chartType === 'scatter';
       var isArea = parsed.type === 'area';
-
       var dataset = {
         label: parsed.title || '',
-        data: isScatter
-          ? parsed.values.map(function (v, i) { return { x: i, y: v }; })
-          : parsed.values,
+        data: isScatter ? parsed.values.map(function (v, i) { return { x: i, y: v }; }) : parsed.values,
         fill: isArea,
         tension: (chartType === 'line' || isArea) ? 0.35 : 0
       };
-
       return {
         type: isArea ? 'line' : (isScatter ? 'scatter' : chartType),
-        data: {
-          labels: isCircular || isScatter ? parsed.labels : parsed.labels,
-          datasets: [dataset]
-        },
+        data: { labels: parsed.labels, datasets: [dataset] },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: isCircular },
-            title: { display: !!parsed.title, text: parsed.title || '' }
-          }
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: isCircular }, title: { display: !!parsed.title, text: parsed.title || '' } }
         }
       };
     }
-
     return parsed;
   }
 
@@ -1039,6 +1271,9 @@
       deselecionarTudo();
       selectedImgEl = imgWrap;
       imgWrap.classList.add('img-selected');
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler('onImageSelected', imgWrap.getAttribute('data-img-pos') || 'inline');
+      }
       return;
     }
     if (chartWrap) {
@@ -1075,8 +1310,9 @@
         if (!arrastando || !bodyEl) return;
         evento.preventDefault();
         var pos = posClient(evento);
-        var deltaX = (pos.x - startX) / fitScale;
-        var deltaY = (pos.y - startY) / fitScale;
+        var escalaAtual = focusZoomActive ? FOCUS_ZOOM_FACTOR : fitScale;
+        var deltaX = (pos.x - startX) / escalaAtual;
+        var deltaY = (pos.y - startY) / escalaAtual;
         bodyEl.style.width = Math.max(20, startW + deltaX) + 'px';
         bodyEl.style.height = Math.max(20, startH + deltaY) + 'px';
         if (isChart && chartId && chartInstances[chartId]) { try { chartInstances[chartId].resize(); } catch (e) {} }
@@ -1094,6 +1330,47 @@
       window.addEventListener('mouseup', aoTerminar);
       window.addEventListener('touchend', aoTerminar);
     });
+
+    var flutuantes = document.querySelectorAll('.doc-img-wrap.pos-front, .doc-img-wrap.pos-back');
+    flutuantes.forEach(function (el) {
+      if (el.getAttribute('data-drag-bound') === '1') return;
+      el.setAttribute('data-drag-bound', '1');
+      var arrastando = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+      function posClient(evento) { return evento.touches && evento.touches.length ? { x: evento.touches[0].clientX, y: evento.touches[0].clientY } : { x: evento.clientX, y: evento.clientY }; }
+      function aoIniciar(evento) {
+        if (evento.target.classList.contains('resize-handle')) return;
+        evento.preventDefault(); evento.stopPropagation();
+        arrastando = true;
+        var pos = posClient(evento);
+        startX = pos.x; startY = pos.y;
+        startLeft = parseFloat(el.style.left) || 0;
+        startTop = parseFloat(el.style.top) || 0;
+        deselecionarTudo();
+        selectedImgEl = el;
+        el.classList.add('img-selected');
+      }
+      function aoMover(evento) {
+        if (!arrastando) return;
+        evento.preventDefault();
+        var pos = posClient(evento);
+        var escalaAtual = focusZoomActive ? FOCUS_ZOOM_FACTOR : fitScale;
+        var deltaX = (pos.x - startX) / escalaAtual;
+        var deltaY = (pos.y - startY) / escalaAtual;
+        el.style.left = (startLeft + deltaX) + 'px';
+        el.style.top = (startTop + deltaY) + 'px';
+      }
+      function aoTerminar() {
+        if (!arrastando) return;
+        arrastando = false;
+        agendarGravacao();
+      }
+      el.addEventListener('mousedown', aoIniciar);
+      el.addEventListener('touchstart', aoIniciar, { passive: false });
+      window.addEventListener('mousemove', aoMover);
+      window.addEventListener('touchmove', aoMover, { passive: false });
+      window.addEventListener('mouseup', aoTerminar);
+      window.addEventListener('touchend', aoTerminar);
+    });
   }
 
   function setPageOrientation(orientacao) {
@@ -1106,6 +1383,7 @@
     }
     ajustarZoom();
     reequilibrarDocumento();
+    centralizarScrollHorizontal();
   }
 
   function trazerParaFrente() {
@@ -1125,10 +1403,6 @@
     conteudo.insertBefore(el, conteudo.firstChild);
     handleInput();
   }
-
-  // ══════════════════════════════════════════════
-  // API PÚBLICA — numeração / cabeçalho / rodapé
-  // ══════════════════════════════════════════════
 
   function setPageNumbersVisible(visible) {
     docSettings.showPageNumbers = !!visible;
@@ -1160,12 +1434,26 @@
     agendarGravacao();
   }
 
-  function getDocSettings() {
-    return JSON.stringify(docSettings);
+  function getDocSettings() { return JSON.stringify(docSettings); }
+
+  function setPaperDarkMode(isDark) {
+    docSettings.paperDark = !!isDark;
+    document.body.classList.toggle('paper-dark', docSettings.paperDark);
+    agendarGravacao();
   }
+
+  function getPaperDarkMode() { return docSettings.paperDark; }
 
   function setThemeMode(modo) {
     document.body.classList.toggle('dark', modo === 'dark');
+  }
+
+  function prepararParaFechar() {
+    pararSeguirCursor();
+    clearTimeout(saveTimeout);
+    clearTimeout(timeoutReequilibrio);
+    clearTimeout(focusZoomTimeout);
+    destruirTodosOsCharts();
   }
 
   window.editorApi = {
@@ -1179,7 +1467,10 @@
     insertLink: insertLink,
     insertShape: insertShape,
     insertChart: insertChart,
+    insertHtmlExterno: inserirHtmlExterno,
     setSelectedShapeColor: setSelectedShapeColor,
+    setSelectedImagePosition: setSelectedImagePosition,
+    getSelectedImagePosition: getSelectedImagePosition,
     deleteSelectedShape: deleteSelectedShape,
     deleteSelectedImage: deleteSelectedImage,
     deleteSelectedChart: deleteSelectedChart,
@@ -1195,7 +1486,10 @@
     setHeaderText: setHeaderText,
     setFooterText: setFooterText,
     getDocSettings: getDocSettings,
-    setThemeMode: setThemeMode
+    setPaperDarkMode: setPaperDarkMode,
+    getPaperDarkMode: getPaperDarkMode,
+    setThemeMode: setThemeMode,
+    prepararParaFechar: prepararParaFechar
   };
 
   function iniciar() {
@@ -1204,12 +1498,9 @@
     window.addEventListener('resize', ajustarZoom);
     window.addEventListener('orientationchange', ajustarZoom);
     document.execCommand('defaultParagraphSeparator', false, 'p');
-    var conteudoInicial = '';
-    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-      // O Flutter injeta via setContent após onLoadStop.
-    }
-    if (conteudoInicial) setContent(conteudoInicial);
-    else { criarFolha(); reequilibrarDocumento(); }
+    criarFolha();
+    reequilibrarDocumento();
+    centralizarScrollHorizontal(); // centraliza a folha inicial
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);

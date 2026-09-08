@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/apps/sheets_app.dart
 // ══════════════════════════════════════════════════════════════
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -13,39 +14,15 @@ import '../../../core/widgets/app_sheet.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/export_service.dart';
 import '../app_types.dart';
-
+import '../docs/docs.dart' show showMenuSheet, SheetMenuItem, AppToggle;
 
 const Set<String> _kEditorSvgIcons = {
-  'align_center',
-  'align_left',
-  'align_right',
-  'bold',
-  'brush',
-  'bullet_point',
-  'capital_letter',
-  'chart',
-  'edit_text',
-  'eraser',
-  'font',
-  'font-2',
-  'font_size',
-  'hyperlink',
-  'image',
-  'indent_decrease',
-  'indent_increase',
-  'justify',
-  'paste',
-  'pencil_holder',
-  'quote',
-  'resize',
-  'spacing_height',
-  'spacing_width',
-  'spellcheck',
-  'subscript',
-  'superscript',
-  'text_color',
-  'underline',
-
+  'align_center', 'align_left', 'align_right', 'bold', 'brush',
+  'bullet_point', 'capital_letter', 'chart', 'edit_text', 'eraser',
+  'font', 'font-2', 'font_size', 'hyperlink', 'image', 'indent_decrease',
+  'indent_increase', 'justify', 'paste', 'pencil_holder', 'quote',
+  'resize', 'spacing_height', 'spacing_width', 'spellcheck', 'subscript',
+  'superscript', 'text_color', 'underline', 'fill', 'download', 'code',
 };
 
 const Map<String, String> _kEditorIconAliases = {
@@ -80,36 +57,6 @@ class _EditorIcon extends StatelessWidget {
   }
 }
 
-Future<T?> _showAppPopupMenu<T>(
-  BuildContext context,
-  AppColorScheme s, {
-  required GlobalKey anchorKey,
-  required List<PopupMenuEntry<T>> items,
-}) async {
-  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
-  if (box == null) return null;
-  final overlayState = Overlay.of(context);
-  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final offset = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-  final size = box.size;
-  final position = RelativeRect.fromLTRB(
-    offset.dx,
-    offset.dy + size.height,
-    overlayBox.size.width - (offset.dx + size.width),
-    overlayBox.size.height - (offset.dy + size.height),
-  );
-  return showMenu<T>(
-    context: context,
-    position: position,
-    color: s.floatingSurface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: s.outline.withOpacity(0.25)),
-    ),
-    items: items,
-  );
-}
-
 class SheetsScreen extends StatefulWidget {
   const SheetsScreen({super.key});
   @override State<SheetsScreen> createState() => _SheetsScreenState();
@@ -119,6 +66,7 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   static const EditorType _type = EditorType.sheets;
   InAppWebViewController? _ctrl;
   bool _aiEditing = false;
+  bool _isClosing = false;
 
   String _documentTitle = 'Folha de cálculo';
   String? _lastSavedContent;
@@ -127,8 +75,6 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   bool _restoringContent = false;
 
   bool _readyForWebView = false;
-
-  final GlobalKey _moreMenuKey = GlobalKey();
 
   @override
   void initState() {
@@ -163,6 +109,30 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     editTabController.removeListener(_onPendingLoad);
     try { _ctrl?.dispose(); } catch (_) {}
     super.dispose();
+  }
+
+  // Fecho ordenado — mesma abordagem do Docs: para o WebView
+  // (destrói gráficos, cancela timers) antes de a tela sair.
+  Future<bool> _pararWebViewAntesDeFechar() async {
+    if (_isClosing) return false;
+    _isClosing = true;
+    final ctrl = _ctrl;
+    if (ctrl != null) {
+      try {
+        // sheets.html não tem prepararParaFechar dedicado — os
+        // gráficos Chart.js são a única coisa persistente a limpar,
+        // e destroyCellChart já corre synchronously ao remover uma
+        // célula; para o fecho de tela, garantimos que não há saves
+        // pendentes disparando um último getContent síncrono.
+        await ctrl.callAsyncJavaScript(functionBody: 'return true;');
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  void _fecharTela() async {
+    final podeFechar = await _pararWebViewAntesDeFechar();
+    if (podeFechar && mounted) Navigator.of(context).pop();
   }
 
   void _onPendingLoad() {
@@ -230,7 +200,6 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     });
   }
 
-  void _addSingleRow() => _runJs("editorApi.insertRowBelow()");
   void _addFiftyRows() => _runJs("editorApi.addMoreRows(50)");
 
   void _openColorPicker(BuildContext context, AppColorScheme s, String cb) async {
@@ -247,11 +216,6 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     } catch (_) { return ''; }
   }
 
-  void _setCurrentContent(String content) {
-    final ctrl = _ctrl;
-    if (ctrl != null) _injectCanvas(ctrl, content);
-  }
-
   Future<void> _downloadCurrentDocument() async {
     final content = await _getCurrentContent();
     if (content.trim().isEmpty) {
@@ -261,16 +225,9 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
       return;
     }
     try {
-      final item = LocalCanvasItem(
-        id: 'export-xlsx',
-        kind: LocalCanvasKind.sheet,
-        title: _documentTitle,
-        content: content,
-      );
+      final item = LocalCanvasItem(id: 'export-xlsx', kind: LocalCanvasKind.sheet, title: _documentTitle, content: content);
       final bytes = await ExportService.export(item: item, format: 'xlsx');
-      final safeTitle = _documentTitle.trim().isEmpty
-          ? 'documento'
-          : _documentTitle.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_').trim();
+      final safeTitle = _documentTitle.trim().isEmpty ? 'documento' : _documentTitle.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_').trim();
       await ExportService.shareBytes(bytes, filename: '$safeTitle.xlsx');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -278,7 +235,6 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
       );
     }
   }
-
 
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
@@ -316,7 +272,12 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
 
   void _onInsertChart() async {
     final cellKey = await _getSelectedCellKey();
-    if (cellKey == null) return;
+    if (cellKey == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Toca numa célula antes de inserir um gráfico.')),
+      );
+      return;
+    }
     final configJson = await showChartConfigDialog(context, AppTheme.of(context));
     if (configJson == null || configJson.trim().isEmpty) return;
     final safeConfig = configJson.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
@@ -325,10 +286,33 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
 
   void _onInsertImage() async {
     final cellKey = await _getSelectedCellKey();
-    if (cellKey == null) return;
+    if (cellKey == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Toca numa célula antes de inserir uma imagem.')),
+      );
+      return;
+    }
     final url = await showImageUrlDialog(context, AppTheme.of(context));
     if (url == null || url.trim().isEmpty) return;
     _runJs("editorApi.renderCellImage('$cellKey', '$url')");
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // BLOCO HTML MULTI-CÉLULA — pede a célula-âncora (topo-esquerda),
+  // o HTML e o tamanho da área (linhas × colunas) a ocupar.
+  // ══════════════════════════════════════════════════════════════
+  void _onInsertHtmlBlock() async {
+    final cellKey = await _getSelectedCellKey();
+    if (cellKey == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Toca na célula onde o bloco deve começar (canto superior esquerdo).')),
+      );
+      return;
+    }
+    final resultado = await showHtmlBlockDialog(context, AppTheme.of(context));
+    if (resultado == null) return;
+    final safeHtml = resultado.html.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
+    _runJs("editorApi.renderCellHtmlBlock('$cellKey', '$safeHtml', ${resultado.rowspan}, ${resultado.colspan})");
   }
 
   void _onInsertLink() {
@@ -337,128 +321,172 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     });
   }
 
-  // Menu "more" como popup
-  void _openMenu() async {
-    final result = await _showAppPopupMenu<int>(
-      context,
-      AppTheme.of(context),
-      anchorKey: _moreMenuKey,
-      items: [
-        PopupMenuItem(value: 1, child: _buildPopupItem('add', 'Adicionar 50 linhas', false)),
-        PopupMenuItem(value: 2, child: _buildPopupItem('chart', 'Inserir gráfico', false)),
-        PopupMenuItem(value: 3, child: _buildPopupItem('image', 'Inserir imagem', false)),
-        PopupMenuItem(value: 4, child: _buildPopupItem('link', 'Inserir hiperligação', false)),
-        PopupMenuItem(value: 5, child: _buildPopupItem('sparkles', 'Editar com IA', false)),
-        PopupMenuItem(value: 6, child: _buildPopupItem('download', 'Descarregar documento', false)),
-      ],
+  // ══════════════════════════════════════════════════════════════
+  // TOM DA FOLHA — escolha explícita do utilizador, independente
+  // do tema da app. Vive num sheet dedicado nos 3 pontinhos.
+  // ══════════════════════════════════════════════════════════════
+  void _openSheetToneSheet() async {
+    final s = AppTheme.of(context);
+    bool escuro = false;
+    try {
+      final result = await _ctrl?.callAsyncJavaScript(functionBody: 'return editorApi.getSheetDarkMode();');
+      escuro = result?.value == true;
+    } catch (_) {}
+
+    if (!mounted) return;
+    await showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      title: 'Tom da folha',
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Independente do tema da app — escolha só para esta folha.', style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: Text('Folha escura', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+                  AppToggle(
+                    s: s,
+                    value: escuro,
+                    onChanged: (v) {
+                      setSheetState(() => escuro = v);
+                      _runJs("editorApi.setSheetDarkMode($v)");
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-    if (result == 1) _addFiftyRows();
-    else if (result == 2) _onInsertChart();
-    else if (result == 3) _onInsertImage();
-    else if (result == 4) _onInsertLink();
-    else if (result == 5) _openAiEditModal();
-    else if (result == 6) _downloadCurrentDocument();
   }
 
-  Widget _buildPopupItem(String assetName, String label, bool destructive) {
-    final s = AppTheme.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          _EditorIcon(assetName, size: 18, color: destructive ? s.error : s.onSurface),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(fontSize: 14, color: destructive ? s.error : s.onSurface)),
-        ],
-      ),
+  // ══════════════════════════════════════════════════════════════
+  // MENU "MAIS" — bottom sheet no padrão showCraftBottomSheet, SEM
+  // duplicar nada que já esteja na bottom toolbar (negrito, itálico,
+  // sublinhado, alinhamentos, cor de texto/fundo, imagem, gráfico,
+  // link e IA já vivem lá — só entram aqui ações que NÃO estão na
+  // toolbar).
+  // ══════════════════════════════════════════════════════════════
+  void _openMenu() async {
+    final result = await showMenuSheet<int>(
+      context,
+      title: 'Opções da folha',
+      items: const [
+        SheetMenuItem(value: 1, asset: 'download', label: 'Descarregar documento', subtitle: 'Guarda como .xlsx'),
+        SheetMenuItem(value: 2, asset: 'code', label: 'Bloco HTML', subtitle: 'Insere um bloco que ocupa várias células'),
+        SheetMenuItem(value: 3, asset: 'brush', label: 'Tom da folha'),
+      ],
     );
+    switch (result) {
+      case 1: _downloadCurrentDocument(); break;
+      case 2: _onInsertHtmlBlock(); break;
+      case 3: _openSheetToneSheet(); break;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: s.statusBarStyle,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ColoredBox(
-          color: s.pageBackground,
-          child: SafeArea(
-            child: Stack(children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 58, bottom: 44),
-                child: (kIsWeb || !_readyForWebView)
-                    ? const SizedBox.shrink()
-                    : InAppWebView(
-                        initialFile: _type.htmlAsset,
-                        initialSettings: InAppWebViewSettings(
-                          transparentBackground: true,
-                          javaScriptEnabled: true,
-                          allowFileAccessFromFileURLs: true,
-                          allowUniversalAccessFromFileURLs: true,
-                          useHybridComposition: true,
-                          verticalScrollBarEnabled: false,
-                          horizontalScrollBarEnabled: false,
-                          supportZoom: false,
+    final teclado = MediaQuery.of(context).viewInsets.bottom;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _fecharTela();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: s.statusBarStyle,
+        child: Material(
+          type: MaterialType.transparency,
+          child: ColoredBox(
+            color: s.pageBackground,
+            child: SafeArea(
+              child: Stack(children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 58, bottom: 44),
+                  child: (kIsWeb || !_readyForWebView)
+                      ? const SizedBox.shrink()
+                      : InAppWebView(
+                          initialFile: _type.htmlAsset,
+                          initialSettings: InAppWebViewSettings(
+                            transparentBackground: true,
+                            javaScriptEnabled: true,
+                            allowFileAccessFromFileURLs: true,
+                            allowUniversalAccessFromFileURLs: true,
+                            useHybridComposition: true,
+                            verticalScrollBarEnabled: false,
+                            horizontalScrollBarEnabled: false,
+                            supportZoom: false,
+                          ),
+                          onWebViewCreated: (c) {
+                            _ctrl = c;
+                            c.addJavaScriptHandler(
+                              handlerName: 'openColorPicker',
+                              callback: (args) {
+                                final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setCellColor';
+                                _openColorPicker(context, s, cb);
+                              },
+                            );
+                            c.addJavaScriptHandler(
+                              handlerName: 'saveDocument',
+                              callback: (args) {
+                                final content = args.isNotEmpty ? args[0]?.toString() : null;
+                                if (content != null) _onSaveDocument(content);
+                              },
+                            );
+                            c.addJavaScriptHandler(handlerName: 'onCellSelected', callback: (args) {});
+                          },
+                          onLoadStop: (c, _) {
+                            _onPendingLoad();
+                            // setThemeMode aqui é só o tema da app (não mexe
+                            // no tom claro/escuro da folha, que é escolhido
+                            // pelo utilizador via setSheetDarkMode).
+                            c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
+                            c.evaluateJavascript(source: "editorApi.setFontScale(${appPreferences.textScaleFactor})");
+                          },
                         ),
-                        onWebViewCreated: (c) {
-                          _ctrl = c;
-                          c.addJavaScriptHandler(
-                            handlerName: 'openColorPicker',
-                            callback: (args) {
-                              final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setCellColor';
-                              _openColorPicker(context, s, cb);
-                            },
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'saveDocument',
-                            callback: (args) {
-                              final content = args.isNotEmpty ? args[0]?.toString() : null;
-                              if (content != null) _onSaveDocument(content);
-                            },
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'onCellSelected',
-                            callback: (args) {},
-                          );
-                        },
-                        onLoadStop: (c, _) {
-                          _onPendingLoad();
-                          c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
-                          c.evaluateJavascript(source: "editorApi.setFontScale(${appPreferences.textScaleFactor})");
-                        },
-                      ),
-              ),
-              _ScreenHeader(
-                s: s,
-                title: _documentTitle,
-                onUndo: _undo,
-                onRedo: _redo,
-                onAddRow: _addSingleRow,
-                onMenu: _openMenu,
-                menuKey: _moreMenuKey,
-              ),
-              _SheetBottomToolbar(
-                s: s,
-                onBold: () => _runJs("editorApi.applyFormat('bold')"),
-                onItalic: () => _runJs("editorApi.applyFormat('italic')"),
-                onUnderline: () => _runJs("editorApi.applyFormat('underline')"),
-                onAlignLeft: () => _runJs("editorApi.setCellAlign('left')"),
-                onAlignCenter: () => _runJs("editorApi.setCellAlign('center')"),
-                onAlignRight: () => _runJs("editorApi.setCellAlign('right')"),
-                onTextColor: () => _openColorPicker(context, s, 'editorApi.setCellColor'),
-                onFillColor: () => _openColorPicker(context, s, 'editorApi.setCellFill'),
-                onInsertImage: _onInsertImage,
-                onInsertChart: _onInsertChart,
-                onInsertLink: _onInsertLink,
-                onAiEdit: () => _openAiEditModal(),
-              ),
-            ]),
+                ),
+                _ScreenHeader(
+                  s: s,
+                  title: _documentTitle,
+                  onUndo: _undo,
+                  onRedo: _redo,
+                  onMenu: _openMenu,
+                  onClose: _fecharTela,
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  left: 12,
+                  right: 12,
+                  bottom: 16 + teclado,
+                  child: _SheetBottomToolbar(
+                    s: s,
+                    onBold: () => _runJs("editorApi.applyFormat('bold')"),
+                    onItalic: () => _runJs("editorApi.applyFormat('italic')"),
+                    onUnderline: () => _runJs("editorApi.applyFormat('underline')"),
+                    onAlignLeft: () => _runJs("editorApi.setCellAlign('left')"),
+                    onAlignCenter: () => _runJs("editorApi.setCellAlign('center')"),
+                    onAlignRight: () => _runJs("editorApi.setCellAlign('right')"),
+                    onTextColor: () => _openColorPicker(context, s, 'editorApi.setCellColor'),
+                    onFillColor: () => _openColorPicker(context, s, 'editorApi.setCellFill'),
+                    onInsertImage: _onInsertImage,
+                    onInsertChart: _onInsertChart,
+                    onInsertLink: _onInsertLink,
+                    onAddRow: _addFiftyRows,
+                    onAiEdit: () => _openAiEditModal(),
+                  ),
+                ),
+              ]),
+            ),
           ),
         ),
       ),
@@ -471,18 +499,12 @@ class _ScreenHeader extends StatelessWidget {
   final String title;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
-  final VoidCallback onAddRow;
   final VoidCallback onMenu;
-  final GlobalKey menuKey;
+  final VoidCallback onClose;
 
   const _ScreenHeader({
-    required this.s,
-    required this.title,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onAddRow,
-    required this.onMenu,
-    required this.menuKey,
+    required this.s, required this.title, required this.onUndo,
+    required this.onRedo, required this.onMenu, required this.onClose,
   });
 
   @override
@@ -492,30 +514,27 @@ class _ScreenHeader extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(6, 6, 8, 10),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)],
-          ),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)]),
         ),
         child: Row(children: [
-          ScreenBackButton(s: s),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            child: Container(
+              width: 40, height: 40, alignment: Alignment.center,
+              decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle),
+              child: AppIcon('back.svg', size: 20, color: s.onSurface),
+            ),
+          ),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface),
-            ),
+            child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface)),
           ),
           const SizedBox(width: 12),
           _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo, withContainer: false),
           _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo, withContainer: false),
           const SizedBox(width: 8),
-          _HeaderIconButton(s: s, assetName: 'add', onTap: onAddRow),
-          const SizedBox(width: 8),
-          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu, anchorKey: menuKey),
+          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu),
         ]),
       ),
     );
@@ -526,34 +545,28 @@ class _HeaderIconButton extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
-  final GlobalKey? anchorKey;
   final bool withContainer;
-  const _HeaderIconButton({
-    required this.s,
-    required this.assetName,
-    required this.onTap,
-    this.anchorKey,
-    this.withContainer = true,
-  });
+  const _HeaderIconButton({required this.s, required this.assetName, required this.onTap, this.withContainer = true});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      key: anchorKey,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
-        alignment: Alignment.center,
-        decoration: withContainer
-            ? BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow)
-            : null,
+        width: 40, height: 40, alignment: Alignment.center,
+        decoration: withContainer ? BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow) : null,
         child: _EditorIcon(assetName, size: 20, color: s.onSurface),
       ),
     );
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// TOOLBAR — inclui "Adicionar linha" (antes vivia num botão à
+// parte no header e duplicado no menu de 3 pontos como "50 linhas").
+// Agora só existe aqui, uma vez.
+// ══════════════════════════════════════════════════════════════
 class _SheetBottomToolbar extends StatelessWidget {
   final AppColorScheme s;
   final VoidCallback onBold;
@@ -567,58 +580,55 @@ class _SheetBottomToolbar extends StatelessWidget {
   final VoidCallback onInsertImage;
   final VoidCallback onInsertChart;
   final VoidCallback onInsertLink;
+  final VoidCallback onAddRow;
   final VoidCallback onAiEdit;
 
   const _SheetBottomToolbar({
-    required this.s,
-    required this.onBold,
-    required this.onItalic,
-    required this.onUnderline,
-    required this.onAlignLeft,
-    required this.onAlignCenter,
-    required this.onAlignRight,
-    required this.onTextColor,
-    required this.onFillColor,
-    required this.onInsertImage,
-    required this.onInsertChart,
-    required this.onInsertLink,
-    required this.onAiEdit,
+    required this.s, required this.onBold, required this.onItalic, required this.onUnderline,
+    required this.onAlignLeft, required this.onAlignCenter, required this.onAlignRight,
+    required this.onTextColor, required this.onFillColor, required this.onInsertImage,
+    required this.onInsertChart, required this.onInsertLink, required this.onAddRow, required this.onAiEdit,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      left: 12, right: 12, bottom: 16,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: s.floatingShadow,
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _ToolbarButton(s: s, assetName: 'bold', onTap: onBold),
-              _ToolbarButton(s: s, assetName: 'italic', onTap: onItalic),
-              _ToolbarButton(s: s, assetName: 'underline', onTap: onUnderline),
-              _ToolbarButton(s: s, assetName: 'align_left', onTap: onAlignLeft),
-              _ToolbarButton(s: s, assetName: 'align_center', onTap: onAlignCenter),
-              _ToolbarButton(s: s, assetName: 'align_right', onTap: onAlignRight),
-              _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
-              _ToolbarButton(s: s, assetName: 'fill', onTap: onFillColor),
-              _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
-              _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
-              _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
-              _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
-            ],
-          ),
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(color: s.cardBackground, borderRadius: BorderRadius.circular(28), boxShadow: s.floatingShadow),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _ToolbarButton(s: s, assetName: 'bold', onTap: onBold),
+            _ToolbarButton(s: s, assetName: 'italic', onTap: onItalic),
+            _ToolbarButton(s: s, assetName: 'underline', onTap: onUnderline),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'align_left', onTap: onAlignLeft),
+            _ToolbarButton(s: s, assetName: 'align_center', onTap: onAlignCenter),
+            _ToolbarButton(s: s, assetName: 'align_right', onTap: onAlignRight),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
+            _ToolbarButton(s: s, assetName: 'fill', onTap: onFillColor),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
+            _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
+            _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'add', onTap: onAddRow),
+            _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
+          ],
         ),
       ),
     );
   }
+}
+
+class _ToolbarDivider extends StatelessWidget {
+  final AppColorScheme s;
+  const _ToolbarDivider({required this.s});
+  @override
+  Widget build(BuildContext context) => Container(width: 1, height: 22, margin: const EdgeInsets.symmetric(horizontal: 4), color: s.outlineVariant);
 }
 
 class _ToolbarButton extends StatelessWidget {
@@ -633,8 +643,7 @@ class _ToolbarButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
-        alignment: Alignment.center,
+        width: 40, height: 40, alignment: Alignment.center,
         child: _EditorIcon(assetName, size: 20, color: s.onSurface),
       ),
     );
@@ -646,13 +655,12 @@ Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {
   return showCraftBottomSheet<String>(
     context: context,
     s: s,
+    title: 'Configuração do gráfico',
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Configuração do gráfico', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
-          const SizedBox(height: 12),
           TextField(controller: ctrl, minLines: 3, maxLines: 6, decoration: const InputDecoration(hintText: '{"type":"bar",...}')),
           const SizedBox(height: 16),
           GestureDetector(
@@ -661,7 +669,7 @@ Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {
               padding: const EdgeInsets.symmetric(vertical: 13),
               alignment: Alignment.center,
               decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
+              child: Text('Inserir', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -675,13 +683,12 @@ Future<String?> showImageUrlDialog(BuildContext context, AppColorScheme s) {
   return showCraftBottomSheet<String>(
     context: context,
     s: s,
+    title: 'URL da imagem',
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('URL da imagem', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
-          const SizedBox(height: 12),
           TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'https://')),
           const SizedBox(height: 16),
           GestureDetector(
@@ -690,13 +697,148 @@ Future<String?> showImageUrlDialog(BuildContext context, AppColorScheme s) {
               padding: const EdgeInsets.symmetric(vertical: 13),
               alignment: Alignment.center,
               decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: Text('Inserir', style: TextStyle(color: s.onPrimary)),
+              child: Text('Inserir', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
       ),
     ),
   );
+}
+
+// ══════════════════════════════════════════════════════════════
+// BLOCO HTML MULTI-CÉLULA — pede o HTML e o tamanho da área
+// ══════════════════════════════════════════════════════════════
+class HtmlBlockResult {
+  final String html;
+  final int rowspan;
+  final int colspan;
+  const HtmlBlockResult({required this.html, required this.rowspan, required this.colspan});
+}
+
+Future<HtmlBlockResult?> showHtmlBlockDialog(BuildContext context, AppColorScheme s) {
+  final htmlCtrl = TextEditingController();
+  int rowspan = 3;
+  int colspan = 3;
+  return showCraftBottomSheet<HtmlBlockResult>(
+    context: context,
+    s: s,
+    title: 'Bloco HTML',
+    child: StatefulBuilder(
+      builder: (ctx, setSheetState) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'O bloco começa na célula selecionada e ocupa a área indicada. O conteúdo é mostrado mas não é interativo (sem cliques nem scripts).',
+              style: TextStyle(fontSize: 12, color: s.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: htmlCtrl,
+              minLines: 4,
+              maxLines: 8,
+              style: TextStyle(fontSize: 13, color: s.onSurface, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '<div>...</div>',
+                filled: true,
+                fillColor: s.hover,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _HtmlBlockSizeField(
+                    s: s,
+                    label: 'Linhas',
+                    value: rowspan,
+                    min: 1,
+                    max: 20,
+                    onChanged: (v) => setSheetState(() => rowspan = v),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _HtmlBlockSizeField(
+                    s: s,
+                    label: 'Colunas',
+                    value: colspan,
+                    min: 1,
+                    max: 10,
+                    onChanged: (v) => setSheetState(() => colspan = v),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                final html = htmlCtrl.text.trim();
+                if (html.isEmpty) return;
+                Navigator.pop(context, HtmlBlockResult(html: html, rowspan: rowspan, colspan: colspan));
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
+                child: Text('Inserir bloco', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _HtmlBlockSizeField extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final int value;
+  final int min;
+  final int max;
+  final ValueChanged<int> onChanged;
+  const _HtmlBlockSizeField({required this.s, required this.label, required this.value, required this.min, required this.max, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: s.pageBackground, borderRadius: BorderRadius.circular(16), border: Border.all(color: s.outlineVariant)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              _stepBtn('-', () { if (value > min) onChanged(value - 1); }),
+              Expanded(child: Text('$value', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface))),
+              _stepBtn('+', () { if (value < max) onChanged(value + 1); }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepBtn(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28, height: 28, alignment: Alignment.center,
+        decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadowSoft),
+        child: Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
+      ),
+    );
+  }
 }
 
 class ScreenBackButton extends StatefulWidget {
@@ -712,16 +854,15 @@ class _ScreenBackButtonState extends State<ScreenBackButton> {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
       onTap: () => Navigator.of(context).pop(),
       child: AnimatedScale(
         scale: _pressed ? 0.9 : 1.0,
         duration: const Duration(milliseconds: 110),
         child: Container(
-          width: 40, height: 40,
-          alignment: Alignment.center,
+          width: 40, height: 40, alignment: Alignment.center,
           decoration: BoxDecoration(color: widget.s.cardBackground, shape: BoxShape.circle),
           child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
         ),

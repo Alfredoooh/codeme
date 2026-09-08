@@ -1,64 +1,32 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/apps/docs.dart
 // ══════════════════════════════════════════════════════════════
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
-import 'dart:convert';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/widgets/widgets.dart';
-import '../../apps/sheets/sheets.dart';
 import '../../../core/widgets/app_sheet.dart';
+import '../../apps/sheets/sheets.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/export_service.dart';
 import '../app_types.dart';
 
 const Set<String> _kEditorSvgIcons = {
-  'align_center',
-  'align_left',
-  'align_right',
-  'bold',
-  'brush',
-  'bullet_point',
-  'capital_letter',
-  'chart',
-  'edit_text',
-  'eraser',
-  'font',
-  'font-2',
-  'font_size',
-  'hyperlink',
-  'image',
-  'indent_decrease',
-  'indent_increase',
-  'justify',
-  'paste',
-  'pencil_holder',
-  'quote',
-  'resize',
-  'spacing_height',
-  'spacing_width',
-  'spellcheck',
-  'subscript',
-  'superscript',
-  'text_color',
-  'underline',
-  'download',
-  'share',
-  'pdf',
-  'check',
-  'plus',
-  'minus',
-  'trash',
-  'grid',
-  'row',
-  'column',
-  'wand',
+  'align_center', 'align_left', 'align_right', 'bold', 'brush',
+  'bullet_point', 'capital_letter', 'chart', 'edit_text', 'eraser',
+  'font', 'font-2', 'font_size', 'hyperlink', 'image', 'indent_decrease',
+  'indent_increase', 'justify', 'paste', 'pencil_holder', 'quote',
+  'resize', 'spacing_height', 'spacing_width', 'spellcheck', 'subscript',
+  'superscript', 'text_color', 'underline', 'download', 'share', 'pdf',
+  'check', 'plus', 'minus', 'trash', 'grid', 'row', 'column', 'wand',
+  'layers', 'send_to_back', 'bring_to_front',
 };
 
 const Map<String, String> _kEditorIconAliases = {
@@ -68,6 +36,7 @@ const Map<String, String> _kEditorIconAliases = {
   'palette': 'text_color',
   'highlight': 'brush',
   'text': 'edit_text',
+  'position': 'layers',
 };
 
 class _EditorIcon extends StatelessWidget {
@@ -94,125 +63,105 @@ class _EditorIcon extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// POPUP CUSTOMIZADO — Container Transform super suave
+// TOGGLE CUSTOMIZADO — usado em todos os sheets deste ficheiro
+// (numeração, cabeçalho/rodapé, tom do papel, tabela) em vez de
+// Switch.adaptive, que renderiza como switch nativo do Android.
 // ══════════════════════════════════════════════════════════════
-//
-// Substitui o antigo `showMenu` nativo. Nasce a partir do botão
-// (posição + tamanho do anchor) e expande em direção ao tamanho
-// final do cartão, com blur de fundo, bordas suaves e curva
-// elástica muito lenta — efeito "morph" em vez de "popup".
+class AppToggle extends StatelessWidget {
+  final AppColorScheme s;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const AppToggle({super.key, required this.s, required this.value, required this.onChanged});
 
-Future<T?> _showMorphMenu<T>(
-  BuildContext context,
-  AppColorScheme s, {
-  required GlobalKey anchorKey,
-  required List<_MorphMenuItem<T>> items,
-  double width = 240,
-}) async {
-  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
-  if (box == null) return null;
-  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-  final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-  final anchorSize = box.size;
-  final screenSize = overlay.size;
-
-  final anchorRect = Rect.fromLTWH(
-    anchorTopLeft.dx,
-    anchorTopLeft.dy,
-    anchorSize.width,
-    anchorSize.height,
-  );
-
-  double left = anchorRect.right - width;
-  if (left < 12) left = 12;
-  if (left + width > screenSize.width - 12) left = screenSize.width - 12 - width;
-  double top = anchorRect.bottom + 8;
-
-  return showGeneralDialog<T>(
-    context: context,
-    barrierLabel: 'menu',
-    barrierColor: Colors.black.withOpacity(0.001),
-    barrierDismissible: true,
-    transitionDuration: const Duration(milliseconds: 480),
-    pageBuilder: (ctx, anim, secAnim) => const SizedBox.shrink(),
-    transitionBuilder: (ctx, anim, secAnim, child) {
-      final curved = CurvedAnimation(parent: anim, curve: const Cubic(0.16, 1, 0.3, 1));
-      return Stack(
-        children: [
-          Positioned.fill(
-            child: FadeTransition(
-              opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-              child: GestureDetector(
-                onTap: () => Navigator.of(ctx).pop(),
-                child: BackdropBlurBox(sigma: 6 * curved.value, color: s.barrier.withOpacity(0.18 * curved.value)),
-              ),
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        width: 46,
+        height: 28,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: value ? s.primary : s.outlineVariant,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 3, offset: const Offset(0, 1))],
             ),
           ),
-          Positioned(
-            left: Tween<double>(begin: anchorRect.left, end: left).transform(curved.value),
-            top: Tween<double>(begin: anchorRect.top, end: top).transform(curved.value),
-            width: Tween<double>(begin: anchorRect.width, end: width).transform(curved.value),
-            child: Opacity(
-              opacity: Curves.easeOut.transform(anim.value.clamp(0.0, 1.0)),
-              child: Transform.scale(
-                alignment: Alignment.topRight,
-                scale: 0.86 + (0.14 * curved.value),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: s.floatingSurface.withOpacity(0.98),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: s.outline.withOpacity(0.14), width: 1),
-                      boxShadow: s.floatingShadow,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (int i = 0; i < items.length; i++)
-                          _MorphMenuTile<T>(
-                            item: items[i],
-                            s: s,
-                            onSelected: (v) => Navigator.of(ctx).pop(v),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
+        ),
+      ),
+    );
+  }
 }
 
-class _MorphMenuItem<T> {
+// ══════════════════════════════════════════════════════════════
+// MENU EM BOTTOM SHEET — base showCraftBottomSheet (a mesma que
+// showLinkSheet já usa), substitui TODOS os antigos popup morph.
+// ══════════════════════════════════════════════════════════════
+
+class SheetMenuItem<T> {
   final T value;
   final String asset;
   final String label;
+  final String? subtitle;
   final bool destructive;
-  const _MorphMenuItem({
+  final bool selected;
+  const SheetMenuItem({
     required this.value,
     required this.asset,
     required this.label,
+    this.subtitle,
     this.destructive = false,
+    this.selected = false,
   });
 }
 
-class _MorphMenuTile<T> extends StatefulWidget {
-  final _MorphMenuItem<T> item;
-  final AppColorScheme s;
-  final void Function(T) onSelected;
-  const _MorphMenuTile({required this.item, required this.s, required this.onSelected});
-
-  @override
-  State<_MorphMenuTile<T>> createState() => _MorphMenuTileState<T>();
+Future<T?> showMenuSheet<T>(
+  BuildContext context, {
+  required String title,
+  required List<SheetMenuItem<T>> items,
+}) {
+  final s = AppTheme.of(context);
+  return showCraftBottomSheet<T>(
+    context: context,
+    s: s,
+    title: title,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final item in items)
+            _SheetMenuTile<T>(item: item, s: s, onSelected: (v) => Navigator.pop(context, v)),
+        ],
+      ),
+    ),
+  );
 }
 
-class _MorphMenuTileState<T> extends State<_MorphMenuTile<T>> {
+class _SheetMenuTile<T> extends StatefulWidget {
+  final SheetMenuItem<T> item;
+  final AppColorScheme s;
+  final void Function(T) onSelected;
+  const _SheetMenuTile({required this.item, required this.s, required this.onSelected});
+
+  @override
+  State<_SheetMenuTile<T>> createState() => _SheetMenuTileState<T>();
+}
+
+class _SheetMenuTileState<T> extends State<_SheetMenuTile<T>> {
   bool _pressed = false;
 
   @override
@@ -227,43 +176,34 @@ class _MorphMenuTileState<T> extends State<_MorphMenuTile<T>> {
       onTapUp: (_) => setState(() => _pressed = false),
       onTap: () => widget.onSelected(item.value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
-        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        duration: const Duration(milliseconds: 120),
+        margin: const EdgeInsets.symmetric(vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: _pressed ? s.hover : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          color: _pressed ? s.hover : (item.selected ? s.primaryContainer.withOpacity(0.3) : Colors.transparent),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
-            _EditorIcon(item.asset, size: 18, color: color),
-            const SizedBox(width: 12),
+            _EditorIcon(item.asset, size: 19, color: item.selected ? s.primary : color),
+            const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                item.label,
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: color),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: color)),
+                  if (item.subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(item.subtitle!, style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
+                  ],
+                ],
               ),
             ),
+            if (item.selected) _EditorIcon('check', size: 16, color: s.primary),
           ],
         ),
       ),
     );
-  }
-}
-
-/// Retângulo desfocado leve para o fundo do menu morph. Evita
-/// depender de `BackdropFilter` dentro de um `showGeneralDialog`
-/// sem contexto de clipping garantido — usa apenas opacidade,
-/// suficiente para o efeito desejado sem custo de performance.
-class BackdropBlurBox extends StatelessWidget {
-  final double sigma;
-  final Color color;
-  const BackdropBlurBox({super.key, required this.sigma, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(color: color);
   }
 }
 
@@ -276,6 +216,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   static const EditorType _type = EditorType.docs;
   InAppWebViewController? _ctrl;
   bool _aiEditing = false;
+  bool _isClosing = false;
 
   String _documentTitle = 'Documento';
   String? _lastSavedContent;
@@ -284,9 +225,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   bool _restoringContent = false;
 
   bool _readyForWebView = false;
-
-  final GlobalKey _moreMenuKey = GlobalKey();
-  final GlobalKey _shapesMenuKey = GlobalKey();
+  String? _selectedImagePosition;
 
   @override
   void initState() {
@@ -321,6 +260,23 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     editTabController.removeListener(_onPendingLoad);
     try { _ctrl?.dispose(); } catch (_) {}
     super.dispose();
+  }
+
+  Future<bool> _pararWebViewAntesDeFechar() async {
+    if (_isClosing) return false;
+    _isClosing = true;
+    final ctrl = _ctrl;
+    if (ctrl != null) {
+      try {
+        await ctrl.callAsyncJavaScript(functionBody: 'editorApi.prepararParaFechar(); return true;');
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  void _fecharTela() async {
+    final podeFechar = await _pararWebViewAntesDeFechar();
+    if (podeFechar && mounted) Navigator.of(context).pop();
   }
 
   void _onPendingLoad() {
@@ -402,11 +358,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     } catch (_) { return ''; }
   }
 
-  void _setCurrentContent(String content) {
-    final ctrl = _ctrl;
-    if (ctrl != null) _injectCanvas(ctrl, content);
-  }
-
   Future<Uint8List?> _exportDocx() async {
     final content = await _getCurrentContent();
     if (content.trim().isEmpty) {
@@ -415,12 +366,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
       );
       return null;
     }
-    final item = LocalCanvasItem(
-      id: 'export-docx',
-      kind: LocalCanvasKind.doc,
-      title: _documentTitle,
-      content: content,
-    );
+    final item = LocalCanvasItem(id: 'export-docx', kind: LocalCanvasKind.doc, title: _documentTitle, content: content);
     return ExportService.export(item: item, format: 'docx');
   }
 
@@ -432,12 +378,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
       );
       return null;
     }
-    final item = LocalCanvasItem(
-      id: 'export-pdf',
-      kind: LocalCanvasKind.doc,
-      title: _documentTitle,
-      content: content,
-    );
+    final item = LocalCanvasItem(id: 'export-pdf', kind: LocalCanvasKind.doc, title: _documentTitle, content: content);
     return ExportService.export(item: item, format: 'pdf');
   }
 
@@ -459,28 +400,28 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   Future<void> _shareCurrentDocument() async {
-  try {
-    final bytes = await _exportDocx();
-    if (bytes == null) return;
-    await ExportService.shareBytes(bytes, filename: '$_safeTitle.docx');
-  } catch (e) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Não foi possível partilhar o documento: ${e.toString()}')),
-    );
+    try {
+      final bytes = await _exportDocx();
+      if (bytes == null) return;
+      await ExportService.shareBytes(bytes, filename: '$_safeTitle.docx');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível partilhar o documento: ${e.toString()}')),
+      );
+    }
   }
-}
 
   Future<void> _sharePdf() async {
-  try {
-    final bytes = await _exportPdf();
-    if (bytes == null) return;
-    await ExportService.shareBytes(bytes, filename: '$_safeTitle.pdf');
-  } catch (e) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Não foi possível partilhar como PDF: ${e.toString()}')),
-    );
+    try {
+      final bytes = await _exportPdf();
+      if (bytes == null) return;
+      await ExportService.shareBytes(bytes, filename: '$_safeTitle.pdf');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível partilhar como PDF: ${e.toString()}')),
+      );
+    }
   }
-}
 
   Future<void> _openAiEditModal({String? preselectedText}) async {
     final s = AppTheme.of(context);
@@ -495,7 +436,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     setState(() => _aiEditing = true);
     try {
       // Edição IA desativada temporariamente até backend ser atualizado.
-      // Mantém o conteúdo atual sem alterações.
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -558,10 +498,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
           final curved = CurvedAnimation(parent: anim, curve: const Cubic(0.16, 1, 0.3, 1));
           return FadeTransition(
             opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(curved),
-              child: child,
-            ),
+            child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(curved), child: child),
           );
         },
       ),
@@ -572,157 +509,354 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     }
   }
 
-  // Menu "more" — agora um popup customizado (Container Transform)
-  // com apenas as três ações que fazem sentido aqui: descarregar,
-  // partilhar e partilhar como PDF. As restantes ferramentas
-  // (tabela, imagem, forma, gráfico, IA) vivem só no bottomtoolbar.
   void _openMenu() async {
-    final s = AppTheme.of(context);
-    final result = await _showMorphMenu<int>(
+    final result = await showMenuSheet<int>(
       context,
-      s,
-      anchorKey: _moreMenuKey,
+      title: 'Opções do documento',
       items: const [
-        _MorphMenuItem(value: 1, asset: 'download', label: 'Descarregar documento'),
-        _MorphMenuItem(value: 2, asset: 'share', label: 'Partilhar'),
-        _MorphMenuItem(value: 3, asset: 'pdf', label: 'Partilhar como PDF'),
+        SheetMenuItem(value: 1, asset: 'download', label: 'Descarregar documento', subtitle: 'Guarda como .docx'),
+        SheetMenuItem(value: 2, asset: 'share', label: 'Partilhar', subtitle: 'Envia para outra app'),
+        SheetMenuItem(value: 3, asset: 'pdf', label: 'Partilhar como PDF'),
+        SheetMenuItem(value: 4, asset: 'row', label: 'Numeração de página'),
+        SheetMenuItem(value: 5, asset: 'column', label: 'Cabeçalho e rodapé'),
+        SheetMenuItem(value: 6, asset: 'grid', label: 'Orientação da página'),
+        SheetMenuItem(value: 7, asset: 'brush', label: 'Tom do papel'),
       ],
     );
-    if (result == 1) _downloadCurrentDocument();
-    else if (result == 2) _shareCurrentDocument();
-    else if (result == 3) _sharePdf();
+    switch (result) {
+      case 1: _downloadCurrentDocument(); break;
+      case 2: _shareCurrentDocument(); break;
+      case 3: _sharePdf(); break;
+      case 4: _openPageNumbersSheet(); break;
+      case 5: _openHeaderFooterSheet(); break;
+      case 6: _openOrientationSheet(); break;
+      case 7: _openPaperToneSheet(); break;
+    }
   }
 
-  // Menu de formas — mesmo popup morph, com formas geométricas
-  Future<void> _showShapeMenuPopup() async {
+  void _openPageNumbersSheet() async {
     final s = AppTheme.of(context);
-    final result = await _showMorphMenu<int>(
+    bool ativo = false;
+    try {
+      final result = await _ctrl?.callAsyncJavaScript(functionBody: 'return editorApi.getDocSettings();');
+      final settings = jsonDecode(result?.value?.toString() ?? '{}');
+      ativo = settings['showPageNumbers'] == true;
+    } catch (_) {}
+
+    if (!mounted) return;
+    await showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      title: 'Numeração de página',
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mostra o número em cada folha do documento.', style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: Text('Mostrar números', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+                  AppToggle(
+                    s: s,
+                    value: ativo,
+                    onChanged: (v) {
+                      setSheetState(() => ativo = v);
+                      _runJs("editorApi.setPageNumbersVisible($v)");
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openHeaderFooterSheet() async {
+    final s = AppTheme.of(context);
+    bool headerAtivo = false;
+    bool footerAtivo = false;
+    try {
+      final result = await _ctrl?.callAsyncJavaScript(functionBody: 'return editorApi.getDocSettings();');
+      final settings = jsonDecode(result?.value?.toString() ?? '{}');
+      headerAtivo = settings['showHeader'] == true;
+      footerAtivo = settings['showFooter'] == true;
+    } catch (_) {}
+
+    if (!mounted) return;
+    await showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      title: 'Cabeçalho e rodapé',
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text('Mostrar cabeçalho', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+                  AppToggle(
+                    s: s,
+                    value: headerAtivo,
+                    onChanged: (v) {
+                      setSheetState(() => headerAtivo = v);
+                      _runJs("editorApi.setHeaderVisible($v)");
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: Text('Mostrar rodapé', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+                  AppToggle(
+                    s: s,
+                    value: footerAtivo,
+                    onChanged: (v) {
+                      setSheetState(() => footerAtivo = v);
+                      _runJs("editorApi.setFooterVisible($v)");
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'O conteúdo do cabeçalho/rodapé escreve-se diretamente na folha, tocando na área correspondente.',
+                style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openOrientationSheet() async {
+    final result = await showMenuSheet<String>(
       context,
-      s,
-      anchorKey: _shapesMenuKey,
+      title: 'Orientação da página',
       items: const [
-        _MorphMenuItem(value: 1, asset: 'rect', label: 'Retângulo'),
-        _MorphMenuItem(value: 2, asset: 'circle', label: 'Círculo'),
-        _MorphMenuItem(value: 3, asset: 'line', label: 'Linha'),
-        _MorphMenuItem(value: 4, asset: 'arrow', label: 'Seta'),
+        SheetMenuItem(value: 'portrait', asset: 'grid', label: 'Retrato'),
+        SheetMenuItem(value: 'landscape', asset: 'grid', label: 'Paisagem'),
       ],
     );
-    if (result == 1) _onInsertShape('rect');
-    else if (result == 2) _onInsertShape('circle');
-    else if (result == 3) _onInsertShape('line');
-    else if (result == 4) _onInsertShape('arrow');
+    if (result != null) _runJs("editorApi.setPageOrientation('$result')");
+  }
+
+  void _openPaperToneSheet() async {
+    final s = AppTheme.of(context);
+    bool escuro = false;
+    try {
+      final result = await _ctrl?.callAsyncJavaScript(functionBody: 'return editorApi.getPaperDarkMode();');
+      escuro = result?.value == true;
+    } catch (_) {}
+
+    if (!mounted) return;
+    await showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      title: 'Tom do papel',
+      child: StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Independente do tema da app — escolha só para este documento.', style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: Text('Papel escuro', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+                  AppToggle(
+                    s: s,
+                    value: escuro,
+                    onChanged: (v) {
+                      setSheetState(() => escuro = v);
+                      _runJs("editorApi.setPaperDarkMode($v)");
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showShapeMenuSheet() async {
+    final result = await showMenuSheet<String>(
+      context,
+      title: 'Inserir forma',
+      items: const [
+        SheetMenuItem(value: 'rect', asset: 'grid', label: 'Retângulo'),
+        SheetMenuItem(value: 'circle', asset: 'grid', label: 'Círculo'),
+        SheetMenuItem(value: 'line', asset: 'grid', label: 'Linha'),
+        SheetMenuItem(value: 'arrow', asset: 'grid', label: 'Seta'),
+      ],
+    );
+    if (result != null) _onInsertShape(result);
+  }
+
+  Future<void> _showImagePositionSheet() async {
+    String atual = 'inline';
+    try {
+      final result = await _ctrl?.callAsyncJavaScript(functionBody: 'return editorApi.getSelectedImagePosition();');
+      atual = result?.value?.toString() ?? 'inline';
+    } catch (_) {}
+
+    final selecionado = await showMenuSheet<String>(
+      context,
+      title: 'Posição da imagem',
+      items: [
+        SheetMenuItem(value: 'inline', asset: 'align_left', label: 'Alinhado com o texto', subtitle: 'Comportamento padrão', selected: atual == 'inline'),
+        SheetMenuItem(value: 'front', asset: 'bring_to_front', label: 'Frente do texto', subtitle: 'Imagem sobreposta ao texto', selected: atual == 'front'),
+        SheetMenuItem(value: 'back', asset: 'send_to_back', label: 'Atrás do texto', subtitle: 'Texto visível sobre a imagem', selected: atual == 'back'),
+      ],
+    );
+    if (selecionado != null) {
+      _runJs("editorApi.setSelectedImagePosition('$selecionado')");
+      setState(() => _selectedImagePosition = selecionado);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: s.statusBarStyle,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ColoredBox(
-          color: s.pageBackground,
-          child: SafeArea(
-            child: Stack(children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 58, bottom: 44),
-                child: (kIsWeb || !_readyForWebView)
-                    ? const SizedBox.shrink()
-                    : InAppWebView(
-                        initialFile: _type.htmlAsset,
-                        initialSettings: InAppWebViewSettings(
-                          transparentBackground: true,
-                          javaScriptEnabled: true,
-                          allowFileAccessFromFileURLs: true,
-                          allowUniversalAccessFromFileURLs: true,
-                          useHybridComposition: true,
-                          verticalScrollBarEnabled: false,
-                          horizontalScrollBarEnabled: false,
-                          supportZoom: false,
+    final teclado = MediaQuery.of(context).viewInsets.bottom;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _fecharTela();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: s.statusBarStyle,
+        child: Material(
+          type: MaterialType.transparency,
+          child: ColoredBox(
+            color: s.pageBackground,
+            child: SafeArea(
+              child: Stack(children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 58, bottom: 44),
+                  child: (kIsWeb || !_readyForWebView)
+                      ? const SizedBox.shrink()
+                      : InAppWebView(
+                          initialFile: _type.htmlAsset,
+                          initialSettings: InAppWebViewSettings(
+                            transparentBackground: true,
+                            javaScriptEnabled: true,
+                            allowFileAccessFromFileURLs: true,
+                            allowUniversalAccessFromFileURLs: true,
+                            useHybridComposition: true,
+                            verticalScrollBarEnabled: false,
+                            horizontalScrollBarEnabled: false,
+                            supportZoom: false,
+                          ),
+                          onWebViewCreated: (c) {
+                            _ctrl = c;
+                            c.addJavaScriptHandler(
+                              handlerName: 'openColorPicker',
+                              callback: (args) {
+                                final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
+                                _openColorPicker(context, s, cb);
+                              },
+                            );
+                            c.addJavaScriptHandler(handlerName: 'openImagePicker', callback: (_) => _onInsertImage());
+                            c.addJavaScriptHandler(
+                              handlerName: 'openLinkSheet',
+                              callback: (_) => showLinkSheet(context, s, (url, text) {
+                                _runJs("editorApi.insertLink('$url','$text')");
+                              }),
+                            );
+                            c.addJavaScriptHandler(
+                              handlerName: 'openAiEditForSelection',
+                              callback: (args) {
+                                final selected = args.isNotEmpty ? args[0]?.toString() : null;
+                                _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
+                              },
+                            );
+                            c.addJavaScriptHandler(
+                              handlerName: 'saveDocument',
+                              callback: (args) {
+                                final content = args.isNotEmpty ? args[0]?.toString() : null;
+                                if (content != null) _onSaveDocument(content);
+                              },
+                            );
+                            c.addJavaScriptHandler(handlerName: 'onShapeSelected', callback: (args) {});
+                            c.addJavaScriptHandler(
+                              handlerName: 'onImageSelected',
+                              callback: (args) {
+                                final pos = args.isNotEmpty ? args[0]?.toString() : 'inline';
+                                setState(() => _selectedImagePosition = pos);
+                              },
+                            );
+                          },
+                          onLoadStop: (c, _) {
+                            _onPendingLoad();
+                            c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
+                          },
                         ),
-                        onWebViewCreated: (c) {
-                          _ctrl = c;
-                          c.addJavaScriptHandler(
-                            handlerName: 'openColorPicker',
-                            callback: (args) {
-                              final cb = args.isNotEmpty ? args[0] as String : 'editorApi.setColor';
-                              _openColorPicker(context, s, cb);
-                            },
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'openImagePicker',
-                            callback: (_) => _onInsertImage(),
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'openLinkSheet',
-                            callback: (_) => showLinkSheet(context, s, (url, text) {
-                              _runJs("editorApi.insertLink('$url','$text')");
-                            }),
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'openAiEditForSelection',
-                            callback: (args) {
-                              final selected = args.isNotEmpty ? args[0]?.toString() : null;
-                              _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
-                            },
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'saveDocument',
-                            callback: (args) {
-                              final content = args.isNotEmpty ? args[0]?.toString() : null;
-                              if (content != null) _onSaveDocument(content);
-                            },
-                          );
-                          c.addJavaScriptHandler(
-                            handlerName: 'onShapeSelected',
-                            callback: (args) {},
-                          );
-                        },
-                        onLoadStop: (c, _) {
-                          _onPendingLoad();
-                          c.evaluateJavascript(source: "editorApi.setThemeMode('${s.isDark ? 'dark' : 'light'}')");
-                        },
-                      ),
-              ),
-              _ScreenHeader(
-                s: s,
-                title: _documentTitle,
-                onUndo: _undo,
-                onRedo: _redo,
-                onMenu: _openMenu,
-                menuKey: _moreMenuKey,
-              ),
-              _DocsBottomToolbar(
-                s: s,
-                onBold: () => _runJs("editorApi.exec('bold')"),
-                onItalic: () => _runJs("editorApi.exec('italic')"),
-                onUnderline: () => _runJs("editorApi.exec('underline')"),
-                onStrike: () => _runJs("editorApi.exec('strikethrough')"),
-                onAlignLeft: () => _runJs("editorApi.exec('alignLeft')"),
-                onAlignCenter: () => _runJs("editorApi.exec('alignCenter')"),
-                onAlignRight: () => _runJs("editorApi.exec('alignRight')"),
-                onJustify: () => _runJs("editorApi.exec('alignJustify')"),
-                onBullet: () => _runJs("editorApi.exec('bulletList')"),
-                onNumbered: () => _runJs("editorApi.exec('numberedList')"),
-                onIndentIncrease: () => _runJs("editorApi.exec('indentIncrease')"),
-                onIndentDecrease: () => _runJs("editorApi.exec('indentDecrease')"),
-                onSubscript: () => _runJs("editorApi.exec('subscript')"),
-                onSuperscript: () => _runJs("editorApi.exec('superscript')"),
-                onQuote: () => _runJs("editorApi.exec('blockquote')"),
-                onClearFormat: () => _runJs("editorApi.exec('clearFormat')"),
-                onTextColor: () => _openColorPicker(context, s, 'editorApi.setColor'),
-                onHighlight: () => _openColorPicker(context, s, 'editorApi.setHighlight'),
-                onInsertImage: _onInsertImage,
-                onInsertTable: _onInsertTable,
-                onInsertLink: _onInsertLink,
-                onInsertShape: _showShapeMenuPopup,
-                onInsertChart: _onInsertChart,
-                onAiEdit: () => _openAiEditModal(),
-                onFront: () => _runJs("editorApi.trazerParaFrente()"),
-                onBack: () => _runJs("editorApi.enviarParaTras()"),
-                shapeMenuKey: _shapesMenuKey,
-              ),
-            ]),
+                ),
+                _ScreenHeader(
+                  s: s,
+                  title: _documentTitle,
+                  onUndo: _undo,
+                  onRedo: _redo,
+                  onMenu: _openMenu,
+                  onClose: _fecharTela,
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  left: 12,
+                  right: 12,
+                  bottom: 16 + teclado,
+                  child: _DocsBottomToolbar(
+                    s: s,
+                    imageSelected: _selectedImagePosition != null,
+                    onBold: () => _runJs("editorApi.exec('bold')"),
+                    onItalic: () => _runJs("editorApi.exec('italic')"),
+                    onUnderline: () => _runJs("editorApi.exec('underline')"),
+                    onStrike: () => _runJs("editorApi.exec('strikethrough')"),
+                    onAlignLeft: () => _runJs("editorApi.exec('alignLeft')"),
+                    onAlignCenter: () => _runJs("editorApi.exec('alignCenter')"),
+                    onAlignRight: () => _runJs("editorApi.exec('alignRight')"),
+                    onJustify: () => _runJs("editorApi.exec('alignJustify')"),
+                    onBullet: () => _runJs("editorApi.exec('bulletList')"),
+                    onNumbered: () => _runJs("editorApi.exec('numberedList')"),
+                    onIndentIncrease: () => _runJs("editorApi.exec('indentIncrease')"),
+                    onIndentDecrease: () => _runJs("editorApi.exec('indentDecrease')"),
+                    onSubscript: () => _runJs("editorApi.exec('subscript')"),
+                    onSuperscript: () => _runJs("editorApi.exec('superscript')"),
+                    onQuote: () => _runJs("editorApi.exec('blockquote')"),
+                    onClearFormat: () => _runJs("editorApi.exec('clearFormat')"),
+                    onTextColor: () => _openColorPicker(context, s, 'editorApi.setColor'),
+                    onHighlight: () => _openColorPicker(context, s, 'editorApi.setHighlight'),
+                    onInsertImage: _onInsertImage,
+                    onInsertTable: _onInsertTable,
+                    onInsertLink: _onInsertLink,
+                    onInsertShape: _showShapeMenuSheet,
+                    onInsertChart: _onInsertChart,
+                    onAiEdit: () => _openAiEditModal(),
+                    onFront: () => _runJs("editorApi.trazerParaFrente()"),
+                    onBack: () => _runJs("editorApi.enviarParaTras()"),
+                    onImagePosition: _showImagePositionSheet,
+                  ),
+                ),
+              ]),
+            ),
           ),
         ),
       ),
@@ -736,14 +870,10 @@ class _ScreenHeader extends StatelessWidget {
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onMenu;
-  final GlobalKey menuKey;
+  final VoidCallback onClose;
   const _ScreenHeader({
-    required this.s,
-    required this.title,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onMenu,
-    required this.menuKey,
+    required this.s, required this.title, required this.onUndo,
+    required this.onRedo, required this.onMenu, required this.onClose,
   });
 
   @override
@@ -753,28 +883,27 @@ class _ScreenHeader extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(6, 6, 8, 10),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)],
-          ),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)]),
         ),
         child: Row(children: [
-          ScreenBackButton(s: s),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            child: Container(
+              width: 40, height: 40, alignment: Alignment.center,
+              decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle),
+              child: AppIcon('back.svg', size: 20, color: s.onSurface),
+            ),
+          ),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface),
-            ),
+            child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: s.onSurface)),
           ),
           const SizedBox(width: 12),
           _HeaderIconButton(s: s, assetName: 'undo', onTap: onUndo, withContainer: false),
           _HeaderIconButton(s: s, assetName: 'redo', onTap: onRedo, withContainer: false),
           const SizedBox(width: 8),
-          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu, anchorKey: menuKey),
+          _HeaderIconButton(s: s, assetName: 'more_vert', onTap: onMenu),
         ]),
       ),
     );
@@ -785,28 +914,17 @@ class _HeaderIconButton extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
-  final GlobalKey? anchorKey;
   final bool withContainer;
-  const _HeaderIconButton({
-    required this.s,
-    required this.assetName,
-    required this.onTap,
-    this.anchorKey,
-    this.withContainer = true,
-  });
+  const _HeaderIconButton({required this.s, required this.assetName, required this.onTap, this.withContainer = true});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      key: anchorKey,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
-        alignment: Alignment.center,
-        decoration: withContainer
-            ? BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow)
-            : null,
+        width: 40, height: 40, alignment: Alignment.center,
+        decoration: withContainer ? BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadow) : null,
         child: _EditorIcon(assetName, size: 20, color: s.onSurface),
       ),
     );
@@ -815,6 +933,7 @@ class _HeaderIconButton extends StatelessWidget {
 
 class _DocsBottomToolbar extends StatelessWidget {
   final AppColorScheme s;
+  final bool imageSelected;
   final VoidCallback onBold;
   final VoidCallback onItalic;
   final VoidCallback onUnderline;
@@ -841,89 +960,63 @@ class _DocsBottomToolbar extends StatelessWidget {
   final VoidCallback onAiEdit;
   final VoidCallback onFront;
   final VoidCallback onBack;
-  final GlobalKey shapeMenuKey;
+  final VoidCallback onImagePosition;
 
   const _DocsBottomToolbar({
-    required this.s,
-    required this.onBold,
-    required this.onItalic,
-    required this.onUnderline,
-    required this.onStrike,
-    required this.onAlignLeft,
-    required this.onAlignCenter,
-    required this.onAlignRight,
-    required this.onJustify,
-    required this.onBullet,
-    required this.onNumbered,
-    required this.onIndentIncrease,
-    required this.onIndentDecrease,
-    required this.onSubscript,
-    required this.onSuperscript,
-    required this.onQuote,
-    required this.onClearFormat,
-    required this.onTextColor,
-    required this.onHighlight,
-    required this.onInsertImage,
-    required this.onInsertTable,
-    required this.onInsertLink,
-    required this.onInsertShape,
-    required this.onInsertChart,
-    required this.onAiEdit,
-    required this.onFront,
-    required this.onBack,
-    required this.shapeMenuKey,
+    required this.s, required this.imageSelected, required this.onBold, required this.onItalic,
+    required this.onUnderline, required this.onStrike, required this.onAlignLeft, required this.onAlignCenter,
+    required this.onAlignRight, required this.onJustify, required this.onBullet, required this.onNumbered,
+    required this.onIndentIncrease, required this.onIndentDecrease, required this.onSubscript, required this.onSuperscript,
+    required this.onQuote, required this.onClearFormat, required this.onTextColor, required this.onHighlight,
+    required this.onInsertImage, required this.onInsertTable, required this.onInsertLink, required this.onInsertShape,
+    required this.onInsertChart, required this.onAiEdit, required this.onFront, required this.onBack,
+    required this.onImagePosition,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      left: 12, right: 12, bottom: 16,
-      child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: s.floatingShadow,
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _ToolbarButton(s: s, assetName: 'bold', onTap: onBold),
-              _ToolbarButton(s: s, assetName: 'italic', onTap: onItalic),
-              _ToolbarButton(s: s, assetName: 'underline', onTap: onUnderline),
-              _ToolbarButton(s: s, assetName: 'strike', onTap: onStrike),
-              _ToolbarDivider(s: s),
-              _ToolbarButton(s: s, assetName: 'align_left', onTap: onAlignLeft),
-              _ToolbarButton(s: s, assetName: 'align_center', onTap: onAlignCenter),
-              _ToolbarButton(s: s, assetName: 'align_right', onTap: onAlignRight),
-              _ToolbarButton(s: s, assetName: 'align_justify', onTap: onJustify),
-              _ToolbarDivider(s: s),
-              _ToolbarButton(s: s, assetName: 'bullet', onTap: onBullet),
-              _ToolbarButton(s: s, assetName: 'numbered', onTap: onNumbered),
-              _ToolbarButton(s: s, assetName: 'indent_decrease', onTap: onIndentDecrease),
-              _ToolbarButton(s: s, assetName: 'indent_increase', onTap: onIndentIncrease),
-              _ToolbarDivider(s: s),
-              _ToolbarButton(s: s, assetName: 'subscript', onTap: onSubscript),
-              _ToolbarButton(s: s, assetName: 'superscript', onTap: onSuperscript),
-              _ToolbarButton(s: s, assetName: 'quote', onTap: onQuote),
-              _ToolbarButton(s: s, assetName: 'eraser', onTap: onClearFormat),
-              _ToolbarDivider(s: s),
-              _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
-              _ToolbarButton(s: s, assetName: 'highlight', onTap: onHighlight),
-              _ToolbarDivider(s: s),
-              _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
-              _ToolbarButton(s: s, assetName: 'table', onTap: onInsertTable),
-              _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
-              _ToolbarButton(s: s, assetName: 'shapes', onTap: onInsertShape, anchorKey: shapeMenuKey),
-              _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
-              _ToolbarDivider(s: s),
-              _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
-              _ToolbarButton(s: s, assetName: 'front', onTap: onFront),
-              _ToolbarButton(s: s, assetName: 'back', onTap: onBack),
-            ],
-          ),
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(color: s.cardBackground, borderRadius: BorderRadius.circular(28), boxShadow: s.floatingShadow),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _ToolbarButton(s: s, assetName: 'bold', onTap: onBold),
+            _ToolbarButton(s: s, assetName: 'italic', onTap: onItalic),
+            _ToolbarButton(s: s, assetName: 'underline', onTap: onUnderline),
+            _ToolbarButton(s: s, assetName: 'strike', onTap: onStrike),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'align_left', onTap: onAlignLeft),
+            _ToolbarButton(s: s, assetName: 'align_center', onTap: onAlignCenter),
+            _ToolbarButton(s: s, assetName: 'align_right', onTap: onAlignRight),
+            _ToolbarButton(s: s, assetName: 'align_justify', onTap: onJustify),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'bullet', onTap: onBullet),
+            _ToolbarButton(s: s, assetName: 'numbered', onTap: onNumbered),
+            _ToolbarButton(s: s, assetName: 'indent_decrease', onTap: onIndentDecrease),
+            _ToolbarButton(s: s, assetName: 'indent_increase', onTap: onIndentIncrease),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'subscript', onTap: onSubscript),
+            _ToolbarButton(s: s, assetName: 'superscript', onTap: onSuperscript),
+            _ToolbarButton(s: s, assetName: 'quote', onTap: onQuote),
+            _ToolbarButton(s: s, assetName: 'eraser', onTap: onClearFormat),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
+            _ToolbarButton(s: s, assetName: 'highlight', onTap: onHighlight),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
+            _ToolbarButton(s: s, assetName: 'position', onTap: onImagePosition, highlighted: imageSelected),
+            _ToolbarButton(s: s, assetName: 'table', onTap: onInsertTable),
+            _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
+            _ToolbarButton(s: s, assetName: 'shapes', onTap: onInsertShape),
+            _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
+            _ToolbarDivider(s: s),
+            _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
+            _ToolbarButton(s: s, assetName: 'front', onTap: onFront),
+            _ToolbarButton(s: s, assetName: 'back', onTap: onBack),
+          ],
         ),
       ),
     );
@@ -934,46 +1027,29 @@ class _ToolbarDivider extends StatelessWidget {
   final AppColorScheme s;
   const _ToolbarDivider({required this.s});
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 22,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: s.outlineVariant,
-    );
-  }
+  Widget build(BuildContext context) => Container(width: 1, height: 22, margin: const EdgeInsets.symmetric(horizontal: 4), color: s.outlineVariant);
 }
 
 class _ToolbarButton extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final VoidCallback onTap;
-  final GlobalKey? anchorKey;
-  const _ToolbarButton({
-    required this.s,
-    required this.assetName,
-    required this.onTap,
-    this.anchorKey,
-  });
+  final bool highlighted;
+  const _ToolbarButton({required this.s, required this.assetName, required this.onTap, this.highlighted = false});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      key: anchorKey,
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
-        alignment: Alignment.center,
-        child: _EditorIcon(assetName, size: 20, color: s.onSurface),
+        width: 40, height: 40, alignment: Alignment.center,
+        decoration: highlighted ? BoxDecoration(color: s.primaryContainer.withOpacity(0.4), borderRadius: BorderRadius.circular(12)) : null,
+        child: _EditorIcon(assetName, size: 20, color: highlighted ? s.primary : s.onSurface),
       ),
     );
   }
 }
-
-// ══════════════════════════════════════════════════════════════
-// INSERIR TABELA — completo (dimensões + preview + cabeçalho + bordas)
-// ══════════════════════════════════════════════════════════════
 
 class TableInsertConfig {
   final int rows;
@@ -981,31 +1057,16 @@ class TableInsertConfig {
   final bool header;
   final bool bordered;
   final bool striped;
-  const TableInsertConfig({
-    required this.rows,
-    required this.cols,
-    required this.header,
-    required this.bordered,
-    required this.striped,
-  });
+  const TableInsertConfig({required this.rows, required this.cols, required this.header, required this.bordered, required this.striped});
 
-  String toJs() => '{'
-      '"rows":$rows,'
-      '"cols":$cols,'
-      '"header":$header,'
-      '"bordered":$bordered,'
-      '"striped":$striped'
-      '}';
+  String toJs() => '{"rows":$rows,"cols":$cols,"header":$header,"bordered":$bordered,"striped":$striped}';
 }
 
-Future<void> showTableDialog(
-  BuildContext context,
-  AppColorScheme s,
-  void Function(TableInsertConfig) onInsert,
-) {
+Future<void> showTableDialog(BuildContext context, AppColorScheme s, void Function(TableInsertConfig) onInsert) {
   return showCraftBottomSheet<void>(
     context: context,
     s: s,
+    title: 'Inserir tabela',
     child: _TableInsertSheet(s: s, onInsert: onInsert),
   );
 }
@@ -1034,25 +1095,17 @@ class _TableInsertSheetState extends State<_TableInsertSheet> {
   Widget build(BuildContext context) {
     final s = widget.s;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36, height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(color: s.outline, borderRadius: BorderRadius.circular(4)),
-          ),
           Row(
             children: [
-              Text('Inserir tabela', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
               const Spacer(),
               Text('$_cols × $_rows', style: TextStyle(fontSize: 13, color: s.onSurfaceVariant, fontWeight: FontWeight.w600)),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Grelha de seleção rápida estilo Word/Excel
+          const SizedBox(height: 12),
           GestureDetector(
             onPanUpdate: (details) => _updateHoverFromLocal(details.localPosition),
             onPanEnd: (_) => setState(() { _hoverRow = -1; _hoverCol = -1; }),
@@ -1060,8 +1113,7 @@ class _TableInsertSheetState extends State<_TableInsertSheet> {
               builder: (context, constraints) {
                 final cell = (constraints.maxWidth - (_maxGrid - 1) * 4) / _maxGrid;
                 return Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
+                  spacing: 4, runSpacing: 4,
                   children: List.generate(_maxGrid * _maxGrid, (i) {
                     final r = i ~/ _maxGrid;
                     final c = i % _maxGrid;
@@ -1071,12 +1123,8 @@ class _TableInsertSheetState extends State<_TableInsertSheet> {
                     return GestureDetector(
                       onTap: () => setState(() { _rows = r + 1; _cols = c + 1; }),
                       child: Container(
-                        width: cell,
-                        height: cell,
-                        decoration: BoxDecoration(
-                          color: selected ? s.primary : s.outlineVariant,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
+                        width: cell, height: cell,
+                        decoration: BoxDecoration(color: selected ? s.primary : s.outlineVariant, borderRadius: BorderRadius.circular(3)),
                       ),
                     );
                   }),
@@ -1084,70 +1132,35 @@ class _TableInsertSheetState extends State<_TableInsertSheet> {
               },
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // Pré-visualização em miniatura da tabela configurada
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: s.pageBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: s.outlineVariant),
-            ),
+            decoration: BoxDecoration(color: s.pageBackground, borderRadius: BorderRadius.circular(16), border: Border.all(color: s.outlineVariant)),
             child: _TablePreview(s: s, rows: _rows, cols: _cols, header: _header, bordered: _bordered, striped: _striped),
           ),
-
           const SizedBox(height: 16),
-
           _TableToggleRow(s: s, label: 'Linha de cabeçalho', value: _header, onChanged: (v) => setState(() => _header = v)),
           _TableToggleRow(s: s, label: 'Bordas visíveis', value: _bordered, onChanged: (v) => setState(() => _bordered = v)),
           _TableToggleRow(s: s, label: 'Linhas alternadas', value: _striped, onChanged: (v) => setState(() => _striped = v)),
-
           const SizedBox(height: 20),
-
           Row(
             children: [
-              _StepperField(
-                s: s,
-                label: 'Linhas',
-                value: _rows,
-                min: 1,
-                max: 20,
-                onChanged: (v) => setState(() => _rows = v),
-              ),
+              _StepperField(s: s, label: 'Linhas', value: _rows, min: 1, max: 20, onChanged: (v) => setState(() => _rows = v)),
               const SizedBox(width: 12),
-              _StepperField(
-                s: s,
-                label: 'Colunas',
-                value: _cols,
-                min: 1,
-                max: 10,
-                onChanged: (v) => setState(() => _cols = v),
-              ),
+              _StepperField(s: s, label: 'Colunas', value: _cols, min: 1, max: 10, onChanged: (v) => setState(() => _cols = v)),
             ],
           ),
-
           const SizedBox(height: 20),
-
           GestureDetector(
             onTap: () {
               Navigator.pop(context);
-              widget.onInsert(TableInsertConfig(
-                rows: _rows,
-                cols: _cols,
-                header: _header,
-                bordered: _bordered,
-                striped: _striped,
-              ));
+              widget.onInsert(TableInsertConfig(rows: _rows, cols: _cols, header: _header, bordered: _bordered, striped: _striped));
             },
             child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              alignment: Alignment.center,
+              width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 13), alignment: Alignment.center,
               decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-              child: Text('Inserir tabela', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+              child: Text('Inserir tabela', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
             ),
           ),
         ],
@@ -1171,14 +1184,7 @@ class _TablePreview extends StatelessWidget {
   final bool header;
   final bool bordered;
   final bool striped;
-  const _TablePreview({
-    required this.s,
-    required this.rows,
-    required this.cols,
-    required this.header,
-    required this.bordered,
-    required this.striped,
-  });
+  const _TablePreview({required this.s, required this.rows, required this.cols, required this.header, required this.bordered, required this.striped});
 
   @override
   Widget build(BuildContext context) {
@@ -1190,11 +1196,7 @@ class _TablePreview extends StatelessWidget {
         final isStriped = striped && !isHeader && r.isOdd;
         return Container(
           decoration: BoxDecoration(
-            color: isHeader
-                ? s.primary.withOpacity(0.16)
-                : isStriped
-                    ? s.outlineVariant.withOpacity(0.5)
-                    : Colors.transparent,
+            color: isHeader ? s.primary.withOpacity(0.16) : isStriped ? s.outlineVariant.withOpacity(0.5) : Colors.transparent,
             border: bordered ? Border(bottom: BorderSide(color: s.outlineVariant)) : null,
           ),
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1204,10 +1206,7 @@ class _TablePreview extends StatelessWidget {
                 child: Container(
                   height: 8,
                   margin: const EdgeInsets.symmetric(horizontal: 3),
-                  decoration: BoxDecoration(
-                    color: isHeader ? s.primary.withOpacity(0.4) : s.outline.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  decoration: BoxDecoration(color: isHeader ? s.primary.withOpacity(0.4) : s.outline.withOpacity(0.5), borderRadius: BorderRadius.circular(2)),
                 ),
               );
             }),
@@ -1229,19 +1228,11 @@ class _TableToggleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: GestureDetector(
-        onTap: () => onChanged(!value),
-        behavior: HitTestBehavior.opaque,
-        child: Row(
-          children: [
-            Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, color: s.onSurface))),
-            Switch.adaptive(
-              value: value,
-              onChanged: onChanged,
-              activeColor: s.primary,
-            ),
-          ],
-        ),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+          AppToggle(s: s, value: value, onChanged: onChanged),
+        ],
       ),
     );
   }
@@ -1254,25 +1245,14 @@ class _StepperField extends StatelessWidget {
   final int min;
   final int max;
   final ValueChanged<int> onChanged;
-  const _StepperField({
-    required this.s,
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
+  const _StepperField({required this.s, required this.label, required this.value, required this.min, required this.max, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: s.pageBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: s.outlineVariant),
-        ),
+        decoration: BoxDecoration(color: s.pageBackground, borderRadius: BorderRadius.circular(16), border: Border.all(color: s.outlineVariant)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1281,13 +1261,7 @@ class _StepperField extends StatelessWidget {
             Row(
               children: [
                 _stepBtn(context, '-', () { if (value > min) onChanged(value - 1); }),
-                Expanded(
-                  child: Text(
-                    '$value',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface),
-                  ),
-                ),
+                Expanded(child: Text('$value', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface))),
                 _stepBtn(context, '+', () { if (value < max) onChanged(value + 1); }),
               ],
             ),
@@ -1301,18 +1275,13 @@ class _StepperField extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 28, height: 28,
-        alignment: Alignment.center,
+        width: 28, height: 28, alignment: Alignment.center,
         decoration: BoxDecoration(color: s.cardBackground, shape: BoxShape.circle, boxShadow: s.cardShadowSoft),
         child: Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: s.onSurface)),
       ),
     );
   }
 }
-
-// ══════════════════════════════════════════════════════════════
-// COLOR PICKER AVANÇADO — com gerador de paleta HSV
-// ══════════════════════════════════════════════════════════════
 
 const List<Color> _kQuickPaletteColors = [
   Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFFFFCC00), Color(0xFF34C759),
@@ -1344,37 +1313,20 @@ class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
   double _lightness = 0.5;
 
   Color get _currentColor => HSLColor.fromAHSL(1, _hue, _saturation, _lightness).toColor();
-
-  String _toHex(Color c) =>
-      '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+  String _toHex(Color c) => '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36, height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(color: s.outline, borderRadius: BorderRadius.circular(4)),
-          ),
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  _generatorMode ? 'Gerador de paleta' : 'Escolher cor',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface),
-                ),
-              ),
-              _ModeToggleButton(
-                s: s,
-                icon: 'wand',
-                active: _generatorMode,
-                onTap: () => setState(() => _generatorMode = !_generatorMode),
-              ),
+              Expanded(child: Text(_generatorMode ? 'Gerador de paleta' : 'Escolher cor', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface))),
+              _ModeToggleButton(s: s, icon: 'wand', active: _generatorMode, onTap: () => setState(() => _generatorMode = !_generatorMode)),
             ],
           ),
           const SizedBox(height: 18),
@@ -1388,19 +1340,13 @@ class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
     return Column(
       children: [
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 12, runSpacing: 12,
           children: _kQuickPaletteColors.map((c) {
             return GestureDetector(
               onTap: () => Navigator.pop(context, _toHex(c)),
               child: Container(
                 width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: c,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: s.outline.withOpacity(0.4), width: 1),
-                  boxShadow: s.cardShadowSoft,
-                ),
+                decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: s.outline.withOpacity(0.4), width: 1), boxShadow: s.cardShadowSoft),
               ),
             );
           }).toList(),
@@ -1411,11 +1357,7 @@ class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: s.pageBackground,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: s.outlineVariant),
-            ),
+            decoration: BoxDecoration(color: s.pageBackground, borderRadius: BorderRadius.circular(999), border: Border.all(color: s.outlineVariant)),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -1434,52 +1376,24 @@ class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
     return Column(
       children: [
         Container(
-          width: double.infinity,
-          height: 84,
-          decoration: BoxDecoration(
-            color: _currentColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: s.outline.withOpacity(0.3)),
-            boxShadow: s.cardShadow,
-          ),
+          width: double.infinity, height: 84,
+          decoration: BoxDecoration(color: _currentColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: s.outline.withOpacity(0.3)), boxShadow: s.cardShadow),
           alignment: Alignment.center,
-          child: Text(
-            _toHex(_currentColor),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: _lightness > 0.55 ? Colors.black.withOpacity(0.7) : Colors.white,
-              letterSpacing: 0.5,
-            ),
-          ),
+          child: Text(_toHex(_currentColor), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _lightness > 0.55 ? Colors.black.withOpacity(0.7) : Colors.white, letterSpacing: 0.5)),
         ),
         const SizedBox(height: 20),
         _HueSlider(hue: _hue, onChanged: (v) => setState(() => _hue = v)),
         const SizedBox(height: 14),
-        _ShadeSlider(
-          label: 'Saturação',
-          value: _saturation,
-          baseColor: HSLColor.fromAHSL(1, _hue, 1, 0.5).toColor(),
-          trackBuilder: (t) => HSLColor.fromAHSL(1, _hue, t, _lightness).toColor(),
-          onChanged: (v) => setState(() => _saturation = v),
-        ),
+        _ShadeSlider(label: 'Saturação', value: _saturation, baseColor: HSLColor.fromAHSL(1, _hue, 1, 0.5).toColor(), trackBuilder: (t) => HSLColor.fromAHSL(1, _hue, t, _lightness).toColor(), onChanged: (v) => setState(() => _saturation = v)),
         const SizedBox(height: 14),
-        _ShadeSlider(
-          label: 'Luminosidade',
-          value: _lightness,
-          baseColor: HSLColor.fromAHSL(1, _hue, _saturation, 0.5).toColor(),
-          trackBuilder: (t) => HSLColor.fromAHSL(1, _hue, _saturation, t).toColor(),
-          onChanged: (v) => setState(() => _lightness = v),
-        ),
+        _ShadeSlider(label: 'Luminosidade', value: _lightness, baseColor: HSLColor.fromAHSL(1, _hue, _saturation, 0.5).toColor(), trackBuilder: (t) => HSLColor.fromAHSL(1, _hue, _saturation, t).toColor(), onChanged: (v) => setState(() => _lightness = v)),
         const SizedBox(height: 22),
         GestureDetector(
           onTap: () => Navigator.pop(context, _toHex(_currentColor)),
           child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            alignment: Alignment.center,
+            width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 13), alignment: Alignment.center,
             decoration: BoxDecoration(color: s.primary, borderRadius: BorderRadius.circular(999)),
-            child: Text('Aplicar cor', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+            child: Text('Aplicar cor', style: TextStyle(color: s.onPrimary, fontWeight: FontWeight.w600, fontSize: 15)),
           ),
         ),
       ],
@@ -1500,13 +1414,8 @@ class _ModeToggleButton extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        width: 36, height: 36,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? s.primaryContainer : s.pageBackground,
-          shape: BoxShape.circle,
-          border: Border.all(color: active ? Colors.transparent : s.outlineVariant),
-        ),
+        width: 36, height: 36, alignment: Alignment.center,
+        decoration: BoxDecoration(color: active ? s.primaryContainer : s.pageBackground, shape: BoxShape.circle, border: Border.all(color: active ? Colors.transparent : s.outlineVariant)),
         child: _EditorIcon(icon, size: 17, color: active ? s.onPrimaryContainer : s.onSurfaceVariant),
       ),
     );
@@ -1524,28 +1433,15 @@ class _HueSlider extends StatelessWidget {
       height: 32,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
-            Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000),
-          ],
-        ),
+        gradient: const LinearGradient(colors: [Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00), Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF), Color(0xFFFF0000)]),
       ),
       child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
-          trackHeight: 32,
-          activeTrackColor: Colors.transparent,
-          inactiveTrackColor: Colors.transparent,
+          trackHeight: 32, activeTrackColor: Colors.transparent, inactiveTrackColor: Colors.transparent,
           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12, elevation: 3),
-          overlayShape: SliderComponentShape.noOverlay,
-          thumbColor: Colors.white,
+          overlayShape: SliderComponentShape.noOverlay, thumbColor: Colors.white,
         ),
-        child: Slider(
-          value: hue,
-          min: 0,
-          max: 360,
-          onChanged: onChanged,
-        ),
+        child: Slider(value: hue, min: 0, max: 360, onChanged: onChanged),
       ),
     );
   }
@@ -1557,56 +1453,30 @@ class _ShadeSlider extends StatelessWidget {
   final Color baseColor;
   final Color Function(double) trackBuilder;
   final ValueChanged<double> onChanged;
-  const _ShadeSlider({
-    required this.label,
-    required this.value,
-    required this.baseColor,
-    required this.trackBuilder,
-    required this.onChanged,
-  });
+  const _ShadeSlider({required this.label, required this.value, required this.baseColor, required this.trackBuilder, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 4),
-          child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.grey)),
-        ),
+        Padding(padding: const EdgeInsets.only(left: 4, bottom: 4), child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.grey))),
         Container(
           height: 28,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            gradient: LinearGradient(
-              colors: List.generate(9, (i) => trackBuilder(i / 8)),
-            ),
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), gradient: LinearGradient(colors: List.generate(9, (i) => trackBuilder(i / 8)))),
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
-              trackHeight: 28,
-              activeTrackColor: Colors.transparent,
-              inactiveTrackColor: Colors.transparent,
+              trackHeight: 28, activeTrackColor: Colors.transparent, inactiveTrackColor: Colors.transparent,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10, elevation: 3),
-              overlayShape: SliderComponentShape.noOverlay,
-              thumbColor: Colors.white,
+              overlayShape: SliderComponentShape.noOverlay, thumbColor: Colors.white,
             ),
-            child: Slider(
-              value: value,
-              min: 0,
-              max: 1,
-              onChanged: onChanged,
-            ),
+            child: Slider(value: value, min: 0, max: 1, onChanged: onChanged),
           ),
         ),
       ],
     );
   }
 }
-
-// ══════════════════════════════════════════════════════════════
-// GRÁFICOS PRONTOS — tela de presets em vez de JSON manual
-// ══════════════════════════════════════════════════════════════
 
 enum ChartKind { bar, line, pie, area, donut, scatter }
 
@@ -1616,22 +1486,12 @@ class ChartPreset {
   final ChartKind kind;
   final List<double> sampleValues;
   final List<String> sampleLabels;
-  const ChartPreset({
-    required this.id,
-    required this.title,
-    required this.kind,
-    required this.sampleValues,
-    required this.sampleLabels,
-  });
+  const ChartPreset({required this.id, required this.title, required this.kind, required this.sampleValues, required this.sampleLabels});
 
   String get kindKey => const {
-        ChartKind.bar: 'bar',
-        ChartKind.line: 'line',
-        ChartKind.pie: 'pie',
-        ChartKind.area: 'area',
-        ChartKind.donut: 'donut',
-        ChartKind.scatter: 'scatter',
-      }[kind]!;
+    ChartKind.bar: 'bar', ChartKind.line: 'line', ChartKind.pie: 'pie',
+    ChartKind.area: 'area', ChartKind.donut: 'donut', ChartKind.scatter: 'scatter',
+  }[kind]!;
 
   String toJson() {
     final labels = sampleLabels.map((l) => '"$l"').join(',');
@@ -1641,20 +1501,13 @@ class ChartPreset {
 }
 
 const List<ChartPreset> _kChartPresets = [
-  ChartPreset(id: 'bar_basic', title: 'Barras simples', kind: ChartKind.bar,
-      sampleValues: [4, 7, 3, 8, 5], sampleLabels: ['A', 'B', 'C', 'D', 'E']),
-  ChartPreset(id: 'bar_growth', title: 'Barras — crescimento', kind: ChartKind.bar,
-      sampleValues: [2, 4, 6, 9, 13], sampleLabels: ['T1', 'T2', 'T3', 'T4', 'T5']),
-  ChartPreset(id: 'line_trend', title: 'Linha — tendência', kind: ChartKind.line,
-      sampleValues: [3, 5, 4, 7, 9, 8], sampleLabels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun']),
-  ChartPreset(id: 'area_volume', title: 'Área — volume', kind: ChartKind.area,
-      sampleValues: [10, 14, 9, 18, 16], sampleLabels: ['S1', 'S2', 'S3', 'S4', 'S5']),
-  ChartPreset(id: 'pie_share', title: 'Circular — distribuição', kind: ChartKind.pie,
-      sampleValues: [40, 25, 20, 15], sampleLabels: ['Norte', 'Sul', 'Este', 'Oeste']),
-  ChartPreset(id: 'donut_share', title: 'Rosca — distribuição', kind: ChartKind.donut,
-      sampleValues: [35, 30, 20, 15], sampleLabels: ['A', 'B', 'C', 'D']),
-  ChartPreset(id: 'scatter_corr', title: 'Dispersão — correlação', kind: ChartKind.scatter,
-      sampleValues: [2, 5, 3, 8, 6, 9], sampleLabels: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']),
+  ChartPreset(id: 'bar_basic', title: 'Barras simples', kind: ChartKind.bar, sampleValues: [4, 7, 3, 8, 5], sampleLabels: ['A', 'B', 'C', 'D', 'E']),
+  ChartPreset(id: 'bar_growth', title: 'Barras — crescimento', kind: ChartKind.bar, sampleValues: [2, 4, 6, 9, 13], sampleLabels: ['T1', 'T2', 'T3', 'T4', 'T5']),
+  ChartPreset(id: 'line_trend', title: 'Linha — tendência', kind: ChartKind.line, sampleValues: [3, 5, 4, 7, 9, 8], sampleLabels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun']),
+  ChartPreset(id: 'area_volume', title: 'Área — volume', kind: ChartKind.area, sampleValues: [10, 14, 9, 18, 16], sampleLabels: ['S1', 'S2', 'S3', 'S4', 'S5']),
+  ChartPreset(id: 'pie_share', title: 'Circular — distribuição', kind: ChartKind.pie, sampleValues: [40, 25, 20, 15], sampleLabels: ['Norte', 'Sul', 'Este', 'Oeste']),
+  ChartPreset(id: 'donut_share', title: 'Rosca — distribuição', kind: ChartKind.donut, sampleValues: [35, 30, 20, 15], sampleLabels: ['A', 'B', 'C', 'D']),
+  ChartPreset(id: 'scatter_corr', title: 'Dispersão — correlação', kind: ChartKind.scatter, sampleValues: [2, 5, 3, 8, 6, 9], sampleLabels: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']),
 ];
 
 class ChartPresetScreen extends StatelessWidget {
@@ -1674,31 +1527,16 @@ class ChartPresetScreen extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                  child: Row(
-                    children: [
-                      ScreenBackButton(s: s),
-                      const SizedBox(width: 12),
-                      Text('Inserir gráfico', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: s.onSurface)),
-                    ],
-                  ),
+                  child: Row(children: [ScreenBackButton(s: s), const SizedBox(width: 12), Text('Inserir gráfico', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: s.onSurface))]),
                 ),
                 Expanded(
                   child: GridView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 14,
-                      crossAxisSpacing: 14,
-                      childAspectRatio: 0.92,
-                    ),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 0.92),
                     itemCount: _kChartPresets.length,
                     itemBuilder: (context, i) {
                       final preset = _kChartPresets[i];
-                      return _ChartPresetCard(
-                        s: s,
-                        preset: preset,
-                        onTap: () => Navigator.of(context).pop(preset),
-                      );
+                      return _ChartPresetCard(s: s, preset: preset, onTap: () => Navigator.of(context).pop(preset));
                     },
                   ),
                 ),
@@ -1737,22 +1575,13 @@ class _ChartPresetCardState extends State<_ChartPresetCard> {
         duration: const Duration(milliseconds: 120),
         child: Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: s.cardBackground,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: s.cardShadow,
-          ),
+          decoration: BoxDecoration(color: s.cardBackground, borderRadius: BorderRadius.circular(22), boxShadow: s.cardShadow),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _ChartThumbnail(s: s, preset: widget.preset)),
               const SizedBox(height: 10),
-              Text(
-                widget.preset.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface),
-              ),
+              Text(widget.preset.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: s.onSurface)),
             ],
           ),
         ),
@@ -1790,33 +1619,16 @@ class _ChartThumbnail extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
             height: 46 * (v / maxV),
-            decoration: BoxDecoration(
-              color: s.primary.withOpacity(0.55 + 0.35 * (v / maxV)),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-            ),
+            decoration: BoxDecoration(color: s.primary.withOpacity(0.55 + 0.35 * (v / maxV)), borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
           ),
         );
       }).toList(),
     );
   }
 
-  Widget _lineThumb() {
-    return CustomPaint(
-      size: const Size(double.infinity, 52),
-      painter: _MiniLinePainter(values: preset.sampleValues, color: s.primary),
-    );
-  }
+  Widget _lineThumb() => CustomPaint(size: const Size(double.infinity, 52), painter: _MiniLinePainter(values: preset.sampleValues, color: s.primary));
 
-  Widget _pieThumb() {
-    return Center(
-      child: SizedBox(
-        width: 52, height: 52,
-        child: CustomPaint(
-          painter: _MiniPiePainter(values: preset.sampleValues, color: s.primary, donut: preset.kind == ChartKind.donut),
-        ),
-      ),
-    );
-  }
+  Widget _pieThumb() => Center(child: SizedBox(width: 52, height: 52, child: CustomPaint(painter: _MiniPiePainter(values: preset.sampleValues, color: s.primary, donut: preset.kind == ChartKind.donut))));
 }
 
 class _MiniLinePainter extends CustomPainter {
@@ -1835,20 +1647,9 @@ class _MiniLinePainter extends CustomPainter {
     for (int i = 0; i < values.length; i++) {
       final x = dx * i;
       final y = size.height - ((values[i] - minV) / range) * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      if (i == 0) { path.moveTo(x, y); } else { path.lineTo(x, y); }
     }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..strokeWidth = 2.4
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
+    canvas.drawPath(path, Paint()..color = color..strokeWidth = 2.4..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
   }
 
   @override
@@ -1869,13 +1670,7 @@ class _MiniPiePainter extends CustomPainter {
     double start = -math.pi / 2;
     for (int i = 0; i < values.length; i++) {
       final sweep = (values[i] / total) * 2 * math.pi;
-      canvas.drawArc(
-        rect,
-        start,
-        sweep,
-        true,
-        Paint()..color = color.withOpacity(0.4 + 0.5 * (i / values.length)),
-      );
+      canvas.drawArc(rect, start, sweep, true, Paint()..color = color.withOpacity(0.4 + 0.5 * (i / values.length)));
       start += sweep;
     }
     if (donut) {
@@ -1886,10 +1681,6 @@ class _MiniPiePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MiniPiePainter oldDelegate) => false;
 }
-
-// ══════════════════════════════════════════════════════════════
-// BOTÃO DE VOLTAR — inalterado
-// ══════════════════════════════════════════════════════════════
 
 class ScreenBackButton extends StatefulWidget {
   final AppColorScheme s;
@@ -1904,16 +1695,15 @@ class _ScreenBackButtonState extends State<ScreenBackButton> {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapCancel: ()  => setState(() => _pressed = false),
-      onTapUp:     (_) => setState(() => _pressed = false),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
       onTap: () => Navigator.of(context).pop(),
       child: AnimatedScale(
         scale: _pressed ? 0.9 : 1.0,
         duration: const Duration(milliseconds: 110),
         child: Container(
-          width: 40, height: 40,
-          alignment: Alignment.center,
+          width: 40, height: 40, alignment: Alignment.center,
           decoration: BoxDecoration(color: widget.s.cardBackground, shape: BoxShape.circle),
           child: AppIcon('back.svg', size: 20, color: widget.s.onSurface),
         ),

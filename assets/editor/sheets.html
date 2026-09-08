@@ -19,7 +19,12 @@
     --sheet-cell-font-size: 12px;
   }
 
-  body.dark {
+  /*
+   * IMPORTANTE: esta classe .sheet-dark é ativada SÓ pela escolha
+   * explícita do utilizador (botão dedicado nos 3 pontinhos), nunca
+   * pelo tema da app. setThemeMode() já NÃO liga isto — ver JS.
+   */
+  body.sheet-dark {
     --sheet-bg: #1C1C1E;
     --sheet-header-bg: #2C2C2E;
     --sheet-header-text: #A0A0A5;
@@ -45,6 +50,8 @@
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+    touch-action: pan-x pan-y;
   }
 
   #gridScroll {
@@ -53,6 +60,7 @@
     height: 100%;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
     background: var(--sheet-bg);
   }
 
@@ -63,7 +71,7 @@
 
   .col-header, .row-header {
     background: var(--sheet-header-bg);
-    font-size: 11px !important; /* Tamanho fixo, nunca muda */
+    font-size: 11px !important;
     font-weight: 600;
     color: var(--sheet-header-text);
     text-align: center;
@@ -128,6 +136,32 @@
     z-index: 1;
   }
 
+  /*
+   * EXPANSÃO DE CÉLULA AO FOCAR (estilo Google Sheets)
+   * ---------------------------------------------------
+   * Quando a célula tem foco E o conteúdo excede a largura normal,
+   * ganha position:absolute e cresce por cima das células vizinhas
+   * (sem empurrar nada no grid real), com min-width/min-height
+   * suficientes para caber o texto. Ao perder o foco, volta ao
+   * tamanho normal. Isto é puramente visual — os dados da célula
+   * (cellsData) e o layout do grid nunca mudam.
+   */
+  .cell.expanded {
+    position: absolute;
+    z-index: 10;
+    white-space: pre-wrap;
+    overflow: visible;
+    text-overflow: clip;
+    min-width: 96px;
+    min-height: 26px;
+    width: max-content;
+    max-width: 360px;
+    height: auto;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+    outline: 2px solid var(--sheet-selection);
+    outline-offset: -1px;
+  }
+
   .cell.number {
     text-align: right;
   }
@@ -171,6 +205,32 @@
     width: 100% !important;
     height: 100% !important;
   }
+
+  /*
+   * BLOCO HTML — ocupa uma área de células (rowspan/colspan), tal
+   * como imagens/gráficos ocupam uma célula. O HTML dentro é
+   * sanitizado (sem <script>, sem atributos on*) e não-interativo
+   * (pointer-events: none), pela mesma razão de segurança do Docs:
+   * mostrar visualmente qualquer HTML recebido sem permitir que
+   * execute código ou responda a cliques.
+   */
+  .cell.has-html-block {
+    padding: 6px;
+    white-space: normal;
+    overflow: auto;
+    vertical-align: top;
+    text-align: left;
+  }
+  .html-block-content {
+    width: 100%;
+    height: 100%;
+    font-size: 12px;
+    pointer-events: none;
+  }
+  .html-block-content * {
+    pointer-events: none !important;
+    max-width: 100%;
+  }
 </style>
 </head>
 <body>
@@ -190,6 +250,7 @@
   var selectedCellKey = null;
   var saveTimeout = null;
   var chartInstances = {};
+  var currentlyExpandedEl = null;
 
   function colLetter(idx) {
     var letra = '';
@@ -259,6 +320,7 @@
     }
     selectedCellKey = td.getAttribute('data-key');
     td.classList.add('selected');
+    avaliarExpansaoCelula(td);
     if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
       var dados = cellsData[selectedCellKey] || {};
       window.flutter_inappwebview.callHandler('onCellSelected', selectedCellKey, JSON.stringify(dados));
@@ -269,18 +331,66 @@
     var td = evento.target.closest ? evento.target.closest('.cell') : null;
     if (!td) return;
     td.classList.remove('selected');
+    contrairCelula(td);
+  }
+
+  // ══════════════════════════════════════════════
+  // EXPANSÃO DE CÉLULA (estilo Google Sheets)
+  // ══════════════════════════════════════════════
+  // Mede se o conteúdo da célula excede a largura normal usando um
+  // elemento de medição invisível (evita alterar o DOM real da
+  // célula só para medir). Se exceder, aplica .expanded e fixa a
+  // posição absoluta no ponto exato onde a célula já está no ecrã
+  // (para não "saltar" de sítio ao expandir).
+  var medidorInvisivel = null;
+  function obterMedidor() {
+    if (medidorInvisivel) return medidorInvisivel;
+    medidorInvisivel = document.createElement('span');
+    medidorInvisivel.style.position = 'absolute';
+    medidorInvisivel.style.visibility = 'hidden';
+    medidorInvisivel.style.whiteSpace = 'pre';
+    medidorInvisivel.style.fontSize = getComputedStyle(document.body).getPropertyValue('--sheet-cell-font-size') || '12px';
+    document.body.appendChild(medidorInvisivel);
+    return medidorInvisivel;
+  }
+
+  function avaliarExpansaoCelula(td) {
+    if (td.classList.contains('has-image') || td.classList.contains('has-chart') || td.classList.contains('has-html-block')) return;
+    var medidor = obterMedidor();
+    medidor.textContent = td.textContent || '';
+    var larguraNecessaria = medidor.offsetWidth + 14; // + padding aproximado
+    var larguraAtual = td.offsetWidth;
+    if (larguraNecessaria <= larguraAtual) return;
+
+    var rect = td.getBoundingClientRect();
+    var scrollContainer = document.getElementById('gridScroll');
+    var rectScroll = scrollContainer.getBoundingClientRect();
+    td.style.left = (rect.left - rectScroll.left + scrollContainer.scrollLeft) + 'px';
+    td.style.top = (rect.top - rectScroll.top + scrollContainer.scrollTop) + 'px';
+    td.classList.add('expanded');
+    currentlyExpandedEl = td;
+  }
+
+  function contrairCelula(td) {
+    if (!td.classList.contains('expanded')) return;
+    td.classList.remove('expanded');
+    td.style.left = '';
+    td.style.top = '';
+    if (currentlyExpandedEl === td) currentlyExpandedEl = null;
   }
 
   function aoEditar(evento) {
     var td = evento.target.closest ? evento.target.closest('.cell') : null;
     if (!td) return;
-    if (td.classList.contains('has-image') || td.classList.contains('has-chart')) return;
+    if (td.classList.contains('has-image') || td.classList.contains('has-chart') || td.classList.contains('has-html-block')) return;
     var key = td.getAttribute('data-key');
     var valor = td.textContent;
     if (!cellsData[key]) cellsData[key] = {};
     cellsData[key].value = valor;
     var ehNumero = valor.trim() !== '' && !isNaN(valor.trim());
     td.classList.toggle('number', ehNumero);
+    // Reavalia expansão a cada tecla, já que o conteúdo muda.
+    avaliarExpansaoCelula(td);
     agendarGravacao();
   }
 
@@ -304,6 +414,7 @@
     if (!td) return;
     destroyCellChart(key);
     removeCellImage(key);
+    removeCellHtmlBlock(key);
     if (!cellsData[key]) cellsData[key] = {};
     cellsData[key].image = url;
     td.classList.add('has-image');
@@ -320,7 +431,7 @@
     if (!td) return;
     if (cellsData[key]) delete cellsData[key].image;
     td.classList.remove('has-image');
-    if (!td.classList.contains('has-chart')) {
+    if (!td.classList.contains('has-chart') && !td.classList.contains('has-html-block')) {
       td.innerHTML = '';
       td.textContent = (cellsData[key] && cellsData[key].value) || '';
     }
@@ -343,6 +454,7 @@
     var td = gridTable.querySelector('[data-key="' + key + '"]');
     if (!td) return;
     destroyCellChart(key);
+    removeCellHtmlBlock(key);
     if (!cellsData[key]) cellsData[key] = {};
     cellsData[key].chart = config;
     td.classList.add('has-chart');
@@ -366,6 +478,124 @@
     }
     if (cellsData[key]) delete cellsData[key].chart;
     agendarGravacao();
+  }
+
+  // ══════════════════════════════════════════════
+  // SANITIZAÇÃO DE HTML EXTERNO — mesma lógica de segurança do
+  // Docs: remove <script>, atributos on*, e o CSS bloqueia
+  // pointer-events em tudo lá dentro (mostra mas não interage).
+  // ══════════════════════════════════════════════
+  function sanitizarHtmlExterno(htmlBruto) {
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = htmlBruto;
+    var scripts = wrapper.querySelectorAll('script');
+    scripts.forEach(function (s) { s.remove(); });
+    var todosOsElementos = wrapper.querySelectorAll('*');
+    todosOsElementos.forEach(function (el) {
+      var atributos = Array.prototype.slice.call(el.attributes);
+      atributos.forEach(function (attr) {
+        if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+      });
+      if (el.tagName === 'A' && el.getAttribute('href') && /^javascript:/i.test(el.getAttribute('href'))) {
+        el.removeAttribute('href');
+      }
+    });
+    return wrapper.innerHTML;
+  }
+
+  // ══════════════════════════════════════════════
+  // BLOCO HTML MULTI-CÉLULA
+  // ══════════════════════════════════════════════
+  // Ocupa uma área retangular via rowspan/colspan a partir da
+  // célula-âncora (topo-esquerda da área). As células "engolidas"
+  // pelo span ficam marcadas como data-covered-by para nunca
+  // receberem conteúdo próprio enquanto o bloco existir.
+  function renderCellHtmlBlock(key, htmlBruto, rowspan, colspan) {
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (!td) return;
+    destroyCellChart(key);
+    removeCellImage(key);
+
+    var rs = Math.max(1, Math.min(20, rowspan || 3));
+    var cs = Math.max(1, Math.min(10, colspan || 3));
+    var limpo = sanitizarHtmlExterno(htmlBruto);
+
+    if (!cellsData[key]) cellsData[key] = {};
+    cellsData[key].htmlBlock = limpo;
+    cellsData[key].htmlBlockRowspan = rs;
+    cellsData[key].htmlBlockColspan = cs;
+
+    td.classList.add('has-html-block');
+    td.setAttribute('rowspan', rs);
+    td.setAttribute('colspan', cs);
+    td.innerHTML = '<div class="html-block-content">' + limpo + '</div>';
+
+    marcarCelulasCobertas(key, rs, cs, true);
+    agendarGravacao();
+  }
+
+  function removeCellHtmlBlock(key) {
+    var td = gridTable.querySelector('[data-key="' + key + '"]');
+    if (!td || !td.classList.contains('has-html-block')) return;
+    var d = cellsData[key] || {};
+    var rs = d.htmlBlockRowspan || 1;
+    var cs = d.htmlBlockColspan || 1;
+    marcarCelulasCobertas(key, rs, cs, false);
+    td.removeAttribute('rowspan');
+    td.removeAttribute('colspan');
+    td.classList.remove('has-html-block');
+    td.innerHTML = '';
+    td.textContent = d.value || '';
+    if (cellsData[key]) {
+      delete cellsData[key].htmlBlock;
+      delete cellsData[key].htmlBlockRowspan;
+      delete cellsData[key].htmlBlockColspan;
+    }
+    agendarGravacao();
+  }
+
+  // Ao cobrir/descobrir uma área, remove/repõe as <td> reais das
+  // células cobertas (para o rowspan/colspan funcionar como tabela
+  // HTML nativa exige — não pode haver <td> duplicada na mesma
+  // posição visual quando outra célula já a cobre via rowspan).
+  function marcarCelulasCobertas(anchorKey, rowspan, colspan, coberto) {
+    var m = anchorKey.match(/^([A-Z]+)(\d+)$/);
+    if (!m) return;
+    var colBase = letraParaIndice(m[1]);
+    var rowBase = parseInt(m[2], 10) - 1;
+    var tbody = gridTable.querySelector('tbody');
+    for (var r = rowBase; r < rowBase + rowspan; r++) {
+      for (var c = colBase; c < colBase + colspan; c++) {
+        if (r === rowBase && c === colBase) continue; // a própria âncora
+        var k = cellKey(c, r);
+        var tr = tbody.children[r];
+        if (!tr) continue;
+        var existente = tr.querySelector('[data-key="' + k + '"]');
+        if (coberto) {
+          if (existente) existente.remove();
+        } else {
+          // Repõe a <td> na posição correta se ainda não existir.
+          if (!existente) {
+            var novaTd = document.createElement('td');
+            novaTd.className = 'cell';
+            novaTd.setAttribute('contenteditable', 'true');
+            novaTd.setAttribute('data-key', k);
+            var indiceInsercao = c; // +1 por causa do row-header
+            if (indiceInsercao < tr.children.length) tr.insertBefore(novaTd, tr.children[indiceInsercao]);
+            else tr.appendChild(novaTd);
+            if (cellsData[k] && cellsData[k].value) novaTd.textContent = cellsData[k].value;
+          }
+        }
+      }
+    }
+  }
+
+  function letraParaIndice(letras) {
+    var idx = 0;
+    for (var i = 0; i < letras.length; i++) {
+      idx = idx * 26 + (letras.charCodeAt(i) - 64);
+    }
+    return idx - 1;
   }
 
   function applyFormat(command) {
@@ -420,6 +650,18 @@
     el.style.background = hexColor;
     if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
     cellsData[selectedCellKey].fill = hexColor;
+    agendarGravacao();
+  }
+
+  function setCellLink(url, texto) {
+    if (!selectedCellKey) return;
+    var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
+    if (!el) return;
+    var label = texto && texto.trim() ? texto : url;
+    el.textContent = label;
+    if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
+    cellsData[selectedCellKey].value = label;
+    cellsData[selectedCellKey].link = url;
     agendarGravacao();
   }
 
@@ -501,6 +743,7 @@
       var d = dados[key];
       if (d.chart) { renderCellChart(key, d.chart); return; }
       if (d.image) { renderCellImage(key, d.image); return; }
+      if (d.htmlBlock) { renderCellHtmlBlock(key, d.htmlBlock, d.htmlBlockRowspan, d.htmlBlockColspan); return; }
       if (d.value !== undefined) el.textContent = d.value;
       if (d.bold) el.setAttribute('data-bold', '1');
       if (d.italic) el.setAttribute('data-italic', '1');
@@ -517,28 +760,59 @@
     try {
       var parsed = JSON.parse(json || '{}');
       var dados = parsed && parsed.cells ? parsed.cells : parsed;
+      var config = parsed && parsed.settings ? parsed.settings : null;
       aplicarCellsData(dados || {});
+      if (config && typeof config.sheetDark === 'boolean') {
+        aplicarTomEscolhido(config.sheetDark);
+      }
     } catch (e) {}
   }
 
   function setContentFromAi(json) { setContent(json); return true; }
 
+  // ══════════════════════════════════════════════
+  // TOM DA FOLHA — controlado SÓ pelo utilizador, nunca pelo tema
+  // da app. setThemeMode() (chamado pelo Flutter ao abrir a tela
+  // ou ao mudar o tema da app) já NÃO mexe nisto.
+  // ══════════════════════════════════════════════
+  var sheetIsDark = false;
+
+  function aplicarTomEscolhido(isDark) {
+    sheetIsDark = !!isDark;
+    document.body.classList.toggle('sheet-dark', sheetIsDark);
+    atualizarCorDosGraficos();
+  }
+
+  function setSheetDarkMode(isDark) {
+    aplicarTomEscolhido(isDark);
+    agendarGravacao();
+  }
+
+  function getSheetDarkMode() { return sheetIsDark; }
+
+  function atualizarCorDosGraficos() {
+    if (!window.Chart) return;
+    var cor = sheetIsDark ? '#F2F2F2' : '#1A1A1A';
+    Chart.defaults.color = cor;
+    Object.keys(chartInstances).forEach(function (key) {
+      var chart = chartInstances[key];
+      if (chart && chart.options) {
+        chart.options.plugins = chart.options.plugins || {};
+        chart.options.plugins.legend = chart.options.plugins.legend || {};
+        chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+        chart.options.plugins.legend.labels.color = cor;
+        chart.update();
+      }
+    });
+  }
+
+  // setThemeMode mantido por compatibilidade de chamada (o Flutter
+  // já a invoca no onLoadStop de todos os editores), mas aqui NÃO
+  // faz nada relacionado com a cor da folha — só existe para não
+  // partir a chamada existente. A cor da folha vive inteiramente em
+  // setSheetDarkMode/getSheetDarkMode.
   function setThemeMode(mode) {
-    var isDark = (mode === 'dark') || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.body.classList.toggle('dark', isDark);
-    if (window.Chart) {
-      Chart.defaults.color = isDark ? '#F2F2F2' : '#1A1A1A';
-      Object.keys(chartInstances).forEach(function (key) {
-        var chart = chartInstances[key];
-        if (chart && chart.options) {
-          chart.options.plugins = chart.options.plugins || {};
-          chart.options.plugins.legend = chart.options.plugins.legend || {};
-          chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
-          chart.options.plugins.legend.labels.color = Chart.defaults.color;
-          chart.update();
-        }
-      });
-    }
+    // Intencionalmente vazio quanto à cor da folha — ver nota acima.
   }
 
   function setFontScale(scale) {
@@ -568,16 +842,7 @@
     if (!selectedCellKey) return;
     if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
       window.flutter_inappwebview.callHandler('openLinkSheet', function (url, text) {
-        if (selectedCellKey && url) {
-          var el = gridTable.querySelector('[data-key="' + selectedCellKey + '"]');
-          if (el) {
-            el.textContent = text || url;
-            if (!cellsData[selectedCellKey]) cellsData[selectedCellKey] = {};
-            cellsData[selectedCellKey].value = text || url;
-            cellsData[selectedCellKey].link = url;
-            agendarGravacao();
-          }
-        }
+        if (selectedCellKey && url) setCellLink(url, text);
       });
     }
   }
@@ -596,6 +861,7 @@
     setCellAlign: setCellAlign,
     setCellColor: setCellColor,
     setCellFill: setCellFill,
+    setCellLink: setCellLink,
     insertRowBelow: insertRowBelow,
     addMoreRows: addMoreRows,
     applyFormula: applyFormula,
@@ -603,11 +869,15 @@
     removeCellImage: removeCellImage,
     renderCellChart: renderCellChart,
     removeCellChart: removeCellChart,
+    renderCellHtmlBlock: renderCellHtmlBlock,
+    removeCellHtmlBlock: removeCellHtmlBlock,
     scrollToCell: scrollParaCelula,
     getContent: getContent,
     setContent: setContent,
     setContentFromAi: setContentFromAi,
     setThemeMode: setThemeMode,
+    setSheetDarkMode: setSheetDarkMode,
+    getSheetDarkMode: getSheetDarkMode,
     setFontScale: setFontScale,
     getSelectedCellKey: getSelectedCellKey,
     openColorPickerForCell: openColorPickerForCell,
@@ -618,7 +888,9 @@
 
   function iniciar() {
     construirGrid();
-    setThemeMode('system');
+    // Tom da folha começa sempre claro por defeito, até o
+    // utilizador escolher explicitamente ou um documento gravado
+    // trazer a preferência (ver setContent → settings.sheetDark).
   }
 
   if (document.readyState === 'loading') {

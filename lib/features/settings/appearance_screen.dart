@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
-import '../../core/widgets/app_sheet.dart';
 import '../../core/language/language_controller.dart';
 import 'settings_widgets.dart';
 
@@ -30,30 +29,16 @@ class _AppearanceScreenState extends State<AppearanceScreen>
   }
 
   void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _PrimaryColorSheet(s: s),
-    );
-  }
-
-  void _openFontFamilyPicker(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _FontFamilySheet(s: s),
-    );
-  }
-
-  void _openIconStylePicker(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _IconStyleSheet(s: s),
-    );
-  }
-
-  void _openChatBubbleStylePicker(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _ChatBubbleStyleSheet(s: s),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: s.pageBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: _PrimaryColorSheet(s: s),
+      ),
     );
   }
 
@@ -119,64 +104,6 @@ class _AppearanceScreenState extends State<AppearanceScreen>
                             shape: BoxShape.circle,
                             border: Border.all(color: s.outline),
                           ),
-                        ),
-                      ),
-                      SettingsRow(
-                        s: s,
-                        iconAsset: 'text',
-                        label: t.appearanceFontFamily,
-                        onTap: () => _openFontFamilyPicker(context, s),
-                        trailing: Text(
-                          appPreferences.fontFamily,
-                          style: TextStyle(
-                              fontSize: 14, color: s.onSurfaceVariant),
-                        ),
-                      ),
-                      SettingsRow(
-                        s: s,
-                        iconAsset: 'shapes',
-                        label: t.appearanceIconStyle,
-                        onTap: () => _openIconStylePicker(context, s),
-                        trailing: Text(
-                          appPreferences.iconStyle ==
-                                  AppIconStyle.filled
-                              ? 'Preenchido'
-                              : 'Contorno',
-                          style: TextStyle(
-                              fontSize: 14, color: s.onSurfaceVariant),
-                        ),
-                      ),
-                      SettingsRow(
-                        s: s,
-                        iconAsset: 'message',
-                        label: t.appearanceChatBubbleStyle,
-                        onTap: () =>
-                            _openChatBubbleStylePicker(context, s),
-                        trailing: Text(
-                          appPreferences.chatBubbleStyle ==
-                                  ChatBubbleStyle.bubble
-                              ? 'Balão'
-                              : 'Plano',
-                          style: TextStyle(
-                              fontSize: 14, color: s.onSurfaceVariant),
-                        ),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: SettingsGroup(s: s, rows: [
-                      SettingsRow(
-                        s: s,
-                        iconAsset: 'motion',
-                        label: t.appearanceReduceMotion,
-                        onTap: () => appPreferences.setReduceMotion(
-                            !appPreferences.reduceMotion),
-                        trailing: _MiniSwitch(
-                          s: s,
-                          value: appPreferences.reduceMotion,
-                          onChanged: appPreferences.setReduceMotion,
                         ),
                       ),
                     ]),
@@ -475,8 +402,7 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PRIMARY COLOR PICKER — movido para Aparência (antes estava em
-// Personalização).
+// PRIMARY COLOR PICKER — agora usa showModalBottomSheet nativo.
 // ══════════════════════════════════════════════════════════════
 
 class _PrimaryColorSheet extends StatelessWidget {
@@ -531,205 +457,6 @@ class _PrimaryColorSheet extends StatelessWidget {
             }),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// FONT FAMILY — só guarda a preferência e mostra no preview desta
-// própria tela. NÃO aplica globalmente ainda (ThemeData/MaterialApp
-// não são tocados por isto).
-// ══════════════════════════════════════════════════════════════
-
-class _FontFamilySheet extends StatelessWidget {
-  final AppColorScheme s;
-  const _FontFamilySheet({required this.s});
-
-  static const _options = [
-    'Inter',
-    'Roboto',
-    'System',
-    'Poppins',
-    'Nunito',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final t = appLanguage.strings;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(t.appearanceFontFamily,
-              style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: s.onSurface)),
-          const SizedBox(height: 6),
-          Text(t.appearanceFontFamilyDescription,
-              style: TextStyle(
-                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
-          const SizedBox(height: 16),
-          for (final font in _options)
-            _SimpleOptionRow(
-              s: s,
-              label: font,
-              selected: appPreferences.fontFamily == font,
-              onTap: () {
-                appPreferences.setFontFamily(font);
-                Navigator.pop(context);
-              },
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IconStyleSheet extends StatelessWidget {
-  final AppColorScheme s;
-  const _IconStyleSheet({required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = appLanguage.strings;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(t.appearanceIconStyle,
-              style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: s.onSurface)),
-          const SizedBox(height: 6),
-          Text(t.appearanceIconStyleDescription,
-              style: TextStyle(
-                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
-          const SizedBox(height: 16),
-          _SimpleOptionRow(
-            s: s,
-            label: 'Contorno',
-            selected: appPreferences.iconStyle == AppIconStyle.outline,
-            onTap: () {
-              appPreferences.setIconStyle(AppIconStyle.outline);
-              Navigator.pop(context);
-            },
-          ),
-          _SimpleOptionRow(
-            s: s,
-            label: 'Preenchido',
-            selected: appPreferences.iconStyle == AppIconStyle.filled,
-            onTap: () {
-              appPreferences.setIconStyle(AppIconStyle.filled);
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChatBubbleStyleSheet extends StatelessWidget {
-  final AppColorScheme s;
-  const _ChatBubbleStyleSheet({required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = appLanguage.strings;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 12, 20, 20 + MediaQuery.of(context).padding.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(t.appearanceChatBubbleStyle,
-              style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: s.onSurface)),
-          const SizedBox(height: 6),
-          Text(t.appearanceChatBubbleStyleDescription,
-              style: TextStyle(
-                  fontSize: 12.5, color: s.onSurfaceVariant, height: 1.4)),
-          const SizedBox(height: 16),
-          _SimpleOptionRow(
-            s: s,
-            label: 'Balão',
-            selected:
-                appPreferences.chatBubbleStyle == ChatBubbleStyle.bubble,
-            onTap: () {
-              appPreferences.setChatBubbleStyle(ChatBubbleStyle.bubble);
-              Navigator.pop(context);
-            },
-          ),
-          _SimpleOptionRow(
-            s: s,
-            label: 'Plano',
-            selected: appPreferences.chatBubbleStyle == ChatBubbleStyle.flat,
-            onTap: () {
-              appPreferences.setChatBubbleStyle(ChatBubbleStyle.flat);
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SimpleOptionRow extends StatelessWidget {
-  final AppColorScheme s;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SimpleOptionRow({
-    required this.s,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        margin: const EdgeInsets.only(bottom: 4),
-        decoration: BoxDecoration(
-          color: selected ? s.primaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  color: selected ? s.onPrimaryContainer : s.onSurface,
-                ),
-              ),
-            ),
-            if (selected)
-              AppIcon('checkmark_circle',
-                  size: 20, color: s.onPrimaryContainer)
-            else
-              const SizedBox(width: 20),
-          ],
-        ),
       ),
     );
   }
