@@ -28,9 +28,18 @@ import '../app_types.dart';
 //     isso as cores originais do ficheiro nunca são substituídas —
 //     só o preto dentro deles pode ser trocado manualmente editando
 //     o próprio SVG, nunca via código.
-// Ainda faltam ficheiros para: strike, numbered, shapes, grid, row,
-// column, download, share, bring_to_front, send_to_back — os nomes
-// já estão mapeados, falta só colocar os .svg em assets/icons/editor/.
+//
+// undo/redo: existiam em assets/icons/editor/ mas não estavam
+// listados aqui, por isso caíam no fallback AppIcon(fileName,...)
+// em vez de SvgPicture — corrigido, agora resolvem como SVG normal.
+//
+// page_numbering / page_orientation / header / footer: ficheiros
+// reais confirmados em assets/icons/editor/, substituem os
+// genéricos row/column/grid usados antes nesses pontos específicos.
+//
+// Ainda faltam ficheiros para: strike, numbered, shapes, download,
+// share, bring_to_front, send_to_back, wand — os nomes já estão
+// mapeados, falta só colocar os .svg em assets/icons/editor/.
 // ══════════════════════════════════════════════════════════════
 
 const Set<String> _kEditorSvgIcons = {
@@ -42,6 +51,8 @@ const Set<String> _kEditorSvgIcons = {
   'superscript', 'text_color', 'underline', 'download', 'share', 'pdf',
   'check', 'plus', 'minus', 'trash', 'grid', 'row', 'column', 'wand',
   'layers', 'strike', 'numbered', 'shapes', 'bring_to_front', 'send_to_back',
+  'undo', 'redo', 'page_numbering', 'page_orientation', 'header', 'footer',
+  'margins',
 };
 
 // Ícones que já vêm coloridos no próprio ficheiro SVG. Adiciona aqui
@@ -49,6 +60,11 @@ const Set<String> _kEditorSvgIcons = {
 // assets/icons/editor/ — o widget deixa de aplicar colorFilter
 // automaticamente para esse nome, preservando as cores originais.
 const Set<String> _kColoredSvgIcons = {};
+
+// Ícones que vivem em assets/icons/outline/ em vez de editor/.
+const Set<String> _kOutlineSvgIcons = {
+  'theme',
+};
 
 const Map<String, String> _kEditorIconAliases = {
   'align_justify': 'justify',
@@ -71,6 +87,15 @@ class _EditorIcon extends StatelessWidget {
     final rawName = asset.endsWith('.svg') ? asset.substring(0, asset.length - 4) : asset;
     final key = _kEditorIconAliases[rawName] ?? rawName;
     final fileName = '$key.svg';
+
+    if (_kOutlineSvgIcons.contains(key)) {
+      return SvgPicture.asset(
+        'assets/icons/outline/$fileName',
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
     if (_kColoredSvgIcons.contains(key)) {
       // SVG colorido — sem colorFilter, preserva as cores do ficheiro.
       return SvgPicture.asset(
@@ -501,6 +526,12 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     }
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // MENU POPUP (botão more_vert do header) — troca de row/column/grid
+  // genéricos para os ícones reais confirmados em assets/icons/editor/:
+  // page_numbering, page_orientation, header. "Tom do papel" fica
+  // com brush como já estava (não há ícone dedicado ainda).
+  // ══════════════════════════════════════════════════════════════
   void _openMenu() async {
     final result = await showMenuSheet<int>(
       context,
@@ -509,9 +540,9 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
         SheetMenuItem(value: 1, asset: 'download', label: 'Descarregar documento', subtitle: 'Guarda como .docx'),
         SheetMenuItem(value: 2, asset: 'share', label: 'Partilhar', subtitle: 'Envia para outra app'),
         SheetMenuItem(value: 3, asset: 'pdf', label: 'Partilhar como PDF'),
-        SheetMenuItem(value: 4, asset: 'row', label: 'Numeração de página'),
-        SheetMenuItem(value: 5, asset: 'column', label: 'Cabeçalho e rodapé'),
-        SheetMenuItem(value: 6, asset: 'grid', label: 'Orientação da página'),
+        SheetMenuItem(value: 4, asset: 'page_numbering', label: 'Numeração de página'),
+        SheetMenuItem(value: 5, asset: 'header', label: 'Cabeçalho e rodapé'),
+        SheetMenuItem(value: 6, asset: 'page_orientation', label: 'Orientação da página'),
         SheetMenuItem(value: 7, asset: 'brush', label: 'Tom do papel'),
       ],
     );
@@ -551,6 +582,8 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
               const SizedBox(height: 16),
               Row(
                 children: [
+                  _EditorIcon('page_numbering', size: 19, color: s.onSurface),
+                  const SizedBox(width: 12),
                   Expanded(child: Text('Mostrar números', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
                   AppToggle(
                     s: s,
@@ -594,6 +627,8 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
             children: [
               Row(
                 children: [
+                  _EditorIcon('header', size: 19, color: s.onSurface),
+                  const SizedBox(width: 12),
                   Expanded(child: Text('Mostrar cabeçalho', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
                   AppToggle(
                     s: s,
@@ -608,6 +643,8 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
               const SizedBox(height: 12),
               Row(
                 children: [
+                  _EditorIcon('footer', size: 19, color: s.onSurface),
+                  const SizedBox(width: 12),
                   Expanded(child: Text('Mostrar rodapé', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
                   AppToggle(
                     s: s,
@@ -636,13 +673,17 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
       context,
       title: 'Orientação da página',
       items: const [
-        SheetMenuItem(value: 'portrait', asset: 'grid', label: 'Retrato'),
-        SheetMenuItem(value: 'landscape', asset: 'grid', label: 'Paisagem'),
+        SheetMenuItem(value: 'portrait', asset: 'page_orientation', label: 'Retrato'),
+        SheetMenuItem(value: 'landscape', asset: 'page_orientation', label: 'Paisagem'),
       ],
     );
     if (result != null) _runJs("editorApi.setPageOrientation('$result')");
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // TOM DO PAPEL — switch direto (sem sub-menu, sem texto explicativo
+  // extra), ícone theme.svg (outline/) ao lado do label.
+  // ══════════════════════════════════════════════════════════════
   void _openPaperToneSheet() async {
     final s = AppTheme.of(context);
     bool escuro = false;
@@ -659,24 +700,18 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
       child: StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text('Independente do tema da app — escolha só para este documento.', style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: Text('Papel escuro', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
-                  AppToggle(
-                    s: s,
-                    value: escuro,
-                    onChanged: (v) {
-                      setSheetState(() => escuro = v);
-                      _runJs("editorApi.setPaperDarkMode($v)");
-                    },
-                  ),
-                ],
+              _EditorIcon('theme', size: 19, color: s.onSurface),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Papel escuro', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+              AppToggle(
+                s: s,
+                value: escuro,
+                onChanged: (v) {
+                  setSheetState(() => escuro = v);
+                  _runJs("editorApi.setPaperDarkMode($v)");
+                },
               ),
             ],
           ),
@@ -925,6 +960,9 @@ class _HeaderIconButton extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // TOOLBAR INFERIOR
+// - Fundo no tema claro: s.cardBackground misturado com 10% de
+//   s.primary (Color.alphaBlend), em vez do cardBackground puro,
+//   para ganhar visibilidade. Tema escuro mantém cardBackground puro.
 // - Botão de IA (sparkles) removido por completo.
 // - "front"/"back" (z-order de imagem) renomeados para
 //   bring_to_front/send_to_back para não colidir com o "back" do
@@ -976,10 +1014,17 @@ class _DocsBottomToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tema claro: cardBackground + 10% de primary por cima, via
+    // alphaBlend (mistura real de cor, não opacidade sobreposta).
+    // Tema escuro: cardBackground puro, como já estava.
+    final toolbarBg = s.isDark
+        ? s.cardBackground
+        : Color.alphaBlend(s.primary.withOpacity(0.10), s.cardBackground);
+
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 6),
-      decoration: BoxDecoration(color: s.cardBackground, borderRadius: BorderRadius.circular(28), boxShadow: s.floatingShadow),
+      decoration: BoxDecoration(color: toolbarBg, borderRadius: BorderRadius.circular(28), boxShadow: s.floatingShadow),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -1551,58 +1596,50 @@ const List<ChartPreset> _kChartPresets = [
 ];
 
 // ══════════════════════════════════════════════════════════════
-// GRÁFICOS — passou de PageRouteBuilder (ecrã inteiro, slide
-// lateral) para showModalBottomSheet com useSafeArea:true e
-// altura quase total, subindo até debaixo da status bar.
+// GRÁFICOS — usa showAppSheet (o MESMO wrapper que os outros
+// modals do ficheiro usam via showCraftBottomSheet), portanto:
+//   • fundo do modal = branco puro no claro, s.cardBackground no
+//     escuro — herdado diretamente de showAppSheet, sem duplicar
+//     a lógica aqui.
+//   • handlebar cinzenta no topo — herdada do mesmo sítio.
+//   • sobe até debaixo da status bar via SafeArea(top: false) +
+//     ConstrainedBox(maxHeight: 90% da altura) já dentro de
+//     showAppSheet; aqui só pedimos altura quase total do
+//     conteúdo interno para ocupar esse espaço.
+//   • SEM botão de voltar — os outros sheets (showMenuSheet,
+//     showTableDialog, color picker) não têm nenhum, então este
+//     também não tem. Fecha por toque fora (barrierDismissible)
+//     ou ao escolher um preset.
+// Os CARDS de preset usam s.pageBackground (fundo do app), não
+// s.cardBackground — para se distinguirem do fundo branco/escuro
+// do modal em vez de se confundirem com ele.
 // ══════════════════════════════════════════════════════════════
 Future<ChartPreset?> showChartPresetSheet(BuildContext context) {
-  return showModalBottomSheet<ChartPreset>(
+  final s = AppTheme.of(context);
+  return showCraftBottomSheet<ChartPreset>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => const _ChartPresetModal(),
+    s: s,
+    title: 'Inserir gráfico',
+    child: const _ChartPresetGrid(),
   );
 }
 
-class _ChartPresetModal extends StatelessWidget {
-  const _ChartPresetModal();
+class _ChartPresetGrid extends StatelessWidget {
+  const _ChartPresetGrid();
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final topInset = MediaQuery.of(context).padding.top;
-    return Container(
-      height: MediaQuery.of(context).size.height - topInset,
-      decoration: BoxDecoration(
-        color: s.pageBackground,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: s.outlineVariant, borderRadius: BorderRadius.circular(999))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-            child: Row(children: [
-              ScreenBackButton(s: s),
-              const SizedBox(width: 12),
-              Text('Inserir gráfico', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: s.onSurface)),
-            ]),
-          ),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 0.92),
-              itemCount: _kChartPresets.length,
-              itemBuilder: (context, i) {
-                final preset = _kChartPresets[i];
-                return _ChartPresetCard(s: s, preset: preset, onTap: () => Navigator.of(context).pop(preset));
-              },
-            ),
-          ),
-        ],
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.75,
+      child: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 0.92),
+        itemCount: _kChartPresets.length,
+        itemBuilder: (context, i) {
+          final preset = _kChartPresets[i];
+          return _ChartPresetCard(s: s, preset: preset, onTap: () => Navigator.of(context).pop(preset));
+        },
       ),
     );
   }
@@ -1634,7 +1671,9 @@ class _ChartPresetCardState extends State<_ChartPresetCard> {
         duration: const Duration(milliseconds: 120),
         child: Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: s.cardBackground, borderRadius: BorderRadius.circular(22), boxShadow: s.cardShadow),
+          // Fundo do card = pageBackground (fundo geral do app), para
+          // se distinguir do fundo branco/cardBackground do modal.
+          decoration: BoxDecoration(color: s.pageBackground, borderRadius: BorderRadius.circular(22)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

@@ -1,3 +1,6 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/core/widgets/app_sheet.dart
+// ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 
@@ -29,6 +32,9 @@ class _AppSheetHandlebar extends StatelessWidget {
 /// Navigator.pop(context, valor), tal como um showModalBottomSheet
 /// normal — mas sem usar essa API, e sem qualquer dependência de
 /// pacote de bottom sheet externo.
+///
+/// Tema claro: fundo puramente branco (Colors.white), sem nenhum
+/// tom fraco/derivado. Tema escuro: mantém s.cardBackground.
 Future<T?> showAppSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -86,92 +92,5 @@ Future<T?> showAppSheet<T>(
         child: FadeTransition(opacity: anim, child: child),
       );
     },
-  );
-}
-
-// ══════════════════════════════════════════════════════════════
-// MODAL DE EDIÇÃO COM IA
-// Usado pelos editores (docs, sheets, slides) para pedir uma
-// instrução de edição ao utilizador.
-// ══════════════════════════════════════════════════════════════
-Future<String?> showAiEditModal(
-  BuildContext context,
-  AppColorScheme s, {
-  bool hasSelection = false,
-}) {
-  final ctrl = TextEditingController();
-  return showAppSheet<String>(
-    context,
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(ctx).viewInsets.bottom,
-      ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20, 12, 20, 20 + MediaQuery.of(ctx).padding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              hasSelection ? 'Editar seleção com IA' : 'Editar com IA',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              style: TextStyle(fontSize: 15, color: s.onSurface),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Descreve a alteração...',
-                hintStyle: TextStyle(
-                  fontSize: 14,
-                  color: s.onSurfaceVariant,
-                ),
-                filled: true,
-                fillColor: s.hover,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: () {
-                Navigator.pop(ctx, ctrl.text.trim());
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: s.primary,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  'Aplicar',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: s.onPrimary,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
   );
 }
