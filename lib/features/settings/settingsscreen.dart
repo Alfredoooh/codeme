@@ -75,14 +75,15 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   void _confirmLogout(BuildContext context, AppColorScheme s) {
     final t = appLanguage.strings;
-    showAppSheet(
-      context,
-      builder: (sheetContext) => ConfirmActionSheet(
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: ConfirmActionSheet(
         s: s,
         message: t.settingsLogoutConfirmMessage,
         confirmLabel: t.settingsLogout,
         onConfirm: () {
-          Navigator.pop(sheetContext);
+          Navigator.pop(context);
           _logoutNow(context);
         },
       ),
@@ -98,9 +99,10 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   void _editName(BuildContext context, AppColorScheme s) {
     final t = appLanguage.strings;
-    showAppSheet(
-      context,
-      builder: (sheetContext) => EditFieldSheet(
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: EditFieldSheet(
         s: s,
         title: t.settingsEditNameTitle,
         label: t.settingsEditNameLabel,
@@ -124,23 +126,25 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _editPassword(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => ChangePasswordSheet(s: s),
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: ChangePasswordSheet(s: s),
     );
   }
 
   void _confirmDeleteAllConversations(BuildContext context, AppColorScheme s) {
     final t = appLanguage.strings;
-    showAppSheet(
-      context,
-      builder: (sheetContext) => ConfirmActionSheet(
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: ConfirmActionSheet(
         s: s,
         message: t.settingsDeleteAllConversationsConfirmMessage,
         confirmLabel: t.settingsDeleteAllConversationsConfirmLabel,
         destructive: true,
         onConfirm: () async {
-          Navigator.pop(sheetContext);
+          Navigator.pop(context);
           final token = authController.token;
           if (token == null) return;
           await ConversationsApiService.deleteAll(token);
@@ -630,9 +634,6 @@ class _AvatarBlock extends StatelessWidget {
                     child: avatarBytes != null
                         ? Image.memory(
                             avatarBytes,
-                            // key baseada nos bytes: força repintar
-                            // quando o avatar muda, mesmo que este
-                            // widget não seja recriado do zero.
                             key: ValueKey(avatarBytes.lengthInBytes),
                             width: innerSize,
                             height: innerSize,
@@ -706,7 +707,7 @@ class _AvatarBlock extends StatelessWidget {
 
         if (user?.email != null)
           Text(
-    user!.email ?? '',
+            user!.email ?? '',
             style: TextStyle(
               fontSize: 13,
               color: s.onSurfaceVariant,

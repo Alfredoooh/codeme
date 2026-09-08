@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
+import '../../core/widgets/app_sheet.dart';
 import '../../core/language/language_controller.dart';
 import 'settings_widgets.dart';
 
@@ -29,16 +30,10 @@ class _AppearanceScreenState extends State<AppearanceScreen>
   }
 
   void _openPrimaryColorPicker(BuildContext context, AppColorScheme s) {
-    showModalBottomSheet<void>(
+    showCraftBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: s.pageBackground,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: _PrimaryColorSheet(s: s),
-      ),
+      s: s,
+      child: _PrimaryColorSheet(s: s),
     );
   }
 
@@ -118,40 +113,6 @@ class _AppearanceScreenState extends State<AppearanceScreen>
               onBack: () => Navigator.pop(context),
             ),
           ]),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniSwitch extends StatelessWidget {
-  final AppColorScheme s;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _MiniSwitch(
-      {required this.s, required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 42,
-        height: 24,
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: value ? s.primary : s.hover,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          width: 18,
-          height: 18,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-          ),
         ),
       ),
     );
@@ -402,7 +363,7 @@ class _ExpressiveSliderState extends State<_ExpressiveSlider> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PRIMARY COLOR PICKER — agora usa showModalBottomSheet nativo.
+// PRIMARY COLOR PICKER — usa o showCraftBottomSheet
 // ══════════════════════════════════════════════════════════════
 
 class _PrimaryColorSheet extends StatelessWidget {

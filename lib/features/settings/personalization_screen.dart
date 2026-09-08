@@ -37,23 +37,26 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
   }
 
   void _openPromptEditor(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _PromptEditorSheet(s: s),
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: _PromptEditorSheet(s: s),
     );
   }
 
   void _openEmojiFrequency(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _EmojiFrequencySheet(s: s),
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: _EmojiFrequencySheet(s: s),
     );
   }
 
   void _openCustomInstructions(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _TextPreferenceSheet(
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: _TextPreferenceSheet(
         s: s,
         title: appLanguage.strings.personalizationCustomInstructions,
         description:
@@ -65,9 +68,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
   }
 
   void _openTraits(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _TextPreferenceSheet(
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: _TextPreferenceSheet(
         s: s,
         title: appLanguage.strings.personalizationTraits,
         description: appLanguage.strings.personalizationTraitsDescription,
@@ -78,9 +82,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
   }
 
   void _openKnownInfo(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _TextPreferenceSheet(
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: _TextPreferenceSheet(
         s: s,
         title: appLanguage.strings.personalizationKnownInfo,
         description: appLanguage.strings.personalizationKnownInfoDescription,
@@ -91,9 +96,10 @@ class _PersonalizationScreenState extends State<PersonalizationScreen>
   }
 
   void _openResponseStyle(BuildContext context, AppColorScheme s) {
-    showAppSheet(
-      context,
-      builder: (sheetContext) => _ResponseStyleSheet(s: s),
+    showCraftBottomSheet<void>(
+      context: context,
+      s: s,
+      child: _ResponseStyleSheet(s: s),
     );
   }
 
@@ -388,7 +394,6 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
-                              year2023: false,
                               strokeWidth: 2.2,
                               valueColor:
                                   AlwaysStoppedAnimation(s.onPrimary),
@@ -410,9 +415,6 @@ class _PromptEditorSheetState extends State<_PromptEditorSheet> {
   }
 }
 
-/// Sheet genérico reutilizado pelos 3 campos novos de texto livre:
-/// instruções personalizadas, traços de personalidade, informação
-/// conhecida sobre o utilizador.
 class _TextPreferenceSheet extends StatefulWidget {
   final AppColorScheme s;
   final String title;
@@ -523,7 +525,6 @@ class _TextPreferenceSheetState extends State<_TextPreferenceSheet> {
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
-                              year2023: false,
                               strokeWidth: 2.2,
                               valueColor:
                                   AlwaysStoppedAnimation(s.onPrimary),

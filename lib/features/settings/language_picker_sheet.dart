@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/settings/language_picker_sheet.dart
-// Seletor de idioma — bottom sheet próprio (app_sheet.dart), com
-// busca. Lista kAllLocales (25 idiomas).
+// Seletor de idioma — bottom sheet estilo docs.dart (showCraftBottomSheet),
+// com busca. Lista kAllLocales (25 idiomas).
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
@@ -11,9 +11,11 @@ import '../../core/language/language_model.dart';
 import '../../core/language/language_controller.dart';
 
 void showLanguagePickerSheet(BuildContext context, AppColorScheme s) {
-  showAppSheet<void>(
-    context,
-    builder: (ctx) => _LanguagePickerContent(s: s),
+  showCraftBottomSheet<void>(
+    context: context,
+    s: s,
+    title: appLanguage.strings.languagePickerTitle,
+    child: _LanguagePickerContent(s: s),
   );
 }
 
@@ -43,54 +45,40 @@ class _LanguagePickerContentState extends State<_LanguagePickerContent> {
     final results = appLanguage.search(_query);
 
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 12,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-            child: Text(
-              t.languagePickerTitle,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: s.onSurface,
-              ),
+          // Campo de busca
+          Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: s.hover,
+              borderRadius: BorderRadius.circular(14),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              height: 46,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: s.hover,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(children: [
-                AppIcon('search', size: 18, color: s.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _query = v),
-                    style: TextStyle(fontSize: 15, color: s.onSurface),
-                    cursorColor: s.primary,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: t.languagePickerSearchHint,
-                      hintStyle:
-                          TextStyle(fontSize: 15, color: s.onSurfaceVariant),
-                    ),
+            child: Row(children: [
+              AppIcon('search', size: 18, color: s.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _query = v),
+                  style: TextStyle(fontSize: 15, color: s.onSurface),
+                  cursorColor: s.primary,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: t.languagePickerSearchHint,
+                    hintStyle:
+                        TextStyle(fontSize: 15, color: s.onSurfaceVariant),
                   ),
                 ),
-              ]),
-            ),
+              ),
+            ]),
           ),
           const SizedBox(height: 8),
+          // Lista de idiomas
           Flexible(
             child: results.isEmpty
                 ? Padding(

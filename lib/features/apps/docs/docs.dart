@@ -18,6 +18,21 @@ import '../../../services/auth_service.dart';
 import '../../../services/export_service.dart';
 import '../app_types.dart';
 
+// ══════════════════════════════════════════════════════════════
+// ÍCONES SVG — duas categorias:
+//  1) _kEditorSvgIcons        → SVGs monocromáticos (preto puro no
+//     ficheiro original). Levam ColorFilter.srcIn, por isso HERDAM
+//     a cor pedida (tema claro/escuro, destaque, etc).
+//  2) _kColoredSvgIcons       → SVGs que já vêm com cores próprias
+//     (ex: ícones de apps, badges). NUNCA levam colorFilter, por
+//     isso as cores originais do ficheiro nunca são substituídas —
+//     só o preto dentro deles pode ser trocado manualmente editando
+//     o próprio SVG, nunca via código.
+// Ainda faltam ficheiros para: strike, numbered, shapes, grid, row,
+// column, download, share, bring_to_front, send_to_back — os nomes
+// já estão mapeados, falta só colocar os .svg em assets/icons/editor/.
+// ══════════════════════════════════════════════════════════════
+
 const Set<String> _kEditorSvgIcons = {
   'align_center', 'align_left', 'align_right', 'bold', 'brush',
   'bullet_point', 'capital_letter', 'chart', 'edit_text', 'eraser',
@@ -26,8 +41,14 @@ const Set<String> _kEditorSvgIcons = {
   'resize', 'spacing_height', 'spacing_width', 'spellcheck', 'subscript',
   'superscript', 'text_color', 'underline', 'download', 'share', 'pdf',
   'check', 'plus', 'minus', 'trash', 'grid', 'row', 'column', 'wand',
-  'layers', 'send_to_back', 'bring_to_front',
+  'layers', 'strike', 'numbered', 'shapes', 'bring_to_front', 'send_to_back',
 };
+
+// Ícones que já vêm coloridos no próprio ficheiro SVG. Adiciona aqui
+// o nome (sem .svg) assim que colocares um ícone colorido em
+// assets/icons/editor/ — o widget deixa de aplicar colorFilter
+// automaticamente para esse nome, preservando as cores originais.
+const Set<String> _kColoredSvgIcons = {};
 
 const Map<String, String> _kEditorIconAliases = {
   'align_justify': 'justify',
@@ -50,6 +71,14 @@ class _EditorIcon extends StatelessWidget {
     final rawName = asset.endsWith('.svg') ? asset.substring(0, asset.length - 4) : asset;
     final key = _kEditorIconAliases[rawName] ?? rawName;
     final fileName = '$key.svg';
+    if (_kColoredSvgIcons.contains(key)) {
+      // SVG colorido — sem colorFilter, preserva as cores do ficheiro.
+      return SvgPicture.asset(
+        'assets/icons/editor/$fileName',
+        width: size,
+        height: size,
+      );
+    }
     if (_kEditorSvgIcons.contains(key)) {
       return SvgPicture.asset(
         'assets/icons/editor/$fileName',
@@ -215,7 +244,6 @@ class DocsScreen extends StatefulWidget {
 class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> {
   static const EditorType _type = EditorType.docs;
   InAppWebViewController? _ctrl;
-  bool _aiEditing = false;
   bool _isClosing = false;
 
   String _documentTitle = 'Documento';
@@ -423,30 +451,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     }
   }
 
-  Future<void> _openAiEditModal({String? preselectedText}) async {
-    final s = AppTheme.of(context);
-    final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
-    if (instruction == null || instruction.trim().isEmpty) return;
-    await _runAiEdit(instruction.trim(), selection: preselectedText);
-  }
-
-  Future<void> _runAiEdit(String instruction, {String? selection}) async {
-    final token = authController.token;
-    if (token == null || _aiEditing) return;
-    setState(() => _aiEditing = true);
-    try {
-      // Edição IA desativada temporariamente até backend ser atualizado.
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível aplicar a edição.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _aiEditing = false);
-    }
-  }
-
   void _onInsertTable() {
     showTableDialog(context, AppTheme.of(context), (config) {
       _runJs("editorApi.insertTable(${config.toJs()})");
@@ -490,19 +494,7 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 
   Future<void> _onInsertChart() async {
-    final preset = await Navigator.of(context).push<ChartPreset>(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 380),
-        pageBuilder: (_, __, ___) => const ChartPresetScreen(),
-        transitionsBuilder: (_, anim, __, child) {
-          final curved = CurvedAnimation(parent: anim, curve: const Cubic(0.16, 1, 0.3, 1));
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(curved), child: child),
-          );
-        },
-      ),
-    );
+    final preset = await showChartPresetSheet(context);
     if (preset != null) {
       final safe = preset.toJson().replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\n', '\\n');
       _runJs("editorApi.insertChart(JSON.parse('$safe'))");
@@ -707,6 +699,10 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
     if (result != null) _onInsertShape(result);
   }
 
+  // Posição da imagem — aplica-se sempre à imagem atualmente
+  // selecionada no editor (nunca a todas as imagens do documento).
+  // O botão da toolbar só aparece destacado quando existe uma
+  // seleção ativa (ver `imageSelected` em _DocsBottomToolbar).
   Future<void> _showImagePositionSheet() async {
     String atual = 'inline';
     try {
@@ -781,13 +777,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
                               }),
                             );
                             c.addJavaScriptHandler(
-                              handlerName: 'openAiEditForSelection',
-                              callback: (args) {
-                                final selected = args.isNotEmpty ? args[0]?.toString() : null;
-                                _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
-                              },
-                            );
-                            c.addJavaScriptHandler(
                               handlerName: 'saveDocument',
                               callback: (args) {
                                 final content = args.isNotEmpty ? args[0]?.toString() : null;
@@ -849,7 +838,6 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
                     onInsertLink: _onInsertLink,
                     onInsertShape: _showShapeMenuSheet,
                     onInsertChart: _onInsertChart,
-                    onAiEdit: () => _openAiEditModal(),
                     onFront: () => _runJs("editorApi.trazerParaFrente()"),
                     onBack: () => _runJs("editorApi.enviarParaTras()"),
                     onImagePosition: _showImagePositionSheet,
@@ -864,6 +852,10 @@ class _DocsScreenState extends State<DocsScreen> with ThemeReactive<DocsScreen> 
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// HEADER — botões afastados 12px da borda (antes: 6px), seguindo
+// o mesmo espaçamento lateral de AllAppsScreen (fromLTRB(16,...)).
+// ══════════════════════════════════════════════════════════════
 class _ScreenHeader extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -881,7 +873,7 @@ class _ScreenHeader extends StatelessWidget {
     return Positioned(
       top: 0, left: 0, right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 6, 8, 10),
+        padding: const EdgeInsets.fromLTRB(12, 6, 14, 10),
         decoration: BoxDecoration(
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)]),
         ),
@@ -931,6 +923,16 @@ class _HeaderIconButton extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// TOOLBAR INFERIOR
+// - Botão de IA (sparkles) removido por completo.
+// - "front"/"back" (z-order de imagem) renomeados para
+//   bring_to_front/send_to_back para não colidir com o "back" do
+//   botão de fechar ecrã. Continuam a aplicar-se só à imagem
+//   selecionada (ver imageSelected/highlighted).
+// - Highlight deixou de ser _ToolbarButton com ícone SVG; passa a
+//   ser o _RainbowRingButton (anel arco-íris).
+// ══════════════════════════════════════════════════════════════
 class _DocsBottomToolbar extends StatelessWidget {
   final AppColorScheme s;
   final bool imageSelected;
@@ -957,7 +959,6 @@ class _DocsBottomToolbar extends StatelessWidget {
   final VoidCallback onInsertLink;
   final VoidCallback onInsertShape;
   final VoidCallback onInsertChart;
-  final VoidCallback onAiEdit;
   final VoidCallback onFront;
   final VoidCallback onBack;
   final VoidCallback onImagePosition;
@@ -969,7 +970,7 @@ class _DocsBottomToolbar extends StatelessWidget {
     required this.onIndentIncrease, required this.onIndentDecrease, required this.onSubscript, required this.onSuperscript,
     required this.onQuote, required this.onClearFormat, required this.onTextColor, required this.onHighlight,
     required this.onInsertImage, required this.onInsertTable, required this.onInsertLink, required this.onInsertShape,
-    required this.onInsertChart, required this.onAiEdit, required this.onFront, required this.onBack,
+    required this.onInsertChart, required this.onFront, required this.onBack,
     required this.onImagePosition,
   });
 
@@ -1004,7 +1005,8 @@ class _DocsBottomToolbar extends StatelessWidget {
             _ToolbarButton(s: s, assetName: 'eraser', onTap: onClearFormat),
             _ToolbarDivider(s: s),
             _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
-            _ToolbarButton(s: s, assetName: 'highlight', onTap: onHighlight),
+            // Highlight: anel arco-íris em vez de SVG — ver _RainbowRingButton.
+            _RainbowRingButton(onTap: onHighlight),
             _ToolbarDivider(s: s),
             _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
             _ToolbarButton(s: s, assetName: 'position', onTap: onImagePosition, highlighted: imageSelected),
@@ -1013,9 +1015,8 @@ class _DocsBottomToolbar extends StatelessWidget {
             _ToolbarButton(s: s, assetName: 'shapes', onTap: onInsertShape),
             _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
             _ToolbarDivider(s: s),
-            _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
-            _ToolbarButton(s: s, assetName: 'front', onTap: onFront),
-            _ToolbarButton(s: s, assetName: 'back', onTap: onBack),
+            _ToolbarButton(s: s, assetName: 'bring_to_front', onTap: onFront),
+            _ToolbarButton(s: s, assetName: 'send_to_back', onTap: onBack),
           ],
         ),
       ),
@@ -1049,6 +1050,64 @@ class _ToolbarButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE HIGHLIGHT — anel circular com gradiente arco-íris no
+// PRÓPRIO ANEL (contorno), não preenchido por dentro. Substitui o
+// antigo _ToolbarButton(assetName: 'highlight') que usava SVG.
+// Implementado com CustomPainter: desenha um círculo com
+// PaintingStyle.stroke e um SweepGradient no shader.
+// ══════════════════════════════════════════════════════════════
+class _RainbowRingButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _RainbowRingButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CustomPaint(painter: _RainbowRingPainter()),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RainbowRingPainter extends CustomPainter {
+  const _RainbowRingPainter();
+
+  static const List<Color> _rainbow = [
+    Color(0xFFFF0000), Color(0xFFFF9500), Color(0xFFFFCC00), Color(0xFF34C759),
+    Color(0xFF00C7BE), Color(0xFF32ADE6), Color(0xFF007AFF), Color(0xFF5856D6),
+    Color(0xFFAF52DE), Color(0xFFFF2D55), Color(0xFFFF0000),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.width / 2 - 2;
+    const strokeWidth = 3.2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(colors: _rainbow, startAngle: 0, endAngle: 2 * math.pi).createShader(rect);
+    canvas.drawCircle(center, radius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RainbowRingPainter oldDelegate) => false;
 }
 
 class TableInsertConfig {
@@ -1298,6 +1357,13 @@ Future<String?> showAdvancedColorPickerSheet(BuildContext context, AppColorSchem
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// COLOR PICKER — botão circular "wand" do topo removido. O acesso
+// ao gerador de cor livre passa a ser exclusivamente pelo botão
+// "Gerar qualquer cor" já existente na paleta rápida; dentro do
+// gerador, para voltar basta fechar o sheet (Navigator.pop já
+// devolve o valor ao selecionar uma cor).
+// ══════════════════════════════════════════════════════════════
 class _AdvancedColorPickerSheet extends StatefulWidget {
   final AppColorScheme s;
   const _AdvancedColorPickerSheet({required this.s});
@@ -1323,12 +1389,7 @@ class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(child: Text(_generatorMode ? 'Gerador de paleta' : 'Escolher cor', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface))),
-              _ModeToggleButton(s: s, icon: 'wand', active: _generatorMode, onTap: () => setState(() => _generatorMode = !_generatorMode)),
-            ],
-          ),
+          Text(_generatorMode ? 'Gerador de paleta' : 'Escolher cor', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
           const SizedBox(height: 18),
           if (_generatorMode) _buildGenerator(s) else _buildQuickPalette(s),
         ],
@@ -1397,27 +1458,6 @@ class _AdvancedColorPickerSheetState extends State<_AdvancedColorPickerSheet> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ModeToggleButton extends StatelessWidget {
-  final AppColorScheme s;
-  final String icon;
-  final bool active;
-  final VoidCallback onTap;
-  const _ModeToggleButton({required this.s, required this.icon, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 36, height: 36, alignment: Alignment.center,
-        decoration: BoxDecoration(color: active ? s.primaryContainer : s.pageBackground, shape: BoxShape.circle, border: Border.all(color: active ? Colors.transparent : s.outlineVariant)),
-        child: _EditorIcon(icon, size: 17, color: active ? s.onPrimaryContainer : s.onSurfaceVariant),
-      ),
     );
   }
 }
@@ -1510,40 +1550,59 @@ const List<ChartPreset> _kChartPresets = [
   ChartPreset(id: 'scatter_corr', title: 'Dispersão — correlação', kind: ChartKind.scatter, sampleValues: [2, 5, 3, 8, 6, 9], sampleLabels: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']),
 ];
 
-class ChartPresetScreen extends StatelessWidget {
-  const ChartPresetScreen({super.key});
+// ══════════════════════════════════════════════════════════════
+// GRÁFICOS — passou de PageRouteBuilder (ecrã inteiro, slide
+// lateral) para showModalBottomSheet com useSafeArea:true e
+// altura quase total, subindo até debaixo da status bar.
+// ══════════════════════════════════════════════════════════════
+Future<ChartPreset?> showChartPresetSheet(BuildContext context) {
+  return showModalBottomSheet<ChartPreset>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _ChartPresetModal(),
+  );
+}
+
+class _ChartPresetModal extends StatelessWidget {
+  const _ChartPresetModal();
 
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: s.statusBarStyle,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ColoredBox(
-          color: s.pageBackground,
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                  child: Row(children: [ScreenBackButton(s: s), const SizedBox(width: 12), Text('Inserir gráfico', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: s.onSurface))]),
-                ),
-                Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 0.92),
-                    itemCount: _kChartPresets.length,
-                    itemBuilder: (context, i) {
-                      final preset = _kChartPresets[i];
-                      return _ChartPresetCard(s: s, preset: preset, onTap: () => Navigator.of(context).pop(preset));
-                    },
-                  ),
-                ),
-              ],
+    final topInset = MediaQuery.of(context).padding.top;
+    return Container(
+      height: MediaQuery.of(context).size.height - topInset,
+      decoration: BoxDecoration(
+        color: s.pageBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: s.outlineVariant, borderRadius: BorderRadius.circular(999))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Row(children: [
+              ScreenBackButton(s: s),
+              const SizedBox(width: 12),
+              Text('Inserir gráfico', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: s.onSurface)),
+            ]),
+          ),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 0.92),
+              itemCount: _kChartPresets.length,
+              itemBuilder: (context, i) {
+                final preset = _kChartPresets[i];
+                return _ChartPresetCard(s: s, preset: preset, onTap: () => Navigator.of(context).pop(preset));
+              },
             ),
           ),
-        ),
+        ],
       ),
     );
   }
