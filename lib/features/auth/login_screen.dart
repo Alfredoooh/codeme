@@ -74,7 +74,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onContactTap() {
-    // Funcionalidade ainda não disponível.
     showAuthSnackBar(context, 'Contacte-nos ainda não está disponível.');
   }
 
@@ -89,6 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -111,10 +111,10 @@ class _LoginScreenState extends State<LoginScreen> {
               return Column(
                 children: [
                   // ── "Contacte-nos" no topo, canto direito ──
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, right: 20),
-                    child: Align(
-                      alignment: Alignment.topRight,
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4, right: 16),
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: _onContactTap,
@@ -133,6 +133,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
+                  // ── Logo grande centralizado, com espaço fixo
+                  // acima e abaixo, sem depender de Spacer dentro
+                  // de scroll (que colapsa em telas pequenas). ──
+                  SizedBox(height: screenHeight * 0.09),
+                  const Center(child: AnimatedAuthLogo(size: 96)),
+                  SizedBox(height: screenHeight * 0.16),
+
+                  // ── Bloco de botões + termos, sempre no fim. ──
                   Expanded(
                     child: SingleChildScrollView(
                       padding: EdgeInsets.only(
@@ -141,65 +149,48 @@ class _LoginScreenState extends State<LoginScreen> {
                         bottom: 28 + MediaQuery.of(context).viewInsets.bottom,
                       ),
                       physics: const BouncingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: MediaQuery.of(context).size.height -
-                              MediaQuery.of(context).padding.top -
-                              MediaQuery.of(context).padding.bottom -
-                              56,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Spacer(flex: 3),
-
-                            // Logo grande e centralizado, como no
-                            // exemplo de referência.
-                            const Center(child: AnimatedAuthLogo(size: 96)),
-
-                            const Spacer(flex: 5),
-
-                            if (authController.lastError != null) ...[
-                              AuthErrorBanner(
-                                  s: s, message: authController.lastError!),
-                              const SizedBox(height: 4),
-                            ],
-
-                            AuthSecondaryButton(
-                              icon: const GoogleIcon(size: 20),
-                              label: 'Continuar com Google',
-                              disabledLook: true,
-                              onTap: _onGoogleTap,
-                            ),
-                            const SizedBox(height: 12),
-
-                            AuthSecondaryButton(
-                              icon: LockIcon(size: 20, color: s.onSurface),
-                              label:
-                                  'Entrar com email ou número de telemóvel',
-                              onTap: _goLogin,
-                            ),
-                            const SizedBox(height: 12),
-
-                            AuthPrimaryButton(
-                              label: 'Criar conta',
-                              loading: false,
-                              onTap: _goRegister,
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            AuthTermsRadio(
-                              value: _termsAccepted,
-                              onChanged: (v) =>
-                                  setState(() => _termsAccepted = v),
-                              onTapTerms: _onTermsTap,
-                              onTapPrivacy: _onPrivacyTap,
-                            ),
-
-                            const SizedBox(height: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (authController.lastError != null) ...[
+                            AuthErrorBanner(
+                                s: s, message: authController.lastError!),
+                            const SizedBox(height: 4),
                           ],
-                        ),
+
+                          AuthSecondaryButton(
+                            icon: const GoogleIcon(size: 20),
+                            label: 'Continuar com Google',
+                            onTap: _onGoogleTap,
+                          ),
+                          const SizedBox(height: 12),
+
+                          AuthSecondaryButton(
+                            icon: LockIcon(size: 20, color: s.onSurface),
+                            label: 'Entrar com email ou telemóvel',
+                            onTap: _goLogin,
+                          ),
+                          const SizedBox(height: 12),
+
+                          AuthPrimaryButton(
+                            label: 'Criar conta',
+                            loading: false,
+                            onTap: _goRegister,
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          AuthTermsRadio(
+                            value: _termsAccepted,
+                            onChanged: (v) =>
+                                setState(() => _termsAccepted = v),
+                            onTapTerms: _onTermsTap,
+                            onTapPrivacy: _onPrivacyTap,
+                          ),
+
+                          const SizedBox(height: 8),
+                        ],
                       ),
                     ),
                   ),
