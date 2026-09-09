@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'dart:math' as math;
 import '../../../core/theme/colors.dart';
 import '../../../core/widgets/widgets.dart';
 import 'sheets.dart';
@@ -16,6 +17,22 @@ import '../../../services/export_service.dart';
 import '../app_types.dart';
 import '../docs/docs.dart' show showMenuSheet, SheetMenuItem, AppToggle;
 
+// ══════════════════════════════════════════════════════════════
+// ÍCONES SVG — mesma estrutura de docs.dart:
+//  1) _kEditorSvgIcons  → SVGs monocromáticos em assets/icons/editor/,
+//     levam ColorFilter.srcIn (herdam a cor pedida).
+//  2) _kColoredSvgIcons → SVGs já coloridos, sem colorFilter.
+//  3) _kOutlineSvgIcons → vivem em assets/icons/outline/ em vez de
+//     editor/, também levam colorFilter.
+//
+// undo/redo: existiam em assets/icons/editor/ mas não estavam
+// listados aqui, por isso caíam no fallback AppIcon errado —
+// corrigido, tal como em docs.dart.
+//
+// Ainda faltam ficheiros para: fill, download, code, sparkles — os
+// nomes já estão mapeados, falta só colocar os .svg.
+// ══════════════════════════════════════════════════════════════
+
 const Set<String> _kEditorSvgIcons = {
   'align_center', 'align_left', 'align_right', 'bold', 'brush',
   'bullet_point', 'capital_letter', 'chart', 'edit_text', 'eraser',
@@ -23,6 +40,18 @@ const Set<String> _kEditorSvgIcons = {
   'indent_increase', 'justify', 'paste', 'pencil_holder', 'quote',
   'resize', 'spacing_height', 'spacing_width', 'spellcheck', 'subscript',
   'superscript', 'text_color', 'underline', 'fill', 'download', 'code',
+  'undo', 'redo',
+};
+
+// Ícones que já vêm coloridos no próprio ficheiro SVG. Adiciona aqui
+// o nome (sem .svg) assim que colocares um ícone colorido em
+// assets/icons/editor/ — o widget deixa de aplicar colorFilter
+// automaticamente para esse nome, preservando as cores originais.
+const Set<String> _kColoredSvgIcons = {};
+
+// Ícones que vivem em assets/icons/outline/ em vez de editor/.
+const Set<String> _kOutlineSvgIcons = {
+  'theme', 'add',
 };
 
 const Map<String, String> _kEditorIconAliases = {
@@ -45,6 +74,23 @@ class _EditorIcon extends StatelessWidget {
     final rawName = asset.endsWith('.svg') ? asset.substring(0, asset.length - 4) : asset;
     final key = _kEditorIconAliases[rawName] ?? rawName;
     final fileName = '$key.svg';
+
+    if (_kOutlineSvgIcons.contains(key)) {
+      return SvgPicture.asset(
+        'assets/icons/outline/$fileName',
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
+    if (_kColoredSvgIcons.contains(key)) {
+      // SVG colorido — sem colorFilter, preserva as cores do ficheiro.
+      return SvgPicture.asset(
+        'assets/icons/editor/$fileName',
+        width: size,
+        height: size,
+      );
+    }
     if (_kEditorSvgIcons.contains(key)) {
       return SvgPicture.asset(
         'assets/icons/editor/$fileName',
@@ -65,7 +111,6 @@ class SheetsScreen extends StatefulWidget {
 class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsScreen> {
   static const EditorType _type = EditorType.sheets;
   InAppWebViewController? _ctrl;
-  bool _aiEditing = false;
   bool _isClosing = false;
 
   String _documentTitle = 'Folha de cálculo';
@@ -236,30 +281,6 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
     }
   }
 
-  Future<void> _openAiEditModal({String? preselectedText}) async {
-    final s = AppTheme.of(context);
-    final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
-    if (instruction == null || instruction.trim().isEmpty) return;
-    await _runAiEdit(instruction.trim(), selection: preselectedText);
-  }
-
-  Future<void> _runAiEdit(String instruction, {String? selection}) async {
-    final token = authController.token;
-    if (token == null || _aiEditing) return;
-    setState(() => _aiEditing = true);
-    try {
-      // Edição IA desativada temporariamente até backend ser atualizado.
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível aplicar a edição.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _aiEditing = false);
-    }
-  }
-
   Future<String?> _getSelectedCellKey() async {
     final ctrl = _ctrl;
     if (ctrl == null) return null;
@@ -322,8 +343,9 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   }
 
   // ══════════════════════════════════════════════════════════════
-  // TOM DA FOLHA — escolha explícita do utilizador, independente
-  // do tema da app. Vive num sheet dedicado nos 3 pontinhos.
+  // TOM DA FOLHA — mesmo padrão de docs.dart: switch direto, sem
+  // sub-texto explicativo, ícone theme.svg (assets/icons/outline/)
+  // ao lado do label.
   // ══════════════════════════════════════════════════════════════
   void _openSheetToneSheet() async {
     final s = AppTheme.of(context);
@@ -341,24 +363,18 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
       child: StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text('Independente do tema da app — escolha só para esta folha.', style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(child: Text('Folha escura', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
-                  AppToggle(
-                    s: s,
-                    value: escuro,
-                    onChanged: (v) {
-                      setSheetState(() => escuro = v);
-                      _runJs("editorApi.setSheetDarkMode($v)");
-                    },
-                  ),
-                ],
+              _EditorIcon('theme', size: 19, color: s.onSurface),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Folha escura', style: TextStyle(fontSize: 14.5, color: s.onSurface))),
+              AppToggle(
+                s: s,
+                value: escuro,
+                onChanged: (v) {
+                  setSheetState(() => escuro = v);
+                  _runJs("editorApi.setSheetDarkMode($v)");
+                },
               ),
             ],
           ),
@@ -368,11 +384,9 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   }
 
   // ══════════════════════════════════════════════════════════════
-  // MENU "MAIS" — bottom sheet no padrão showCraftBottomSheet, SEM
-  // duplicar nada que já esteja na bottom toolbar (negrito, itálico,
-  // sublinhado, alinhamentos, cor de texto/fundo, imagem, gráfico,
-  // link e IA já vivem lá — só entram aqui ações que NÃO estão na
-  // toolbar).
+  // MENU "MAIS" — bottom sheet no padrão showCraftBottomSheet.
+  // "Adicionar 50 linhas" voltou para aqui (saiu da toolbar, onde
+  // ocupava espaço para uma ação pouco frequente).
   // ══════════════════════════════════════════════════════════════
   void _openMenu() async {
     final result = await showMenuSheet<int>(
@@ -381,13 +395,15 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
       items: const [
         SheetMenuItem(value: 1, asset: 'download', label: 'Descarregar documento', subtitle: 'Guarda como .xlsx'),
         SheetMenuItem(value: 2, asset: 'code', label: 'Bloco HTML', subtitle: 'Insere um bloco que ocupa várias células'),
-        SheetMenuItem(value: 3, asset: 'brush', label: 'Tom da folha'),
+        SheetMenuItem(value: 3, asset: 'add', label: 'Adicionar 50 linhas'),
+        SheetMenuItem(value: 4, asset: 'brush', label: 'Tom da folha'),
       ],
     );
     switch (result) {
       case 1: _downloadCurrentDocument(); break;
       case 2: _onInsertHtmlBlock(); break;
-      case 3: _openSheetToneSheet(); break;
+      case 3: _addFiftyRows(); break;
+      case 4: _openSheetToneSheet(); break;
     }
   }
 
@@ -481,8 +497,6 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
                     onInsertImage: _onInsertImage,
                     onInsertChart: _onInsertChart,
                     onInsertLink: _onInsertLink,
-                    onAddRow: _addFiftyRows,
-                    onAiEdit: () => _openAiEditModal(),
                   ),
                 ),
               ]),
@@ -494,6 +508,10 @@ class _SheetsScreenState extends State<SheetsScreen> with ThemeReactive<SheetsSc
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// HEADER — botões afastados 12px da borda (antes: 6px), mesmo
+// espaçamento lateral aplicado em docs.dart.
+// ══════════════════════════════════════════════════════════════
 class _ScreenHeader extends StatelessWidget {
   final AppColorScheme s;
   final String title;
@@ -512,7 +530,7 @@ class _ScreenHeader extends StatelessWidget {
     return Positioned(
       top: 0, left: 0, right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(6, 6, 8, 10),
+        padding: const EdgeInsets.fromLTRB(12, 6, 14, 10),
         decoration: BoxDecoration(
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [s.pageBackground, s.pageBackground.withOpacity(0.0)]),
         ),
@@ -563,9 +581,15 @@ class _HeaderIconButton extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TOOLBAR — inclui "Adicionar linha" (antes vivia num botão à
-// parte no header e duplicado no menu de 3 pontos como "50 linhas").
-// Agora só existe aqui, uma vez.
+// TOOLBAR
+// - Fundo no tema claro: cardBackground + 10% de primary via
+//   Color.alphaBlend, igual a docs.dart. Tema escuro inalterado.
+// - Botão de IA (sparkles) removido por completo.
+// - Botão "Adicionar linha" (add) removido do toolbar — a ação
+//   voltou a viver só no menu popup (ver _openMenu).
+// - onFillColor deixou de ser _ToolbarButton com ícone SVG; passa
+//   a ser o _RainbowRingButton (anel arco-íris), tal como o
+//   highlight em docs.dart. onTextColor mantém-se ícone normal.
 // ══════════════════════════════════════════════════════════════
 class _SheetBottomToolbar extends StatelessWidget {
   final AppColorScheme s;
@@ -580,22 +604,27 @@ class _SheetBottomToolbar extends StatelessWidget {
   final VoidCallback onInsertImage;
   final VoidCallback onInsertChart;
   final VoidCallback onInsertLink;
-  final VoidCallback onAddRow;
-  final VoidCallback onAiEdit;
 
   const _SheetBottomToolbar({
     required this.s, required this.onBold, required this.onItalic, required this.onUnderline,
     required this.onAlignLeft, required this.onAlignCenter, required this.onAlignRight,
     required this.onTextColor, required this.onFillColor, required this.onInsertImage,
-    required this.onInsertChart, required this.onInsertLink, required this.onAddRow, required this.onAiEdit,
+    required this.onInsertChart, required this.onInsertLink,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Tema claro: cardBackground + 10% de primary por cima, via
+    // alphaBlend (mistura real de cor, não opacidade sobreposta).
+    // Tema escuro: cardBackground puro, como já estava.
+    final toolbarBg = s.isDark
+        ? s.cardBackground
+        : Color.alphaBlend(s.primary.withOpacity(0.10), s.cardBackground);
+
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 6),
-      decoration: BoxDecoration(color: s.cardBackground, borderRadius: BorderRadius.circular(28), boxShadow: s.floatingShadow),
+      decoration: BoxDecoration(color: toolbarBg, borderRadius: BorderRadius.circular(28), boxShadow: s.floatingShadow),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -609,14 +638,12 @@ class _SheetBottomToolbar extends StatelessWidget {
             _ToolbarButton(s: s, assetName: 'align_right', onTap: onAlignRight),
             _ToolbarDivider(s: s),
             _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
-            _ToolbarButton(s: s, assetName: 'fill', onTap: onFillColor),
+            // Preenchimento de célula: anel arco-íris em vez de SVG.
+            _RainbowRingButton(onTap: onFillColor),
             _ToolbarDivider(s: s),
             _ToolbarButton(s: s, assetName: 'image', onTap: onInsertImage),
             _ToolbarButton(s: s, assetName: 'chart', onTap: onInsertChart),
             _ToolbarButton(s: s, assetName: 'link', onTap: onInsertLink),
-            _ToolbarDivider(s: s),
-            _ToolbarButton(s: s, assetName: 'add', onTap: onAddRow),
-            _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
           ],
         ),
       ),
@@ -648,6 +675,62 @@ class _ToolbarButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE PREENCHIMENTO — anel circular com gradiente arco-íris
+// no PRÓPRIO ANEL (contorno), não preenchido por dentro. Idêntico
+// ao _RainbowRingButton de docs.dart (mesma pintura, mesma medida).
+// ══════════════════════════════════════════════════════════════
+class _RainbowRingButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _RainbowRingButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CustomPaint(painter: _RainbowRingPainter()),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RainbowRingPainter extends CustomPainter {
+  const _RainbowRingPainter();
+
+  static const List<Color> _rainbow = [
+    Color(0xFFFF0000), Color(0xFFFF9500), Color(0xFFFFCC00), Color(0xFF34C759),
+    Color(0xFF00C7BE), Color(0xFF32ADE6), Color(0xFF007AFF), Color(0xFF5856D6),
+    Color(0xFFAF52DE), Color(0xFFFF2D55), Color(0xFFFF0000),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.width / 2 - 2;
+    const strokeWidth = 3.2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(colors: _rainbow, startAngle: 0, endAngle: 2 * math.pi).createShader(rect);
+    canvas.drawCircle(center, radius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RainbowRingPainter oldDelegate) => false;
 }
 
 Future<String?> showChartConfigDialog(BuildContext context, AppColorScheme s) {

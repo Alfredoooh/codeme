@@ -1024,7 +1024,7 @@ class AssistantBubble extends StatelessWidget {
           case TextSegment(:final segText):
             if (segText.trim().isNotEmpty) {
               children.add(RichAiText(
-                text: segText,
+                text: Text,
                 s: s,
                 widgetsEnabled: widgetsEnabled,
                 onEnableWidgets: onEnableWidgets,
@@ -1250,7 +1250,7 @@ class _StreamingBubbleState extends State<StreamingBubble> {
         case TextSegment(:final segText):
           if (segText.trim().isNotEmpty) {
             children.add(RichAiText(
-              text: segText,
+              text: Text,
               s: s,
               widgetsEnabled: widget.widgetsEnabled,
               onEnableWidgets: widget.onEnableWidgets,
