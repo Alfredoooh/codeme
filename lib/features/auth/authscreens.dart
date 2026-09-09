@@ -1,18 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/auth/authscreens.dart
-// Índice do módulo de auth. Apenas o AuthGate (roteador) vive
-// aqui — cada tela tem o seu próprio ficheiro e é reexportada
-// abaixo, para quem importa "authscreens.dart" continuar a
-// aceder a tudo com um único import.
-//
-// AuthGate mantém o seu próprio Navigator interno, usando
-// AppPageRoute — a mesma transição que todas as telas de auth já
-// usam entre si. Isto garante:
-//  - a troca LoginScreen -> RootShell (e vice-versa) desliza com
-//    a mesma animação de sempre, em vez de trocar instantaneamente;
-//  - o botão "voltar" de cada tela de auth faz sempre pop() para
-//    a tela anterior real da pilha, e nunca cai de volta na
-//    LoginScreen à força.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
@@ -66,17 +53,24 @@ class _AuthGateState extends State<AuthGate> {
     final nav = _navigatorKey.currentState;
     if (nav == null) return;
 
+    if (newStatus == AuthStatus.unknown) return;
+
     if (newStatus == AuthStatus.authenticated) {
       nav.pushAndRemoveUntil(
         AppPageRoute(builder: (_) => const RootShell()),
         (route) => false,
       );
-    } else if (newStatus == AuthStatus.unauthenticated &&
-        previousStatus == AuthStatus.authenticated) {
-      nav.pushAndRemoveUntil(
-        AppPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+    } else if (newStatus == AuthStatus.unauthenticated) {
+      // Cobre tanto "unknown -> unauthenticated" (primeira
+      // verificação terminou sem sessão) como
+      // "authenticated -> unauthenticated" (logout).
+      if (previousStatus == AuthStatus.unknown ||
+          previousStatus == AuthStatus.authenticated) {
+        nav.pushAndRemoveUntil(
+          AppPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -100,6 +94,9 @@ class _AuthGateState extends State<AuthGate> {
     return Navigator(
       key: _navigatorKey,
       onGenerateRoute: (settings) => AppPageRoute(
+        // A rota inicial usa sempre o status ATUAL no momento em
+        // que o Navigator é de facto montado (primeiro frame),
+        // não um valor lido antes disso.
         builder: (_) => _screenForStatus(s, authController.status),
         settings: settings,
       ),
