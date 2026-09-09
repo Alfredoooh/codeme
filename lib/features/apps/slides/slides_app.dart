@@ -264,7 +264,6 @@ class SlidesScreen extends StatefulWidget {
 class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesScreen> {
   static const EditorType _type = EditorType.slides;
   InAppWebViewController? _ctrl;
-  bool _aiEditing = false;
 
   String _documentTitle = 'Apresentação';
   String? _lastSavedContent;
@@ -429,30 +428,6 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
     }
   }
 
-  Future<void> _openAiEditModal({String? preselectedText}) async {
-    final s = AppTheme.of(context);
-    final instruction = await showAiEditModal(context, s, hasSelection: preselectedText != null);
-    if (instruction == null || instruction.trim().isEmpty) return;
-    await _runAiEdit(instruction.trim(), selection: preselectedText);
-  }
-
-  Future<void> _runAiEdit(String instruction, {String? selection}) async {
-    final token = authController.token;
-    if (token == null || _aiEditing) return;
-    setState(() => _aiEditing = true);
-    try {
-      // Edição IA desativada temporariamente até backend ser atualizado.
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível aplicar a edição.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _aiEditing = false);
-    }
-  }
-
   void _onInsertImage() async {
     final url = await showImageUrlDialog(context, AppTheme.of(context));
     if (url == null || url.trim().isEmpty) return;
@@ -477,7 +452,7 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
   // Menu "more" — popup morph igual ao docs.dart. Apenas ações que
   // NÃO existem no bottomtoolbar (que já tem: slide, apagar slide,
   // texto, imagem, forma, círculo, gráfico, apagar elemento,
-  // negrito, itálico, sublinhado, cor de texto, cor de forma, IA).
+  // negrito, itálico, sublinhado, cor de texto, cor de forma).
   void _openMenu() async {
     final s = AppTheme.of(context);
     final result = await _showMorphMenu<int>(
@@ -542,13 +517,6 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
                             handlerName: 'openImagePicker',
                             callback: (_) => showImagePickerSheet(context, s),
                           );
-                          c.addJavaScriptHandler(
-                            handlerName: 'openAiEditForSelection',
-                            callback: (args) {
-                              final selected = args.isNotEmpty ? args[0]?.toString() : null;
-                              _openAiEditModal(preselectedText: (selected != null && selected.isNotEmpty) ? selected : null);
-                            },
-                          );
                         },
                         onLoadStop: (c, _) {
                           _onPendingLoad();
@@ -581,7 +549,6 @@ class _SlidesScreenState extends State<SlidesScreen> with ThemeReactive<SlidesSc
                 onTextColor: () => _openColorPicker(context, s, 'editorApi.setSelectedTextColor'),
                 onShapeColor: () => _openColorPicker(context, s, 'editorApi.setSelectedShapeColor'),
                 onFontSize: (px) => _runJs("editorApi.setSelectedFontSize($px)"),
-                onAiEdit: () => _openAiEditModal(),
               ),
             ]),
           ),
@@ -690,7 +657,6 @@ class _SlidesBottomToolbar extends StatelessWidget {
   final VoidCallback onTextColor;
   final VoidCallback onShapeColor;
   final ValueChanged<double> onFontSize;
-  final VoidCallback onAiEdit;
 
   const _SlidesBottomToolbar({
     required this.s,
@@ -708,7 +674,6 @@ class _SlidesBottomToolbar extends StatelessWidget {
     required this.onTextColor,
     required this.onShapeColor,
     required this.onFontSize,
-    required this.onAiEdit,
   });
 
   @override
@@ -740,7 +705,6 @@ class _SlidesBottomToolbar extends StatelessWidget {
               _ToolbarButton(s: s, assetName: 'underline', onTap: onUnderline),
               _ToolbarButton(s: s, assetName: 'palette', onTap: onTextColor),
               _ToolbarButton(s: s, assetName: 'fill', onTap: onShapeColor),
-              _ToolbarButton(s: s, assetName: 'sparkles', onTap: onAiEdit),
             ],
           ),
         ),

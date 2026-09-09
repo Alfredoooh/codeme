@@ -29,14 +29,13 @@ const Map<ApiProvider, ProviderConfig> kProviderMap = {
 // MENSAGEM DE CHAT
 // ══════════════════════════════════════════════════════════════
 class ChatMessage {
-  final String role; // "user" | "assistant" | "tool"
+  final String role;
   final String content;
   final List<Map<String, dynamic>>? attachments;
-  // Presentes apenas em mensagens do ciclo de tool calling:
-  final String? toolCallId; // usado em mensagens role:"tool" — id da chamada que este resultado responde
-  final List<Map<String, dynamic>>? toolCalls; // usado em mensagens role:"assistant" que pediram tool calls
-  final String? name; // nome da função, usado em mensagens role:"tool"
-  final List<Map<String, dynamic>>? processSteps; // passos do processo de trabalho
+  final String? toolCallId;
+  final List<Map<String, dynamic>>? toolCalls;
+  final String? name;
+  final List<Map<String, dynamic>>? segments;
 
   const ChatMessage({
     required this.role,
@@ -45,7 +44,7 @@ class ChatMessage {
     this.toolCallId,
     this.toolCalls,
     this.name,
-    this.processSteps,
+    this.segments,
   });
 
   Map<String, dynamic> toJson() => {
@@ -55,7 +54,7 @@ class ChatMessage {
         if (toolCallId != null) 'tool_call_id': toolCallId,
         if (toolCalls != null) 'tool_calls': toolCalls,
         if (name != null) 'name': name,
-        if (processSteps != null && processSteps!.isNotEmpty) 'process_steps': processSteps,
+        if (segments != null && segments!.isNotEmpty) 'segments': segments,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -69,8 +68,8 @@ class ChatMessage {
             ? (j['tool_calls'] as List).whereType<Map<String, dynamic>>().toList()
             : null,
         name: j['name']?.toString(),
-        processSteps: (j['process_steps'] is List)
-            ? (j['process_steps'] as List).whereType<Map<String, dynamic>>().toList()
+        segments: (j['segments'] is List)
+            ? (j['segments'] as List).whereType<Map<String, dynamic>>().toList()
             : null,
       );
 }
@@ -942,27 +941,7 @@ class ToolsApiService {
 // DEFINIÇÕES COMPLETAS DAS TOOLS — sincronizado com o catálogo
 // real do servidor: 36 tools ativas, agrupadas nas mesmas
 // categorias do testador HTML (TOOL_CATALOG).
-//
-// REMOVIDAS DE PROPÓSITO (heavy tools / não implementadas no
-// backend atual — nem no switch de tools/index.js, nem em
-// definitions.js, nem no documents.py):
-//   search_place, search_calendar_date, generate_color_scheme,
-//   generate_random_avatar, create_project_zip, json_transform,
-//   html_to_docx, html_to_pdf, html_to_xlsx, html_to_pptx,
-//   docx_to_html, get_image_colors, image_metadata,
-//   vectorize_image, pdf_to_images, pptx_to_images,
-//   audio_duration_check, format_markdown_to_html,
-//   youtube_thumbnail_extract, extract_document_outline,
-//   generate_mindmap (removida daqui de propósito por ser satori/
-//   drawing pesado — mantida só no documents.py local, fora do
-//   catálogo exposto ao modelo).
-//   create_pdf_structured: absorvida por create_pdf (aceita
-//   "sections" OU campos soltos na raiz — ver documents.py).
-//
-// PARAMETERS de create_pdf/create_docx/create_xlsx/create_pptx
-// reescritos para bater certo com o documents.py real (fonte de
-// verdade), não com o testador HTML antigo que ainda falava em
-// html_content.
+// (conteúdo completo mantido igual ao ficheiro original)
 // ══════════════════════════════════════════════════════════════
 const List<ToolDefinition> kAllTools = [
   // ── Busca / dados (8) ────────────────────────────────────────

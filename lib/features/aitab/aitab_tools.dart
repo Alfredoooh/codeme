@@ -225,12 +225,22 @@ class ToolExecutionOutcome {
 /// Gera o ProcessStep concluído a partir do resultado bruto de uma
 /// tool — usado dentro de processToolCalls para acumular a lista
 /// "Em processo". Nunca remove ou substitui um passo já criado.
+/// Preenche faviconDomains (para web_search/read_website) e
+/// foundImages (para search_images) diretamente no passo, para que
+/// fiquem visíveis dentro do collapsible sem precisar de outro
+/// widget solto.
 ProcessStep buildCompletedProcessStep(String toolName, Map<String, dynamic> resultJson) {
+  final domains = extractVisitedDomains(toolName, resultJson);
+  final images = toolName == 'search_images' && resultJson['images'] is List
+      ? (resultJson['images'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+      : <Map<String, dynamic>>[];
   return ProcessStep(
     toolName: toolName,
     label: labelForToolName(toolName),
     summary: summaryForToolResult(toolName, resultJson),
     done: true,
+    faviconDomains: domains,
+    foundImages: images,
   );
 }
 
@@ -444,6 +454,105 @@ Future<ToolExecutionOutcome> processToolCalls(
     images: images,
     toolResultMessages: toolResultMsgs,
     processSteps: processSteps, // NOVO
+  );
+}
+
+/// Versão sequencial e instrumentada de processToolCalls: chama
+/// onStepStart assim que cada tool call começa a executar (para a
+/// UI mostrar o passo "a decorrer" imediatamente, um de cada vez,
+/// nunca todos ao mesmo tempo) e onStepComplete quando o resultado
+/// dessa tool chega. As tool calls são sempre processadas em
+/// sequência — nunca em paralelo — porque o loop `for...await`
+/// aguarda cada `executeToolCall` terminar antes de avançar.
+Future<ToolExecutionOutcome> processToolCallsSequential(
+  List<ToolCall> calls,
+  List<ChatMessage> history, {
+  required void Function(ProcessStep step) onStepStart,
+  required void Function(int index, ProcessStep step) onStepComplete,
+}) async {
+  final visuals = <VisualToolResult>[];
+  final documents = <DocumentToolResult>[];
+  final images = <ImagesToolResult>[];
+  final toolResultMsgs = <ChatMessage>[];
+  final processSteps = <ProcessStep>[];
+
+  for (int i = 0; i < calls.length; i++) {
+    final call = calls[i];
+
+    onStepStart(ProcessStep(
+      toolName: call.name,
+      label: labelForToolName(call.name),
+      done: false,
+    ));
+
+    final resultJson = await executeToolCall(call, history);
+    final completedStep = buildCompletedProcessStep(call.name, resultJson);
+    processSteps.add(completedStep);
+    onStepComplete(i, completedStep);
+
+    if (kImageSearchTools.contains(call.name)) {
+      final marker = buildImagesMarker(resultJson);
+      if (marker.isNotEmpty) {
+        images.add(ImagesToolResult(marker: marker));
+        toolResultMsgs.add(ChatMessage(
+          role: 'tool',
+          content: jsonEncode({'success': true, 'rendered': true, 'tool': call.name}),
+          toolCallId: call.id,
+          name: call.name,
+        ));
+        continue;
+      }
+    }
+
+    if (kVisualTools.contains(call.name)) {
+      final base64Png = resultJson['content_base64']?.toString();
+      if (base64Png != null && base64Png.isNotEmpty) {
+        visuals.add(VisualToolResult(
+          label: labelForToolName(call.name).replaceAll('...', ''),
+          base64Png: base64Png,
+        ));
+        toolResultMsgs.add(ChatMessage(
+          role: 'tool',
+          content: jsonEncode({'success': true, 'rendered': true, 'tool': call.name}),
+          toolCallId: call.id,
+          name: call.name,
+        ));
+        continue;
+      }
+    }
+
+    if (kDocumentTools.contains(call.name)) {
+      final payload = extractDocumentPayload(call.name, resultJson);
+      if (payload != null) {
+        documents.add(DocumentToolResult(
+          base64Data: payload.base64Data,
+          filename: payload.filename,
+          mimeType: payload.mimeType,
+        ));
+        toolResultMsgs.add(ChatMessage(
+          role: 'tool',
+          content: jsonEncode({'success': true, 'filename': payload.filename, 'ready_for_download': true}),
+          toolCallId: call.id,
+          name: call.name,
+        ));
+        continue;
+      }
+    }
+
+    toolResultMsgs.add(ChatMessage(
+      role: 'tool',
+      content: jsonEncode(resultJson),
+      toolCallId: call.id,
+      name: call.name,
+    ));
+  }
+
+  return ToolExecutionOutcome(
+    visuals: visuals,
+    documents: documents,
+    images: images,
+    toolResultMessages: toolResultMsgs,
+    processSteps: processSteps,
   );
 }
 

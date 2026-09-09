@@ -7,31 +7,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/animated_canvas_icon.dart';
+import '../../core/widgets/app_sheet.dart';
 import '../apps/app_types.dart';
 import 'aitab_models.dart';
-
-const double _kFlatModalRadius = 20.0;
-
-class SheetHandlebar extends StatelessWidget {
-  final AppColorScheme s;
-  const SheetHandlebar({super.key, required this.s});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 4),
-      child: Center(
-        child: Container(
-          width: 36,
-          height: 4,
-          decoration: BoxDecoration(
-            color: s.onSurfaceVariant.withOpacity(0.35),
-            borderRadius: BorderRadius.circular(999),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════
 // SHIMMER TEXT
@@ -796,74 +774,63 @@ void showAttachPopup(
   required VoidCallback onChooseModel,
   required ValueChanged<EditorType> onSelectTool,
 }) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (sheetContext) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SheetHandlebar(s: s),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _AttachOptionCardShared(
-                    s: s,
-                    assetName: 'folder_upload',
-                    label: 'Arquivos',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      onFiles();
-                    },
-                  ),
+  await showAppSheet<void>(
+    context,
+    builder: (sheetContext) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _AttachOptionCardShared(
+                  s: s,
+                  assetName: 'folder_upload',
+                  label: 'Arquivos',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    onFiles();
+                  },
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _AttachOptionCardShared(
-                    s: s,
-                    assetName: 'image',
-                    label: 'Fotos',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      onPhotos();
-                    },
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _AttachOptionCardShared(
+                  s: s,
+                  assetName: 'image',
+                  label: 'Fotos',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    onPhotos();
+                  },
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _AttachOptionCardShared(
-                    s: s,
-                    assetName: 'camera',
-                    label: 'Câmera',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      onCamera();
-                    },
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _AttachOptionCardShared(
+                  s: s,
+                  assetName: 'camera',
+                  label: 'Câmera',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    onCamera();
+                  },
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _AttachSheetItem(
-              s: s,
-              iconAsset: 'sliders',
-              label: 'Modelo',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                onChooseModel();
-              },
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _AttachSheetItem(
+            s: s,
+            iconAsset: 'sliders',
+            label: 'Modelo',
+            onTap: () {
+              Navigator.pop(sheetContext);
+              onChooseModel();
+            },
+          ),
+        ],
       ),
     ),
   );

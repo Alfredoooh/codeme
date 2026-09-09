@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/richtext.dart';
@@ -22,8 +23,9 @@ import 'aitab_widgets_shared.dart';
 import 'aitab_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
 
+// Fonte do sistema (sem fontFamily explícito — herda a fonte
+// padrão da app/tema), como pedido: nunca mais Times New Roman.
 TextStyle aiBodyTextStyle(AppColorScheme s) => TextStyle(
-      fontFamily: 'TimesNewRoman',
       fontSize: 15,
       height: 1.45,
       color: s.onSurface,
@@ -32,10 +34,50 @@ TextStyle aiBodyTextStyle(AppColorScheme s) => TextStyle(
 const double _kFlatModalRadius = 10.0;
 
 // ──────────────────────────────────────────────────────────────
+// DIÁLOGO ABRIR LINK EXTERNO
+// ──────────────────────────────────────────────────────────────
+
+Future<void> showOpenLinkDialog(
+  BuildContext context,
+  AppColorScheme s, {
+  required String url,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: s.isDark ? s.cardBackground : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Abrir link', style: TextStyle(color: s.onSurface, fontSize: 17, fontWeight: FontWeight.w700)),
+      content: Text(
+        'Abrir "$url" no navegador do telemóvel?',
+        style: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text('Cancelar', style: TextStyle(color: s.onSurfaceVariant)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text('Abrir', style: TextStyle(color: s.primary, fontWeight: FontWeight.w700)),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true) {
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
 // BOLHA DO UTILIZADOR
 // ──────────────────────────────────────────────────────────────
 
-class UserBubble extends StatelessWidget {
+class UserBubble extends StatefulWidget {
   final AppColorScheme s;
   final String text;
   final List<Map<String, dynamic>>? attachments;
@@ -55,9 +97,24 @@ class UserBubble extends StatelessWidget {
   });
 
   @override
+  State<UserBubble> createState() => _UserBubbleState();
+}
+
+class _UserBubbleState extends State<UserBubble> {
+  bool _expanded = false;
+  static const int _collapseThreshold = 360;
+
+  bool get _isLong => widget.text.length > _collapseThreshold;
+
+  @override
   Widget build(BuildContext context) {
+    final s = widget.s;
     final bubbleColor = s.userBubbleBg;
     final textColor = s.userBubbleText;
+    final showCollapsed = _isLong && !_expanded;
+    final displayText = showCollapsed
+        ? widget.text.substring(0, _collapseThreshold).trimRight() + '…'
+        : widget.text;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -71,10 +128,10 @@ class UserBubble extends StatelessWidget {
             s,
             anchorOffset: off,
             anchorSize: sz,
-            onEdit: onEdit,
-            onCopy: onCopy,
-            onDelete: onDelete,
-            onSelectText: onSelectText,
+            onEdit: widget.onEdit,
+            onCopy: widget.onCopy,
+            onDelete: widget.onDelete,
+            onSelectText: widget.onSelectText,
           );
         },
         child: Container(
@@ -91,20 +148,45 @@ class UserBubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (attachments != null && attachments!.isNotEmpty) ...[
+              if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
                 Wrap(
                   alignment: WrapAlignment.end,
                   spacing: 6,
                   runSpacing: 6,
-                  children: attachments!
+                  children: widget.attachments!
                       .map((a) => _UserAttachmentChip(s: s, attachment: a))
                       .toList(),
                 ),
-                if (text.isNotEmpty) const SizedBox(height: 8),
+                if (widget.text.isNotEmpty) const SizedBox(height: 8),
               ],
-              if (text.isNotEmpty)
-                Text(text,
-                    style: TextStyle(color: textColor, fontSize: 14)),
+              if (widget.text.isNotEmpty) ...[
+                Text(displayText, style: TextStyle(color: textColor, fontSize: 14)),
+                if (_isLong) ...[
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _expanded ? 'Mostrar menos' : 'Mostrar mais',
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.85),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: Icon(Icons.keyboard_arrow_down, size: 16, color: textColor.withOpacity(0.85)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ],
           ),
         ),
@@ -564,66 +646,50 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
 
     if (visibleImages.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
       child: SizedBox(
         height: 160,
-        child: ScrollConfiguration(
-          behavior: const _ElasticScrollBehavior(),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            itemCount: visibleImages.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (_, i) {
-              final img = visibleImages[i];
-              final url = img['imageUrl']?.toString() ?? '';
-              return GestureDetector(
-                key: ValueKey(url),
-                onTap: () => _openFullscreen(context, i),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Image.network(
-                    url,
-                    key: ValueKey(url),
-                    width: 160,
-                    height: 160,
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded) return child;
-                      return AnimatedOpacity(
-                        opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        child: child,
-                      );
-                    },
-                    errorBuilder: (_, __, ___) {
-                      _markFailed(url);
-                      return const SizedBox(width: 160, height: 160);
-                    },
-                  ),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          itemCount: visibleImages.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (_, i) {
+            final img = visibleImages[i];
+            final url = img['imageUrl']?.toString() ?? '';
+            return GestureDetector(
+              key: ValueKey(url),
+              onTap: () => _openFullscreen(context, i),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.network(
+                  url,
+                  key: ValueKey(url),
+                  width: 160,
+                  height: 160,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    if (wasSynchronouslyLoaded) return child;
+                    return AnimatedOpacity(
+                      opacity: frame == null ? 0 : 1,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      child: child,
+                    );
+                  },
+                  errorBuilder: (_, __, ___) {
+                    _markFailed(url);
+                    return const SizedBox(width: 160, height: 160);
+                  },
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
-  }
-}
-
-class _ElasticScrollBehavior extends ScrollBehavior {
-  const _ElasticScrollBehavior();
-
-  @override
-  ScrollPhysics getScrollPhysics(BuildContext context) {
-    return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
-  }
-
-  @override
-  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
-    return child;
   }
 }
 
@@ -669,6 +735,7 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
               Positioned.fill(
                 child: PageView.builder(
                   controller: _pageCtrl,
+                  physics: const ClampingScrollPhysics(),
                   itemCount: widget.images.length,
                   onPageChanged: (i) => setState(() => _current = i),
                   itemBuilder: (_, i) {
@@ -756,36 +823,9 @@ class SourcesRow extends StatelessWidget {
   String _faviconUrl(String url) => 'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
 
   void _openSourcesModal(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: s.cardBackground,
-      barrierColor: Colors.black.withOpacity(0.35),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Fontes',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-              const SizedBox(height: 8),
-              SheetOptionsGroup(
-                s: s,
-                options: urls.map((url) {
-                  return _SourceRow(s: s, url: url, domain: _domain(url), faviconUrl: _faviconUrl(url));
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
+    showAppSheet<void>(
+      context,
+      builder: (sheetContext) => _SourcesModalContent(s: s, urls: urls),
     );
   }
 
@@ -794,29 +834,34 @@ class SourcesRow extends StatelessWidget {
     if (urls.isEmpty) return const SizedBox.shrink();
     return GestureDetector(
       onTap: () => _openSourcesModal(context),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: s.pageBackground,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: s.outline.withOpacity(0.4), width: 1),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: 20,
-              width: 20.0 + (urls.length - 1).clamp(0, 3) * 12.0,
+              height: 18,
+              width: 18.0 + (urls.length - 1).clamp(0, 3) * 11.0,
               child: Stack(
                 children: [
                   for (int i = 0; i < urls.length.clamp(0, 4); i++)
                     Positioned(
-                      left: i * 12.0,
+                      left: i * 11.0,
                       child: ClipOval(
                         child: Container(
-                          width: 20,
-                          height: 20,
-                          color: s.cardBackground,
+                          width: 18,
+                          height: 18,
+                          color: s.pageBackground,
                           child: Image.network(
                             _faviconUrl(urls[i]),
                             fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            errorBuilder: (_, __, ___) => Icon(Icons.public, size: 11, color: s.onSurfaceVariant),
+                            errorBuilder: (_, __, ___) => Icon(Icons.public, size: 10, color: s.onSurfaceVariant),
                           ),
                         ),
                       ),
@@ -833,20 +878,69 @@ class SourcesRow extends StatelessWidget {
   }
 }
 
-class _SourceRow extends StatelessWidget {
+class _SourcesModalContent extends StatelessWidget {
   final AppColorScheme s;
-  final String url;
-  final String domain;
-  final String faviconUrl;
-  const _SourceRow({required this.s, required this.url, required this.domain, required this.faviconUrl});
+  final List<String> urls;
+  const _SourcesModalContent({required this.s, required this.urls});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {},
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Text('Fontes',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                itemCount: urls.length,
+                itemBuilder: (_, i) {
+                  final url = urls[i];
+                  return _SourceModalRow(s: s, url: url);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SourceModalRow extends StatelessWidget {
+  final AppColorScheme s;
+  final String url;
+  const _SourceModalRow({required this.s, required this.url});
+
+  String _domain(String url) {
+    try {
+      return Uri.parse(url).host.replaceFirst('www.', '');
+    } catch (_) {
+      return url;
+    }
+  }
+
+  String _faviconUrl(String url) => 'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => showOpenLinkDialog(context, s, url: url),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         child: Row(
           children: [
             ClipOval(
@@ -855,9 +949,8 @@ class _SourceRow extends StatelessWidget {
                 height: 28,
                 color: s.hover,
                 child: Image.network(
-                  faviconUrl,
+                  _faviconUrl(url),
                   fit: BoxFit.cover,
-                  gaplessPlayback: true,
                   errorBuilder: (_, __, ___) => Icon(Icons.public, size: 14, color: s.onSurfaceVariant),
                 ),
               ),
@@ -867,7 +960,7 @@ class _SourceRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(domain, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
+                  Text(_domain(url), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
                   Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant)),
                 ],
               ),
@@ -888,7 +981,7 @@ class AssistantBubble extends StatelessWidget {
   final String text;
   final String? thinking;
   final List<LocalCanvasItem> canvases;
-  final List<ProcessStep> processSteps;
+  final List<ResponseSegment> segments;
   final ValueChanged<LocalCanvasItem> onOpenCanvas;
   final VoidCallback onThumbUp;
   final VoidCallback onThumbDown;
@@ -903,7 +996,7 @@ class AssistantBubble extends StatelessWidget {
     required this.text,
     this.thinking,
     required this.canvases,
-    this.processSteps = const [],
+    this.segments = const [],
     required this.onOpenCanvas,
     required this.onThumbUp,
     required this.onThumbDown,
@@ -915,57 +1008,87 @@ class AssistantBubble extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 18),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final v in extractVisualResults(text))
-                ToolResultImageCard(s: s, base64Png: v.base64Png, label: v.label),
-              for (final d in extractDocumentResults(text))
-                ToolResultDownloadCard(s: s, base64Data: d.base64Data, filename: d.filename, mimeType: d.mimeType),
-              ImageSearchCarousel(s: s, images: extractImages(text)),
-              if (processSteps.isNotEmpty)
-                ProcessCollapsible(s: s, steps: processSteps, isActive: false, startExpanded: false),
-              if (thinking != null && thinking!.isNotEmpty)
-                _ThinkingHistoryCollapsible(
-                  s: s,
-                  thinking: thinking!,
-                ),
-              if (text.isNotEmpty)
-                RichAiText(
-                  text: text
-                      .replaceAll(kVisualResultRe, '')
-                      .replaceAll(kDocumentResultRe, '')
-                      .replaceAll(kSourcesRe, '')
-                      .replaceAll(kImagesRe, '')
-                      .trim(),
-                  s: s,
-                  widgetsEnabled: widgetsEnabled,
-                  onEnableWidgets: onEnableWidgets,
-                  onSuggestionTap: onSuggestionTap,
-                  bodyTextStyle: aiBodyTextStyle(s),
-                ),
-              for (final item in canvases) ...[
-                const SizedBox(height: 8),
-                SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)),
-              ],
-              const SizedBox(height: 6),
-              _AssistantActionBar(
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+
+    for (final v in extractVisualResults(text)) {
+      children.add(ToolResultImageCard(s: s, base64Png: v.base64Png, label: v.label));
+    }
+    for (final d in extractDocumentResults(text)) {
+      children.add(ToolResultDownloadCard(s: s, base64Data: d.base64Data, filename: d.filename, mimeType: d.mimeType));
+    }
+
+    if (segments.isNotEmpty) {
+      for (final seg in segments) {
+        switch (seg) {
+          case TextSegment(:final segText):
+            if (segText.trim().isNotEmpty) {
+              children.add(RichAiText(
+                text: segText,
                 s: s,
-                onThumbUp: onThumbUp,
-                onThumbDown: onThumbDown,
-                onCopy: onCopy,
-                onRefresh: onRefresh,
-                sources: extractSources(text),
-              ),
-            ],
-          ),
+                widgetsEnabled: widgetsEnabled,
+                onEnableWidgets: onEnableWidgets,
+                onSuggestionTap: onSuggestionTap,
+                bodyTextStyle: aiBodyTextStyle(s),
+              ));
+            }
+          case ProcessSegment(:final steps):
+            if (steps.isNotEmpty) {
+              children.add(ProcessCollapsible(s: s, steps: steps, isActive: false, startExpanded: false));
+            }
+          case ImagesSegment(:final images):
+            if (images.isNotEmpty) {
+              children.add(ImageSearchCarousel(s: s, images: images));
+            }
+        }
+      }
+    } else if (text.isNotEmpty) {
+      children.add(RichAiText(
+        text: text
+            .replaceAll(kVisualResultRe, '')
+            .replaceAll(kDocumentResultRe, '')
+            .replaceAll(kSourcesRe, '')
+            .replaceAll(kImagesRe, '')
+            .trim(),
+        s: s,
+        widgetsEnabled: widgetsEnabled,
+        onEnableWidgets: onEnableWidgets,
+        onSuggestionTap: onSuggestionTap,
+        bodyTextStyle: aiBodyTextStyle(s),
+      ));
+    }
+
+    if (thinking != null && thinking!.isNotEmpty) {
+      children.add(_ThinkingHistoryCollapsible(s: s, thinking: thinking!));
+    }
+
+    for (final item in canvases) {
+      children.add(const SizedBox(height: 8));
+      children.add(SimpleCanvasCard(s: s, item: item, onTap: () => onOpenCanvas(item)));
+    }
+
+    children.add(const SizedBox(height: 6));
+    children.add(_AssistantActionBar(
+      s: s,
+      onThumbUp: onThumbUp,
+      onThumbDown: onThumbDown,
+      onCopy: onCopy,
+      onRefresh: onRefresh,
+      sources: extractSources(text),
+    ));
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.92),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ThinkingHistoryCollapsible extends StatelessWidget {
@@ -1069,13 +1192,11 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
 
 class StreamingBubble extends StatefulWidget {
   final AppColorScheme s;
+  final List<ResponseSegment> segments;
   final List<StreamElement> elements;
   final String? thinking;
   final bool isThinkingActive;
   final bool showLogoLoader;
-  final String? activeToolCallLabel;
-  final String? activeToolCallName;
-  final List<ProcessStep> processSteps;
   final bool widgetsEnabled;
   final VoidCallback onEnableWidgets;
   final ValueChanged<String> onSuggestionTap;
@@ -1088,13 +1209,11 @@ class StreamingBubble extends StatefulWidget {
   const StreamingBubble({
     super.key,
     required this.s,
+    this.segments = const [],
     required this.elements,
     this.thinking,
     this.isThinkingActive = false,
     this.showLogoLoader = false,
-    this.activeToolCallLabel,
-    this.activeToolCallName,
-    this.processSteps = const [],
     required this.widgetsEnabled,
     required this.onEnableWidgets,
     required this.onSuggestionTap,
@@ -1117,8 +1236,6 @@ class _StreamingBubbleState extends State<StreamingBubble> {
     final thinking = widget.thinking;
     final children = <Widget>[];
 
-    // Pensamento — agora um ThinkingCollapsible próprio, sem modal,
-    // sem ícone de cérebro, texto no mesmo tamanho do "Em processo".
     if (thinking != null && thinking.isNotEmpty) {
       children.add(ThinkingCollapsible(
         s: s,
@@ -1128,18 +1245,36 @@ class _StreamingBubbleState extends State<StreamingBubble> {
       ));
     }
 
-    // Processo de trabalho — todos os passos de tool calls vivem
-    // aqui dentro, nunca soltos na tela.
-    if (widget.processSteps.isNotEmpty) {
-      children.add(ProcessCollapsible(
-        s: s,
-        steps: widget.processSteps,
-        isActive: widget.processSteps.any((step) => !step.done),
-        startExpanded: true,
-      ));
+    for (final seg in widget.segments) {
+      switch (seg) {
+        case TextSegment(:final segText):
+          if (segText.trim().isNotEmpty) {
+            children.add(RichAiText(
+              text: segText,
+              s: s,
+              widgetsEnabled: widget.widgetsEnabled,
+              onEnableWidgets: widget.onEnableWidgets,
+              onSuggestionTap: widget.onSuggestionTap,
+              bodyTextStyle: aiBodyTextStyle(s),
+            ));
+          }
+        case ProcessSegment(:final steps):
+          if (steps.isNotEmpty) {
+            children.add(ProcessCollapsible(
+              s: s,
+              steps: steps,
+              isActive: steps.any((step) => !step.done),
+              startExpanded: true,
+            ));
+          }
+        case ImagesSegment(:final images):
+          if (images.isNotEmpty) {
+            children.add(ImageSearchCarousel(s: s, images: images));
+          }
+      }
     }
 
-    bool anyContent = false;
+    bool anyContent = widget.segments.isNotEmpty;
     for (final el in widget.elements) {
       switch (el) {
         case StreamText(:final text):
@@ -1229,7 +1364,7 @@ class _StreamingBubbleState extends State<StreamingBubble> {
       }
     }
 
-    if (!anyContent && thinking == null && widget.processSteps.isEmpty) {
+    if (!anyContent && thinking == null) {
       children.add(widget.showLogoLoader
           ? const NexaLoaderLogo(size: 28)
           : AiSmallDotsLoader(color: s.onSurfaceVariant));

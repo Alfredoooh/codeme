@@ -4,17 +4,13 @@
 // MUDANÇAS NESTA VERSÃO:
 // 1) Cupertino removido — não havia nenhum import cupertino neste
 //    ficheiro para começar, mantido assim.
-// 2) showAttachMenuSheet e todos os outros sheets deste ficheiro
-//    (voz, texto selecionável, canvas) passam a usar
-//    showModalBottomSheet Android nativo com curva reduzida
-//    (_kFlatModalRadius), em vez do popup ancorado
-//    _AnchoredPopupRoute que existia antes (crescimento a partir do
-//    botão). O popup desaparece — como pedido — dando lugar ao
-//    bottom sheet Android pouco curvo, subindo do fundo do ecrã.
+// 2) Todos os sheets passam a usar showAppSheet (handlebar e curva
+//    do drawer já vêm de lá) — removida a constante _kFlatModalRadius
+//    e o uso explícito de showModalBottomSheet.
 // 3) _AnchoredPopupRoute, _AnimatedAnchoredMenu e toda a lógica de
 //    ancoragem ao botão foram removidas por deixarem de ser usadas.
-// 4) Adicionada handlebar (SheetHandlebar) no topo do sheet de menu
-//    "+" e curva atualizada para 20.0 (mesma do drawer).
+// 4) A handlebar explícita (SheetHandlebar) foi removida do topo do
+//    menu "+" porque showAppSheet já inclui a sua própria handlebar.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -28,8 +24,6 @@ import '../apps/registry/app_registry.dart';
 import '../apps/sheets/sheets.dart';
 import 'aitab_models.dart';
 import 'aitab_widgets_shared.dart';
-
-const double _kFlatModalRadius = 20.0;
 
 // ══════════════════════════════════════════════════════════════
 // CHAT INPUT
@@ -342,6 +336,7 @@ class _FloatingAttachmentsRow extends StatelessWidget {
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
         itemCount: files.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) => _FloatingAttachmentChip(
@@ -528,7 +523,7 @@ class _FullScreenFileView extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: TEXTO SELECIONÁVEL — Android bottom sheet, curva reduzida
+// SHEET: TEXTO SELECIONÁVEL — showAppSheet
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showSelectTextSheet(
@@ -536,46 +531,35 @@ Future<void> showSelectTextSheet(
   AppColorScheme s, {
   required String text,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (ctx) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Selecionar texto',
-                style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-            const SizedBox(height: 12),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(ctx).size.height * 0.7,
-              ),
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  text,
-                  style: TextStyle(fontSize: 15, color: s.onSurface, height: 1.5),
-                ),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Selecionar texto',
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+          const SizedBox(height: 12),
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: SelectableText(
+                text,
+                style: TextStyle(fontSize: 15, color: s.onSurface, height: 1.5),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ),
   );
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: CANVAS DA CONVERSA — Android bottom sheet, curva reduzida
+// SHEET: CANVAS DA CONVERSA — showAppSheet
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showCanvasSheet(
@@ -584,62 +568,51 @@ Future<void> showCanvasSheet(
   required List<LocalCanvasItem> canvases,
   required ValueChanged<LocalCanvasItem> onOpenCanvas,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (ctx) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              AppIcon('stacks', color: s.onSurface, size: 18),
-              const SizedBox(width: 8),
-              Text('Canvas desta conversa',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-            ]),
-            const SizedBox(height: 12),
-            if (canvases.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Center(
-                  child: Text('Ainda não há documentos nesta conversa.',
-                      style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.75,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: canvases.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final item = canvases[canvases.length - 1 - i];
-                    return _CanvasCard(
-                      s: s,
-                      item: item,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        onOpenCanvas(item);
-                      },
-                    );
-                  },
-                ),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            AppIcon('stacks', color: s.onSurface, size: 18),
+            const SizedBox(width: 8),
+            Text('Canvas desta conversa',
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+          ]),
+          const SizedBox(height: 12),
+          if (canvases.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text('Ainda não há documentos nesta conversa.',
+                    style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
               ),
-          ],
-        ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const ClampingScrollPhysics(),
+                itemCount: canvases.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) {
+                  final item = canvases[canvases.length - 1 - i];
+                  return _CanvasCard(
+                    s: s,
+                    item: item,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      onOpenCanvas(item);
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     ),
   );
@@ -704,7 +677,7 @@ class _CanvasCardState extends State<_CanvasCard> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: GRAVAÇÃO DE VOZ — Android bottom sheet, curva reduzida
+// SHEET: GRAVAÇÃO DE VOZ — showAppSheet
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -712,20 +685,11 @@ Future<void> showVoiceRecordSheet(
   AppColorScheme s, {
   required ValueChanged<String> onTranscribed,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (ctx) => SafeArea(
-      top: false,
-      child: _VoiceRecordSheetContent(
-        s: s,
-        onTranscribed: onTranscribed,
-      ),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => _VoiceRecordSheetContent(
+      s: s,
+      onTranscribed: onTranscribed,
     ),
   );
 }
@@ -783,7 +747,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
   Widget build(BuildContext context) {
     final s = widget.s;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -850,8 +814,7 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: MENU "+" — Android bottom sheet, curva reduzida
-// (substitui o antigo popup ancorado por scale a partir do botão)
+// SHEET: MENU "+" — showAppSheet
 // ══════════════════════════════════════════════════════════════
 
 enum _AttachMenuPageKind { root, modelSelect }
@@ -871,29 +834,20 @@ Future<void> showAttachMenuSheet(
   required VoidCallback onPhotos,
   required VoidCallback onLocalFile,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: s.isDark ? s.cardBackground : s.floatingSurface,
-    barrierColor: Colors.black.withOpacity(0.32),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (ctx) => SafeArea(
-      top: false,
-      child: _AttachMenuSheetContent(
-        s: s,
-        currentModel: currentModel,
-        webSearchEnabled: webSearchEnabled,
-        widgetsEnabled: widgetsEnabled,
-        onModelSelected: onModelSelected,
-        onWebSearchChanged: onWebSearchChanged,
-        onWidgetsChanged: onWidgetsChanged,
-        onOpenCanvas: onOpenCanvas,
-        onCamera: onCamera,
-        onPhotos: onPhotos,
-        onLocalFile: onLocalFile,
-      ),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => _AttachMenuSheetContent(
+      s: s,
+      currentModel: currentModel,
+      webSearchEnabled: webSearchEnabled,
+      widgetsEnabled: widgetsEnabled,
+      onModelSelected: onModelSelected,
+      onWebSearchChanged: onWebSearchChanged,
+      onWidgetsChanged: onWidgetsChanged,
+      onOpenCanvas: onOpenCanvas,
+      onCamera: onCamera,
+      onPhotos: onPhotos,
+      onLocalFile: onLocalFile,
     ),
   );
 }
@@ -947,75 +901,69 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SheetHandlebar(s: s),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, anim) {
-              final isModelPage = child.key == const ValueKey('model_page');
-              final beginOffset = isModelPage
-                  ? const Offset(0.06, 0)
-                  : const Offset(-0.06, 0);
-              return FadeTransition(
-                opacity: anim,
-                child: SlideTransition(
-                  position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
-                      .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-                  child: child,
-                ),
-              );
-            },
-            child: _page == _AttachMenuPageKind.root
-                ? _RootPage(
-                    key: const ValueKey('root_page'),
-                    s: s,
-                    selectedModel: _selectedModel,
-                    webSearchEnabled: _localWeb,
-                    widgetsEnabled: _localWidgets,
-                    onModelTap: _goToModelSelect,
-                    onCanvasTap: () {
-                      Navigator.pop(context);
-                      widget.onOpenCanvas();
-                    },
-                    onWebSearchChanged: (v) {
-                      setState(() => _localWeb = v);
-                      widget.onWebSearchChanged(v);
-                    },
-                    onWidgetsChanged: (v) {
-                      setState(() => _localWidgets = v);
-                      widget.onWidgetsChanged(v);
-                    },
-                    onCamera: () {
-                      Navigator.pop(context);
-                      widget.onCamera();
-                    },
-                    onPhotos: () {
-                      Navigator.pop(context);
-                      widget.onPhotos();
-                    },
-                    onLocalFile: () {
-                      Navigator.pop(context);
-                      widget.onLocalFile();
-                    },
-                  )
-                : _ModelSelectPage(
-                    key: const ValueKey('model_page'),
-                    s: s,
-                    selectedModel: _selectedModel,
-                    onBack: _backToRoot,
-                    onPick: _pickModel,
-                  ),
-          ),
-        ),
-      ],
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) {
+          final isModelPage = child.key == const ValueKey('model_page');
+          final beginOffset = isModelPage
+              ? const Offset(0.06, 0)
+              : const Offset(-0.06, 0);
+          return FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
+                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+              child: child,
+            ),
+          );
+        },
+        child: _page == _AttachMenuPageKind.root
+            ? _RootPage(
+                key: const ValueKey('root_page'),
+                s: s,
+                selectedModel: _selectedModel,
+                webSearchEnabled: _localWeb,
+                widgetsEnabled: _localWidgets,
+                onModelTap: _goToModelSelect,
+                onCanvasTap: () {
+                  Navigator.pop(context);
+                  widget.onOpenCanvas();
+                },
+                onWebSearchChanged: (v) {
+                  setState(() => _localWeb = v);
+                  widget.onWebSearchChanged(v);
+                },
+                onWidgetsChanged: (v) {
+                  setState(() => _localWidgets = v);
+                  widget.onWidgetsChanged(v);
+                },
+                onCamera: () {
+                  Navigator.pop(context);
+                  widget.onCamera();
+                },
+                onPhotos: () {
+                  Navigator.pop(context);
+                  widget.onPhotos();
+                },
+                onLocalFile: () {
+                  Navigator.pop(context);
+                  widget.onLocalFile();
+                },
+              )
+            : _ModelSelectPage(
+                key: const ValueKey('model_page'),
+                s: s,
+                selectedModel: _selectedModel,
+                onBack: _backToRoot,
+                onPick: _pickModel,
+              ),
+      ),
     );
   }
 }
@@ -1051,7 +999,7 @@ class _RootPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1261,7 +1209,7 @@ class _ModelSelectPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 16, 16),
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1349,35 +1297,26 @@ class _ModelOptionRow extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: APPS CONECTADOS — Android bottom sheet, curva reduzida
+// SHEET: APPS CONECTADOS — showAppSheet
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAppsConnectSheet(
   BuildContext context,
   AppColorScheme s,
 ) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: s.cardBackground,
-    barrierColor: Colors.black.withOpacity(0.35),
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
-    ),
-    builder: (ctx) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Apps',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
-            const SizedBox(height: 12),
-            _AppsConnectSheetContent(s: s),
-          ],
-        ),
+  return showAppSheet<void>(
+    context,
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Apps',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+          const SizedBox(height: 12),
+          _AppsConnectSheetContent(s: s),
+        ],
       ),
     ),
   );

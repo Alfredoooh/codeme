@@ -26,27 +26,17 @@ import 'aitab_progress_cards.dart';
 import 'aitab_message_bubbles.dart';
 import 'aitab_input_bar.dart';
 import '../../core/navigation/app_page_route.dart';
+import '../../core/widgets/app_sheet.dart';
 
 export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
 export 'aitab_widgets_shared.dart' show AiConversationMenuButton, NexaLoaderLogo, ShimmerText;
 
-class _ClampedTopScrollPhysics extends BouncingScrollPhysics {
+class _ClampedTopScrollPhysics extends ClampingScrollPhysics {
   const _ClampedTopScrollPhysics({super.parent});
 
   @override
   _ClampedTopScrollPhysics applyTo(ScrollPhysics? ancestor) {
     return _ClampedTopScrollPhysics(parent: buildParent(ancestor));
-  }
-
-  @override
-  double applyBoundaryConditions(ScrollMetrics position, double value) {
-    if (value < position.pixels && position.pixels <= position.minScrollExtent) {
-      return value - position.minScrollExtent;
-    }
-    if (value < position.minScrollExtent && position.pixels >= position.minScrollExtent) {
-      return value - position.minScrollExtent;
-    }
-    return super.applyBoundaryConditions(position, value);
   }
 }
 
@@ -104,7 +94,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   String? _activeToolCallName;
   String  _pendingLocalMarkers = '';
 
-  List<ProcessStep> _currentProcessSteps = [];
+  // Segmentos ordenados da resposta atual em streaming: texto,
+  // processo, imagens, texto, processo... na ordem exata em que
+  // foram produzidos.
+  List<ResponseSegment> _currentSegments = [];
 
   List<AttachedFile> get attachedFiles => List.unmodifiable(_attachedFiles);
 
@@ -214,7 +207,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _activeToolCallLabel = null;
     _activeToolCallName = null;
     _pendingLocalMarkers = '';
-    _currentProcessSteps = [];
+    _currentSegments = [];
     if (_msgs.isNotEmpty) widget.onFirstMessage();
     widget.onHasMessagesChanged?.call(_hasMessages);
     _notifyHeader();
@@ -285,17 +278,23 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
+  void _flushCurrentTextIntoSegments() {
+    final pending = cleanAiText(_streamingTextNotifier.value);
+    if (pending.trim().isNotEmpty) {
+      _currentSegments = [..._currentSegments, TextSegment(pending)];
+    }
+    _streamingTextNotifier.value = '';
+  }
+
   Future<void> _handleToolCalls(List<ToolCall> calls, bool isFirst, String originalUserText) async {
     if (calls.isEmpty) return;
+
+    _flushCurrentTextIntoSegments();
+
+    final stepsForThisRound = <ProcessStep>[];
+    final segmentIndex = _currentSegments.length;
     setState(() {
-      _currentProcessSteps = [
-        ..._currentProcessSteps,
-        ...calls.map((c) => ProcessStep(
-              toolName: c.name,
-              label: labelForToolName(c.name),
-              done: false,
-            )),
-      ];
+      _currentSegments = [..._currentSegments, ProcessSegment(stepsForThisRound)];
     });
     _notifyHeader();
 
@@ -305,21 +304,40 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       toolCalls: calls.map((c) => c.toMessageJson()).toList(),
     );
 
-    final outcome = await processToolCalls(calls, _msgs);
+    final outcome = await processToolCallsSequential(
+      calls,
+      _msgs,
+      onStepStart: (step) {
+        if (!mounted) return;
+        setState(() {
+          stepsForThisRound.add(step);
+          _currentSegments = List<ResponseSegment>.from(_currentSegments)
+            ..[segmentIndex] = ProcessSegment(List<ProcessStep>.from(stepsForThisRound));
+        });
+      },
+      onStepComplete: (index, completedStep) {
+        if (!mounted) return;
+        setState(() {
+          if (index < stepsForThisRound.length) {
+            stepsForThisRound[index] = completedStep;
+          }
+          _currentSegments = List<ResponseSegment>.from(_currentSegments)
+            ..[segmentIndex] = ProcessSegment(List<ProcessStep>.from(stepsForThisRound));
+        });
+      },
+    );
 
     if (!mounted) return;
 
-    setState(() {
-      final n = outcome.processSteps.length;
-      if (n > 0 && _currentProcessSteps.length >= n) {
-        final head = _currentProcessSteps.sublist(0, _currentProcessSteps.length - n);
-        _currentProcessSteps = [...head, ...outcome.processSteps];
-      } else {
-        _currentProcessSteps = [..._currentProcessSteps, ...outcome.processSteps];
-      }
-    });
-
     final localMarkersText = buildLocalResultMarkersText(outcome);
+    if (outcome.images.isNotEmpty) {
+      final imgs = extractImages(outcome.images.map((i) => i.marker).join('\n'));
+      if (imgs.isNotEmpty) {
+        setState(() {
+          _currentSegments = [..._currentSegments, ImagesSegment(imgs)];
+        });
+      }
+    }
     if (localMarkersText.isNotEmpty) {
       _streamingTextNotifier.value = localMarkersText;
       _scrollToEnd();
@@ -333,10 +351,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       });
       _streamingTextNotifier.value = '';
       _pendingLocalMarkers = '';
-      setState(() {
-        _activeToolCallLabel = null;
-        _activeToolCallName = null;
-      });
       return;
     }
 
@@ -400,7 +414,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _activeToolCallLabel = null;
     _activeToolCallName = null;
     _pendingLocalMarkers = '';
-    _currentProcessSteps = [];
+    _currentSegments = [];
     if (isFirst) {
       widget.onFirstMessage();
       widget.onHasMessagesChanged?.call(true);
@@ -476,14 +490,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ? '[[THINKING]]\n$thinkingText\n[[/THINKING]]\n\n$bodyWithCanvasBlocks'
             : bodyWithCanvasBlocks;
 
+        _flushCurrentTextIntoSegments();
+
         setState(() {
-          if (combined.trim().isNotEmpty || scan.items.isNotEmpty) {
+          if (combined.trim().isNotEmpty || scan.items.isNotEmpty || _currentSegments.isNotEmpty) {
             _msgs.add(ChatMessage(
               role: 'assistant',
               content: combined,
-              processSteps: _currentProcessSteps.isEmpty
-                  ? null
-                  : _currentProcessSteps.map((p) => p.toJson()).toList(),
+              segments: _currentSegments.isEmpty ? null : _segmentsToJson(_currentSegments),
             ));
           }
           _canvases.addAll(scan.items);
@@ -734,26 +748,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _openModelSelectSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppTheme.of(context).isDark
-          ? AppTheme.of(context).cardBackground
-          : AppTheme.of(context).floatingSurface,
-      barrierColor: Colors.black.withOpacity(0.32),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(10.0)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: _StandaloneModelSelectSheet(
-          s: AppTheme.of(context),
-          currentModel: _model,
-          onPick: (model) {
-            _onModelSelected(model);
-            Navigator.pop(ctx);
-          },
-        ),
+    showAppSheet<void>(
+      context,
+      builder: (ctx) => _StandaloneModelSelectSheet(
+        s: AppTheme.of(context),
+        currentModel: _model,
+        onPick: (model) {
+          _onModelSelected(model);
+          Navigator.pop(ctx);
+        },
       ),
     );
   }
@@ -837,7 +840,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
-        _currentProcessSteps = [];
+        _currentSegments = [];
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -862,7 +865,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
-        _currentProcessSteps = [];
+        _currentSegments = [];
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -905,7 +908,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _activeToolCallLabel = null;
         _activeToolCallName = null;
         _pendingLocalMarkers = '';
-        _currentProcessSteps = [];
+        _currentSegments = [];
         widget.onHasMessagesChanged?.call(false);
         _notifyHeader();
         break;
@@ -1002,6 +1005,41 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     }
   }
 
+  List<Map<String, dynamic>> _segmentsToJson(List<ResponseSegment> segments) {
+    return segments.map((seg) {
+      switch (seg) {
+        case TextSegment(:final text):
+          return {'type': 'text', 'text': text};
+        case ProcessSegment(:final steps):
+          return {'type': 'process', 'steps': steps.map((s) => s.toJson()).toList()};
+        case ImagesSegment(:final images):
+          return {'type': 'images', 'images': images};
+      }
+    }).toList();
+  }
+
+  List<ResponseSegment> _segmentsFromJson(List<dynamic>? raw) {
+    if (raw == null) return const [];
+    final result = <ResponseSegment>[];
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final type = entry['type']?.toString();
+      if (type == 'text') {
+        result.add(TextSegment(entry['text']?.toString() ?? ''));
+      } else if (type == 'process') {
+        final steps = (entry['steps'] as List? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map((j) => ProcessStep.fromJson(j))
+            .toList();
+        result.add(ProcessSegment(steps));
+      } else if (type == 'images') {
+        final images = (entry['images'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
+        result.add(ImagesSegment(images));
+      }
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
@@ -1030,9 +1068,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
-                            physics: const _ClampedTopScrollPhysics(
-                              parent: AlwaysScrollableScrollPhysics(),
-                            ),
+                            physics: const _ClampedTopScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
@@ -1047,17 +1083,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                     final thinking = _streamingThinkNotifier.value;
                                     final isThinkingOnly = text.isEmpty &&
                                         (thinking == null || thinking.isEmpty) &&
-                                        _activeToolCallLabel == null &&
-                                        _currentProcessSteps.isEmpty;
+                                        _currentSegments.isEmpty;
                                     return StreamingBubble(
                                       s: s,
+                                      segments: _currentSegments,
                                       elements: elements,
                                       thinking: thinking != null ? cleanAiText(thinking) : null,
                                       isThinkingActive: text.isEmpty && _sending,
                                       showLogoLoader: isThinkingOnly,
-                                      activeToolCallLabel: _activeToolCallLabel,
-                                      activeToolCallName: _activeToolCallName,
-                                      processSteps: _currentProcessSteps,
                                       widgetsEnabled: _widgetsEnabled,
                                       onEnableWidgets: () => setWidgetsEnabled(true),
                                       onSuggestionTap: sendSuggestedMessage,
@@ -1091,9 +1124,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                     text: thinkScan.cleanText,
                                     thinking: thinkScan.thinking,
                                     canvases: msgCanvases,
-                                    processSteps: (msg.processSteps ?? [])
-                                        .map((j) => ProcessStep.fromJson(j))
-                                        .toList(),
+                                    segments: _segmentsFromJson(msg.segments),
                                     onOpenCanvas: _onOpenCanvas,
                                     onThumbUp: () => _onAssistantThumbUp(i),
                                     onThumbDown: () => _onAssistantThumbDown(i),

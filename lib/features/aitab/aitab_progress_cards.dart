@@ -8,6 +8,11 @@
 // explicitamente alinhado à esquerda dentro do Expanded.
 // AJUSTE VISUAL: ícones e textos de progresso sem azul e sem bold
 // excessivo.
+//
+// NOVO: _ProcessStepRow agora mostra favicons de domínios visitados
+// (web_search/read_website) e miniaturas de imagens encontradas
+// (search_images) diretamente dentro do passo do processo, sem
+// precisar de widgets soltos.
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -725,6 +730,9 @@ class _ProcessStepRow extends StatelessWidget {
     required this.isLast,
   });
 
+  String _faviconUrl(String domain) =>
+      'https://www.google.com/s2/favicons?sz=64&domain=$domain';
+
   @override
   Widget build(BuildContext context) {
     return IntrinsicHeight(
@@ -777,6 +785,54 @@ class _ProcessStepRow extends StatelessWidget {
                     Text(
                       step.summary!,
                       style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant.withOpacity(0.75)),
+                    ),
+                  ],
+                  if (step.faviconDomains.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: step.faviconDomains.map((domain) {
+                        return ClipOval(
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            color: s.hover,
+                            child: Image.network(
+                              _faviconUrl(domain),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  Icon(Icons.public, size: 10, color: s.onSurfaceVariant),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  if (step.foundImages.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const ClampingScrollPhysics(),
+                        itemCount: step.foundImages.length.clamp(0, 6),
+                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                        itemBuilder: (_, i) {
+                          final url = step.foundImages[i]['imageUrl']?.toString() ?? '';
+                          if (url.isEmpty) return const SizedBox.shrink();
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              url,
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox(width: 40, height: 40),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ],

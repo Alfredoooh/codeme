@@ -819,19 +819,31 @@ class ProcessStep {
   final String label;
   final String? summary;
   final bool done;
+  final List<String> faviconDomains;
+  final List<Map<String, dynamic>> foundImages;
 
   const ProcessStep({
     required this.toolName,
     required this.label,
     this.summary,
     this.done = false,
+    this.faviconDomains = const [],
+    this.foundImages = const [],
   });
 
-  ProcessStep copyWith({String? summary, bool? done}) => ProcessStep(
+  ProcessStep copyWith({
+    String? summary,
+    bool? done,
+    List<String>? faviconDomains,
+    List<Map<String, dynamic>>? foundImages,
+  }) =>
+      ProcessStep(
         toolName: toolName,
         label: label,
         summary: summary ?? this.summary,
         done: done ?? this.done,
+        faviconDomains: faviconDomains ?? this.faviconDomains,
+        foundImages: foundImages ?? this.foundImages,
       );
 
   Map<String, dynamic> toJson() => {
@@ -839,6 +851,8 @@ class ProcessStep {
         'label': label,
         if (summary != null) 'summary': summary,
         'done': done,
+        if (faviconDomains.isNotEmpty) 'faviconDomains': faviconDomains,
+        if (foundImages.isNotEmpty) 'foundImages': foundImages,
       };
 
   factory ProcessStep.fromJson(Map<String, dynamic> j) => ProcessStep(
@@ -846,7 +860,40 @@ class ProcessStep {
         label: j['label']?.toString() ?? '',
         summary: j['summary']?.toString(),
         done: j['done'] == true,
+        faviconDomains: (j['faviconDomains'] is List)
+            ? (j['faviconDomains'] as List).map((e) => e.toString()).toList()
+            : const [],
+        foundImages: (j['foundImages'] is List)
+            ? (j['foundImages'] as List).whereType<Map<String, dynamic>>().toList()
+            : const [],
       );
+}
+
+/// Extrai a lista de domínios (host, sem "www.") visitados/citados
+/// num resultado de tool de pesquisa, para exibir favicons em
+/// miniatura dentro do passo do processo.
+List<String> extractVisitedDomains(String toolName, Map<String, dynamic> resultJson) {
+  final domains = <String>[];
+  void addFromUrl(String? url) {
+    if (url == null || url.isEmpty) return;
+    try {
+      final host = Uri.parse(url).host.replaceFirst('www.', '');
+      if (host.isNotEmpty && !domains.contains(host)) domains.add(host);
+    } catch (_) {}
+  }
+
+  if (toolName == 'web_search') {
+    final results = resultJson['results'];
+    if (results is List) {
+      for (final r in results) {
+        if (r is Map) addFromUrl(r['url']?.toString() ?? r['link']?.toString());
+      }
+    }
+  } else if (toolName == 'read_website') {
+    addFromUrl(resultJson['url']?.toString());
+  }
+
+  return domains.take(6).toList();
 }
 
 /// Gera o resumo curto e automático mostrado ao lado de cada passo
@@ -897,4 +944,28 @@ String summaryForToolResult(String toolName, Map<String, dynamic> resultJson) {
     return 'Dados obtidos';
   }
   return 'Concluído';
+}
+
+// ══════════════════════════════════════════════════════════════
+// SEGMENTOS DE RESPOSTA — permite intercalar texto, "Em processo"
+// e carrosséis de imagens na ordem exata em que a IA os produziu,
+// em vez de um único bloco de processo fixo no topo. Cada segmento
+// guarda a que ponto do texto (afirmação da IA) ele pertence.
+// ══════════════════════════════════════════════════════════════
+
+sealed class ResponseSegment {}
+
+class TextSegment extends ResponseSegment {
+  final String text;
+  TextSegment(this.text);
+}
+
+class ProcessSegment extends ResponseSegment {
+  final List<ProcessStep> steps;
+  ProcessSegment(this.steps);
+}
+
+class ImagesSegment extends ResponseSegment {
+  final List<Map<String, dynamic>> images;
+  ImagesSegment(this.images);
 }
