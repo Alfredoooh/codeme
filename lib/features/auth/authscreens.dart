@@ -4,9 +4,19 @@
 // aqui — cada tela tem o seu próprio ficheiro e é reexportada
 // abaixo, para quem importa "authscreens.dart" continuar a
 // aceder a tudo com um único import.
+//
+// AuthGate mantém o seu próprio Navigator interno, usando
+// AppPageRoute — a mesma transição que todas as telas de auth já
+// usam entre si. Isto garante:
+//  - a troca LoginScreen -> RootShell (e vice-versa) desliza com
+//    a mesma animação de sempre, em vez de trocar instantaneamente;
+//  - o botão "voltar" de cada tela de auth faz sempre pop() para
+//    a tela anterior real da pilha, e nunca cai de volta na
+//    LoginScreen à força.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
+import '../../core/navigation/app_page_route.dart';
 import '../../main.dart';
 import '../../services/auth_service.dart';
 import 'widgets/auth_widgets.dart';
@@ -31,9 +41,13 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  late AuthStatus _lastStatus;
+
   @override
   void initState() {
     super.initState();
+    _lastStatus = authController.status;
     authController.addListener(_onAuthChanged);
   }
 
@@ -44,13 +58,30 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void _onAuthChanged() {
-    if (mounted) setState(() {});
+    final newStatus = authController.status;
+    if (newStatus == _lastStatus) return;
+    final previousStatus = _lastStatus;
+    _lastStatus = newStatus;
+
+    final nav = _navigatorKey.currentState;
+    if (nav == null) return;
+
+    if (newStatus == AuthStatus.authenticated) {
+      nav.pushAndRemoveUntil(
+        AppPageRoute(builder: (_) => const RootShell()),
+        (route) => false,
+      );
+    } else if (newStatus == AuthStatus.unauthenticated &&
+        previousStatus == AuthStatus.authenticated) {
+      nav.pushAndRemoveUntil(
+        AppPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    switch (authController.status) {
+  Widget _screenForStatus(AppColorScheme s, AuthStatus status) {
+    switch (status) {
       case AuthStatus.unknown:
         return ColoredBox(
           color: s.surface,
@@ -61,5 +92,17 @@ class _AuthGateState extends State<AuthGate> {
       case AuthStatus.unauthenticated:
         return const LoginScreen();
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Navigator(
+      key: _navigatorKey,
+      onGenerateRoute: (settings) => AppPageRoute(
+        builder: (_) => _screenForStatus(s, authController.status),
+        settings: settings,
+      ),
+    );
   }
 }

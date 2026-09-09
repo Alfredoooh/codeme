@@ -703,71 +703,75 @@ class _AuthTermsRadioState extends State<AuthTermsRadio>
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => widget.onChanged(!widget.value),
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color:
-                      widget.value ? s.primary : s.outline.withOpacity(0.6),
-                  width: 1.6,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2, right: 12),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: widget.value
+                        ? s.primary
+                        : s.outline.withOpacity(0.6),
+                    width: 1.6,
+                  ),
+                  color: widget.value ? s.primary : Colors.transparent,
                 ),
-                color: widget.value ? s.primary : Colors.transparent,
-              ),
-              child: AnimatedCheck(
-                progress: _ctrl,
-                color: s.onPrimary,
-                size: 14,
+                child: AnimatedCheck(
+                  progress: _ctrl,
+                  color: s.onPrimary,
+                  size: 12,
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => widget.onChanged(!widget.value),
-          child: RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: s.onSurfaceVariant,
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.onChanged(!widget.value),
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: s.onSurfaceVariant,
+                ),
+                children: [
+                  const TextSpan(text: 'Li e aceito '),
+                  TextSpan(
+                    text: 'Termos de Utilização',
+                    style: TextStyle(
+                      color: s.onSurface,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: s.onSurface,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = widget.onTapTerms,
+                  ),
+                  const TextSpan(text: ' e '),
+                  TextSpan(
+                    text: 'Política de Privacidade',
+                    style: TextStyle(
+                      color: s.onSurface,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: s.onSurface,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = widget.onTapPrivacy,
+                  ),
+                ],
               ),
-              children: [
-                const TextSpan(text: 'Li e aceito '),
-                TextSpan(
-                  text: 'Termos de Utilização',
-                  style: TextStyle(
-                    color: s.onSurface,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    decorationColor: s.onSurface,
-                  ),
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = widget.onTapTerms,
-                ),
-                const TextSpan(text: ' e '),
-                TextSpan(
-                  text: 'Política de Privacidade',
-                  style: TextStyle(
-                    color: s.onSurface,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    decorationColor: s.onSurface,
-                  ),
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = widget.onTapPrivacy,
-                ),
-              ],
             ),
           ),
         ),

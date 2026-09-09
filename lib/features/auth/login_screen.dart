@@ -23,7 +23,19 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _termsAccepted = false;
 
+  void _showTermsRequired() {
+    showAuthSnackBar(
+      context,
+      'Para continuar, precisas de ler e aceitar os Termos de '
+      'Utilização e a Política de Privacidade.',
+    );
+  }
+
   void _goLogin() async {
+    if (!_termsAccepted) {
+      _showTermsRequired();
+      return;
+    }
     authController.clearError();
     final accounts = await LocalAccountsService.load();
 
@@ -56,6 +68,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _goRegister() {
+    if (!_termsAccepted) {
+      _showTermsRequired();
+      return;
+    }
     authController.clearError();
     Navigator.of(context).push(
       AppPageRoute(builder: (_) => const RegisterScreen()),
@@ -63,6 +79,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onGoogleTap() {
+    if (!_termsAccepted) {
+      _showTermsRequired();
+      return;
+    }
     showAuthSnackBar(
       context,
       'Login com Google indisponível de momento. Usa o email para continuar.',
@@ -84,7 +104,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final screenHeight = MediaQuery.of(context).size.height;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -128,61 +147,58 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  SizedBox(height: screenHeight * 0.07),
-                  const Center(child: AnimatedAuthLogo(size: 96)),
-                  SizedBox(height: screenHeight * 0.24),
-
+                  // Logo ocupa o espaço livre acima do bloco de
+                  // botões, que fica todo colado ao fundo.
                   Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.only(
-                        left: 28,
-                        right: 28,
-                        bottom: 28 + MediaQuery.of(context).viewInsets.bottom,
-                      ),
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (authController.lastError != null) ...[
-                            AuthErrorBanner(
-                                s: s, message: authController.lastError!),
-                            const SizedBox(height: 4),
-                          ],
+                    child: Center(child: AnimatedAuthLogo(size: 96)),
+                  ),
 
-                          AuthSecondaryButton(
-                            icon: const GoogleIcon(size: 20),
-                            label: 'Continuar com Google',
-                            onTap: _onGoogleTap,
-                          ),
-                          const SizedBox(height: 12),
-
-                          AuthSecondaryButton(
-                            icon: LockIcon(size: 20, color: s.onSurface),
-                            label: 'Entrar com email ou telemóvel',
-                            onTap: _goLogin,
-                          ),
-                          const SizedBox(height: 12),
-
-                          AuthPrimaryButton(
-                            label: 'Criar conta',
-                            loading: false,
-                            onTap: _goRegister,
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          AuthTermsRadio(
-                            value: _termsAccepted,
-                            onChanged: (v) =>
-                                setState(() => _termsAccepted = v),
-                            onTapTerms: _onTermsTap,
-                            onTapPrivacy: _onPrivacyTap,
-                          ),
-
-                          const SizedBox(height: 8),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: 28,
+                      right: 28,
+                      bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (authController.lastError != null) ...[
+                          AuthErrorBanner(
+                              s: s, message: authController.lastError!),
+                          const SizedBox(height: 4),
                         ],
-                      ),
+
+                        AuthSecondaryButton(
+                          icon: const GoogleIcon(size: 20),
+                          label: 'Continuar com Google',
+                          onTap: _onGoogleTap,
+                        ),
+                        const SizedBox(height: 12),
+
+                        AuthSecondaryButton(
+                          icon: LockIcon(size: 20, color: s.onSurface),
+                          label: 'Entrar com email ou telemóvel',
+                          onTap: _goLogin,
+                        ),
+                        const SizedBox(height: 12),
+
+                        AuthPrimaryButton(
+                          label: 'Criar conta',
+                          loading: false,
+                          onTap: _goRegister,
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        AuthTermsRadio(
+                          value: _termsAccepted,
+                          onChanged: (v) =>
+                              setState(() => _termsAccepted = v),
+                          onTapTerms: _onTermsTap,
+                          onTapPrivacy: _onPrivacyTap,
+                        ),
+                      ],
                     ),
                   ),
                 ],
