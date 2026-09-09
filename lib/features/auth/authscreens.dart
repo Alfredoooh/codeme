@@ -7,6 +7,7 @@
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
+import '../../core/navigation/app_page_route.dart';
 import '../../main.dart';
 import '../../services/auth_service.dart';
 import 'widgets/auth_widgets.dart';
@@ -22,6 +23,14 @@ export 'widgets/account_picker_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
 // AUTH GATE
+// Mantém o seu próprio Navigator interno. Isto garante que:
+// - a troca entre LoginScreen e RootShell usa a mesma transição
+//   (AppPageRoute) que todas as outras telas de auth já usam;
+// - o botão "voltar" de cada tela de auth faz sempre pop() para
+//   a tela anterior real, nunca cai de novo na LoginScreen à
+//   força — porque a LoginScreen só volta a aparecer quando o
+//   AuthGate decide substituí-la (logout), não por navegação
+//   normal do utilizador.
 // ══════════════════════════════════════════════════════════════
 
 class AuthGate extends StatefulWidget {
@@ -31,9 +40,13 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  AuthStatus _lastStatus = AuthStatus.unknown;
+
   @override
   void initState() {
     super.initState();
+    _lastStatus = authController.status;
     authController.addListener(_onAuthChanged);
   }
 
@@ -44,12 +57,40 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void _onAuthChanged() {
-    if (mounted) setState(() {});
+    final newStatus = authController.status;
+    if (newStatus == _lastStatus) return;
+    final previousStatus = _lastStatus;
+    _lastStatus = newStatus;
+
+    final nav = _navigatorKey.currentState;
+    if (nav == null) {
+      // Navigator ainda não montado (primeiro build) — o valor
+      // inicial do switch abaixo já vai tratar disto.
+      if (mounted) setState(() {});
+      return;
+    }
+
+    switch (newStatus) {
+      case AuthStatus.authenticated:
+        nav.pushAndRemoveUntil(
+          AppPageRoute(builder: (_) => const RootShell()),
+          (route) => false,
+        );
+        break;
+      case AuthStatus.unauthenticated:
+        if (previousStatus == AuthStatus.authenticated) {
+          nav.pushAndRemoveUntil(
+            AppPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+        break;
+      case AuthStatus.unknown:
+        break;
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
+  Widget _initialScreen(AppColorScheme s) {
     switch (authController.status) {
       case AuthStatus.unknown:
         return ColoredBox(
@@ -61,5 +102,17 @@ class _AuthGateState extends State<AuthGate> {
       case AuthStatus.unauthenticated:
         return const LoginScreen();
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Navigator(
+      key: _navigatorKey,
+      onGenerateRoute: (settings) => AppPageRoute(
+        builder: (_) => _initialScreen(s),
+        settings: settings,
+      ),
+    );
   }
 }
