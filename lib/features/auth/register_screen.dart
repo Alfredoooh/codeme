@@ -117,7 +117,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           isEmail: _looksLikeEmail(identifier),
         );
       }
-      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      // Mesma correção do bug de login: aguarda o frame seguinte
+      // para garantir que o AuthGate já mudou para RootShell antes
+      // de fechar a pilha de auth.
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      });
       return;
     }
     if (!ok && mounted) {

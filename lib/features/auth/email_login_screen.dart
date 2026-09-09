@@ -90,11 +90,14 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
           isEmail: _looksLikeEmail(identifier),
         );
       }
-      // Login OK: AuthGate troca para RootShell automaticamente
-      // via notifyListeners(). Fechamos esta tela e todas as que
-      // estejam por cima do AuthGate para entrar de imediato,
-      // sem precisar de "voltar" manualmente.
-      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      // Login OK: authController já notificou o AuthGate. Aguarda o
+      // próximo frame (garante que o AuthGate já reconstruiu para
+      // RootShell) antes de fechar esta pilha — corrige o bug de
+      // ser preciso "voltar" uma segunda vez para entrar na conta.
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+      });
       return;
     }
     if (!ok && mounted) {

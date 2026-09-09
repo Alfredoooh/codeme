@@ -4,10 +4,37 @@
 // Botões sólidos, sem boxShadow / sem gradiente de elevação.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/widgets/widgets.dart';
+
+// ── SNACKBAR DE ERRO PARTILHADO ──
+
+void showAuthSnackBar(BuildContext context, String message) {
+  final s = AppTheme.of(context);
+  ScaffoldMessenger.of(context).clearSnackBars();
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: s.cardBackground,
+      content: Row(
+        children: [
+          AppIcon('error.svg', size: 16, color: s.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13.5, color: s.onSurface),
+            ),
+          ),
+        ],
+      ),
+      duration: const Duration(seconds: 4),
+    ),
+  );
+}
 
 // ── LOGO ANIMADO — mesma animação de sempre, sem alterações de fundo ──
 
@@ -176,7 +203,10 @@ class AuthLogoFallback extends StatelessWidget {
   }
 }
 
-// ── FRASES EM STREAMING (texto de boas-vindas por baixo do logo) ──
+// ── FRASES EM STREAMING ──
+// Mantido no ficheiro para não partir imports antigos, mas deixou
+// de ser usado em LoginScreen a pedido (textos que aparecem e
+// desaparecem foram removidos dessa tela).
 
 class StreamingPhrases extends StatefulWidget {
   const StreamingPhrases({super.key});
@@ -278,7 +308,7 @@ class _StreamingPhrasesState extends State<StreamingPhrases>
   }
 }
 
-// ── CAMPO DE TEXTO ──
+// ── CAMPO DE TEXTO — borda 100% curva (pílula) ──
 
 class AuthField extends StatefulWidget {
   final TextEditingController ctrl;
@@ -324,7 +354,7 @@ class _AuthFieldState extends State<AuthField> {
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             color: s.cardBackground,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: hasError
                   ? s.error
@@ -349,7 +379,7 @@ class _AuthFieldState extends State<AuthField> {
                 isDense: true,
                 border: InputBorder.none,
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                 hintText: widget.hint,
                 hintStyle: TextStyle(
                     fontSize: 15,
@@ -411,7 +441,7 @@ class _AuthPrimaryButtonState extends State<AuthPrimaryButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          height: 54,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: disabled ? s.primary.withOpacity(0.5) : s.primary,
@@ -500,13 +530,16 @@ class _AuthSecondaryButtonState extends State<AuthSecondaryButton> {
                   child: widget.icon,
                 ),
                 const SizedBox(width: 10),
-                Text(widget.label,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: widget.disabledLook
-                            ? s.onSurface.withOpacity(0.45)
-                            : s.onSurface)),
+                Flexible(
+                  child: Text(widget.label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: widget.disabledLook
+                              ? s.onSurface.withOpacity(0.45)
+                              : s.onSurface)),
+                ),
               ],
             ],
           ),
@@ -603,4 +636,116 @@ class GoogleIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       SvgPicture.string(_svg, width: size, height: size);
+}
+
+// ── ÍCONE CADEADO (para "Continuar com a Password") ──
+
+class LockIcon extends StatelessWidget {
+  final double size;
+  final Color color;
+  const LockIcon({super.key, required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) =>
+      Icon(Icons.lock_outline_rounded, size: size, color: color);
+}
+
+// ── RADIO DE TERMOS — "Li e aceito Termos de Utilização e Política
+// de Privacidade", com os dois links sublinhados e clicáveis ──
+
+class AuthTermsRadio extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onTapTerms;
+  final VoidCallback onTapPrivacy;
+
+  const AuthTermsRadio({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.onTapTerms,
+    required this.onTapPrivacy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2, right: 12),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: value ? s.primary : s.outline.withOpacity(0.6),
+                    width: 1.6,
+                  ),
+                  color: Colors.transparent,
+                ),
+                child: value
+                    ? Center(
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: s.primary,
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onChanged(!value),
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: s.onSurfaceVariant,
+                ),
+                children: [
+                  const TextSpan(text: 'Li e aceito '),
+                  TextSpan(
+                    text: 'Termos de Utilização',
+                    style: TextStyle(
+                      color: s.onSurface,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: s.onSurface,
+                    ),
+                    recognizer: TapGestureRecognizer()..onTap = onTapTerms,
+                  ),
+                  const TextSpan(text: ' e '),
+                  TextSpan(
+                    text: 'Política de Privacidade',
+                    style: TextStyle(
+                      color: s.onSurface,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: s.onSurface,
+                    ),
+                    recognizer: TapGestureRecognizer()..onTap = onTapPrivacy,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

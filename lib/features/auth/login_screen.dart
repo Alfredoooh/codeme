@@ -1,9 +1,11 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/auth/login_screen.dart
+// Tela principal ao abrir o app — design alinhado à referência:
+// "Contacte-nos" no topo, logo grande centralizado, botões
+// descidos para o fim, radio de termos por baixo dos botões.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/navigation/app_page_route.dart';
@@ -15,57 +17,6 @@ import 'widgets/account_picker_sheet.dart';
 import 'email_login_screen.dart';
 import 'register_screen.dart';
 
-// ══════════════════════════════════════════════════════════════
-// AUTH GATE
-// ══════════════════════════════════════════════════════════════
-
-class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
-  @override
-  State<AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<AuthGate> {
-  @override
-  void initState() {
-    super.initState();
-    authController.addListener(_onAuthChanged);
-  }
-
-  @override
-  void dispose() {
-    authController.removeListener(_onAuthChanged);
-    super.dispose();
-  }
-
-  void _onAuthChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppTheme.of(context);
-    switch (authController.status) {
-      case AuthStatus.unknown:
-        return ColoredBox(
-          color: s.surface,
-          child: Center(child: AuthLogoFallback(s: s, pulsing: true)),
-        );
-      case AuthStatus.authenticated:
-        return const RootShell();
-      case AuthStatus.unauthenticated:
-        return const LoginScreen();
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// LOGIN SCREEN — tela principal ao abrir o app.
-// Sem logo. Frases motivacionais com efeito de escrita + cursor
-// a piscar. Rodapé de termos idêntico à imagem de referência,
-// fixo no fundo desta tela.
-// ══════════════════════════════════════════════════════════════
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -74,6 +25,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  bool _termsAccepted = false;
+
   void _goLogin() async {
     authController.clearError();
     final accounts = await LocalAccountsService.load();
@@ -120,12 +73,17 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _openTerm(String label) {
+  void _onContactTap() {
+    // Funcionalidade ainda não disponível.
+    showAuthSnackBar(context, 'Contacte-nos ainda não está disponível.');
+  }
+
+  void _onTermsTap() {
     // TODO: ligar a URL real quando disponível.
   }
 
-  TapGestureRecognizer _tapRecognizer(VoidCallback onTap) {
-    return TapGestureRecognizer()..onTap = onTap;
+  void _onPrivacyTap() {
+    // TODO: ligar a URL real quando disponível.
   }
 
   @override
@@ -150,118 +108,102 @@ class _LoginScreenState extends State<LoginScreen> {
           child: AnimatedBuilder(
             animation: authController,
             builder: (context, _) {
-              return SingleChildScrollView(
-                padding: EdgeInsets.only(
-                  left: 28,
-                  right: 28,
-                  top: 40,
-                  bottom: 28 + MediaQuery.of(context).viewInsets.bottom,
-                ),
-                physics: const BouncingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height -
-                        MediaQuery.of(context).padding.top -
-                        MediaQuery.of(context).padding.bottom -
-                        40 -
-                        28,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Logo removido — componentes descem mais.
-                      const Spacer(flex: 4),
-
-                      // Frases motivacionais maiores, efeito de
-                      // escrita com cursor a piscar, sem elastic.
-                      const SizedBox(
-                        height: 96,
-                        child: Center(child: StreamingPhrases()),
-                      ),
-
-                      const SizedBox(height: 56),
-
-                      AuthSecondaryButton(
-                        icon: const GoogleIcon(size: 20),
-                        label: 'Continuar com Google',
-                        disabledLook: true,
-                        onTap: _onGoogleTap,
-                      ),
-                      const SizedBox(height: 12),
-
-                      AuthSecondaryButton(
-                        icon: AppIcon('mail', size: 20, color: s.onSurface),
-                        label: 'Entrar com número de telemóvel ou email',
-                        onTap: _goLogin,
-                      ),
-                      const SizedBox(height: 12),
-
-                      AuthPrimaryButton(
-                        label: 'Criar conta',
-                        loading: false,
-                        onTap: _goRegister,
-                      ),
-
-                      const Spacer(flex: 2),
-
-                      // ── Rodapé de termos, idêntico à imagem ──
-                      // Fica nesta tela (LoginScreen) porque é a
-                      // que aparece ao abrir o app.
-                      Padding(
-                        padding: const EdgeInsets.only(top: 24),
-                        child: RichText(
-                          textAlign: TextAlign.center,
-                          text: TextSpan(
+              return Column(
+                children: [
+                  // ── "Contacte-nos" no topo, canto direito ──
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, right: 20),
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _onContactTap,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 4),
+                          child: Text(
+                            'Contacte-nos',
                             style: TextStyle(
-                              fontSize: 13,
-                              height: 1.5,
+                              fontSize: 14,
                               color: s.onSurfaceVariant,
                             ),
-                            children: [
-                              const TextSpan(
-                                  text: 'Ao continuar, concordas com os '),
-                              TextSpan(
-                                text: 'Termos do Consumidor',
-                                style: TextStyle(
-                                  color: s.onSurfaceVariant,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: s.onSurfaceVariant,
-                                ),
-                                recognizer: _tapRecognizer(
-                                    () => _openTerm('consumidor')),
-                              ),
-                              const TextSpan(text: ' e a '),
-                              TextSpan(
-                                text: 'Política de Utilização',
-                                style: TextStyle(
-                                  color: s.onSurfaceVariant,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: s.onSurfaceVariant,
-                                ),
-                                recognizer: _tapRecognizer(
-                                    () => _openTerm('utilizacao')),
-                              ),
-                              const TextSpan(
-                                  text:
-                                      ' da Anthropic, e reconheces a sua '),
-                              TextSpan(
-                                text: 'Política de Privacidade',
-                                style: TextStyle(
-                                  color: s.onSurfaceVariant,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: s.onSurfaceVariant,
-                                ),
-                                recognizer: _tapRecognizer(
-                                    () => _openTerm('privacidade')),
-                              ),
-                              const TextSpan(text: '.'),
-                            ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.only(
+                        left: 28,
+                        right: 28,
+                        bottom: 28 + MediaQuery.of(context).viewInsets.bottom,
+                      ),
+                      physics: const BouncingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: MediaQuery.of(context).size.height -
+                              MediaQuery.of(context).padding.top -
+                              MediaQuery.of(context).padding.bottom -
+                              56,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Spacer(flex: 3),
+
+                            // Logo grande e centralizado, como no
+                            // exemplo de referência.
+                            const Center(child: AnimatedAuthLogo(size: 96)),
+
+                            const Spacer(flex: 5),
+
+                            if (authController.lastError != null) ...[
+                              AuthErrorBanner(
+                                  s: s, message: authController.lastError!),
+                              const SizedBox(height: 4),
+                            ],
+
+                            AuthSecondaryButton(
+                              icon: const GoogleIcon(size: 20),
+                              label: 'Continuar com Google',
+                              disabledLook: true,
+                              onTap: _onGoogleTap,
+                            ),
+                            const SizedBox(height: 12),
+
+                            AuthSecondaryButton(
+                              icon: LockIcon(size: 20, color: s.onSurface),
+                              label:
+                                  'Entrar com email ou número de telemóvel',
+                              onTap: _goLogin,
+                            ),
+                            const SizedBox(height: 12),
+
+                            AuthPrimaryButton(
+                              label: 'Criar conta',
+                              loading: false,
+                              onTap: _goRegister,
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            AuthTermsRadio(
+                              value: _termsAccepted,
+                              onChanged: (v) =>
+                                  setState(() => _termsAccepted = v),
+                              onTapTerms: _onTermsTap,
+                              onTapPrivacy: _onPrivacyTap,
+                            ),
+
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           ),
