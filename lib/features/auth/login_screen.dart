@@ -1,5 +1,8 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/auth/login_screen.dart
+// Tela principal ao abrir o app — design alinhado à referência:
+// "Contacte-nos" no topo, logo grande centralizado, botões
+// descidos para o fim, radio de termos por baixo dos botões.
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +11,7 @@ import '../../core/widgets/widgets.dart';
 import '../../core/navigation/app_page_route.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_accounts_service.dart';
+import '../../main.dart';
 import 'widgets/auth_widgets.dart';
 import 'widgets/account_picker_sheet.dart';
 import 'email_login_screen.dart';
@@ -106,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (context, _) {
               return Column(
                 children: [
+                  // ── "Contacte-nos" no topo, canto direito ──
                   Align(
                     alignment: Alignment.topRight,
                     child: Padding(
@@ -128,10 +133,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  SizedBox(height: screenHeight * 0.07),
+                  // ── Logo grande centralizado, com espaço fixo
+                  // acima e abaixo, sem depender de Spacer dentro
+                  // de scroll (que colapsa em telas pequenas). ──
+                  SizedBox(height: screenHeight * 0.09),
                   const Center(child: AnimatedAuthLogo(size: 96)),
-                  SizedBox(height: screenHeight * 0.24),
+                  SizedBox(height: screenHeight * 0.16),
 
+                  // ── Bloco de botões + termos, sempre no fim. ──
                   Expanded(
                     child: SingleChildScrollView(
                       padding: EdgeInsets.only(

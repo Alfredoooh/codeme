@@ -654,7 +654,7 @@ class LockIcon extends StatelessWidget {
 // ── RADIO DE TERMOS — "Li e aceito Termos de Utilização e Política
 // de Privacidade", com os dois links sublinhados e clicáveis ──
 
-class AuthTermsRadio extends StatefulWidget {
+class AuthTermsRadio extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   final VoidCallback onTapTerms;
@@ -669,104 +669,80 @@ class AuthTermsRadio extends StatefulWidget {
   });
 
   @override
-  State<AuthTermsRadio> createState() => _AuthTermsRadioState();
-}
-
-class _AuthTermsRadioState extends State<AuthTermsRadio>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 260),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.value) _ctrl.value = 1;
-  }
-
-  @override
-  void didUpdateWidget(covariant AuthTermsRadio old) {
-    super.didUpdateWidget(old);
-    if (widget.value != old.value) {
-      widget.value ? _ctrl.forward() : _ctrl.reverse();
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => widget.onChanged(!widget.value),
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color:
-                      widget.value ? s.primary : s.outline.withOpacity(0.6),
-                  width: 1.6,
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2, right: 12),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: value ? s.primary : s.outline.withOpacity(0.6),
+                    width: 1.6,
+                  ),
+                  color: Colors.transparent,
                 ),
-                color: widget.value ? s.primary : Colors.transparent,
-              ),
-              child: AnimatedCheck(
-                progress: _ctrl,
-                color: s.onPrimary,
-                size: 14,
+                child: value
+                    ? Center(
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: s.primary,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => widget.onChanged(!widget.value),
-          child: RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: s.onSurfaceVariant,
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onChanged(!value),
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: s.onSurfaceVariant,
+                ),
+                children: [
+                  const TextSpan(text: 'Li e aceito '),
+                  TextSpan(
+                    text: 'Termos de Utilização',
+                    style: TextStyle(
+                      color: s.onSurface,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: s.onSurface,
+                    ),
+                    recognizer: TapGestureRecognizer()..onTap = onTapTerms,
+                  ),
+                  const TextSpan(text: ' e '),
+                  TextSpan(
+                    text: 'Política de Privacidade',
+                    style: TextStyle(
+                      color: s.onSurface,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: s.onSurface,
+                    ),
+                    recognizer: TapGestureRecognizer()..onTap = onTapPrivacy,
+                  ),
+                ],
               ),
-              children: [
-                const TextSpan(text: 'Li e aceito '),
-                TextSpan(
-                  text: 'Termos de Utilização',
-                  style: TextStyle(
-                    color: s.onSurface,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    decorationColor: s.onSurface,
-                  ),
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = widget.onTapTerms,
-                ),
-                const TextSpan(text: ' e '),
-                TextSpan(
-                  text: 'Política de Privacidade',
-                  style: TextStyle(
-                    color: s.onSurface,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    decorationColor: s.onSurface,
-                  ),
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = widget.onTapPrivacy,
-                ),
-              ],
             ),
           ),
         ),
