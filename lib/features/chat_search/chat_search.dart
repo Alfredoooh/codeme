@@ -311,6 +311,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         return '';
     }
   }
+}
 
 class _ElasticFilterRow extends StatelessWidget {
   final AppColorScheme s;
