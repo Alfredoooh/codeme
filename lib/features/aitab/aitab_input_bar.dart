@@ -1,32 +1,24 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_input_bar.dart
 //
-// MUDANÇAS NESTA VERSÃO:
-// 1) Zero Cupertino, zero showAppSheet — todos os sheets deste
-//    ficheiro usam a MESMA infraestrutura do drawermenu.dart:
-//    showFlatBottomSheet + _ModalHandlebar, radius 20, mesma cor
-//    de fundo (s.cardBackground) e mesma handlebar.
-// 2) Os cards de anexo (Câmera / Fotos / Arquivo local) usam
-//    s.pageBackground como fundo (fundo do corpo do app), não
-//    s.cardBackground/s.hover — só o fundo do sheet em si continua
-//    com a cor de card, igual ao drawer.
-// 3) Botão de enviar: em "sending" (respondendo), no tema escuro
-//    fica branco puro sem borda com ícone pause azul (s.primary);
-//    no tema claro fica com s.primary sólido e ícone pause branco
-//    puro. Sem bordas em nenhum dos dois casos.
-// 4) Novo botão de gravação de voz ao lado do botão de enviar:
-//    tema escuro = fundo branco + ícone record.svg; tema claro =
-//    fundo s.primary + ícone record.svg. Quando o campo está vazio,
-//    o botão de enviar desaparece e o de gravar ocupa o lugar dele
-//    (anima suavemente até lá); ao digitar, o botão de gravar volta
-//    deslizando para o seu lugar enquanto o de enviar entra com
-//    crescimento suave (scale 0 → 1).
-// 5) Câmera e visualizador de imagem passam a ser telas próprias do
-//    app, em ficheiros separados: aitab_camera_screen.dart e
-//    aitab_image_viewer_screen.dart.
+// MUDANÇAS ACUMULADAS:
+// 1) Botão de record: SEM container, apenas ícone tappável.
+// 2) Botão de enviar: SEMPRE presente; inativo (cinza) quando vazio.
+// 3) Tap no record: NÃO abre modal; o input bar encolhe para uma
+//    pill grande de escuta, com botão de close FLUTUANTE.
+// 4) Pill de record: borda SÓLIDA (s.primary) + gradiente animado
+//    (rotação contínua + amplitude de fala simulada).
+// 5) Modais: gestos corrigidos (enableDrag, isDismissible,
+//    useSafeArea, HitTestBehavior.opaque) e _HoverSurface unifica
+//    hover/press/tap.
+// 6) Modo escuro: cards base já parecem "pressionados" (branco 4.5%).
+// 7) _ModelOptionRow: só o check indica seleção, sem fundo primário.
+// 8) Compatível com web (só AnimationController, Timer, math).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
@@ -41,8 +33,6 @@ import 'aitab_image_viewer_screen.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SHEET GENÉRICO PLANO — mesma infraestrutura do drawermenu.dart.
-// Radius, handlebar e cor de fundo idênticos: s.cardBackground,
-// topo arredondado em _kFlatModalRadius, handlebar 36×4 centrada.
 // ══════════════════════════════════════════════════════════════
 
 const double _kFlatModalRadius = 20.0;
@@ -79,8 +69,12 @@ Future<T?> showFlatBottomSheet<T>({
     backgroundColor: s.cardBackground,
     barrierColor: Colors.black.withOpacity(0.35),
     isScrollControlled: true,
+    enableDrag: true,
+    isDismissible: true,
+    useSafeArea: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+      borderRadius:
+          BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
     ),
     builder: (sheetContext) => SafeArea(
       top: false,
@@ -93,6 +87,95 @@ Future<T?> showFlatBottomSheet<T>({
       ),
     ),
   );
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUPERFÍCIE REUTILIZÁVEL COM HOVER + PRESS + TAP
+//
+// - No modo escuro, o estado BASE já parece "pressionado"
+//   (branco a ~4.5% de opacidade).
+// - Hover (web/desktop) → tom intermédio.
+// - Press (mobile) → tom mais claro.
+// - HitTestBehavior.opaque garante que o tap não é engolido pelo
+//   drag do bottom sheet.
+// ══════════════════════════════════════════════════════════════
+
+class _HoverSurface extends StatefulWidget {
+  final AppColorScheme s;
+  final BorderRadius borderRadius;
+  final Widget child;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry? padding;
+  final Color? baseColor;
+  final Color? hoverColor;
+  final Color? pressedColor;
+
+  const _HoverSurface({
+    required this.s,
+    required this.borderRadius,
+    required this.child,
+    this.onTap,
+    this.padding,
+    this.baseColor,
+    this.hoverColor,
+    this.pressedColor,
+  });
+
+  @override
+  State<_HoverSurface> createState() => _HoverSurfaceState();
+}
+
+class _HoverSurfaceState extends State<_HoverSurface> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  Color _resolveColor() {
+    final s = widget.s;
+
+    if (_pressed) {
+      return widget.pressedColor ??
+          (s.isDark ? Colors.white.withOpacity(0.10) : s.hover);
+    }
+
+    if (_hovered) {
+      return widget.hoverColor ??
+          (s.isDark ? Colors.white.withOpacity(0.07) : s.hover);
+    }
+
+    return widget.baseColor ??
+        (s.isDark ? Colors.white.withOpacity(0.045) : s.surface);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tappable = widget.onTap != null;
+
+    return MouseRegion(
+      cursor: tappable ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: tappable ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: tappable ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: tappable ? () => setState(() => _pressed = false) : null,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          curve: Curves.easeOutCubic,
+          padding: widget.padding,
+          decoration: BoxDecoration(
+            color: _resolveColor(),
+            borderRadius: widget.borderRadius,
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -112,6 +195,7 @@ class ChatInput extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onAttach;
   final VoidCallback onRecord;
+  final VoidCallback? onRecordCancel;
   final ValueChanged<String> onRemoveFile;
 
   const ChatInput({
@@ -128,6 +212,7 @@ class ChatInput extends StatelessWidget {
     required this.onPause,
     required this.onAttach,
     required this.onRecord,
+    this.onRecordCancel,
     required this.onRemoveFile,
   });
 
@@ -178,6 +263,7 @@ class ChatInput extends StatelessWidget {
               onPause: onPause,
               onAttach: onAttach,
               onRecord: onRecord,
+              onRecordCancel: onRecordCancel,
             ),
           ],
         );
@@ -190,7 +276,7 @@ class ChatInput extends StatelessWidget {
 // SHELL DO INPUT
 // ══════════════════════════════════════════════════════════════
 
-class _ChatInputShell extends StatelessWidget {
+class _ChatInputShell extends StatefulWidget {
   final AppColorScheme s;
   final bool hasText;
   final bool incognito;
@@ -204,6 +290,7 @@ class _ChatInputShell extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onAttach;
   final VoidCallback onRecord;
+  final VoidCallback? onRecordCancel;
 
   static const double _maxInputHeight = 168.0;
   static const double _minInputHeight = 52.0;
@@ -222,62 +309,156 @@ class _ChatInputShell extends StatelessWidget {
     required this.onPause,
     required this.onAttach,
     required this.onRecord,
+    required this.onRecordCancel,
   });
+
+  @override
+  State<_ChatInputShell> createState() => _ChatInputShellState();
+}
+
+class _ChatInputShellState extends State<_ChatInputShell>
+    with SingleTickerProviderStateMixin {
+  bool _recording = false;
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  void _startRecording() {
+    if (_recording) return;
+    setState(() => _recording = true);
+    _pulse.repeat(reverse: true);
+    widget.onRecord();
+  }
+
+  void _cancelRecording() {
+    if (!_recording) return;
+    _pulse.stop();
+    _pulse.reset();
+    setState(() => _recording = false);
+    widget.onRecordCancel?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+
+    final Widget child = _recording
+        ? _RecordingPill(
+            key: const ValueKey('recording_pill'),
+            s: s,
+            pulse: _pulse,
+            floatingShadow: widget.floatingShadow,
+            onClose: _cancelRecording,
+          )
+        : _buildInputBar(key: const ValueKey('input_bar'));
+
+    final Widget animated = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, anim) {
+        return FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.97, end: 1.0).animate(anim),
+            alignment: Alignment.bottomCenter,
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+
+    if (widget.incognito && !_recording) {
+      return DashedRRectBorder(
+        color: s.outline,
+        radius: 26,
+        child: animated,
+      );
+    }
+    return animated;
+  }
+
+  // ───────────────────────────────────────────────────────────
+  // INPUT BAR NORMAL
+  // ───────────────────────────────────────────────────────────
 
   Widget _attachButton() {
     return GestureDetector(
-      key: attachButtonKey,
-      onTap: onAttach,
+      key: widget.attachButtonKey,
+      onTap: widget.onAttach,
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: AppIcon('add', color: s.onSurface, size: 22),
+        child: AppIcon('add', color: widget.s.onSurface, size: 22),
       ),
     );
   }
 
   Widget _textField() {
+    final s = widget.s;
     return TextField(
-      controller: ctrl,
-      focusNode: focusNode,
+      controller: widget.ctrl,
+      focusNode: widget.focusNode,
       minLines: 1,
       maxLines: null,
       keyboardType: TextInputType.multiline,
       textCapitalization: TextCapitalization.sentences,
-      style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15).copyWith(color: s.onSurface),
+      style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15)
+          .copyWith(color: s.onSurface),
       cursorColor: s.primary,
       decoration: InputDecoration(
         isDense: true,
         border: InputBorder.none,
-        hintText: incognito ? 'Mensagem incógnita...' : 'Pergunte qualquer coisa aqui...',
-        hintStyle: TextStyle(fontSize: 16.5, letterSpacing: 0.15, color: s.onSurfaceVariant),
+        hintText: widget.incognito
+            ? 'Mensagem incógnita...'
+            : 'Pergunte qualquer coisa aqui...',
+        hintStyle: TextStyle(
+            fontSize: 16.5,
+            letterSpacing: 0.15,
+            color: s.onSurfaceVariant),
         contentPadding: EdgeInsets.zero,
       ),
-      onSubmitted: (_) => hasText ? onSend() : null,
+      onSubmitted: (_) => widget.hasText ? widget.onSend() : null,
     );
   }
 
   Widget _toolPillRow() {
-    if (attachedTool == null) return const SizedBox.shrink();
+    if (widget.attachedTool == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: _AttachedToolPill(s: s, type: attachedTool!, onClear: () {}),
+        child: _AttachedToolPill(
+            s: widget.s, type: widget.attachedTool!, onClear: () {}),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final content = Container(
+  Widget _buildInputBar({required Key key}) {
+    final s = widget.s;
+    return Container(
+      key: key,
       constraints: const BoxConstraints(
-        minHeight: _minInputHeight,
-        maxHeight: _maxInputHeight,
+        minHeight: _ChatInputShell._minInputHeight,
+        maxHeight: _ChatInputShell._maxInputHeight,
       ),
       decoration: BoxDecoration(
         color: s.isDark ? s.cardBackground : s.floatingSurface,
         borderRadius: BorderRadius.circular(26),
-        boxShadow: floatingShadow,
+        boxShadow: widget.floatingShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -299,11 +480,11 @@ class _ChatInputShell extends StatelessWidget {
                 const Spacer(),
                 _SendRecordCluster(
                   s: s,
-                  hasText: hasText,
-                  sending: sending,
-                  onSend: onSend,
-                  onPause: onPause,
-                  onRecord: onRecord,
+                  hasText: widget.hasText,
+                  sending: widget.sending,
+                  onSend: widget.onSend,
+                  onPause: widget.onPause,
+                  onRecord: _startRecording,
                 ),
               ],
             ),
@@ -311,36 +492,182 @@ class _ChatInputShell extends StatelessWidget {
         ],
       ),
     );
-
-    final animated = AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-      child: content,
-    );
-
-    return incognito
-        ? DashedRRectBorder(
-            color: s.outline,
-            radius: 26,
-            child: animated,
-          )
-        : animated;
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// CLUSTER: botão de gravar + botão de enviar/pausa
-//
-// Comportamento pedido:
-// - Sem texto: botão de enviar não existe (nem invisível — some do
-//   layout), e o botão de gravar ocupa exatamente o lugar dele
-//   (mesma posição à direita).
-// - Ao escrever: o botão de gravar desliza suavemente para a sua
-//   posição própria (à esquerda do de enviar) enquanto o botão de
-//   enviar entra com um crescimento suave (scale 0 → 1, do centro).
-// - Durante "sending": o botão de enviar vira botão de pausa com
-//   as cores por tema descritas acima; o botão de gravar continua
-//   visível na sua posição normal (ainda com texto presente).
+// PILL DE GRAVAÇÃO — borda sólida + gradiente animado
+// ══════════════════════════════════════════════════════════════
+
+class _RecordingPill extends StatefulWidget {
+  final AppColorScheme s;
+  final AnimationController pulse;
+  final List<BoxShadow> floatingShadow;
+  final VoidCallback onClose;
+
+  const _RecordingPill({
+    super.key,
+    required this.s,
+    required this.pulse,
+    required this.floatingShadow,
+    required this.onClose,
+  });
+
+  @override
+  State<_RecordingPill> createState() => _RecordingPillState();
+}
+
+class _RecordingPillState extends State<_RecordingPill>
+    with TickerProviderStateMixin {
+  Timer? _timer;
+  int _seconds = 0;
+  late final AnimationController _gradientCtrl;
+  late final AnimationController _speechCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _gradientCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+
+    _speechCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    )..repeat(reverse: true);
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _seconds++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _gradientCtrl.dispose();
+    _speechCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _formattedTime {
+    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
+    final sec = (_seconds % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        AnimatedBuilder(
+          animation: Listenable.merge([_gradientCtrl, _speechCtrl]),
+          builder: (_, __) {
+            final angle = _gradientCtrl.value * 2 * math.pi;
+            final dx = math.cos(angle);
+            final dy = math.sin(angle);
+
+            final speech = _speechCtrl.value;
+
+            final baseAlpha = s.isDark ? 0.18 : 0.10;
+            final peakAlpha = baseAlpha + 0.16 + speech * 0.14;
+
+            final borderAlpha = 0.55 + speech * 0.35;
+
+            return Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: s.primary.withOpacity(borderAlpha.clamp(0.0, 1.0)),
+                  width: 1.4,
+                ),
+                gradient: LinearGradient(
+                  begin: Alignment(-dx, -dy),
+                  end: Alignment(dx, dy),
+                  colors: [
+                    s.primary.withOpacity(baseAlpha),
+                    s.primary.withOpacity(peakAlpha),
+                    s.primary.withOpacity(baseAlpha),
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+                boxShadow: widget.floatingShadow,
+              ),
+              child: Row(
+                children: [
+                  AnimatedBuilder(
+                    animation: widget.pulse,
+                    builder: (_, __) {
+                      final scale = 1.0 + widget.pulse.value * 0.18;
+                      return Transform.scale(
+                        scale: scale,
+                        child: AppIcon('mic', color: s.primary, size: 22),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      'A ouvir...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: s.onSurface,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _formattedTime,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        Positioned(
+          top: -10,
+          right: -6,
+          child: GestureDetector(
+            onTap: widget.onClose,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.isDark ? s.cardBackground : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: AppIcon('close', color: s.onSurface, size: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CLUSTER: botão de gravar + botão de enviar
 // ══════════════════════════════════════════════════════════════
 
 class _SendRecordCluster extends StatelessWidget {
@@ -352,8 +679,6 @@ class _SendRecordCluster extends StatelessWidget {
   final VoidCallback onRecord;
 
   static const double _btnSize = 36;
-  static const Duration _dur = Duration(milliseconds: 220);
-  static const Curve _curve = Curves.easeOutCubic;
 
   const _SendRecordCluster({
     required this.s,
@@ -366,56 +691,25 @@ class _SendRecordCluster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // showSend: há texto (ou está a enviar/responder, para permitir pausar).
-    final showSend = hasText || sending;
-
     return SizedBox(
       height: _btnSize,
-      // Largura total: botão de gravar + gap + botão de enviar, quando
-      // ambos visíveis; só o de gravar, quando o de enviar some.
-      width: showSend ? (_btnSize * 2 + 8) : _btnSize,
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Botão de gravar: anima a sua posição horizontal (left)
-          // entre "no lugar do botão de enviar" (0) e "na sua posição
-          // própria" (0, já que fica à esquerda quando os dois existem).
-          AnimatedPositioned(
-            duration: _dur,
-            curve: _curve,
-            left: 0,
-            top: 0,
-            child: _RecordButton(s: s, size: _btnSize, onTap: onRecord),
+          _RecordButton(
+            s: s,
+            size: _btnSize,
+            enabled: !sending,
+            onTap: onRecord,
           ),
-          // Botão de enviar/pausa: só existe quando showSend é true.
-          // Entrada com crescimento suave (scale 0 → 1) a partir do
-          // centro da sua posição final.
-          AnimatedPositioned(
-            duration: _dur,
-            curve: _curve,
-            right: 0,
-            top: 0,
-            child: AnimatedScale(
-              duration: _dur,
-              curve: _curve,
-              scale: showSend ? 1.0 : 0.0,
-              alignment: Alignment.center,
-              child: AnimatedOpacity(
-                duration: _dur,
-                curve: _curve,
-                opacity: showSend ? 1.0 : 0.0,
-                child: IgnorePointer(
-                  ignoring: !showSend,
-                  child: _SendButton(
-                    s: s,
-                    hasText: hasText,
-                    sending: sending,
-                    onSend: onSend,
-                    onPause: onPause,
-                  ),
-                ),
-              ),
-            ),
+          const SizedBox(width: 2),
+          _SendButton(
+            s: s,
+            hasText: hasText,
+            sending: sending,
+            onSend: onSend,
+            onPause: onPause,
           ),
         ],
       ),
@@ -444,11 +738,23 @@ class _SendButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = hasText && !sending;
 
-    // Cores durante "sending" (respondendo):
-    // - escuro: fundo branco puro, sem borda; ícone pause em s.primary (azul).
-    // - claro: fundo s.primary sólido, sem borda; ícone pause branco puro.
     final Color sendingBg = s.isDark ? Colors.white : s.primary;
     final Color sendingIcon = s.isDark ? s.primary : Colors.white;
+
+    final Color idleBg = s.hover;
+    final Color idleIcon = s.onSurfaceVariant.withOpacity(0.45);
+
+    final Color bg = sending
+        ? sendingBg
+        : active
+            ? s.primary
+            : idleBg;
+
+    final Color iconColor = sending
+        ? sendingIcon
+        : active
+            ? Colors.white
+            : idleIcon;
 
     return GestureDetector(
       onTap: sending ? onPause : (hasText ? onSend : null),
@@ -459,20 +765,12 @@ class _SendButton extends StatelessWidget {
         height: _size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: sending
-              ? sendingBg
-              : active
-                  ? s.primary
-                  : s.hover,
+          color: bg,
           shape: BoxShape.circle,
         ),
         child: AppIcon(
           sending ? 'pause' : 'arrow_up',
-          color: sending
-              ? sendingIcon
-              : active
-                  ? Colors.white
-                  : s.onSurfaceVariant,
+          color: iconColor,
           size: sending ? 16 : 20,
         ),
       ),
@@ -483,32 +781,30 @@ class _SendButton extends StatelessWidget {
 class _RecordButton extends StatelessWidget {
   final AppColorScheme s;
   final double size;
+  final bool enabled;
   final VoidCallback onTap;
 
   const _RecordButton({
     required this.s,
     required this.size,
+    required this.enabled,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Escuro: fundo branco puro + ícone record.svg.
-    // Claro: fundo s.primary sólido + ícone record.svg.
-    final Color bg = s.isDark ? Colors.white : s.primary;
-    final Color iconColor = s.isDark ? s.primary : Colors.white;
+    final color =
+        enabled ? s.primary : s.onSurfaceVariant.withOpacity(0.4);
 
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
+      onTap: enabled ? onTap : null,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
         width: size,
         height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
+        child: Center(
+          child: AppIcon('record', color: color, size: 22),
         ),
-        child: AppIcon('record', color: iconColor, size: 18),
       ),
     );
   }
@@ -544,8 +840,8 @@ class _AttachedToolPill extends StatelessWidget {
               const SizedBox(width: 4),
               GestureDetector(
                 onTap: onClear,
-                child: AppIcon('close',
-                    color: s.onPrimaryContainer, size: 9),
+                child:
+                    AppIcon('close', color: s.onPrimaryContainer, size: 9),
               ),
             ],
           ),
@@ -599,7 +895,6 @@ class _FloatingAttachmentChip extends StatelessWidget {
   bool get _isImage => file.mimeType.startsWith('image/');
 
   void _openFullScreen(BuildContext context) {
-    // Visualizador de imagem em ficheiro próprio.
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
@@ -621,7 +916,7 @@ class _FloatingAttachmentChip extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.only(left: 14, right: 8),
         decoration: BoxDecoration(
-          color: s.isDark ? const Color(0xFF262626) : const Color(0xFF262626),
+          color: const Color(0xFF262626),
           borderRadius: BorderRadius.circular(999),
           boxShadow: [
             BoxShadow(
@@ -651,13 +946,15 @@ class _FloatingAttachmentChip extends StatelessWidget {
             GestureDetector(
               onTap: onRemove,
               child: Container(
-                width: 26, height: 26,
+                width: 26,
+                height: 26,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.16),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, size: 15, color: Colors.white),
+                child: const Icon(Icons.close,
+                    size: 15, color: Colors.white),
               ),
             ),
           ],
@@ -687,14 +984,17 @@ Future<void> showSelectTextSheet(
         children: [
           Text('Selecionar texto',
               style: TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface)),
           const SizedBox(height: 12),
           Flexible(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: SelectableText(
                 text,
-                style: TextStyle(fontSize: 15, color: s.onSurface, height: 1.5),
+                style: TextStyle(
+                    fontSize: 15, color: s.onSurface, height: 1.5),
               ),
             ),
           ),
@@ -728,7 +1028,9 @@ Future<void> showCanvasSheet(
             const SizedBox(width: 8),
             Text('Canvas desta conversa',
                 style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface)),
           ]),
           const SizedBox(height: 12),
           if (canvases.isEmpty)
@@ -736,7 +1038,8 @@ Future<void> showCanvasSheet(
               padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
                 child: Text('Ainda não há documentos nesta conversa.',
-                    style: TextStyle(fontSize: 13.5, color: s.onSurfaceVariant)),
+                    style: TextStyle(
+                        fontSize: 13.5, color: s.onSurfaceVariant)),
               ),
             )
           else
@@ -765,66 +1068,55 @@ Future<void> showCanvasSheet(
   );
 }
 
-class _CanvasCard extends StatefulWidget {
+class _CanvasCard extends StatelessWidget {
   final AppColorScheme s;
   final LocalCanvasItem item;
   final VoidCallback onTap;
-  const _CanvasCard({required this.s, required this.item, required this.onTap});
-  @override State<_CanvasCard> createState() => _CanvasCardState();
-}
+  const _CanvasCard(
+      {required this.s, required this.item, required this.onTap});
 
-class _CanvasCardState extends State<_CanvasCard> {
-  bool _h = false;
-
-  EditorType get _editorType => widget.item.kind.editorType;
+  EditorType get _editorType => item.kind.editorType;
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: _h ? s.hover : s.surface,
-          borderRadius: BorderRadius.circular(20),
+    return _HoverSurface(
+      s: s,
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(children: [
+        AnimatedCanvasIcon(
+          editorType: _editorType,
+          s: s,
+          size: 40,
+          animated: false,
         ),
-        child: Row(children: [
-          AnimatedCanvasIcon(
-            editorType: _editorType,
-            s: s,
-            size: 40,
-            animated: false,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: s.onSurface)),
+              const SizedBox(height: 2),
+              Text(_editorType.label,
+                  style: TextStyle(
+                      fontSize: 12, color: s.onSurfaceVariant)),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: s.onSurface)),
-                const SizedBox(height: 2),
-                Text(_editorType.label,
-                    style: TextStyle(fontSize: 12, color: s.onSurfaceVariant)),
-              ],
-            ),
-          ),
-        ]),
-      ),
+        ),
+      ]),
     );
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: GRAVAÇÃO DE VOZ
+// SHEET: GRAVAÇÃO DE VOZ (LEGACY — não é usada pelo input bar)
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showVoiceRecordSheet(
@@ -909,20 +1201,19 @@ class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
           const SizedBox(height: 6),
           Text(
             _formattedTime,
-            style: TextStyle(
-                fontSize: 13, color: s.onSurfaceVariant),
+            style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
           ),
           const SizedBox(height: 24),
           AnimatedBuilder(
             animation: _pulse,
             builder: (_, child) {
-              final scale = _recording
-                  ? 1.0 + (_pulse.value * 0.12)
-                  : 1.0;
+              final scale =
+                  _recording ? 1.0 + (_pulse.value * 0.12) : 1.0;
               return Transform.scale(scale: scale, child: child);
             },
             child: Container(
-              width: 76, height: 76,
+              width: 76,
+              height: 76,
               decoration: BoxDecoration(
                 color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
                 shape: BoxShape.circle,
@@ -1029,7 +1320,8 @@ class _AttachMenuSheetContent extends StatefulWidget {
   });
 
   @override
-  State<_AttachMenuSheetContent> createState() => _AttachMenuSheetContentState();
+  State<_AttachMenuSheetContent> createState() =>
+      _AttachMenuSheetContentState();
 }
 
 class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
@@ -1038,7 +1330,8 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
   late bool _localWeb = widget.webSearchEnabled;
   late bool _localWidgets = widget.widgetsEnabled;
 
-  void _goToModelSelect() => setState(() => _page = _AttachMenuPageKind.modelSelect);
+  void _goToModelSelect() =>
+      setState(() => _page = _AttachMenuPageKind.modelSelect);
   void _backToRoot() => setState(() => _page = _AttachMenuPageKind.root);
 
   void _pickModel(AiModel model) {
@@ -1067,7 +1360,8 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
             opacity: anim,
             child: SlideTransition(
               position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
-                  .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+                  .animate(CurvedAnimation(
+                      parent: anim, curve: Curves.easeOutCubic)),
               child: child,
             ),
           );
@@ -1157,19 +1451,28 @@ class _RootPage extends StatelessWidget {
             children: [
               Expanded(
                 child: _AttachOptionCard(
-                  s: s, assetName: 'camera', label: 'Câmera', onTap: onCamera,
+                  s: s,
+                  assetName: 'camera',
+                  label: 'Câmera',
+                  onTap: onCamera,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _AttachOptionCard(
-                  s: s, assetName: 'image', label: 'Fotos', onTap: onPhotos,
+                  s: s,
+                  assetName: 'image',
+                  label: 'Fotos',
+                  onTap: onPhotos,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _AttachOptionCard(
-                  s: s, assetName: 'folder_upload', label: 'Arquivo local', onTap: onLocalFile,
+                  s: s,
+                  assetName: 'folder_upload',
+                  label: 'Arquivo local',
+                  onTap: onLocalFile,
                 ),
               ),
             ],
@@ -1208,10 +1511,10 @@ class _RootPage extends StatelessWidget {
   }
 }
 
-// Card de opção de anexo: fundo igual ao fundo do corpo do app
-// (s.pageBackground), não mais s.hover/s.cardBackground — só o
-// sheet em si mantém a cor de card, como no drawer.
-class _AttachOptionCard extends StatefulWidget {
+// Card de opção de anexo — agora usa _HoverSurface (modo escuro já
+// parece "pressionado" no estado base; hover e press têm tons
+// distintos; tap não é engolido pelo drag do sheet).
+class _AttachOptionCard extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
   final String label;
@@ -1222,43 +1525,31 @@ class _AttachOptionCard extends StatefulWidget {
     required this.label,
     required this.onTap,
   });
-  @override State<_AttachOptionCard> createState() => _AttachOptionCardState();
-}
-
-class _AttachOptionCardState extends State<_AttachOptionCard> {
-  bool _h = false;
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown:   (_) => setState(() => _h = true),
-      onTapCancel: ()  => setState(() => _h = false),
-      onTapUp:     (_) => setState(() => _h = false),
-      onTap:       widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: _h ? s.pageBackground.withOpacity(0.6) : s.pageBackground,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(widget.assetName, size: 22, color: s.onSurface),
-            const SizedBox(height: 6),
-            Text(
-              widget.label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: s.onSurface),
+    return _HoverSurface(
+      s: s,
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIcon(assetName, size: 22, color: s.onSurface),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: s.onSurface,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1280,11 +1571,13 @@ class _PlainMenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: _HoverSurface(
+        s: s,
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
             AppIcon(assetName, size: 20, color: s.onSurface),
@@ -1294,16 +1587,21 @@ class _PlainMenuRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: s.onSurface)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
-                        style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant)),
+                        style: TextStyle(
+                            fontSize: 12.5, color: s.onSurfaceVariant)),
                   ],
                 ],
               ),
             ),
-            AppIcon('chevron_forward', size: 14, color: s.onSurfaceVariant),
+            AppIcon('chevron_forward',
+                size: 14, color: s.onSurfaceVariant),
           ],
         ),
       ),
@@ -1335,7 +1633,10 @@ class _PlainSwitchRow extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Text(title,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: s.onSurface)),
           ),
           _CustomSwitch(value: value, onChanged: onChanged, s: s),
         ],
@@ -1370,14 +1671,19 @@ class _ModelSelectPage extends StatelessWidget {
             children: [
               GestureDetector(
                 onTap: onBack,
+                behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: AppIcon('chevron_back', size: 20, color: s.onSurface),
+                  child:
+                      AppIcon('chevron_back', size: 20, color: s.onSurface),
                 ),
               ),
               const SizedBox(width: 4),
               Text('Modelo',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
+                  style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: s.onSurface)),
             ],
           ),
           const SizedBox(height: 8),
@@ -1394,6 +1700,9 @@ class _ModelSelectPage extends StatelessWidget {
   }
 }
 
+// Linha de modelo — usa _HoverSurface (mesma aparência dos outros
+// cards). Seleção é indicada APENAS pelo ícone de check; sem fundo
+// primário nem borda.
 class _ModelOptionRow extends StatelessWidget {
   final AppColorScheme s;
   final AiModel model;
@@ -1408,16 +1717,15 @@ class _ModelOptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? s.primary.withOpacity(0.1) : s.surface,
-          borderRadius: BorderRadius.circular(18),
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: _HoverSurface(
+        s: s,
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
@@ -1426,21 +1734,27 @@ class _ModelOptionRow extends StatelessWidget {
                   Text(
                     model.label,
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      fontSize: 14.5,
+                      fontWeight: selected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
                       color: s.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     model.description,
-                    style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
+                    style: TextStyle(
+                        fontSize: 12, color: s.onSurfaceVariant),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 12),
             if (selected)
-              AppIcon('check', color: s.primary, size: 20),
+              AppIcon('check', color: s.primary, size: 20)
+            else
+              const SizedBox(width: 20),
           ],
         ),
       ),
@@ -1466,7 +1780,10 @@ Future<void> showAppsConnectSheet(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Apps',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: s.onSurface)),
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: s.onSurface)),
           const SizedBox(height: 12),
           _AppsConnectSheetContent(s: s),
         ],
@@ -1480,7 +1797,8 @@ class _AppsConnectSheetContent extends StatefulWidget {
   const _AppsConnectSheetContent({required this.s});
 
   @override
-  State<_AppsConnectSheetContent> createState() => _AppsConnectSheetContentState();
+  State<_AppsConnectSheetContent> createState() =>
+      _AppsConnectSheetContentState();
 }
 
 class _AppsConnectSheetContentState extends State<_AppsConnectSheetContent> {
@@ -1512,7 +1830,8 @@ class _AppsConnectSheetContentState extends State<_AppsConnectSheetContent> {
             s: s,
             app: entry,
             value: enabledAppsController.isEnabled(entry.manifest.slug),
-            onChanged: (v) => enabledAppsController.setEnabled(entry.manifest.slug, v),
+            onChanged: (v) =>
+                enabledAppsController.setEnabled(entry.manifest.slug, v),
           ),
         ],
       ],
@@ -1534,17 +1853,16 @@ class _AppSwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return _HoverSurface(
+      s: s,
+      borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: s.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: Row(
         children: [
           Image.asset(app.manifest.iconAsset, width: 18, height: 18),
           const SizedBox(width: 10),
-          Text(app.manifest.label, style: TextStyle(fontSize: 14, color: s.onSurface)),
+          Text(app.manifest.label,
+              style: TextStyle(fontSize: 14, color: s.onSurface)),
           const Spacer(),
           _CustomSwitch(value: value, onChanged: onChanged, s: s),
         ],
@@ -1557,16 +1875,19 @@ class _CustomSwitch extends StatelessWidget {
   final AppColorScheme s;
   final bool value;
   final ValueChanged<bool> onChanged;
-  const _CustomSwitch({required this.s, required this.value, required this.onChanged});
+  const _CustomSwitch(
+      {required this.s, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => onChanged(!value),
+      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOutCubic,
-        width: 44, height: 26,
+        width: 44,
+        height: 26,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: value ? s.primary : s.outline,
@@ -1575,9 +1896,11 @@ class _CustomSwitch extends StatelessWidget {
         child: AnimatedAlign(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          alignment:
+              value ? Alignment.centerRight : Alignment.centerLeft,
           child: Container(
-            width: 20, height: 20,
+            width: 20,
+            height: 20,
             decoration: const BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
@@ -1590,9 +1913,7 @@ class _CustomSwitch extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Abre a câmera própria do app (ficheiro separado).
-// Chame a partir de onCamera do showAttachMenuSheet, por exemplo:
-//   onCamera: () => openAitabCamera(context, onCaptured: (bytes) {...}),
+// Câmera própria do app (ficheiro separado)
 // ══════════════════════════════════════════════════════════════
 
 Future<void> openAitabCamera(
