@@ -1,19 +1,24 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_input_bar.dart
 //
-// MUDANÇAS ACUMULADAS:
-// 1) Botão de record: SEM container, apenas ícone tappável.
-// 2) Botão de enviar: SEMPRE presente; inativo (cinza) quando vazio.
-// 3) Tap no record: NÃO abre modal; o input bar encolhe para uma
-//    pill grande de escuta, com botão de close FLUTUANTE.
-// 4) Pill de record: borda SÓLIDA (s.primary) + gradiente animado
-//    (rotação contínua + amplitude de fala simulada).
-// 5) Modais: gestos corrigidos (enableDrag, isDismissible,
-//    useSafeArea, HitTestBehavior.opaque) e _HoverSurface unifica
-//    hover/press/tap.
-// 6) Modo escuro: cards base já parecem "pressionados" (branco 4.5%).
-// 7) _ModelOptionRow: só o check indica seleção, sem fundo primário.
-// 8) Compatível com web (só AnimationController, Timer, math).
+// MUDANÇAS NESTA VERSÃO:
+// 1) O modal de gravação (_VoiceRecordSheetContent / showVoiceRecordSheet)
+//    foi TOTALMENTE REMOVIDO. A gravação agora vive apenas dentro do
+//    próprio input bar (pill).
+// 2) A pill de gravação perdeu o gradiente. Em vez disso usa uma
+//    waveform de traços verticais animados, como os recorders
+//    modernos (estilo IA de hoje em dia).
+// 3) O botão de close já não fica flutuante em cima da pill —
+//    está DE LADO, à direita, num botão circular separado. A pill
+//    foi encurtada (é Expanded) para o close caber ao lado.
+// 4) Adicionados botões de PAUSAR / RETOMAR dentro da pill.
+//    Ao pausar: a waveform congela, o mic deixa de pulsar, o texto
+//    muda para "Pausado" e o timer para de contar.
+// 5) ChatInput ganhou dois callbacks opcionais novos:
+//    onRecordPause e onRecordResume (para o pai pausar/retomar a
+//    gravação real do microfone).
+// 6) Continua compatível com web: só AnimationController, Timer,
+//    math, MouseRegion — nada específico de Android/iOS.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -91,13 +96,6 @@ Future<T?> showFlatBottomSheet<T>({
 
 // ══════════════════════════════════════════════════════════════
 // SUPERFÍCIE REUTILIZÁVEL COM HOVER + PRESS + TAP
-//
-// - No modo escuro, o estado BASE já parece "pressionado"
-//   (branco a ~4.5% de opacidade).
-// - Hover (web/desktop) → tom intermédio.
-// - Press (mobile) → tom mais claro.
-// - HitTestBehavior.opaque garante que o tap não é engolido pelo
-//   drag do bottom sheet.
 // ══════════════════════════════════════════════════════════════
 
 class _HoverSurface extends StatefulWidget {
@@ -196,6 +194,8 @@ class ChatInput extends StatelessWidget {
   final VoidCallback onAttach;
   final VoidCallback onRecord;
   final VoidCallback? onRecordCancel;
+  final VoidCallback? onRecordPause;
+  final VoidCallback? onRecordResume;
   final ValueChanged<String> onRemoveFile;
 
   const ChatInput({
@@ -213,6 +213,8 @@ class ChatInput extends StatelessWidget {
     required this.onAttach,
     required this.onRecord,
     this.onRecordCancel,
+    this.onRecordPause,
+    this.onRecordResume,
     required this.onRemoveFile,
   });
 
@@ -264,6 +266,8 @@ class ChatInput extends StatelessWidget {
               onAttach: onAttach,
               onRecord: onRecord,
               onRecordCancel: onRecordCancel,
+              onRecordPause: onRecordPause,
+              onRecordResume: onRecordResume,
             ),
           ],
         );
@@ -291,6 +295,8 @@ class _ChatInputShell extends StatefulWidget {
   final VoidCallback onAttach;
   final VoidCallback onRecord;
   final VoidCallback? onRecordCancel;
+  final VoidCallback? onRecordPause;
+  final VoidCallback? onRecordResume;
 
   static const double _maxInputHeight = 168.0;
   static const double _minInputHeight = 52.0;
@@ -310,6 +316,8 @@ class _ChatInputShell extends StatefulWidget {
     required this.onAttach,
     required this.onRecord,
     required this.onRecordCancel,
+    required this.onRecordPause,
+    required this.onRecordResume,
   });
 
   @override
@@ -319,36 +327,77 @@ class _ChatInputShell extends StatefulWidget {
 class _ChatInputShellState extends State<_ChatInputShell>
     with SingleTickerProviderStateMixin {
   bool _recording = false;
-  late final AnimationController _pulse;
+  bool _paused = false;
+  int _elapsed = 0;
+  Timer? _sessionTimer;
+  late final AnimationController _waveCtrl;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
+    _waveCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1800),
     );
   }
 
   @override
   void dispose() {
-    _pulse.dispose();
+    _sessionTimer?.cancel();
+    _waveCtrl.dispose();
     super.dispose();
   }
 
+  // ── Ciclo de vida da gravação ─────────────────────────────
   void _startRecording() {
     if (_recording) return;
-    setState(() => _recording = true);
-    _pulse.repeat(reverse: true);
+    setState(() {
+      _recording = true;
+      _paused = false;
+      _elapsed = 0;
+    });
+    _waveCtrl.repeat();
+
+    _sessionTimer?.cancel();
+    _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && !_paused) {
+        setState(() => _elapsed++);
+      }
+    });
+
     widget.onRecord();
   }
 
   void _cancelRecording() {
     if (!_recording) return;
-    _pulse.stop();
-    _pulse.reset();
-    setState(() => _recording = false);
+    _waveCtrl.stop();
+    _waveCtrl.reset();
+    _sessionTimer?.cancel();
+    _sessionTimer = null;
+    setState(() {
+      _recording = false;
+      _paused = false;
+      _elapsed = 0;
+    });
     widget.onRecordCancel?.call();
+  }
+
+  void _togglePause() {
+    if (!_recording) return;
+    setState(() => _paused = !_paused);
+    if (_paused) {
+      _waveCtrl.stop();
+      widget.onRecordPause?.call();
+    } else {
+      _waveCtrl.repeat();
+      widget.onRecordResume?.call();
+    }
+  }
+
+  String get _formattedElapsed {
+    final m = (_elapsed ~/ 60).toString().padLeft(2, '0');
+    final sec = (_elapsed % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
   }
 
   @override
@@ -359,9 +408,12 @@ class _ChatInputShellState extends State<_ChatInputShell>
         ? _RecordingPill(
             key: const ValueKey('recording_pill'),
             s: s,
-            pulse: _pulse,
+            waveCtrl: _waveCtrl,
+            paused: _paused,
+            elapsedLabel: _formattedElapsed,
             floatingShadow: widget.floatingShadow,
             onClose: _cancelRecording,
+            onTogglePause: _togglePause,
           )
         : _buildInputBar(key: const ValueKey('input_bar'));
 
@@ -392,10 +444,7 @@ class _ChatInputShellState extends State<_ChatInputShell>
     return animated;
   }
 
-  // ───────────────────────────────────────────────────────────
-  // INPUT BAR NORMAL
-  // ───────────────────────────────────────────────────────────
-
+  // ── Input bar normal ──────────────────────────────────────
   Widget _attachButton() {
     return GestureDetector(
       key: widget.attachButtonKey,
@@ -496,172 +545,266 @@ class _ChatInputShellState extends State<_ChatInputShell>
 }
 
 // ══════════════════════════════════════════════════════════════
-// PILL DE GRAVAÇÃO — borda sólida + gradiente animado
+// PILL DE GRAVAÇÃO
+//
+// Layout:  [ PILL (Expanded) ]  [ 10 ]  [ CLOSE ]
+//   PILL  :  [mic]  [waveform]  [tempo]  [pausa/retomar]
+//   CLOSE :  botão circular ao lado da pill (não flutuante)
+//
+// Sem gradiente. A "alma" da pill é a waveform de barras verticais
+// animadas, ao estilo dos recorders/IA modernos.
 // ══════════════════════════════════════════════════════════════
 
-class _RecordingPill extends StatefulWidget {
+class _RecordingPill extends StatelessWidget {
   final AppColorScheme s;
-  final AnimationController pulse;
+  final AnimationController waveCtrl;
+  final bool paused;
+  final String elapsedLabel;
   final List<BoxShadow> floatingShadow;
   final VoidCallback onClose;
+  final VoidCallback onTogglePause;
+
+  static const double _pillHeight = 56;
+  static const double _closeSize = 44;
 
   const _RecordingPill({
     super.key,
     required this.s,
-    required this.pulse,
+    required this.waveCtrl,
+    required this.paused,
+    required this.elapsedLabel,
     required this.floatingShadow,
     required this.onClose,
+    required this.onTogglePause,
   });
 
   @override
-  State<_RecordingPill> createState() => _RecordingPillState();
-}
-
-class _RecordingPillState extends State<_RecordingPill>
-    with TickerProviderStateMixin {
-  Timer? _timer;
-  int _seconds = 0;
-  late final AnimationController _gradientCtrl;
-  late final AnimationController _speechCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _gradientCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
-
-    _speechCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    )..repeat(reverse: true);
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _seconds++);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _gradientCtrl.dispose();
-    _speechCtrl.dispose();
-    super.dispose();
-  }
-
-  String get _formattedTime {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final sec = (_seconds % 60).toString().padLeft(2, '0');
-    return '$m:$sec';
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final s = widget.s;
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        AnimatedBuilder(
-          animation: Listenable.merge([_gradientCtrl, _speechCtrl]),
-          builder: (_, __) {
-            final angle = _gradientCtrl.value * 2 * math.pi;
-            final dx = math.cos(angle);
-            final dy = math.sin(angle);
-
-            final speech = _speechCtrl.value;
-
-            final baseAlpha = s.isDark ? 0.18 : 0.10;
-            final peakAlpha = baseAlpha + 0.16 + speech * 0.14;
-
-            final borderAlpha = 0.55 + speech * 0.35;
-
-            return Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+    return SizedBox(
+      height: _pillHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ── Pill principal ──────────────────────────────────
+          Expanded(
+            child: Container(
+              height: _pillHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
+                color: s.isDark ? s.cardBackground : s.floatingSurface,
+                borderRadius: BorderRadius.circular(_pillHeight / 2),
                 border: Border.all(
-                  color: s.primary.withOpacity(borderAlpha.clamp(0.0, 1.0)),
-                  width: 1.4,
+                  color: paused
+                      ? s.outline.withOpacity(0.6)
+                      : s.primary.withOpacity(0.55),
+                  width: 1.2,
                 ),
-                gradient: LinearGradient(
-                  begin: Alignment(-dx, -dy),
-                  end: Alignment(dx, dy),
-                  colors: [
-                    s.primary.withOpacity(baseAlpha),
-                    s.primary.withOpacity(peakAlpha),
-                    s.primary.withOpacity(baseAlpha),
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
-                ),
-                boxShadow: widget.floatingShadow,
+                boxShadow: floatingShadow,
               ),
               child: Row(
                 children: [
+                  // Mic — pulsa quando a gravar, estático quando pausado
                   AnimatedBuilder(
-                    animation: widget.pulse,
+                    animation: waveCtrl,
                     builder: (_, __) {
-                      final scale = 1.0 + widget.pulse.value * 0.18;
+                      final scale = paused
+                          ? 1.0
+                          : 1.0 +
+                              0.10 *
+                                  (0.5 +
+                                      0.5 *
+                                          math.sin(waveCtrl.value *
+                                              2 *
+                                              math.pi));
                       return Transform.scale(
                         scale: scale,
-                        child: AppIcon('mic', color: s.primary, size: 22),
+                        child: AppIcon(
+                          paused ? 'mic_off' : 'mic',
+                          color:
+                              paused ? s.onSurfaceVariant : s.primary,
+                          size: 20,
+                        ),
                       );
                     },
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
+
+                  // Waveform animada
                   Expanded(
-                    child: Text(
-                      'A ouvir...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: s.onSurface,
-                      ),
+                    child: _Waveform(
+                      s: s,
+                      t: waveCtrl,
+                      paused: paused,
                     ),
                   ),
+                  const SizedBox(width: 12),
+
+                  // Tempo
                   Text(
-                    _formattedTime,
+                    elapsedLabel,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: s.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-        Positioned(
-          top: -10,
-          right: -6,
-          child: GestureDetector(
-            onTap: widget.onClose,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.isDark ? s.cardBackground : Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.18),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                  const SizedBox(width: 6),
+
+                  // Pausar / Retomar
+                  _PauseResumeButton(
+                    s: s,
+                    paused: paused,
+                    onTap: onTogglePause,
                   ),
                 ],
               ),
-              child: AppIcon('close', color: s.onSurface, size: 14),
             ),
           ),
+
+          const SizedBox(width: 10),
+
+          // ── Botão de close AO LADO da pill ──────────────────
+          GestureDetector(
+            onTap: onClose,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: _closeSize,
+              height: _closeSize,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: s.isDark ? s.cardBackground : s.floatingSurface,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: s.outline.withOpacity(0.35),
+                  width: 1.0,
+                ),
+                boxShadow: floatingShadow,
+              ),
+              child: AppIcon('close', color: s.onSurface, size: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Waveform — barras verticais animadas ao estilo recorder/IA.
+// Sem gradiente: cor sólida s.primary (ou neutra quando pausado).
+// Alturas pseudo-aleatórias + soma de três senos para dar aquele
+// movimento orgânico e suave.
+// ─────────────────────────────────────────────────────────────
+
+class _Waveform extends StatelessWidget {
+  final AppColorScheme s;
+  final Animation<double> t;
+  final bool paused;
+
+  static const int _barCount = 26;
+  static const double _barWidth = 2.4;
+  static const double _barSpacing = 1.4;
+  static const double _minHeight = 4.0;
+  static const double _maxHeight = 24.0;
+
+  const _Waveform({
+    required this.s,
+    required this.t,
+    required this.paused,
+  });
+
+  double _heightFor(int i, double progress) {
+    // Duas fases pseudo-aleatórias por barra (dá aspeto natural).
+    final seedA = math.sin(i * 12.9898) * 43758.5453;
+    final phaseA = (seedA - seedA.floor()) * 2 * math.pi;
+    final seedB = math.sin(i * 78.233) * 43758.5453;
+    final phaseB = (seedB - seedB.floor()) * 2 * math.pi;
+    final seedC = math.sin(i * 39.425) * 43758.5453;
+    final phaseC = (seedC - seedC.floor()) * 2 * math.pi;
+
+    final twoPi = 2 * math.pi;
+    final w1 = 0.5 + 0.5 * math.sin(progress * twoPi * 2.3 + phaseA);
+    final w2 = 0.5 + 0.5 * math.sin(progress * twoPi * 3.9 + phaseB);
+    final w3 = 0.5 + 0.5 * math.sin(progress * twoPi * 1.4 + phaseC);
+
+    // Mistura ponderada → movimento suave e contínuo
+    final combined = w1 * 0.45 + w2 * 0.35 + w3 * 0.20;
+
+    return _minHeight + combined * (_maxHeight - _minHeight);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: t,
+      builder: (_, __) {
+        final progress = t.value;
+        final color = paused
+            ? s.onSurfaceVariant.withOpacity(0.55)
+            : s.primary.withOpacity(0.90);
+
+        return SizedBox(
+          height: _maxHeight,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: List.generate(_barCount, (i) {
+              final h = _heightFor(i, progress);
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: _barSpacing / 2),
+                child: Container(
+                  width: _barWidth,
+                  height: h,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(_barWidth),
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Botão pequeno de pausar/retomar dentro da pill.
+class _PauseResumeButton extends StatelessWidget {
+  final AppColorScheme s;
+  final bool paused;
+  final VoidCallback onTap;
+
+  static const double _size = 30;
+
+  const _PauseResumeButton({
+    required this.s,
+    required this.paused,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: _size,
+        height: _size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: paused
+              ? s.primary.withOpacity(0.14)
+              : s.hover,
+          shape: BoxShape.circle,
         ),
-      ],
+        child: AppIcon(
+          paused ? 'play' : 'pause',
+          color: paused ? s.primary : s.onSurface,
+          size: 15,
+        ),
+      ),
     );
   }
 }
@@ -1116,143 +1259,6 @@ class _CanvasCard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET: GRAVAÇÃO DE VOZ (LEGACY — não é usada pelo input bar)
-// ══════════════════════════════════════════════════════════════
-
-Future<void> showVoiceRecordSheet(
-  BuildContext context,
-  AppColorScheme s, {
-  required ValueChanged<String> onTranscribed,
-}) {
-  return showFlatBottomSheet<void>(
-    context: context,
-    s: s,
-    builder: (ctx) => _VoiceRecordSheetContent(
-      s: s,
-      onTranscribed: onTranscribed,
-    ),
-  );
-}
-
-class _VoiceRecordSheetContent extends StatefulWidget {
-  final AppColorScheme s;
-  final ValueChanged<String> onTranscribed;
-  const _VoiceRecordSheetContent(
-      {required this.s, required this.onTranscribed});
-  @override
-  State<_VoiceRecordSheetContent> createState() =>
-      _VoiceRecordSheetContentState();
-}
-
-class _VoiceRecordSheetContentState extends State<_VoiceRecordSheetContent>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-  bool _recording = true;
-  Timer? _timer;
-  int _seconds = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _seconds++);
-    });
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String get _formattedTime {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final sec = (_seconds % 60).toString().padLeft(2, '0');
-    return '$m:$sec';
-  }
-
-  void _stopAndTranscribe() {
-    setState(() => _recording = false);
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) Navigator.pop(context);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _recording ? 'A ouvir...' : 'A transcrever...',
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _formattedTime,
-            style: TextStyle(fontSize: 13, color: s.onSurfaceVariant),
-          ),
-          const SizedBox(height: 24),
-          AnimatedBuilder(
-            animation: _pulse,
-            builder: (_, child) {
-              final scale =
-                  _recording ? 1.0 + (_pulse.value * 0.12) : 1.0;
-              return Transform.scale(scale: scale, child: child);
-            },
-            child: Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                color: s.error.withOpacity(s.isDark ? 0.20 : 0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: s.error, width: 1.5),
-              ),
-              child: AppIcon(
-                _recording ? 'mic' : 'mic_off',
-                size: 30,
-                color: s.error,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: _recording ? _stopAndTranscribe : null,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: s.primary,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                _recording ? 'Concluir' : 'A processar...',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: s.onPrimary),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // SHEET: MENU "+"
 // ══════════════════════════════════════════════════════════════
 
@@ -1511,9 +1517,6 @@ class _RootPage extends StatelessWidget {
   }
 }
 
-// Card de opção de anexo — agora usa _HoverSurface (modo escuro já
-// parece "pressionado" no estado base; hover e press têm tons
-// distintos; tap não é engolido pelo drag do sheet).
 class _AttachOptionCard extends StatelessWidget {
   final AppColorScheme s;
   final String assetName;
@@ -1700,9 +1703,6 @@ class _ModelSelectPage extends StatelessWidget {
   }
 }
 
-// Linha de modelo — usa _HoverSurface (mesma aparência dos outros
-// cards). Seleção é indicada APENAS pelo ícone de check; sem fundo
-// primário nem borda.
 class _ModelOptionRow extends StatelessWidget {
   final AppColorScheme s;
   final AiModel model;
