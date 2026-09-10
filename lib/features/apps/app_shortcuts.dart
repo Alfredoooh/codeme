@@ -62,6 +62,21 @@ class AppShortcutsController extends ChangeNotifier {
     await _persist();
   }
 
+  /// Substitui a lista de atalhos inteira pelo conjunto dado, na
+  /// ordem fornecida. Usado pelo ecrã de seleção, que trata a
+  /// seleção final como o estado completo dos atalhos (permite
+  /// adicionar e remover na mesma operação).
+  Future<void> replaceAll(Iterable<String> newSlugs) async {
+    final next = newSlugs.toList();
+    if (next.length == _slugs.length &&
+        next.every((slug) => _slugs.contains(slug))) {
+      return;
+    }
+    _slugs = next;
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> remove(String slug) async {
     if (!_slugs.remove(slug)) return;
     notifyListeners();

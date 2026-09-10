@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/features/all_apps/all_apps_screen.dart
+// FILE: lib/all_apps_screen.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -33,6 +33,12 @@ class _AllAppsScreenState extends State<AllAppsScreen> {
   void initState() {
     super.initState();
     _selectionMode = widget.startInSelectionMode;
+    if (_selectionMode) {
+      // Apps já presentes nos atalhos entram pré-selecionados, para
+      // que o utilizador consiga remover ou adicionar mais na mesma
+      // operação, em vez de perder a seleção anterior.
+      _selected.addAll(appShortcutsController.slugs);
+    }
   }
 
   void _openAppDetail(BuildContext context, AppEntry app) {
@@ -61,7 +67,9 @@ class _AllAppsScreenState extends State<AllAppsScreen> {
     HapticFeedback.mediumImpact();
     setState(() {
       _selectionMode = true;
-      _selected.clear();
+      _selected
+        ..clear()
+        ..addAll(appShortcutsController.slugs);
     });
   }
 
@@ -77,7 +85,9 @@ class _AllAppsScreenState extends State<AllAppsScreen> {
     if (_selected.isEmpty) return;
     HapticFeedback.mediumImpact();
     final count = _selected.length;
-    await appShortcutsController.addAll(_selected);
+    // A seleção final passa a ser o estado completo dos atalhos,
+    // o que permite tanto adicionar como remover na mesma operação.
+    await appShortcutsController.replaceAll(_selected);
     if (!mounted) return;
     setState(() {
       _selectionMode = false;
@@ -165,26 +175,6 @@ class _AllAppsScreenState extends State<AllAppsScreen> {
                     ]),
                   ),
                 ),
-                if (!_selectionMode)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Mantém pressionado o botão "+" na secção de atalhos para escolher os apps que queres ter à mão.',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                height: 1.35,
-                                color: s.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
                   sliver: SliverToBoxAdapter(
@@ -449,89 +439,92 @@ class _AppRowState extends State<_AppRow>
 
 // ══════════════════════════════════════════════════════════════
 // RADIO BUTTON DE SELEÇÃO — círculo com contorno; quando selecionado,
-// preenche com a cor primária e mostra o animated_check por dentro.
+// preenche com a cor primária e desenha o checkmark com animação
+// própria (AnimationController local, forward/reverse conforme o
+// valor de `selected` muda), usando o widget real do pacote
+// animated_check (AnimatedCheck(progress: Animation<double>, ...)).
 // ══════════════════════════════════════════════════════════════
 
-class _SelectionRadio extends StatelessWidget {
+class _SelectionRadio extends StatefulWidget {
   final AppColorScheme s;
   final bool selected;
   const _SelectionRadio({super.key, required this.s, required this.selected});
 
+  @override
+  State<_SelectionRadio> createState() => _SelectionRadioState();
+}
+
+class _SelectionRadioState extends State<_SelectionRadio>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _progress;
+
   static const double _size = 24;
 
   @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: widget.selected ? 1.0 : 0.0,
+    );
+    _progress = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutCirc);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectionRadio oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != oldWidget.selected) {
+      if (widget.selected) {
+        _ctrl.forward();
+      } else {
+        _ctrl.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      width: _size,
-      height: _size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? s.primary : Colors.transparent,
-        border: Border.all(
-          color: selected ? s.primary : s.onSurfaceVariant.withOpacity(0.45),
-          width: 1.6,
-        ),
-      ),
-      alignment: Alignment.center,
-      child: SizedBox(
-        width: 13,
-        height: 13,
-        child: CustomPaint(
-          painter: AnimatedCheckPainter(
-            progress: selected ? 1.0 : 0.0,
-            color: s.onPrimary,
-            strokeWidth: 2.0,
+    final s = widget.s;
+    return AnimatedBuilder(
+      animation: _progress,
+      builder: (context, _) {
+        final t = _progress.value;
+        return Container(
+          width: _size,
+          height: _size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color.lerp(Colors.transparent, s.primary, t),
+            border: Border.all(
+              color: Color.lerp(
+                s.onSurfaceVariant.withOpacity(0.45),
+                s.primary,
+                t,
+              )!,
+              width: 1.6,
+            ),
           ),
-        ),
-      ),
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: 13,
+            height: 13,
+            child: AnimatedCheck(
+              progress: _progress,
+              color: s.onPrimary,
+            ),
+          ),
+        );
+      },
     );
   }
-}
-
-// ══════════════════════════════════════════════════════════════
-// PAINTER DO CHECK — desenha o "v" com progresso de 0..1
-// ══════════════════════════════════════════════════════════════
-
-class AnimatedCheckPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  final double strokeWidth;
-
-  AnimatedCheckPainter({
-    required this.progress,
-    required this.color,
-    required this.strokeWidth,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-
-    final path = Path()
-      ..moveTo(size.width * 0.15, size.height * 0.55)
-      ..lineTo(size.width * 0.42, size.height * 0.80)
-      ..lineTo(size.width * 0.85, size.height * 0.22);
-
-    final p = progress.clamp(0.0, 1.0);
-    if (p <= 0.0) return;
-
-    final metric = path.computeMetrics().first;
-    final extract = metric.extractPath(0, metric.length * p);
-    canvas.drawPath(extract, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant AnimatedCheckPainter old) =>
-      old.progress != progress ||
-      old.color != color ||
-      old.strokeWidth != strokeWidth;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -608,7 +601,9 @@ class _ConcludeButtonInnerState extends State<_ConcludeButtonInner> {
         scale: _pressed ? 0.94 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           alignment: Alignment.center,
@@ -689,44 +684,6 @@ class _MorphingBackButtonState extends State<_MorphingBackButton> {
               color: s.onSurface,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BackButton extends StatefulWidget {
-  final AppColorScheme s;
-  final VoidCallback onTap;
-  const _BackButton({required this.s, required this.onTap});
-  @override
-  State<_BackButton> createState() => _BackButtonState();
-}
-
-class _BackButtonState extends State<_BackButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.9 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.s.cardBackground,
-            shape: BoxShape.circle,
-            boxShadow: widget.s.cardShadow,
-          ),
-          child: AppIcon('back', size: 18, color: widget.s.onSurface),
         ),
       ),
     );

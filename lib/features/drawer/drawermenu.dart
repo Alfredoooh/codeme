@@ -220,6 +220,7 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer> {
   bool _pinnedExpanded = true;
   bool _allExpanded = true;
+  bool _shortcutsExpanded = true;
 
   static const double _topBarContentHeight = 52.0;
   static const double _bottomBarReserve = 84.0;
@@ -571,20 +572,25 @@ class _AppDrawerState extends State<AppDrawer> {
       ),
     ));
 
+    // Secção "Atalhos de apps" — collapsible, mesmo padrão visual e
+    // comportamento das secções de conversas (chevron à direita que
+    // roda 180° e AnimatedCrossFade para recolher/expandir).
     sections.add(_ConversationGroupHeader(
       s: s,
       label: 'Atalhos de apps',
-      expanded: true,
-      interactive: false,
-      onTap: () {},
+      expanded: _shortcutsExpanded,
+      onTap: () => setState(() => _shortcutsExpanded = !_shortcutsExpanded),
     ));
-    sections.add(Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: _AppShortcutsRow(
-        s: s,
-        slugs: appShortcutsController.slugs,
-        onTapShortcut: (slug) => _openShortcutApp(context, slug),
-        onAddTap: () => _openAllAppsInSelectionMode(context),
+    sections.add(_ShortcutsCrossFade(
+      visible: _shortcutsExpanded,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: _AppShortcutsRow(
+          s: s,
+          slugs: appShortcutsController.slugs,
+          onTapShortcut: (slug) => _openShortcutApp(context, slug),
+          onAddTap: () => _openAllAppsInSelectionMode(context),
+        ),
       ),
     ));
 
@@ -732,10 +738,36 @@ class _DrawerSquareActionState extends State<DrawerSquareAction> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SECÇÃO "Atalhos de apps" — lista horizontal de ícones circulares
-// dos apps escolhidos, seguida de um botão "+" circular (contorno
-// traço-a-traço, cor de fundo do corpo) que abre o AllAppsScreen em
-// modo de seleção.
+// CROSSFADE DE RECOLHER/EXPANDIR PARA A SECÇÃO DE ATALHOS — mesmo
+// padrão de animação usado em _StaggeredRevealGroup (conversas),
+// mas sem stagger por item (a fila horizontal já é um único bloco).
+// ══════════════════════════════════════════════════════════════
+
+class _ShortcutsCrossFade extends StatelessWidget {
+  final bool visible;
+  final Widget child;
+  const _ShortcutsCrossFade({required this.visible, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedCrossFade(
+      duration: const Duration(milliseconds: 260),
+      sizeCurve: Curves.easeOutCubic,
+      firstCurve: Curves.easeOut,
+      secondCurve: Curves.easeOut,
+      crossFadeState: visible ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+      firstChild: child,
+      secondChild: const SizedBox(width: double.infinity, height: 0),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECÇÃO "Atalhos de apps" — lista horizontal de ícones (sem
+// container/fundo, -30% do tamanho anterior: 56 → 39) dos apps
+// escolhidos, seguida de um botão "+" circular com contorno
+// tracejado (traço por traço, não linha sólida) que abre o
+// AllAppsScreen em modo de seleção.
 // ══════════════════════════════════════════════════════════════
 
 class _AppShortcutsRow extends StatelessWidget {
@@ -750,7 +782,8 @@ class _AppShortcutsRow extends StatelessWidget {
     required this.onAddTap,
   });
 
-  static const double _itemSize = 56;
+  // Tamanho original era 56; reduzido em 30% (56 * 0.7 = 39.2).
+  static const double _itemSize = 39.2;
 
   @override
   Widget build(BuildContext context) {
@@ -798,11 +831,12 @@ class _AppShortcutIconState extends State<_AppShortcutIcon> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
     final entry = AppRegistry.bySlug(widget.slug);
     if (entry == null) return const SizedBox.shrink();
     final manifest = entry.manifest;
 
+    // Sem Container/fundo por trás do ícone — apenas a imagem do
+    // app, recortada em círculo ou cantos suaves conforme o manifest.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _p = true),
@@ -818,12 +852,11 @@ class _AppShortcutIconState extends State<_AppShortcutIcon> {
         curve: Curves.easeOut,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(
-            manifest.isCircularIcon ? widget.size / 2 : 16,
+            manifest.isCircularIcon ? widget.size / 2 : 12,
           ),
-          child: Container(
+          child: SizedBox(
             width: widget.size,
             height: widget.size,
-            color: manifest.isCircularIcon ? Colors.white : s.cardBackground,
             child: Image.asset(manifest.iconAsset, fit: BoxFit.cover),
           ),
         ),
@@ -865,22 +898,78 @@ class _AddShortcutButtonState extends State<_AddShortcutButton> {
         scale: _p ? 0.92 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
-        child: Container(
+        child: SizedBox(
           width: widget.size,
           height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: s.cardBackground,
-            border: Border.all(
-              color: s.onSurfaceVariant.withOpacity(0.35),
-              width: 1.4,
+          child: CustomPaint(
+            painter: _DashedCirclePainter(
+              color: s.onSurfaceVariant.withOpacity(0.5),
+              strokeWidth: 1.4,
+              gap: 3.2,
+              dashLength: 3.6,
+            ),
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: s.cardBackground,
+              ),
+              child: AppIcon('plus', size: widget.size * 0.36, color: s.onSurface),
             ),
           ),
-          child: AppIcon('plus', size: 20, color: s.onSurface),
         ),
       ),
     );
+  }
+}
+
+/// Desenha um círculo com contorno tracejado (traço por traço),
+/// em vez de um `Border.all` sólido. O painter caminha ao longo
+/// da circunferência distribuindo pares [dashLength, gap] de forma
+/// uniforme, para que o traço feche exatamente no ponto de partida.
+class _DashedCirclePainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  final double dashLength;
+  final double gap;
+
+  const _DashedCirclePainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.dashLength,
+    required this.gap,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final circumference = 2 * 3.141592653589793 * radius;
+    final segment = dashLength + gap;
+    final dashCount = (circumference / segment).floor().clamp(6, 200);
+    final anglePerDash = (2 * 3.141592653589793) / dashCount;
+    final dashAngle = anglePerDash * (dashLength / segment);
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    for (var i = 0; i < dashCount; i++) {
+      final startAngle = i * anglePerDash;
+      canvas.drawArc(rect, startAngle, dashAngle, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dashLength != dashLength ||
+        oldDelegate.gap != gap;
   }
 }
 
@@ -918,13 +1007,13 @@ class _DrawerSkeleton extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
           child: SizedBox(
-            height: 56,
+            height: 40,
             child: Row(
               children: [
                 for (int i = 0; i < 4; i++)
                   Padding(
                     padding: const EdgeInsets.only(right: 10),
-                    child: _SkeletonCircle(s: s, size: 56, delayMs: 180 + i * 40),
+                    child: _SkeletonCircle(s: s, size: 39.2, delayMs: 180 + i * 40),
                   ),
               ],
             ),
@@ -1509,6 +1598,10 @@ class _ConversationOptionsModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Título do modal: branco puro no tema escuro, escuro (cor de
+    // fundo de página) no tema claro — inverso do texto normal,
+    // conforme pedido, em vez de usar s.onSurfaceVariant.
+    final titleColor = s.isDark ? Colors.white : s.pageBackground;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1522,7 +1615,7 @@ class _ConversationOptionsModalContent extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: s.onSurfaceVariant,
+                color: titleColor,
               ),
             ),
           ),
