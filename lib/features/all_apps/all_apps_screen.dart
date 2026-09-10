@@ -442,7 +442,7 @@ class _AppRowState extends State<_AppRow>
 // preenche com a cor primária e desenha o checkmark com animação
 // própria (AnimationController local, forward/reverse conforme o
 // valor de `selected` muda), usando o widget real do pacote
-// animated_check (AnimatedCheck(progress: Animation<double>, size, color)).
+// animated_check (AnimatedCheck(progress: Animation<double>, size: double, color)).
 // ══════════════════════════════════════════════════════════════
 
 class _SelectionRadio extends StatefulWidget {
@@ -515,7 +515,7 @@ class _SelectionRadioState extends State<_SelectionRadio>
           alignment: Alignment.center,
           child: AnimatedCheck(
             progress: _progress,
-            size: const Size(13, 13),
+            size: 13.0,
             color: s.onPrimary,
           ),
         );
