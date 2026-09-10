@@ -80,6 +80,29 @@ const Map<String, String> kMathSymbols = {
   r'\bigtriangleup': '△', r'\bigtriangledown': '▽', r'\lozenge': '◊',
   r'\diamond': '◆', r'\clubsuit': '♣', r'\diamondsuit': '♦',
   r'\heartsuit': '♥', r'\spadesuit': '♠',
+  r'\,': ' ', r'\;': '  ', r'\:': ' ', r'\!': '', r'\quad': '   ',
+  r'\qquad': '      ', r'\ ': ' ',
+};
+
+// Operadores/funções nomeadas do LaTeX — cobertura extensa (álgebra,
+// trigonometria, cálculo, álgebra linear, estatística, lógica).
+// Convertidos para texto "roman" (não itálico) exatamente como o
+// LaTeX real renderiza \sin, \log, \lim, etc.
+const Map<String, String> kMathNamedOperators = {
+  r'\sin': 'sin', r'\cos': 'cos', r'\tan': 'tan', r'\cot': 'cot',
+  r'\sec': 'sec', r'\csc': 'csc',
+  r'\arcsin': 'arcsin', r'\arccos': 'arccos', r'\arctan': 'arctan',
+  r'\sinh': 'sinh', r'\cosh': 'cosh', r'\tanh': 'tanh',
+  r'\coth': 'coth', r'\operatorname{sech}': 'sech', r'\operatorname{csch}': 'csch',
+  r'\log': 'log', r'\ln': 'ln', r'\lg': 'lg', r'\exp': 'exp',
+  r'\lim': 'lim', r'\limsup': 'limsup', r'\liminf': 'liminf',
+  r'\max': 'max', r'\min': 'min', r'\sup': 'sup', r'\inf': 'inf',
+  r'\arg': 'arg', r'\det': 'det', r'\dim': 'dim', r'\ker': 'ker',
+  r'\gcd': 'gcd', r'\lcm': 'lcm', r'\deg': 'deg', r'\hom': 'hom',
+  r'\mod': 'mod', r'\bmod': 'mod', r'\pmod': 'mod',
+  r'\Pr': 'Pr', r'\Var': 'Var', r'\Cov': 'Cov', r'\E': 'E',
+  r'\rank': 'rank', r'\trace': 'tr', r'\tr': 'tr',
+  r'\mathrm{d}': 'd', r'\mathrm{e}': 'e', r'\mathrm{i}': 'i',
 };
 
 const Set<String> kMathFormattingCommands = {
@@ -239,12 +262,18 @@ String _stripOuterBraces(String s) {
 
 String _substituteKnownTokens(String expr) {
   var result = expr;
-  final allTokens = <String, String>{...kGreekLetters, ...kMathSymbols};
+  final allTokens = <String, String>{
+    ...kGreekLetters,
+    ...kMathSymbols,
+    ...kMathNamedOperators,
+  };
   final sortedKeys = allTokens.keys.toList()
     ..sort((a, b) => b.length.compareTo(a.length));
   for (final token in sortedKeys) {
     result = result.replaceAll(token, allTokens[token]!);
   }
+  // Vírgula decimal em contexto matemático: {,} → ,
+  result = result.replaceAll('{,}', ',');
   return result;
 }
 
@@ -403,6 +432,9 @@ List<_MathAtom> _parseMathExpression(String raw) {
     r'|\\int\\limits\^\{([^{}]+)\}_\{([^{}]+)\}'
     r'|\\int\\limits_\{([^{}]+)\}'
     r'|\\int\\limits\^\{([^{}]+)\}'
+    r'|\\lim_\{([^{}]+)\}'
+    r'|\\max_\{([^{}]+)\}'
+    r'|\\min_\{([^{}]+)\}'
     r'|\u0004OVERLINE\{([^{}]+)\}\u0004'
     r'|\u0004UNDERLINE\{([^{}]+)\}\u0004'
     r'|\u0005BOXED\{([^{}]+)\}\u0005'
@@ -449,22 +481,28 @@ List<_MathAtom> _parseMathExpression(String raw) {
       final sub = m.group(36) ?? m.group(38) ?? m.group(40) ?? m.group(42);
       final sup = m.group(37) ?? m.group(39) ?? m.group(41) ?? m.group(43);
       atoms.add(_MathLimits('∫', sub: sub, sup: sup));
+    } else if (match.startsWith(r'\lim_')) {
+      atoms.add(_MathLimits('lim', sub: m.group(44)));
+    } else if (match.startsWith(r'\max_')) {
+      atoms.add(_MathLimits('max', sub: m.group(45)));
+    } else if (match.startsWith(r'\min_')) {
+      atoms.add(_MathLimits('min', sub: m.group(46)));
     } else if (match.startsWith('\u0004OVERLINE')) {
-      atoms.add(_MathOverline(m.group(44)!));
+      atoms.add(_MathOverline(m.group(47)!));
     } else if (match.startsWith('\u0004UNDERLINE')) {
-      atoms.add(_MathUnderline(m.group(45)!));
+      atoms.add(_MathUnderline(m.group(48)!));
     } else if (match.startsWith('\u0005BOXED')) {
-      atoms.add(_MathBoxed(m.group(46)!));
+      atoms.add(_MathBoxed(m.group(49)!));
     } else if (match.startsWith('\u0006COLOR')) {
-      atoms.add(_MathColor(m.group(47)!, m.group(48)!));
+      atoms.add(_MathColor(m.group(50)!, m.group(51)!));
     } else if (match.startsWith('\u0007ACC')) {
-      atoms.add(_MathAccent(m.group(49)!, m.group(50)!));
+      atoms.add(_MathAccent(m.group(52)!, m.group(53)!));
     } else if (match.startsWith('\u0008NOT')) {
-      atoms.add(_MathNot(m.group(51)!));
+      atoms.add(_MathNot(m.group(54)!));
     } else if (match.startsWith('\u0003OVER')) {
-      atoms.add(_MathArrow('over', m.group(52)!));
+      atoms.add(_MathArrow('over', m.group(55)!));
     } else if (match.startsWith('\u0003UNDER')) {
-      atoms.add(_MathArrow('under', m.group(53)!));
+      atoms.add(_MathArrow('under', m.group(56)!));
     }
     last = m.end;
   }
@@ -494,7 +532,7 @@ List<_MathAtom> _parsePlainMathText(String text) {
         atoms.add(_MathText(content, italic: false));
         break;
       case 'BF':
-        atoms.add(_MathText(content, italic: true));
+        atoms.add(_MathText(content, italic: false));
         break;
       case 'IT':
         atoms.add(_MathText(content, italic: true));
@@ -732,7 +770,10 @@ class MathInline extends StatelessWidget {
             children: [
               if (sup != null)
                 Text(sup, style: baseStyle.copyWith(fontSize: baseFontSize * 0.65)),
-              Text(symbol, style: baseStyle.copyWith(fontSize: baseFontSize * 1.3)),
+              Text(symbol, style: baseStyle.copyWith(
+                fontSize: baseFontSize * (symbol.length > 1 ? 1.0 : 1.3),
+                fontStyle: symbol.length > 1 ? FontStyle.normal : FontStyle.italic,
+              )),
               if (sub != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 1),
@@ -892,9 +933,7 @@ class MathBlockParseResult {
 // ══════════════════════════════════════════════════════════════
 // RichAiText — ponto de entrada. Aceita bodyTextStyle opcional que
 // sobrepõe cor/fontFamily/etc. do texto de PROSA normal (nunca é
-// aplicado a: código, matemática, tabela, ícones, labels). Isto é
-// o que permite ao aitab_message_bubbles.dart injetar Times New
-// Roman apenas na prosa da resposta da IA.
+// aplicado a: código, matemática, tabela, ícones, labels).
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
@@ -1120,11 +1159,6 @@ class _RichTextBlockParser {
         final nextRow = i + 1 < lines.length ? _splitTableRow(lines[i + 1].trim()) : null;
         final looksLikeHeader = nextRow != null && _isTableSeparatorRow(nextRow);
         if (looksLikeHeader || tableRows != null) {
-          // Se esta é a última linha do texto recebido até agora e ainda
-          // não fecha com '|' no fim, a linha pode estar a meio de chegar
-          // via streaming — não adiciona à tabela ainda, para não forçar
-          // o Table a rebuilder incompleto (o que expõe o fundo por trás
-          // durante um frame, criando o flash cinza).
           final rowIncomplete = isLastLine && !trimmed.endsWith('|');
           if (rowIncomplete) {
             i++;
@@ -1242,10 +1276,6 @@ class _RichTextBlockParser {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (label != null) ...[
-                        // Rótulo (Nota/Aviso/Cuidado/...) — mesmo
-                        // tamanho do corpo de texto (15.5), só com
-                        // peso maior para se distinguir; sem cor
-                        // nem fundo destacado, como pedido.
                         Text(
                           label,
                           style: (bodyTextStyle ?? const TextStyle()).copyWith(
@@ -1481,6 +1511,10 @@ class _RichTextBlockParser {
         _ => 'Nota',
       };
 
+  // ── Cor fixa do código inline (pedido explícito: azul fixo, não
+  // ligado ao tema) ──────────────────────────────────────────────
+  static const Color _kInlineCodeColor = Color(0xFF5B9DF0);
+
   static List<InlineSpan> inlineSpans(
     String raw,
     AppColorScheme s, {
@@ -1490,6 +1524,14 @@ class _RichTextBlockParser {
     final processed = _normalizeInlineMarkdown(raw);
     final spans = <InlineSpan>[];
 
+    // FIX (bug "**palavra**" a aparecer literal): o padrão de itálico
+    // single-asterisco já não "rouba" um asterisco de abertura de um
+    // **negrito** vizinho. (?!\*) impede abrir itálico logo antes de
+    // um segundo asterisco (isso pertence ao padrão duplo); (?<!\*)
+    // impede fechar itálico nesse mesmo caso. Também exige que não
+    // haja espaço colado ao asterisco (convenção CommonMark: `* x *`
+    // não é itálico válido), o que evita capturar `5 * 3 * 4` de
+    // texto matemático solto como se fosse ênfase.
     final pattern = RegExp(
       r'(\$\$[^$\n]+?\$\$)|'
       r'(\$[^$\n]+?\$)|'
@@ -1497,7 +1539,7 @@ class _RichTextBlockParser {
       r'(\*\*\*[^*\n]+?\*\*\*)|'
       r'(\*\*[^*\n]+?\*\*|__[^_\n]+?__)|'
       r'(~~[^~\n]+?~~)|'
-      r'(\*[^*\n]+?\*|_[^_\n]+?_)|'
+      r'(\*(?!\*)(?!\s)[^*\n]+?(?<!\s)(?<!\*)\*(?!\*)|_(?!\s)[^_\n]+?(?<!\s)_)|'
       r'(==[^=\n]+?==)|'
       r'(\+\+[^+\n]+?\+\+)|'
       r'(<sup>[^<]+</sup>)|'
@@ -1565,8 +1607,6 @@ class _RichTextBlockParser {
           style: const TextStyle(decoration: TextDecoration.lineThrough),
         ));
       } else if (token.startsWith('==')) {
-        // Highlight: pílula curva na cor primária, sem outras
-        // variações de cor — apenas primary como pedido.
         final value = token.substring(2, token.length - 2);
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,
@@ -1616,9 +1656,32 @@ class _RichTextBlockParser {
           style: const TextStyle(fontFamily: 'monospace'),
         ));
       } else if (token.startsWith('`')) {
-        spans.add(TextSpan(
-          text: _unescapeInline(token.substring(1, token.length - 1)),
-          style: TextStyle(fontFamily: 'monospace', backgroundColor: s.hover, fontSize: fontSize - 1),
+        // Código inline — fundo escuro, cantos arredondados (7px),
+        // borda fina s.outline, texto AZUL FIXO #5B9DF0. Precisa de
+        // WidgetSpan (não TextSpan.backgroundColor) porque só um
+        // Container/BoxDecoration real dá cantos arredondados e
+        // borda — o backgroundColor de TextSpan pinta um retângulo
+        // reto sem raio nem borda.
+        final value = _unescapeInline(token.substring(1, token.length - 1));
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: s.isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0),
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: s.outline, width: 1),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: fontSize - 1,
+                color: _kInlineCodeColor,
+                height: 1.25,
+              ),
+            ),
+          ),
         ));
       } else if (token.startsWith('^')) {
         final value = token.startsWith('^(')
@@ -1693,11 +1756,6 @@ class _RichTextBlockParser {
     bool forceLineBreak = false,
     TextStyle? bodyTextStyle,
   }) {
-    // bodyTextStyle (ex.: Times New Roman vindo de aitab_message_bubbles)
-    // sobrepõe-se ao estilo base do texto de PROSA. fontSize/fontWeight
-    // locais (usados por títulos, listas, quotes) continuam a poder
-    // sobrepor o tamanho/peso vindos de bodyTextStyle quando explicitados
-    // aqui, já que copyWith só troca o que passamos.
     final base = TextStyle(
       color: s.onSurface,
       fontSize: fontSize,
@@ -1885,7 +1943,6 @@ class _CodeTokenColors {
     required this.property,
   });
 
-  // Paleta escura — igual à original.
   static const dark = _CodeTokenColors(
     background: Color(0xFF161616),
     baseText: Color(0xFFE8E8E8),
@@ -1909,8 +1966,6 @@ class _CodeTokenColors {
     property: Color(0xFF7EE7FC),
   );
 
-  // Paleta clara — nova, pensada para fundo quase-branco com
-  // contraste suficiente para leitura de código.
   static const light = _CodeTokenColors(
     background: Color(0xFFF6F6F7),
     baseText: Color(0xFF1F2328),
@@ -1990,6 +2045,53 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
     );
   }
 
+  // Nome de exibição da linguagem para a appbar do bloco (ex.: "dart"
+  // -> "Dart", "js" -> "JavaScript"). Mantém o valor cru se não houver
+  // mapeamento amigável.
+  String get _displayLanguage {
+    final lang = widget.language.toLowerCase().trim();
+    const labels = {
+      'dart': 'Dart',
+      'js': 'JavaScript',
+      'javascript': 'JavaScript',
+      'jsx': 'JSX',
+      'ts': 'TypeScript',
+      'typescript': 'TypeScript',
+      'tsx': 'TSX',
+      'py': 'Python',
+      'python': 'Python',
+      'html': 'HTML',
+      'htm': 'HTML',
+      'xml': 'XML',
+      'svg': 'SVG',
+      'css': 'CSS',
+      'scss': 'SCSS',
+      'bash': 'Bash',
+      'shell': 'Shell',
+      'sh': 'Shell',
+      'sql': 'SQL',
+      'markdown': 'Markdown',
+      'md': 'Markdown',
+      'go': 'Go',
+      'rust': 'Rust',
+      'kotlin': 'Kotlin',
+      'swift': 'Swift',
+      'c': 'C',
+      'cpp': 'C++',
+      'c++': 'C++',
+      'csharp': 'C#',
+      'cs': 'C#',
+      'java': 'Java',
+      'json': 'JSON',
+      'yaml': 'YAML',
+      'yml': 'YAML',
+      'toml': 'TOML',
+      'ini': 'INI',
+      'text': 'Texto',
+    };
+    return labels[lang] ?? (lang.isEmpty ? 'Texto' : lang);
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = _CodeTokenColors.of(widget.s.isDark);
@@ -2002,11 +2104,14 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
     final codeSpans = _highlightCode(widget.code, widget.language, baseStyle, tokens);
 
-    // Sem "card" fechado: cantos discretos (14, não 32), sem altura
-    // máxima nem scroll vertical interno — o bloco cresce com o
-    // conteúdo (markdown e streaming) e o scroll vertical passa a
-    // pertencer à lista de mensagens, não ao bloco. Scroll horizontal
-    // mantém-se para linhas compridas.
+    // Appbar: mesmo fundo do corpo do bloco, 10% mais fraco (pedido
+    // explícito). "Mais fraco" = mistura com preto/branco consoante o
+    // tema para dar contraste sutil sem introduzir cor nova.
+    final appBarColor = Color.alphaBlend(
+      (widget.s.isDark ? Colors.black : Colors.white).withOpacity(0.10),
+      tokens.background,
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       clipBehavior: Clip.antiAlias,
@@ -2014,13 +2119,56 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
         color: tokens.background,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Stack(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildAppBar(appBarColor, tokens),
           _buildCodeBody(codeSpans, baseStyle),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: _buildActions(tokens),
+        ],
+      ),
+    );
+  }
+
+  // Appbar: nome da linguagem à esquerda, ações (preview + copiar) à
+  // direita como ícones LIVRES (sem container/fundo/pill — só o
+  // ícone, no mesmo tamanho de antes).
+  Widget _buildAppBar(Color appBarColor, _CodeTokenColors tokens) {
+    final labelColor = tokens.comment;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.only(left: 14, right: 8),
+      decoration: BoxDecoration(color: appBarColor),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _displayLanguage,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: labelColor,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          if (_canPreview) ...[
+            _BareIconButton(
+              svgAsset: 'play.svg',
+              color: labelColor,
+              hoverColor: tokens.baseText,
+              onTap: _openPreview,
+            ),
+            const SizedBox(width: 14),
+          ],
+          _BareIconButton(
+            svgAsset: _copied ? 'check.svg' : 'copy.svg',
+            color: _copied ? const Color(0xFF4ADE80) : labelColor,
+            hoverColor: tokens.baseText,
+            onTap: _copy,
           ),
         ],
       ),
@@ -2033,94 +2181,60 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
     // verticalmente seja sempre entregue ao scroll da conversa por trás.
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 42, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: SelectableText.rich(
         TextSpan(style: baseStyle, children: spans),
         textAlign: TextAlign.left,
       ),
     );
   }
-
-  Widget _buildActions(_CodeTokenColors tokens) {
-    final iconBg = widget.s.isDark ? const Color(0xFF232323) : const Color(0xFFE6E6E8);
-    final iconBgHover = widget.s.isDark ? const Color(0xFF2C2C2C) : const Color(0xFFDCDCDF);
-    final iconHoverBg = widget.s.isDark ? const Color(0xFF383838) : const Color(0xFFCFCFD3);
-    final iconColor = widget.s.isDark ? const Color(0xFF9A9A9A) : const Color(0xFF6B6B70);
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: iconBg,
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_canPreview) ...[
-            _ActionButton(
-              svgAsset: 'play.svg',
-              color: iconColor,
-              backgroundColor: iconBgHover,
-              hoverBackgroundColor: iconHoverBg,
-              onTap: _openPreview,
-            ),
-            const SizedBox(width: 3),
-          ],
-          _ActionButton(
-            svgAsset: _copied ? 'check.svg' : 'copy.svg',
-            color: _copied ? const Color(0xFF4ADE80) : iconColor,
-            backgroundColor: iconBgHover,
-            hoverBackgroundColor: iconHoverBg,
-            onTap: _copy,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-class _ActionButton extends StatefulWidget {
+// Ícone "livre" — sem container, sem fundo, sem pill. Só o ícone, no
+// mesmo tamanho (14px) que tinha dentro do botão circular anterior.
+// Hover clareia ligeiramente a cor para dar feedback sem introduzir
+// fundo/forma.
+class _BareIconButton extends StatefulWidget {
   final String svgAsset;
   final Color color;
-  final Color backgroundColor;
-  final Color hoverBackgroundColor;
+  final Color hoverColor;
   final VoidCallback? onTap;
 
-  const _ActionButton({
+  const _BareIconButton({
     required this.svgAsset,
     required this.color,
-    required this.backgroundColor,
-    required this.hoverBackgroundColor,
+    required this.hoverColor,
     this.onTap,
   });
 
   @override
-  State<_ActionButton> createState() => _ActionButtonState();
+  State<_BareIconButton> createState() => _BareIconButtonState();
 }
 
-class _ActionButtonState extends State<_ActionButton> {
+class _BareIconButtonState extends State<_BareIconButton> {
   bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
-    // Botões encolhidos: 32 → 26, ícone 17 → 14.
-    return GestureDetector(
-      onTapDown: widget.onTap == null ? null : (_) => setState(() => _hover = true),
-      onTapCancel: widget.onTap == null ? null : () => setState(() => _hover = false),
-      onTapUp: widget.onTap == null ? null : (_) => setState(() => _hover = false),
-      onTap: widget.onTap,
-      child: Container(
-        width: 26,
-        height: 26,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: _hover ? widget.hoverBackgroundColor : widget.backgroundColor,
-          borderRadius: BorderRadius.circular(9999),
-        ),
-        child: AppIcon(
-          widget.svgAsset,
-          size: 14,
-          color: widget.color,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: Padding(
+          // Área de toque confortável sem introduzir fundo visual.
+          padding: const EdgeInsets.all(6),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            child: AppIcon(
+              widget.svgAsset,
+              key: ValueKey(widget.svgAsset),
+              size: 14,
+              color: _hover ? widget.hoverColor : widget.color,
+            ),
+          ),
         ),
       ),
     );
