@@ -30,7 +30,6 @@ import '../apps/sheets/sheets_app.dart';
 import '../apps/slides/slides_app.dart';
 import '../apps/sound/sound.dart';
 
-
 // ══════════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════════
@@ -225,9 +224,6 @@ class _AppDrawerState extends State<AppDrawer> {
   static const double _topBarContentHeight = 52.0;
   static const double _bottomBarReserve = 84.0;
 
-  // Tamanho de referência para avatar e botão de fechar do topo do
-  // drawer — igualado aos botões circulares padrão usados em
-  // aitab_widgets_shared.dart (ex.: _HeaderMenuButton).
   static const double _topCircleSize = 40.0;
 
   @override
@@ -367,18 +363,19 @@ class _AppDrawerState extends State<AppDrawer> {
     });
   }
 
+  /// ✅ ALTERAÇÃO: o drawer NÃO fecha antes. A tela de ChatSearch é
+  /// empilhada por cima com `_OverlayDisplayRoute` (fade + scale).
+  /// A mesma animação serve de transição de saída.
   void _openChatSearch(BuildContext context) {
     HapticFeedback.lightImpact();
-    _closeThenRun(() {
-      Navigator.of(context).push(_FadePageRoute(
-        builder: (_) => ChatSearchScreen(
-          s: widget.s,
-          onOpenConversation: (id) {
-            widget.onOpenConversation?.call(id);
-          },
-        ),
-      ));
-    });
+    Navigator.of(context).push(_OverlayDisplayRoute(
+      builder: (_) => ChatSearchScreen(
+        s: widget.s,
+        onOpenConversation: (id) {
+          widget.onOpenConversation?.call(id);
+        },
+      ),
+    ));
   }
 
   Uint8List? _decodeAvatarBytes(String? raw) {
@@ -572,9 +569,6 @@ class _AppDrawerState extends State<AppDrawer> {
       ),
     ));
 
-    // Secção "Atalhos de apps" — collapsible, mesmo padrão visual e
-    // comportamento das secções de conversas (chevron à direita que
-    // roda 180° e AnimatedCrossFade para recolher/expandir).
     sections.add(_ConversationGroupHeader(
       s: s,
       label: 'Atalhos de apps',
@@ -738,9 +732,7 @@ class _DrawerSquareActionState extends State<DrawerSquareAction> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CROSSFADE DE RECOLHER/EXPANDIR PARA A SECÇÃO DE ATALHOS — mesmo
-// padrão de animação usado em _StaggeredRevealGroup (conversas),
-// mas sem stagger por item (a fila horizontal já é um único bloco).
+// CROSSFADE DE RECOLHER/EXPANDIR PARA A SECÇÃO DE ATALHOS
 // ══════════════════════════════════════════════════════════════
 
 class _ShortcutsCrossFade extends StatelessWidget {
@@ -763,11 +755,7 @@ class _ShortcutsCrossFade extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SECÇÃO "Atalhos de apps" — lista horizontal de ícones (sem
-// container/fundo, -30% do tamanho anterior: 56 → 39) dos apps
-// escolhidos, seguida de um botão "+" circular com contorno
-// tracejado (traço por traço, não linha sólida) que abre o
-// AllAppsScreen em modo de seleção.
+// SECÇÃO "Atalhos de apps"
 // ══════════════════════════════════════════════════════════════
 
 class _AppShortcutsRow extends StatelessWidget {
@@ -782,7 +770,6 @@ class _AppShortcutsRow extends StatelessWidget {
     required this.onAddTap,
   });
 
-  // Tamanho original era 56; reduzido em 30% (56 * 0.7 = 39.2).
   static const double _itemSize = 39.2;
 
   @override
@@ -835,8 +822,6 @@ class _AppShortcutIconState extends State<_AppShortcutIcon> {
     if (entry == null) return const SizedBox.shrink();
     final manifest = entry.manifest;
 
-    // Sem Container/fundo por trás do ícone — apenas a imagem do
-    // app, recortada em círculo ou cantos suaves conforme o manifest.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _p = true),
@@ -865,6 +850,7 @@ class _AppShortcutIconState extends State<_AppShortcutIcon> {
   }
 }
 
+// ✅ ALTERAÇÃO: traço mais grosso e ícone 'add'.
 class _AddShortcutButton extends StatefulWidget {
   final AppColorScheme s;
   final double size;
@@ -903,10 +889,11 @@ class _AddShortcutButtonState extends State<_AddShortcutButton> {
           height: widget.size,
           child: CustomPaint(
             painter: _DashedCirclePainter(
-              color: s.onSurfaceVariant.withOpacity(0.5),
-              strokeWidth: 1.4,
-              gap: 3.2,
-              dashLength: 3.6,
+              color: s.onSurfaceVariant.withOpacity(0.55),
+              // traço notoriamente mais grosso do que o original (1.4)
+              strokeWidth: 2.4,
+              gap: 4.2,
+              dashLength: 5.0,
             ),
             child: Container(
               alignment: Alignment.center,
@@ -914,7 +901,11 @@ class _AddShortcutButtonState extends State<_AddShortcutButton> {
                 shape: BoxShape.circle,
                 color: s.cardBackground,
               ),
-              child: AppIcon('plus', size: widget.size * 0.36, color: s.onSurface),
+              child: AppIcon(
+                'add',
+                size: widget.size * 0.42,
+                color: s.onSurface,
+              ),
             ),
           ),
         ),
@@ -923,10 +914,7 @@ class _AddShortcutButtonState extends State<_AddShortcutButton> {
   }
 }
 
-/// Desenha um círculo com contorno tracejado (traço por traço),
-/// em vez de um `Border.all` sólido. O painter caminha ao longo
-/// da circunferência distribuindo pares [dashLength, gap] de forma
-/// uniforme, para que o traço feche exatamente no ponto de partida.
+/// Desenha um círculo com contorno tracejado (traço por traço).
 class _DashedCirclePainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
@@ -974,10 +962,6 @@ class _DashedCirclePainter extends CustomPainter {
 }
 
 // ── Skeleton loader estruturado ─────────────────────────────
-// Reproduz a forma real da tela: 3 cards quadrados de ação,
-// cabeçalho de secção, uma linha de atalhos horizontais + botão,
-// e depois linhas de conversa (título + data) em dois grupos.
-// ══════════════════════════════════════════════════════════════
 
 class _DrawerSkeleton extends StatelessWidget {
   const _DrawerSkeleton();
@@ -1262,8 +1246,6 @@ class _StaggeredItemState extends State<_StaggeredItem> with SingleTickerProvide
 }
 
 // ── Cabeçalho de grupo expansível ─────────────────────────────
-// O chevron fica encostado à direita (Spacer entre o label e o
-// ícone), mantendo o label alinhado à esquerda como antes.
 
 class _ConversationGroupHeader extends StatelessWidget {
   final AppColorScheme s;
@@ -1339,6 +1321,34 @@ class _FadePageRoute<T> extends PageRouteBuilder<T> {
         );
 }
 
+// ✅ NOVO: rota com animação de "overlay display" — fade + scale.
+// Usada para a tela de ChatSearch (abre por cima do drawer, sem o
+// fechar primeiro; a mesma animação serve para sair).
+class _OverlayDisplayRoute<T> extends PageRouteBuilder<T> {
+  final WidgetBuilder builder;
+  _OverlayDisplayRoute({required this.builder})
+      : super(
+          opaque: true,
+          transitionDuration: const Duration(milliseconds: 300),
+          reverseTransitionDuration: const Duration(milliseconds: 240),
+          pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+                child: child,
+              ),
+            );
+          },
+        );
+}
+
 // ── Botão circular genérico ───────────────────────────────────
 
 class _CircleIconButton extends StatefulWidget {
@@ -1404,8 +1414,6 @@ class _CircleIconButtonState extends State<_CircleIconButton> {
 }
 
 // ── Conversa individual ──
-// Layout em coluna: título na linha de cima, data na linha de
-// baixo (alinhada à esquerda, abaixo do título).
 
 class _ConvTile extends StatefulWidget {
   final AppColorScheme s;
@@ -1499,10 +1507,7 @@ class _ConvTileState extends State<_ConvTile> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHEET GENÉRICO PLANO — substitui showCraftBottomSheet/Cupertino
-// em todos os modais deste ficheiro. Mesma curva (topo, radius
-// _kFlatModalRadius) e mesmo handlebar do modal de opções da
-// conversa, para que "tudo" use a mesma linguagem visual.
+// SHEET GENÉRICO PLANO
 // ══════════════════════════════════════════════════════════════
 
 const double _kFlatModalRadius = 20.0;
@@ -1529,6 +1534,8 @@ class _ModalHandlebar extends StatelessWidget {
   }
 }
 
+// ✅ ALTERAÇÃO: no modo claro o modal é BRANCO PURO. No modo escuro
+// mantém-se s.cardBackground, como antes.
 Future<T?> showFlatBottomSheet<T>({
   required BuildContext context,
   required AppColorScheme s,
@@ -1536,7 +1543,7 @@ Future<T?> showFlatBottomSheet<T>({
 }) {
   return showModalBottomSheet<T>(
     context: context,
-    backgroundColor: s.cardBackground,
+    backgroundColor: s.isDark ? s.cardBackground : Colors.white,
     barrierColor: Colors.black.withOpacity(0.35),
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
@@ -1598,9 +1605,6 @@ class _ConversationOptionsModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Título do modal: branco puro no tema escuro, escuro (cor de
-    // fundo de página) no tema claro — inverso do texto normal,
-    // conforme pedido, em vez de usar s.onSurfaceVariant.
     final titleColor = s.isDark ? Colors.white : s.pageBackground;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1933,10 +1937,7 @@ Future<void> showRenameSheet(
 }
 
 // ══════════════════════════════════════════════════════════════
-// BOTTOM FLOATING BAR — searchbar no mesmo tamanho/cor do chat
-// search (altura 48, s.cardBackground, radius 999, s.cardShadow)
-// + FAB circular de nova conversa em 48×48, igual ao botão de
-// fechar (X) do chat search.
+// BOTTOM FLOATING BAR
 // ══════════════════════════════════════════════════════════════
 
 class DrawerBottomFloatingBar extends StatelessWidget {

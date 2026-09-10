@@ -28,7 +28,6 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
   void initState() {
     super.initState();
     conversationsController.addListener(_onConvsChanged);
-    // Carrega tudo desde já, independentemente de haver pesquisa ou não.
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
       conversationsController.load();
     }
@@ -47,11 +46,6 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     if (mounted) setState(() {});
   }
 
-  // Só "Conversas" e "Tudo" têm fonte de dados real por enquanto —
-  // ConversationItem representa apenas conversas de chat. Arquivos,
-  // Imagens e Vídeos ainda não existem como categorias próprias no
-  // backend, por isso devolvem lista vazia até essa funcionalidade
-  // existir (ex.: vindas da Biblioteca ou de um novo endpoint).
   bool get _filterHasDataSource =>
       _activeFilter == _SearchFilter.all || _activeFilter == _SearchFilter.conversations;
 
@@ -97,12 +91,10 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         bottom: false,
         child: Stack(
           children: [
-            // ── Corpo (resultados sempre visíveis) ───────────────
             Positioned.fill(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Espaço reservado para o appbar (toggles).
                   const SizedBox(height: 54),
                   Expanded(
                     child: AnimatedSwitcher(
@@ -200,7 +192,6 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
               ),
             ),
 
-            // ── Appbar compacto, só com toggles ──────────────────
             Positioned(
               top: 0,
               left: 0,
@@ -373,7 +364,13 @@ class _ElasticFilterRow extends StatelessWidget {
   }
 }
 
-class _FilterToggle extends StatelessWidget {
+// ✅ ALTERAÇÃO: toggle com animação Material de pressão.
+// - Repouso: pill completamente arredondado (BorderRadius 999).
+// - Pressionado: cantos quase quadrados (BorderRadius 6).
+// - Soltar: volta a pill.
+// Mesmo comportamento dos chips do Material 3 (StadiumBorder ↔
+// RoundedRectangleBorder). Duração curta, easeOut.
+class _FilterToggle extends StatefulWidget {
   final AppColorScheme s;
   final String label;
   final bool active;
@@ -386,30 +383,47 @@ class _FilterToggle extends StatelessWidget {
   });
 
   @override
+  State<_FilterToggle> createState() => _FilterToggleState();
+}
+
+class _FilterToggleState extends State<_FilterToggle> {
+  bool _pressed = false;
+
+  static const double _restRadius = 999;
+  static const double _pressedRadius = 6;
+  static const Duration _anim = Duration(milliseconds: 130);
+
+  @override
   Widget build(BuildContext context) {
+    final s = widget.s;
     final Color activeBg = s.isDark ? Colors.white : s.primary;
     final Color activeText = s.isDark ? Colors.black : Colors.white;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTapCancel: ()  => setState(() => _pressed = false),
+      onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        duration: _anim,
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: active ? activeBg : s.cardBackground,
-          borderRadius: BorderRadius.circular(10),
+          color: widget.active ? activeBg : s.cardBackground,
+          borderRadius: BorderRadius.circular(
+            _pressed ? _pressedRadius : _restRadius,
+          ),
         ),
         child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
+          duration: _anim,
+          curve: Curves.easeOut,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            color: active ? activeText : s.onSurfaceVariant,
+            fontWeight: widget.active ? FontWeight.w700 : FontWeight.w500,
+            color: widget.active ? activeText : s.onSurfaceVariant,
           ),
-          child: Text(label),
+          child: Text(widget.label),
         ),
       ),
     );
