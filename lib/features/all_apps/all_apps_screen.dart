@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/all_apps_screen.dart
+// FILE: lib/features/all_apps/all_apps_screen.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -488,6 +488,50 @@ class _SelectionRadio extends StatelessWidget {
       ),
     );
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PAINTER DO CHECK — desenha o "v" com progresso de 0..1
+// ══════════════════════════════════════════════════════════════
+
+class AnimatedCheckPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+
+  AnimatedCheckPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    final path = Path()
+      ..moveTo(size.width * 0.15, size.height * 0.55)
+      ..lineTo(size.width * 0.42, size.height * 0.80)
+      ..lineTo(size.width * 0.85, size.height * 0.22);
+
+    final p = progress.clamp(0.0, 1.0);
+    if (p <= 0.0) return;
+
+    final metric = path.computeMetrics().first;
+    final extract = metric.extractPath(0, metric.length * p);
+    canvas.drawPath(extract, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant AnimatedCheckPainter old) =>
+      old.progress != progress ||
+      old.color != color ||
+      old.strokeWidth != strokeWidth;
 }
 
 // ══════════════════════════════════════════════════════════════
