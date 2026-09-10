@@ -2015,6 +2015,9 @@ class _NewChatFabState extends State<_NewChatFab> {
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
+    final bg = s.isDark ? Colors.white : s.primary;
+    final iconColor = s.isDark ? Colors.black : s.onPrimary;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown:   (_) => setState(() => _p = true),
@@ -2033,11 +2036,11 @@ class _NewChatFabState extends State<_NewChatFab> {
           height: _size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: s.primary,
+            color: bg,
             shape: BoxShape.circle,
             boxShadow: s.cardShadow,
           ),
-          child: AppIcon('new_chat', size: 20, color: s.onPrimary),
+          child: AppIcon('new_chat', size: 20, color: iconColor),
         ),
       ),
     );

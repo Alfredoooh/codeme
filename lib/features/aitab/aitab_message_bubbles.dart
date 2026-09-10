@@ -211,7 +211,7 @@ class _UserAttachmentChip extends StatelessWidget {
         ? 'image'
         : (isPdf
             ? 'pdf'
-            : (isZip ? 'folder_upload' : 'paperclip'));
+            : (isZip ? 'folder_upload' : 'attach'));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(

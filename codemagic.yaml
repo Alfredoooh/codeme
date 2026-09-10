@@ -65,6 +65,49 @@ workflows:
           echo "--- Permissões atuais ---"
           grep "uses-permission" "$MANIFEST" || echo "(nenhuma encontrada)"
 
+      - name: Ensure CAMERA permission in AndroidManifest
+        script: |
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
+            exit 1
+          fi
+
+          if ! grep -q 'android.permission.CAMERA' "$MANIFEST"; then
+            echo "⚠️  Permissão CAMERA ausente — adicionando..."
+            python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          permissions = [
+              '<uses-permission android:name="android.permission.CAMERA" />',
+              '<uses-feature android:name="android.hardware.camera" android:required="false" />',
+              '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
+          ]
+
+          if "<manifest" not in content:
+              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
+
+          block = "\n    ".join(permissions) + "\n"
+          content = re.sub(
+              r'(<manifest[^>]*>)',
+              r'\1\n    ' + block.rstrip('\n'),
+              content,
+              count=1,
+          )
+          with open(path, "w") as f:
+              f.write(content)
+          print("✅ Permissões CAMERA + features adicionadas ao AndroidManifest.xml")
+          PYEOF
+          else
+            echo "✅ Permissão CAMERA já presente no AndroidManifest.xml"
+          fi
+          echo "--- Permissões atuais ---"
+          grep -E "uses-permission|uses-feature" "$MANIFEST" || echo "(nenhuma encontrada)"
+
       - name: Ensure network access XML (cleartext + config)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
@@ -629,6 +672,47 @@ workflows:
           PYEOF
           else
             echo "✅ Permissão INTERNET já presente no AndroidManifest.xml"
+          fi
+
+      - name: Ensure CAMERA permission in AndroidManifest
+        script: |
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
+            exit 1
+          fi
+
+          if ! grep -q 'android.permission.CAMERA' "$MANIFEST"; then
+            echo "⚠️  Permissão CAMERA ausente — adicionando..."
+            python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          permissions = [
+              '<uses-permission android:name="android.permission.CAMERA" />',
+              '<uses-feature android:name="android.hardware.camera" android:required="false" />',
+              '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
+          ]
+
+          if "<manifest" not in content:
+              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
+
+          block = "\n    ".join(permissions) + "\n"
+          content = re.sub(
+              r'(<manifest[^>]*>)',
+              r'\1\n    ' + block.rstrip('\n'),
+              content,
+              count=1,
+          )
+          with open(path, "w") as f:
+              f.write(content)
+          print("✅ Permissões CAMERA + features adicionadas ao AndroidManifest.xml")
+          PYEOF
+          else
+            echo "✅ Permissão CAMERA já presente no AndroidManifest.xml"
           fi
 
       - name: Ensure network access XML (cleartext + config)

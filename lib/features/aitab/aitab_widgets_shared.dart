@@ -786,7 +786,7 @@ void showAttachPopup(
               Expanded(
                 child: _AttachOptionCardShared(
                   s: s,
-                  assetName: 'folder_upload',
+                  assetName: 'attach',
                   label: 'Arquivos',
                   onTap: () {
                     Navigator.pop(sheetContext);

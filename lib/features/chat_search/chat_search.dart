@@ -4,7 +4,7 @@ import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../drawer/drawermenu.dart';
 
-enum _SearchFilter { documents, files, images, videos }
+enum _SearchFilter { all, conversations, files, images, videos }
 
 class ChatSearchScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -23,12 +23,13 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
   final TextEditingController _ctrl = TextEditingController();
   final FocusNode _focus = FocusNode();
   String _query = '';
-  final Set<_SearchFilter> _activeFilters = {};
+  _SearchFilter _activeFilter = _SearchFilter.all;
 
   @override
   void initState() {
     super.initState();
     conversationsController.addListener(_onConvsChanged);
+    // Carrega tudo desde já, independentemente de haver pesquisa ou não.
     if (conversationsController.items.isEmpty && !conversationsController.loading) {
       conversationsController.load();
     }
@@ -47,11 +48,28 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     if (mounted) setState(() {});
   }
 
-  List<ConversationItem> get _results {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return const [];
+  // Lista base: tudo carregado sempre, filtrado por tipo (toggle) e depois por texto (quando houver pesquisa).
+  List<ConversationItem> get _baseItems {
     final all = conversationsController.items.where((c) => !c.archived);
-    return all
+    switch (_activeFilter) {
+      case _SearchFilter.all:
+        return all.toList();
+      case _SearchFilter.conversations:
+        return all.where((c) => c.type == ConversationType.conversation).toList();
+      case _SearchFilter.files:
+        return all.where((c) => c.type == ConversationType.file).toList();
+      case _SearchFilter.images:
+        return all.where((c) => c.type == ConversationType.image).toList();
+      case _SearchFilter.videos:
+        return all.where((c) => c.type == ConversationType.video).toList();
+    }
+  }
+
+  List<ConversationItem> get _results {
+    final base = _baseItems;
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return base;
+    return base
         .where((c) =>
             c.title.toLowerCase().contains(q) ||
             c.preview.toLowerCase().contains(q))
@@ -67,21 +85,14 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     Navigator.of(context).maybePop();
   }
 
-  void _toggleFilter(_SearchFilter f) {
-    setState(() {
-      if (_activeFilters.contains(f)) {
-        _activeFilters.remove(f);
-      } else {
-        _activeFilters.add(f);
-      }
-    });
+  void _selectFilter(_SearchFilter f) {
+    setState(() => _activeFilter = f);
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
     final results = _results;
-    final query = _query.trim();
 
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
@@ -91,19 +102,19 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         bottom: false,
         child: Stack(
           children: [
-            // ── Corpo (resultados / estado inicial) ──────────────
+            // ── Corpo (resultados sempre visíveis) ───────────────
             Positioned.fill(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Espaço reservado para o appbar (título + toggles).
-                  const SizedBox(height: 108),
+                  // Espaço reservado para o appbar (toggles).
+                  const SizedBox(height: 54),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
-                      child: _buildBody(s, query, results),
+                      child: _buildBody(s, results),
                     ),
                   ),
                   AnimatedPadding(
@@ -194,13 +205,13 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
               ),
             ),
 
-            // ── Appbar transparente progressivo, com toggles ─────
+            // ── Appbar compacto, só com toggles ──────────────────
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -214,43 +225,10 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                 child: SafeArea(
                   bottom: false,
                   top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.zero,
-                      child: Row(
-                        children: [
-                          _FilterToggle(
-                            s: s,
-                            label: 'Documentos',
-                            active: _activeFilters.contains(_SearchFilter.documents),
-                            onTap: () => _toggleFilter(_SearchFilter.documents),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterToggle(
-                            s: s,
-                            label: 'Arquivos',
-                            active: _activeFilters.contains(_SearchFilter.files),
-                            onTap: () => _toggleFilter(_SearchFilter.files),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterToggle(
-                            s: s,
-                            label: 'Imagens',
-                            active: _activeFilters.contains(_SearchFilter.images),
-                            onTap: () => _toggleFilter(_SearchFilter.images),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterToggle(
-                            s: s,
-                            label: 'Vídeos',
-                            active: _activeFilters.contains(_SearchFilter.videos),
-                            onTap: () => _toggleFilter(_SearchFilter.videos),
-                          ),
-                        ],
-                      ),
-                    ),
+                  child: _ElasticFilterRow(
+                    s: s,
+                    active: _activeFilter,
+                    onSelect: _selectFilter,
                   ),
                 ),
               ),
@@ -261,11 +239,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     );
   }
 
-  Widget _buildBody(AppColorScheme s, String query, List<ConversationItem> results) {
-    if (query.isEmpty) {
-      return _InitialSearchPrompt(key: const ValueKey('initial'), s: s);
-    }
-
+  Widget _buildBody(AppColorScheme s, List<ConversationItem> results) {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return Center(
         key: const ValueKey('loading'),
@@ -281,11 +255,14 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     }
 
     if (results.isEmpty) {
+      final query = _query.trim();
       return Center(
         key: const ValueKey('no-results'),
         child: SelectionContainer.disabled(
           child: Text(
-            'Sem resultados para "$query"',
+            query.isEmpty
+                ? 'Sem conversas por aqui.'
+                : 'Sem resultados para "$query"',
             style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
           ),
         ),
@@ -315,6 +292,81 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
   }
 }
 
+/// Linha de toggles com scroll horizontal e efeito elástico (overscroll bounce)
+/// nas duas pontas, mesmo sem conteúdo suficiente para rolar.
+class _ElasticFilterRow extends StatelessWidget {
+  final AppColorScheme s;
+  final _SearchFilter active;
+  final ValueChanged<_SearchFilter> onSelect;
+  const _ElasticFilterRow({
+    required this.s,
+    required this.active,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrollConfiguration(
+      behavior: const _BouncyScrollBehavior(),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+        padding: EdgeInsets.zero,
+        child: Row(
+          children: [
+            _FilterToggle(
+              s: s,
+              label: 'Tudo',
+              active: active == _SearchFilter.all,
+              onTap: () => onSelect(_SearchFilter.all),
+            ),
+            const SizedBox(width: 8),
+            _FilterToggle(
+              s: s,
+              label: 'Conversas',
+              active: active == _SearchFilter.conversations,
+              onTap: () => onSelect(_SearchFilter.conversations),
+            ),
+            const SizedBox(width: 8),
+            _FilterToggle(
+              s: s,
+              label: 'Arquivos',
+              active: active == _SearchFilter.files,
+              onTap: () => onSelect(_SearchFilter.files),
+            ),
+            const SizedBox(width: 8),
+            _FilterToggle(
+              s: s,
+              label: 'Imagens',
+              active: active == _SearchFilter.images,
+              onTap: () => onSelect(_SearchFilter.images),
+            ),
+            const SizedBox(width: 8),
+            _FilterToggle(
+              s: s,
+              label: 'Vídeos',
+              active: active == _SearchFilter.videos,
+              onTap: () => onSelect(_SearchFilter.videos),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BouncyScrollBehavior extends ScrollBehavior {
+  const _BouncyScrollBehavior();
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    // Sem glow, apenas o efeito elástico do BouncingScrollPhysics.
+    return child;
+  }
+}
+
 class _FilterToggle extends StatelessWidget {
   final AppColorScheme s;
   final String label;
@@ -329,6 +381,11 @@ class _FilterToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No tema escuro, o toggle ativo é branco sólido, sem borda.
+    // No tema claro, o toggle ativo usa a cor primária, sem borda.
+    final Color activeBg = s.isDark ? Colors.white : s.primary;
+    final Color activeText = s.isDark ? Colors.black : Colors.white;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -337,64 +394,18 @@ class _FilterToggle extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: active ? s.primary.withOpacity(0.16) : s.cardBackground,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: active ? s.primary.withOpacity(0.5) : Colors.transparent,
-            width: 1,
-          ),
+          color: active ? activeBg : s.cardBackground,
+          borderRadius: BorderRadius.circular(10),
         ),
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: active ? s.primary : s.onSurfaceVariant,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active ? activeText : s.onSurfaceVariant,
           ),
           child: Text(label),
-        ),
-      ),
-    );
-  }
-}
-
-class _InitialSearchPrompt extends StatelessWidget {
-  final AppColorScheme s;
-  const _InitialSearchPrompt({super.key, required this.s});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Opacity(
-              opacity: 0.65,
-              child: AppIcon('search', color: s.onSurfaceVariant, size: 52),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Pesquise as suas conversas',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: s.onSurface,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Digite para encontrar títulos ou pré-visualizações.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: s.onSurfaceVariant,
-              ),
-            ),
-          ],
         ),
       ),
     );
