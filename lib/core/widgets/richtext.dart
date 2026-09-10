@@ -86,8 +86,6 @@ const Map<String, String> kMathSymbols = {
 
 // Operadores/funções nomeadas do LaTeX — cobertura extensa (álgebra,
 // trigonometria, cálculo, álgebra linear, estatística, lógica).
-// Convertidos para texto "roman" (não itálico) exatamente como o
-// LaTeX real renderiza \sin, \log, \lim, etc.
 const Map<String, String> kMathNamedOperators = {
   r'\sin': 'sin', r'\cos': 'cos', r'\tan': 'tan', r'\cot': 'cot',
   r'\sec': 'sec', r'\csc': 'csc',
@@ -272,7 +270,6 @@ String _substituteKnownTokens(String expr) {
   for (final token in sortedKeys) {
     result = result.replaceAll(token, allTokens[token]!);
   }
-  // Vírgula decimal em contexto matemático: {,} → ,
   result = result.replaceAll('{,}', ',');
   return result;
 }
@@ -931,9 +928,7 @@ class MathBlockParseResult {
 }
 
 // ══════════════════════════════════════════════════════════════
-// RichAiText — ponto de entrada. Aceita bodyTextStyle opcional que
-// sobrepõe cor/fontFamily/etc. do texto de PROSA normal (nunca é
-// aplicado a: código, matemática, tabela, ícones, labels).
+// RichAiText — ponto de entrada.
 // ══════════════════════════════════════════════════════════════
 
 class RichAiText extends StatelessWidget {
@@ -1511,8 +1506,7 @@ class _RichTextBlockParser {
         _ => 'Nota',
       };
 
-  // ── Cor fixa do código inline (pedido explícito: azul fixo, não
-  // ligado ao tema) ──────────────────────────────────────────────
+  // Cor fixa do código inline (azul fixo, não ligado ao tema).
   static const Color _kInlineCodeColor = Color(0xFF5B9DF0);
 
   static List<InlineSpan> inlineSpans(
@@ -1524,14 +1518,6 @@ class _RichTextBlockParser {
     final processed = _normalizeInlineMarkdown(raw);
     final spans = <InlineSpan>[];
 
-    // FIX (bug "**palavra**" a aparecer literal): o padrão de itálico
-    // single-asterisco já não "rouba" um asterisco de abertura de um
-    // **negrito** vizinho. (?!\*) impede abrir itálico logo antes de
-    // um segundo asterisco (isso pertence ao padrão duplo); (?<!\*)
-    // impede fechar itálico nesse mesmo caso. Também exige que não
-    // haja espaço colado ao asterisco (convenção CommonMark: `* x *`
-    // não é itálico válido), o que evita capturar `5 * 3 * 4` de
-    // texto matemático solto como se fosse ênfase.
     final pattern = RegExp(
       r'(\$\$[^$\n]+?\$\$)|'
       r'(\$[^$\n]+?\$)|'
@@ -1656,12 +1642,10 @@ class _RichTextBlockParser {
           style: const TextStyle(fontFamily: 'monospace'),
         ));
       } else if (token.startsWith('`')) {
-        // Código inline — fundo escuro, cantos arredondados (7px),
-        // borda fina s.outline, texto AZUL FIXO #5B9DF0. Precisa de
-        // WidgetSpan (não TextSpan.backgroundColor) porque só um
-        // Container/BoxDecoration real dá cantos arredondados e
-        // borda — o backgroundColor de TextSpan pinta um retângulo
-        // reto sem raio nem borda.
+        // Código inline — fundo escuro, cantos arredondados (9px,
+        // "curvado mas não pill"), borda FINA (0.6) s.outline, texto
+        // AZUL FIXO #5B9DF0. WidgetSpan (não TextSpan.backgroundColor)
+        // porque só um Container real dá cantos arredondados + borda.
         final value = _unescapeInline(token.substring(1, token.length - 1));
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.middle,
@@ -1669,8 +1653,8 @@ class _RichTextBlockParser {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: s.isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF0F0F0),
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(color: s.outline, width: 1),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: s.outline, width: 0.6),
             ),
             child: Text(
               value,
@@ -1885,8 +1869,7 @@ Widget buildAiTableFromWidgetJson(Map<String, dynamic> json, AppColorScheme s) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SYNTAX HIGHLIGHTING — dois conjuntos de tokens (escuro / claro),
-// escolhidos em runtime via AppColorScheme.isDark.
+// SYNTAX HIGHLIGHTING
 // ══════════════════════════════════════════════════════════════
 
 class _TokenPattern {
@@ -2045,9 +2028,6 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
     );
   }
 
-  // Nome de exibição da linguagem para a appbar do bloco (ex.: "dart"
-  // -> "Dart", "js" -> "JavaScript"). Mantém o valor cru se não houver
-  // mapeamento amigável.
   String get _displayLanguage {
     final lang = widget.language.toLowerCase().trim();
     const labels = {
@@ -2104,9 +2084,6 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
 
     final codeSpans = _highlightCode(widget.code, widget.language, baseStyle, tokens);
 
-    // Appbar: mesmo fundo do corpo do bloco, 10% mais fraco (pedido
-    // explícito). "Mais fraco" = mistura com preto/branco consoante o
-    // tema para dar contraste sutil sem introduzir cor nova.
     final appBarColor = Color.alphaBlend(
       (widget.s.isDark ? Colors.black : Colors.white).withOpacity(0.10),
       tokens.background,
@@ -2130,9 +2107,6 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
     );
   }
 
-  // Appbar: nome da linguagem à esquerda, ações (preview + copiar) à
-  // direita como ícones LIVRES (sem container/fundo/pill — só o
-  // ícone, no mesmo tamanho de antes).
   Widget _buildAppBar(Color appBarColor, _CodeTokenColors tokens) {
     final labelColor = tokens.comment;
     return Container(
@@ -2176,9 +2150,6 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
   }
 
   Widget _buildCodeBody(List<TextSpan> spans, TextStyle baseStyle) {
-    // Apenas scroll horizontal — sem constraints de altura máxima e
-    // sem SingleChildScrollView vertical, para que o gesto de arrastar
-    // verticalmente seja sempre entregue ao scroll da conversa por trás.
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -2190,10 +2161,6 @@ class _AiCodeBlockState extends State<AiCodeBlock> {
   }
 }
 
-// Ícone "livre" — sem container, sem fundo, sem pill. Só o ícone, no
-// mesmo tamanho (14px) que tinha dentro do botão circular anterior.
-// Hover clareia ligeiramente a cor para dar feedback sem introduzir
-// fundo/forma.
 class _BareIconButton extends StatefulWidget {
   final String svgAsset;
   final Color color;
@@ -2224,7 +2191,6 @@ class _BareIconButtonState extends State<_BareIconButton> {
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         child: Padding(
-          // Área de toque confortável sem introduzir fundo visual.
           padding: const EdgeInsets.all(6),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 150),

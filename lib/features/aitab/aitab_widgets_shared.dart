@@ -7,9 +7,70 @@ import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/animated_canvas_icon.dart';
-import '../../core/widgets/app_sheet.dart';
 import '../apps/app_types.dart';
 import 'aitab_models.dart';
+
+// ══════════════════════════════════════════════════════════════
+// SHEET GENÉRICO PLANO — showModalBottomSheet nativo (mesmo padrão
+// usado em drawermenu.dart e aitab_input_bar.dart). Substitui
+// app_sheet.dart, que não respondia corretamente ao gesto de
+// arrastar para baixo. Handlebar próprio, radius de topo, drag
+// nativo habilitado explicitamente.
+// ══════════════════════════════════════════════════════════════
+
+const double _kFlatModalRadius = 20.0;
+
+class _SharedModalHandlebar extends StatelessWidget {
+  final AppColorScheme s;
+  const _SharedModalHandlebar({required this.s});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: s.onSurfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<T?> _showSharedFlatBottomSheet<T>(
+  BuildContext context,
+  AppColorScheme s, {
+  required WidgetBuilder builder,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: s.cardBackground,
+    barrierColor: Colors.black.withOpacity(0.35),
+    isScrollControlled: true,
+    enableDrag: true,
+    isDismissible: true,
+    useSafeArea: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius:
+          BorderRadius.vertical(top: Radius.circular(_kFlatModalRadius)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SharedModalHandlebar(s: s),
+          Flexible(child: builder(sheetContext)),
+        ],
+      ),
+    ),
+  );
+}
 
 // ══════════════════════════════════════════════════════════════
 // SHIMMER TEXT
@@ -765,7 +826,13 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
   );
 }
 
-void showAttachPopup(
+// ══════════════════════════════════════════════════════════════
+// ATTACH POPUP — agora usando o showModalBottomSheet nativo
+// (_showSharedFlatBottomSheet) em vez de showAppSheet, que não
+// respondia corretamente ao gesto de arrastar para fechar.
+// ══════════════════════════════════════════════════════════════
+
+Future<void> showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
   required VoidCallback onFiles,
@@ -774,8 +841,9 @@ void showAttachPopup(
   required VoidCallback onChooseModel,
   required ValueChanged<EditorType> onSelectTool,
 }) async {
-  await showAppSheet<void>(
+  await _showSharedFlatBottomSheet<void>(
     context,
+    s,
     builder: (sheetContext) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       child: Column(

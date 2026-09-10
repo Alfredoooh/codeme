@@ -2,27 +2,29 @@
 // FILE: lib/aitab/aitab_input_bar.dart
 //
 // MUDANÇAS NESTA VERSÃO:
-// 1) O modal de gravação foi mantido removido (já não existia).
-// 2) A transição input-bar <-> pill de gravação deixou de ser um
-//    AnimatedSwitcher que troca dois widgets DIFERENTES (fade+scale
-//    entre árvores distintas). Agora é um ÚNICO Container animado
-//    via TweenAnimationBuilder que faz MORPHING real de altura,
-//    largura, raio de canto e cor entre os dois estados — o mesmo
-//    container "linha reta a virar pill" que se pediu, com curva
-//    avançada (Curves.easeOutExpo) e conteúdo interno em
-//    crossfade sincronizado com o progresso do morph.
-// 3) Removido código morto: _ConcaveBottomClipper style helpers que
-//    não eram deste ficheiro foram mantidos fora; aqui, tudo o que
-//    não tinha caminho de uso visual dentro deste ficheiro foi
-//    eliminado (ver notas inline "REMOVIDO").
-// 4) Continua compatível com web: só AnimationController, Timer,
-//    math, MouseRegion — nada específico de Android/iOS.
+// 1) Input bar REVERTIDO ao comportamento original: está SEMPRE
+//    visível, sem morph, sem esconder-se — exatamente como antes
+//    de qualquer alteração experimental.
+// 2) O botão de gravar agora abre um MODAL PRÓPRIO deste ficheiro
+//    (showModalBottomSheet nativo, mesmo padrão do drawermenu —
+//    NÃO depende de app_sheet.dart), com:
+//    - Um único botão de topo: branco no tema escuro / preto no
+//      tema claro, alterna ícone play/pause.
+//    - Título fixo "Diz qualquer coisa", sem subtítulo.
+//    - SEM ícone de microfone.
+//    - Waveform tipo recorder real: barras PARADAS por omissão,
+//      só se movem com a amplitude real captada do microfone via
+//      pacote `record` (stream onAmplitudeChanged).
+//    - Dois botões lado a lado: play/pause (branco/preto conforme
+//      tema) e OK (sempre s.primary, independente de tema).
+// 3) Gravação em tempo real via pacote `record` — permissão pedida
+//    automaticamente pelo pacote ao iniciar.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
+import 'package:record/record.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/animated_canvas_icon.dart';
@@ -35,7 +37,8 @@ import 'aitab_camera_screen.dart';
 import 'aitab_image_viewer_screen.dart';
 
 // ══════════════════════════════════════════════════════════════
-// SHEET GENÉRICO PLANO — mesma infraestrutura do drawermenu.dart.
+// SHEET GENÉRICO PLANO — showModalBottomSheet nativo, próprio
+// deste ficheiro. Mesmo padrão do drawermenu.dart.
 // ══════════════════════════════════════════════════════════════
 
 const double _kFlatModalRadius = 20.0;
@@ -175,7 +178,7 @@ class _HoverSurfaceState extends State<_HoverSurface> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT
+// CHAT INPUT — SEMPRE VISÍVEL, sem morph, como no original.
 // ══════════════════════════════════════════════════════════════
 
 class ChatInput extends StatelessWidget {
@@ -190,10 +193,7 @@ class ChatInput extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
-  final VoidCallback onRecord;
-  final VoidCallback? onRecordCancel;
-  final VoidCallback? onRecordPause;
-  final VoidCallback? onRecordResume;
+  final ValueChanged<String> onRecordingComplete;
   final ValueChanged<String> onRemoveFile;
 
   const ChatInput({
@@ -209,10 +209,7 @@ class ChatInput extends StatelessWidget {
     required this.onSend,
     required this.onPause,
     required this.onAttach,
-    required this.onRecord,
-    this.onRecordCancel,
-    this.onRecordPause,
-    this.onRecordResume,
+    required this.onRecordingComplete,
     required this.onRemoveFile,
   });
 
@@ -262,10 +259,7 @@ class ChatInput extends StatelessWidget {
               onSend: onSend,
               onPause: onPause,
               onAttach: onAttach,
-              onRecord: onRecord,
-              onRecordCancel: onRecordCancel,
-              onRecordPause: onRecordPause,
-              onRecordResume: onRecordResume,
+              onRecordingComplete: onRecordingComplete,
             ),
           ],
         );
@@ -275,17 +269,12 @@ class ChatInput extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHELL DO INPUT — agora com MORPH real entre input-bar e pill de
-// gravação via TweenAnimationBuilder controlado por um único
-// AnimationController (_morphCtrl). Nada de trocar árvores de
-// widget: altura, largura efetiva (via padding horizontal
-// assimétrico), raio de canto e cor de fundo interpolam no MESMO
-// Container. O conteúdo interno faz crossfade (Opacity) sincronizado
-// com o mesmo progresso, para que texto/ícones apareçam e
-// desapareçam suavemente enquanto a casca morfa.
+// SHELL DO INPUT — voltou a ser um único Container fixo, sempre
+// visível. Sem AnimationController de morph, sem troca de forma.
+// O botão de gravar apenas ABRE o modal (_showRecordingModal).
 // ══════════════════════════════════════════════════════════════
 
-class _ChatInputShell extends StatefulWidget {
+class _ChatInputShell extends StatelessWidget {
   final AppColorScheme s;
   final bool hasText;
   final bool incognito;
@@ -298,14 +287,10 @@ class _ChatInputShell extends StatefulWidget {
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
-  final VoidCallback onRecord;
-  final VoidCallback? onRecordCancel;
-  final VoidCallback? onRecordPause;
-  final VoidCallback? onRecordResume;
+  final ValueChanged<String> onRecordingComplete;
 
   static const double _maxInputHeight = 168.0;
   static const double _minInputHeight = 52.0;
-  static const double _pillHeight = 56.0;
 
   const _ChatInputShell({
     required this.s,
@@ -320,100 +305,269 @@ class _ChatInputShell extends StatefulWidget {
     required this.onSend,
     required this.onPause,
     required this.onAttach,
-    required this.onRecord,
-    required this.onRecordCancel,
-    required this.onRecordPause,
-    required this.onRecordResume,
+    required this.onRecordingComplete,
   });
 
+  Widget _attachButton() {
+    return GestureDetector(
+      key: attachButtonKey,
+      onTap: onAttach,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: AppIcon('add', color: s.onSurface, size: 22),
+      ),
+    );
+  }
+
+  Widget _textField() {
+    return TextField(
+      controller: ctrl,
+      focusNode: focusNode,
+      minLines: 1,
+      maxLines: null,
+      keyboardType: TextInputType.multiline,
+      textCapitalization: TextCapitalization.sentences,
+      style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15)
+          .copyWith(color: s.onSurface),
+      cursorColor: s.primary,
+      decoration: InputDecoration(
+        isDense: true,
+        border: InputBorder.none,
+        hintText: incognito
+            ? 'Mensagem incógnita...'
+            : 'Pergunte qualquer coisa aqui...',
+        hintStyle: TextStyle(
+            fontSize: 16.5,
+            letterSpacing: 0.15,
+            color: s.onSurfaceVariant),
+        contentPadding: EdgeInsets.zero,
+      ),
+      onSubmitted: (_) => hasText ? onSend() : null,
+    );
+  }
+
+  Widget _toolPillRow() {
+    if (attachedTool == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _AttachedToolPill(s: s, type: attachedTool!, onClear: () {}),
+      ),
+    );
+  }
+
+  Future<void> _openRecordingModal(BuildContext context) async {
+    final transcript = await showRecordingModal(context, s);
+    if (transcript != null && transcript.trim().isNotEmpty) {
+      onRecordingComplete(transcript);
+    }
+  }
+
   @override
-  State<_ChatInputShell> createState() => _ChatInputShellState();
+  Widget build(BuildContext context) {
+    final Widget bar = Container(
+      constraints: const BoxConstraints(
+        minHeight: _minInputHeight,
+        maxHeight: _maxInputHeight,
+      ),
+      decoration: BoxDecoration(
+        color: s.isDark ? s.cardBackground : s.floatingSurface,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: floatingShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _toolPillRow(),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+              reverse: true,
+              child: _textField(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 12, 8),
+            child: Row(
+              children: [
+                _attachButton(),
+                const Spacer(),
+                _SendRecordCluster(
+                  s: s,
+                  hasText: hasText,
+                  sending: sending,
+                  onSend: onSend,
+                  onPause: onPause,
+                  onRecord: () => _openRecordingModal(context),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (incognito) {
+      return DashedRRectBorder(color: s.outline, radius: 26, child: bar);
+    }
+    return bar;
+  }
 }
 
-class _ChatInputShellState extends State<_ChatInputShell>
-    with TickerProviderStateMixin {
-  bool _recording = false;
-  bool _paused = false;
+// ══════════════════════════════════════════════════════════════
+// MODAL DE GRAVAÇÃO — modal PRÓPRIO deste ficheiro (showModalBottomSheet
+// nativo com enableDrag: true, mesmo padrão do drawermenu.dart).
+// Retorna o transcript (String?) quando o utilizador confirma com OK;
+// null se cancelar.
+//
+// Conteúdo:
+// - Botão único no topo: branco (tema escuro) / preto (tema claro),
+//   alterna ícone play/pause ao gravar/pausar.
+// - Título fixo "Diz qualquer coisa" — sem subtítulo.
+// - SEM ícone de microfone.
+// - Waveform tipo recorder real: barras PARADAS por omissão, só se
+//   movem com a amplitude real do microfone (pacote `record`).
+// - Dois botões lado a lado: play/pause + OK (s.primary sempre).
+// ══════════════════════════════════════════════════════════════
+
+Future<String?> showRecordingModal(BuildContext context, AppColorScheme s) {
+  return showFlatBottomSheet<String>(
+    context: context,
+    s: s,
+    builder: (sheetContext) => _RecordingModalContent(s: s),
+  );
+}
+
+class _RecordingModalContent extends StatefulWidget {
+  final AppColorScheme s;
+  const _RecordingModalContent({required this.s});
+
+  @override
+  State<_RecordingModalContent> createState() => _RecordingModalContentState();
+}
+
+class _RecordingModalContentState extends State<_RecordingModalContent>
+    with SingleTickerProviderStateMixin {
+  final AudioRecorder _recorder = AudioRecorder();
+  StreamSubscription<Amplitude>? _amplitudeSub;
+
+  bool _playing = false; // true = a gravar (ícone mostra pause); false = pausado (ícone mostra play)
+  bool _hasStarted = false;
   int _elapsed = 0;
   Timer? _sessionTimer;
-  late final AnimationController _waveCtrl;
+  String? _recordingPath;
 
-  // Controla o MORPH input-bar <-> pill. 0 = input-bar completo,
-  // 1 = pill completo. Curva avançada (easeOutExpo na ida, easeInCubic
-  // na volta) para dar aquele efeito de "acelera e assenta" suave em
-  // vez de uma transição linear/mecânica.
-  late final AnimationController _morphCtrl;
+  // Amplitude corrente normalizada (0.0 a 1.0). A waveform só se
+  // move quando isto sobe acima do "silêncio" — parada por omissão.
+  double _currentAmplitude = 0.0;
+
+  // Histórico curto de amplitude por barra, para dar leitura de
+  // "forma de onda" real em vez de um único valor a pulsar.
+  static const int _barCount = 32;
+  final List<double> _barHistory = List.filled(_barCount, 0.0);
+
+  late final AnimationController _pulseCtrl;
 
   @override
   void initState() {
     super.initState();
-    _waveCtrl = AnimationController(
+    _pulseCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 120),
     );
-    _morphCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
+    _startRecording();
   }
 
   @override
   void dispose() {
+    _amplitudeSub?.cancel();
     _sessionTimer?.cancel();
-    _waveCtrl.dispose();
-    _morphCtrl.dispose();
+    _pulseCtrl.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
-  // ── Ciclo de vida da gravação ─────────────────────────────
-  void _startRecording() {
-    if (_recording) return;
+  Future<void> _startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (!hasPermission) return;
+
+    final dir = await _tempRecordingPath();
+    await _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc),
+      path: dir,
+    );
+
     setState(() {
-      _recording = true;
-      _paused = false;
-      _elapsed = 0;
+      _playing = true;
+      _hasStarted = true;
+      _recordingPath = dir;
     });
-    _waveCtrl.repeat();
-    _morphCtrl.animateTo(1.0, curve: Curves.easeOutExpo);
 
     _sessionTimer?.cancel();
     _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && !_paused) {
-        setState(() => _elapsed++);
-      }
+      if (mounted && _playing) setState(() => _elapsed++);
     });
 
-    widget.onRecord();
-  }
-
-  void _cancelRecording() {
-    if (!_recording) return;
-    _waveCtrl.stop();
-    _waveCtrl.reset();
-    _sessionTimer?.cancel();
-    _sessionTimer = null;
-    _morphCtrl.animateTo(0.0, curve: Curves.easeInCubic).whenComplete(() {
-      if (mounted) {
-        setState(() {
-          _recording = false;
-          _paused = false;
-          _elapsed = 0;
-        });
-      }
+    // Amplitude real do microfone — só aqui a waveform ganha vida.
+    // Valores tipicamente entre -160 (silêncio) e 0 (pico) em dBFS;
+    // normalizamos para 0..1 com um piso de silêncio.
+    _amplitudeSub?.cancel();
+    _amplitudeSub = _recorder
+        .onAmplitudeChanged(const Duration(milliseconds: 90))
+        .listen((amp) {
+      if (!mounted) return;
+      const silenceFloorDb = -45.0;
+      const peakDb = -5.0;
+      final raw = amp.current;
+      final normalized = ((raw - silenceFloorDb) / (peakDb - silenceFloorDb))
+          .clamp(0.0, 1.0);
+      setState(() {
+        _currentAmplitude = normalized;
+        _barHistory.removeAt(0);
+        _barHistory.add(normalized);
+      });
     });
-    widget.onRecordCancel?.call();
   }
 
-  void _togglePause() {
-    if (!_recording) return;
-    setState(() => _paused = !_paused);
-    if (_paused) {
-      _waveCtrl.stop();
-      widget.onRecordPause?.call();
+  Future<String> _tempRecordingPath() async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    return '/tmp/aitab_recording_$ts.m4a';
+  }
+
+  Future<void> _togglePlayPause() async {
+    if (!_hasStarted) return;
+    if (_playing) {
+      await _recorder.pause();
+      _amplitudeSub?.pause();
+      setState(() {
+        _playing = false;
+        _currentAmplitude = 0.0;
+        for (var i = 0; i < _barHistory.length; i++) {
+          _barHistory[i] = 0.0;
+        }
+      });
     } else {
-      _waveCtrl.repeat();
-      widget.onRecordResume?.call();
+      await _recorder.resume();
+      _amplitudeSub?.resume();
+      setState(() => _playing = true);
     }
+  }
+
+  Future<void> _confirmOk() async {
+    String? path = _recordingPath;
+    if (_hasStarted) {
+      path = await _recorder.stop();
+    }
+    _amplitudeSub?.cancel();
+    _sessionTimer?.cancel();
+    if (!mounted) return;
+    // Este widget não faz transcrição — devolve o path do ficheiro
+    // gravado para o chamador decidir o que fazer (enviar para
+    // transcrição, anexar como áudio, etc.). O tipo de retorno do
+    // showRecordingModal é String?, usado aqui como o path.
+    Navigator.of(context).pop(path);
   }
 
   String get _formattedElapsed {
@@ -425,263 +579,89 @@ class _ChatInputShellState extends State<_ChatInputShell>
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
+    // Botão de topo: branco no tema escuro, preto no tema claro —
+    // pedido explícito, independente da cor primária do tema.
+    final topButtonBg = s.isDark ? Colors.white : Colors.black;
+    final topButtonIcon = s.isDark ? Colors.black : Colors.white;
 
-    final morphed = AnimatedBuilder(
-      animation: _morphCtrl,
-      builder: (context, _) {
-        final t = Curves.easeInOutCubic.transform(_morphCtrl.value);
-        return _MorphingInputShell(
-          s: s,
-          t: t,
-          recording: _recording,
-          paused: _paused,
-          waveCtrl: _waveCtrl,
-          elapsedLabel: _formattedElapsed,
-          floatingShadow: widget.floatingShadow,
-          onClose: _cancelRecording,
-          onTogglePause: _togglePause,
-          inputBarBuilder: _buildInputBarContent,
-        );
-      },
-    );
-
-    if (widget.incognito && !_recording) {
-      return DashedRRectBorder(
-        color: s.outline,
-        radius: 26,
-        child: morphed,
-      );
-    }
-    return morphed;
-  }
-
-  // ── Conteúdo da input bar normal (usado dentro do morph) ────
-  Widget _attachButton() {
-    return GestureDetector(
-      key: widget.attachButtonKey,
-      onTap: widget.onAttach,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: AppIcon('add', color: widget.s.onSurface, size: 22),
-      ),
-    );
-  }
-
-  Widget _textField() {
-    final s = widget.s;
-    return TextField(
-      controller: widget.ctrl,
-      focusNode: widget.focusNode,
-      minLines: 1,
-      maxLines: null,
-      keyboardType: TextInputType.multiline,
-      textCapitalization: TextCapitalization.sentences,
-      style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15)
-          .copyWith(color: s.onSurface),
-      cursorColor: s.primary,
-      decoration: InputDecoration(
-        isDense: true,
-        border: InputBorder.none,
-        hintText: widget.incognito
-            ? 'Mensagem incógnita...'
-            : 'Pergunte qualquer coisa aqui...',
-        hintStyle: TextStyle(
-            fontSize: 16.5,
-            letterSpacing: 0.15,
-            color: s.onSurfaceVariant),
-        contentPadding: EdgeInsets.zero,
-      ),
-      onSubmitted: (_) => widget.hasText ? widget.onSend() : null,
-    );
-  }
-
-  Widget _toolPillRow() {
-    if (widget.attachedTool == null) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: _AttachedToolPill(
-            s: widget.s, type: widget.attachedTool!, onClear: () {}),
+      padding: EdgeInsets.fromLTRB(
+        24, 8, 24, 20 + MediaQuery.of(context).padding.bottom,
       ),
-    );
-  }
-
-  Widget _buildInputBarContent() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _toolPillRow(),
-        Flexible(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-            reverse: true,
-            child: _textField(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Botão único de topo — alterna play/pause, cor invertida
+          // conforme o tema (branco no escuro, preto no claro).
+          GestureDetector(
+            onTap: _togglePlayPause,
+            child: Container(
+              width: 64,
+              height: 64,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: topButtonBg,
+                shape: BoxShape.circle,
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                child: AppIcon(
+                  _playing ? 'pause' : 'play',
+                  key: ValueKey(_playing),
+                  size: 26,
+                  color: topButtonIcon,
+                ),
+              ),
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 12, 8),
-          child: Row(
+          const SizedBox(height: 18),
+
+          // Título fixo, sem subtítulo.
+          Text(
+            'Diz qualquer coisa',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: s.onSurface,
+            ),
+          ),
+          const SizedBox(height: 22),
+
+          // Waveform tipo recorder real — parada até haver amplitude
+          // real do microfone acima do piso de silêncio.
+          _RealWaveform(s: s, barHistory: _barHistory, active: _playing),
+          const SizedBox(height: 10),
+
+          Text(
+            _formattedElapsed,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: s.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 26),
+
+          // Dois botões lado a lado: play/pause + OK.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _attachButton(),
-              const Spacer(),
-              _SendRecordCluster(
-                s: widget.s,
-                hasText: widget.hasText,
-                sending: widget.sending,
-                onSend: widget.onSend,
-                onPause: widget.onPause,
-                onRecord: _startRecording,
+              _ModalCircleButton(
+                icon: _playing ? 'pause' : 'play',
+                background: topButtonBg,
+                iconColor: topButtonIcon,
+                onTap: _togglePlayPause,
+              ),
+              const SizedBox(width: 18),
+              _ModalCircleButton(
+                icon: 'check',
+                // OK: sempre s.primary, independente do tema —
+                // pedido explícito.
+                background: s.primary,
+                iconColor: Colors.white,
+                onTap: _confirmOk,
               ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// MORPH REAL: um único Container cuja altura, raio e cor
-// interpolam entre "input bar" (t=0) e "pill de gravação" (t=1)
-// através do MESMO progresso t. O conteúdo interno faz crossfade
-// (Opacity) na mesma janela de tempo — para não haver dois
-// widgets a co-existir por muito tempo, o crossfade do conteúdo
-// acontece na metade do morph da casca (mais rápido que a casca),
-// de forma a que quando a casca ainda está a mudar de forma, o
-// conteúdo novo já assentou, evitando sobreposição visual confusa.
-// ══════════════════════════════════════════════════════════════
-
-class _MorphingInputShell extends StatelessWidget {
-  final AppColorScheme s;
-  final double t; // 0 = input bar, 1 = pill
-  final bool recording;
-  final bool paused;
-  final AnimationController waveCtrl;
-  final String elapsedLabel;
-  final List<BoxShadow> floatingShadow;
-  final VoidCallback onClose;
-  final VoidCallback onTogglePause;
-  final Widget Function() inputBarBuilder;
-
-  const _MorphingInputShell({
-    required this.s,
-    required this.t,
-    required this.recording,
-    required this.paused,
-    required this.waveCtrl,
-    required this.elapsedLabel,
-    required this.floatingShadow,
-    required this.onClose,
-    required this.onTogglePause,
-    required this.inputBarBuilder,
-  });
-
-  double get _shellHeight {
-    // Input bar tem altura variável (min..max, cresce com o texto);
-    // durante o morph, colapsamos progressivamente para a altura
-    // fixa da pill (56).
-    final target = _ChatInputShell._pillHeight;
-    final start = _ChatInputShell._minInputHeight;
-    return start + (target - start) * t;
-  }
-
-  double get _shellRadius {
-    // 26 (input bar) -> 28 (pill, metade da altura 56) — ambos já
-    // são "pill-like", a diferença é sutil mas garante cantos
-    // perfeitamente redondos em ambos os extremos.
-    const start = 26.0;
-    const end = _ChatInputShell._pillHeight / 2;
-    return start + (end - start) * t;
-  }
-
-  Color get _shellColor {
-    final base = s.isDark ? s.cardBackground : s.floatingSurface;
-    // A pill ganha uma leve tinta da cor primária perto do fim do
-    // morph, para reforçar visualmente "estamos a gravar" sem
-    // depender só da borda.
-    if (t < 0.6) return base;
-    final localT = ((t - 0.6) / 0.4).clamp(0.0, 1.0);
-    return Color.lerp(base, s.primary.withOpacity(0.06), localT)!;
-  }
-
-  Border? get _shellBorder {
-    if (t < 0.5) return null;
-    final localT = ((t - 0.5) / 0.5).clamp(0.0, 1.0);
-    final targetColor = paused
-        ? s.outline.withOpacity(0.6)
-        : s.primary.withOpacity(0.55);
-    return Border.all(
-      color: Color.lerp(Colors.transparent, targetColor, localT)!,
-      width: 1.2 * localT,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Conteúdo cruza a meio do morph (0.35 -> 0.65) para que a troca
-    // visual do conteúdo interno aconteça DENTRO da janela em que a
-    // casca já está suficientemente larga/alta para acomodar ambos
-    // sem cortar — evita "pulo" de layout.
-    final contentSwapT = ((t - 0.35) / 0.30).clamp(0.0, 1.0);
-    final showingPillContent = t > 0.5;
-
-    final Widget pillRow = _RecordingPillRow(
-      s: s,
-      waveCtrl: waveCtrl,
-      paused: paused,
-      elapsedLabel: elapsedLabel,
-      onClose: onClose,
-      onTogglePause: onTogglePause,
-      // Durante o morph, o botão de close some/aparece via escala em
-      // vez de aparecer instantaneamente — reforça a leitura de
-      // "está a nascer da casca", não a ser colado por cima.
-      closeScale: t,
-    );
-
-    return SizedBox(
-      height: _shellHeight,
-      child: Stack(
-        alignment: Alignment.centerRight,
-        children: [
-          Container(
-            width: double.infinity,
-            height: _shellHeight,
-            padding: EdgeInsets.symmetric(horizontal: recording || t > 0.05 ? 0 : 0),
-            decoration: BoxDecoration(
-              color: _shellColor,
-              borderRadius: BorderRadius.circular(_shellRadius),
-              border: _shellBorder,
-              boxShadow: floatingShadow,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Conteúdo da input bar (some conforme t sobe)
-                if (contentSwapT < 1.0)
-                  Opacity(
-                    opacity: (1.0 - contentSwapT).clamp(0.0, 1.0),
-                    child: IgnorePointer(
-                      ignoring: showingPillContent,
-                      child: inputBarBuilder(),
-                    ),
-                  ),
-                // Conteúdo da pill de gravação (aparece conforme t sobe)
-                if (contentSwapT > 0.0)
-                  Opacity(
-                    opacity: contentSwapT.clamp(0.0, 1.0),
-                    child: IgnorePointer(
-                      ignoring: !showingPillContent,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: pillRow,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
         ],
       ),
@@ -689,240 +669,121 @@ class _MorphingInputShell extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CONTEÚDO INTERNO DA PILL DE GRAVAÇÃO
-//
-// [mic] [waveform] [tempo] [pausa/retomar] .... [close]
-//
-// Tudo dentro de UMA linha (a casca já é o morph — este widget não
-// desenha mais nenhum Container de fundo próprio, só o conteúdo).
-// O botão de close cresce em escala conforme closeScale, para
-// nascer suavemente da casca em vez de aparecer instantaneamente.
-// ══════════════════════════════════════════════════════════════
-
-class _RecordingPillRow extends StatelessWidget {
-  final AppColorScheme s;
-  final AnimationController waveCtrl;
-  final bool paused;
-  final String elapsedLabel;
-  final VoidCallback onClose;
-  final VoidCallback onTogglePause;
-  final double closeScale;
-
-  const _RecordingPillRow({
-    required this.s,
-    required this.waveCtrl,
-    required this.paused,
-    required this.elapsedLabel,
-    required this.onClose,
-    required this.onTogglePause,
-    required this.closeScale,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Mic — pulsa quando a gravar, estático quando pausado
-        AnimatedBuilder(
-          animation: waveCtrl,
-          builder: (_, __) {
-            final scale = paused
-                ? 1.0
-                : 1.0 +
-                    0.10 *
-                        (0.5 + 0.5 * math.sin(waveCtrl.value * 2 * math.pi));
-            return Transform.scale(
-              scale: scale,
-              child: AppIcon(
-                paused ? 'mic_off' : 'mic',
-                color: paused ? s.onSurfaceVariant : s.primary,
-                size: 20,
-              ),
-            );
-          },
-        ),
-        const SizedBox(width: 12),
-
-        // Waveform animada
-        Expanded(
-          child: _Waveform(s: s, t: waveCtrl, paused: paused),
-        ),
-        const SizedBox(width: 12),
-
-        // Tempo
-        Text(
-          elapsedLabel,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: s.onSurfaceVariant,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-        const SizedBox(width: 6),
-
-        // Pausar / Retomar
-        _PauseResumeButton(s: s, paused: paused, onTap: onTogglePause),
-        const SizedBox(width: 10),
-
-        // Close — nasce em escala junto com a casca a formar-se
-        Transform.scale(
-          scale: closeScale.clamp(0.0, 1.0),
-          child: Opacity(
-            opacity: closeScale.clamp(0.0, 1.0),
-            child: _CloseCircleButton(s: s, onTap: onClose),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CloseCircleButton extends StatelessWidget {
-  final AppColorScheme s;
+class _ModalCircleButton extends StatefulWidget {
+  final String icon;
+  final Color background;
+  final Color iconColor;
   final VoidCallback onTap;
-  static const double _size = 32;
-
-  const _CloseCircleButton({required this.s, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: _size,
-        height: _size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: s.hover,
-          shape: BoxShape.circle,
-        ),
-        child: AppIcon('close', color: s.onSurface, size: 16),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Waveform — barras verticais animadas ao estilo recorder/IA.
-// Cor sólida s.primary (ou neutra quando pausado). Alturas
-// pseudo-aleatórias + soma de três senos para dar movimento
-// orgânico e suave.
-// ─────────────────────────────────────────────────────────────
-
-class _Waveform extends StatelessWidget {
-  final AppColorScheme s;
-  final Animation<double> t;
-  final bool paused;
-
-  static const int _barCount = 26;
-  static const double _barWidth = 2.4;
-  static const double _barSpacing = 1.4;
-  static const double _minHeight = 4.0;
-  static const double _maxHeight = 24.0;
-
-  const _Waveform({
-    required this.s,
-    required this.t,
-    required this.paused,
-  });
-
-  double _heightFor(int i, double progress) {
-    final seedA = math.sin(i * 12.9898) * 43758.5453;
-    final phaseA = (seedA - seedA.floor()) * 2 * math.pi;
-    final seedB = math.sin(i * 78.233) * 43758.5453;
-    final phaseB = (seedB - seedB.floor()) * 2 * math.pi;
-    final seedC = math.sin(i * 39.425) * 43758.5453;
-    final phaseC = (seedC - seedC.floor()) * 2 * math.pi;
-
-    final twoPi = 2 * math.pi;
-    final w1 = 0.5 + 0.5 * math.sin(progress * twoPi * 2.3 + phaseA);
-    final w2 = 0.5 + 0.5 * math.sin(progress * twoPi * 3.9 + phaseB);
-    final w3 = 0.5 + 0.5 * math.sin(progress * twoPi * 1.4 + phaseC);
-
-    final combined = w1 * 0.45 + w2 * 0.35 + w3 * 0.20;
-
-    return _minHeight + combined * (_maxHeight - _minHeight);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: t,
-      builder: (_, __) {
-        final progress = t.value;
-        final color = paused
-            ? s.onSurfaceVariant.withOpacity(0.55)
-            : s.primary.withOpacity(0.90);
-
-        return SizedBox(
-          height: _maxHeight,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: List.generate(_barCount, (i) {
-              final h = _heightFor(i, progress);
-              return Padding(
-                padding: EdgeInsets.symmetric(horizontal: _barSpacing / 2),
-                child: Container(
-                  width: _barWidth,
-                  height: h,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(_barWidth),
-                  ),
-                ),
-              );
-            }),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// Botão pequeno de pausar/retomar dentro da pill.
-class _PauseResumeButton extends StatelessWidget {
-  final AppColorScheme s;
-  final bool paused;
-  final VoidCallback onTap;
-
-  static const double _size = 30;
-
-  const _PauseResumeButton({
-    required this.s,
-    required this.paused,
+  const _ModalCircleButton({
+    required this.icon,
+    required this.background,
+    required this.iconColor,
     required this.onTap,
   });
 
   @override
+  State<_ModalCircleButton> createState() => _ModalCircleButtonState();
+}
+
+class _ModalCircleButtonState extends State<_ModalCircleButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: _size,
-        height: _size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: paused ? s.primary.withOpacity(0.14) : s.hover,
-          shape: BoxShape.circle,
-        ),
-        child: AppIcon(
-          paused ? 'play' : 'pause',
-          color: paused ? s.primary : s.onSurface,
-          size: 15,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: Container(
+          width: 56,
+          height: 56,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.background,
+            shape: BoxShape.circle,
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: AppIcon(
+              widget.icon,
+              key: ValueKey(widget.icon),
+              size: 22,
+              color: widget.iconColor,
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Waveform "real" — barras que só se movem com amplitude real de
+// fala/som. barHistory já vem normalizado (0.0 = silêncio/parado,
+// 1.0 = pico), atualizado a partir de onAmplitudeChanged do
+// microfone real. Quando active=false (pausado) ou toda a história
+// está em zero (silêncio contínuo), as barras ficam completamente
+// paradas na altura mínima — sem nenhuma animação sintética.
+// ─────────────────────────────────────────────────────────────
+
+class _RealWaveform extends StatelessWidget {
+  final AppColorScheme s;
+  final List<double> barHistory;
+  final bool active;
+
+  static const double _barWidth = 3.0;
+  static const double _barSpacing = 2.6;
+  static const double _minHeight = 4.0;
+  static const double _maxHeight = 40.0;
+
+  const _RealWaveform({
+    required this.s,
+    required this.barHistory,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active
+        ? s.primary
+        : s.onSurfaceVariant.withOpacity(0.4);
+
+    return SizedBox(
+      height: _maxHeight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (final amplitude in barHistory)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: _barSpacing / 2),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 90),
+                curve: Curves.easeOut,
+                width: _barWidth,
+                // Sem amplitude real (parado/pausado/silêncio) a
+                // barra fica na altura mínima — não há movimento
+                // sintético nenhum.
+                height: _minHeight + amplitude * (_maxHeight - _minHeight),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(_barWidth),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
-// CLUSTER: botão de gravar + botão de enviar
+// CLUSTER: botão de gravar + botão de enviar (input bar principal)
 // ══════════════════════════════════════════════════════════════
 
 class _SendRecordCluster extends StatelessWidget {
