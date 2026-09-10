@@ -278,12 +278,11 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
       );
     }
 
-    return CupertinoScrollbar(
+    return Scrollbar(
       key: const ValueKey('results'),
       thickness: 3,
-      thicknessWhileDragging: 5.5,
       radius: const Radius.circular(3),
-      radiusWhileDragging: const Radius.circular(3),
+      thumbVisibility: false,
       child: ListView.builder(
         reverse: true,
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
@@ -312,7 +311,6 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
         return '';
     }
   }
-}
 
 class _ElasticFilterRow extends StatelessWidget {
   final AppColorScheme s;
