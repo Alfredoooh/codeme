@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/all_apps_screen.dart
+// FILE: lib/features/all_apps/all_apps_screen.dart
 // ══════════════════════════════════════════════════════════════
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -442,7 +442,7 @@ class _AppRowState extends State<_AppRow>
 // preenche com a cor primária e desenha o checkmark com animação
 // própria (AnimationController local, forward/reverse conforme o
 // valor de `selected` muda), usando o widget real do pacote
-// animated_check (AnimatedCheck(progress: Animation<double>, ...)).
+// animated_check (AnimatedCheck(progress: Animation<double>, size, color)).
 // ══════════════════════════════════════════════════════════════
 
 class _SelectionRadio extends StatefulWidget {
@@ -513,13 +513,10 @@ class _SelectionRadioState extends State<_SelectionRadio>
             ),
           ),
           alignment: Alignment.center,
-          child: SizedBox(
-            width: 13,
-            height: 13,
-            child: AnimatedCheck(
-              progress: _progress,
-              color: s.onPrimary,
-            ),
+          child: AnimatedCheck(
+            progress: _progress,
+            size: const Size(13, 13),
+            color: s.onPrimary,
           ),
         );
       },
