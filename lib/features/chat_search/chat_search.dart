@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../drawer/drawermenu.dart';
@@ -48,21 +47,17 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     if (mounted) setState(() {});
   }
 
-  // Lista base: tudo carregado sempre, filtrado por tipo (toggle) e depois por texto (quando houver pesquisa).
+  // Só "Conversas" e "Tudo" têm fonte de dados real por enquanto —
+  // ConversationItem representa apenas conversas de chat. Arquivos,
+  // Imagens e Vídeos ainda não existem como categorias próprias no
+  // backend, por isso devolvem lista vazia até essa funcionalidade
+  // existir (ex.: vindas da Biblioteca ou de um novo endpoint).
+  bool get _filterHasDataSource =>
+      _activeFilter == _SearchFilter.all || _activeFilter == _SearchFilter.conversations;
+
   List<ConversationItem> get _baseItems {
-    final all = conversationsController.items.where((c) => !c.archived);
-    switch (_activeFilter) {
-      case _SearchFilter.all:
-        return all.toList();
-      case _SearchFilter.conversations:
-        return all.where((c) => c.type == ConversationType.conversation).toList();
-      case _SearchFilter.files:
-        return all.where((c) => c.type == ConversationType.file).toList();
-      case _SearchFilter.images:
-        return all.where((c) => c.type == ConversationType.image).toList();
-      case _SearchFilter.videos:
-        return all.where((c) => c.type == ConversationType.video).toList();
-    }
+    if (!_filterHasDataSource) return const [];
+    return conversationsController.items.where((c) => !c.archived).toList();
   }
 
   List<ConversationItem> get _results {
@@ -254,6 +249,20 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
       );
     }
 
+    if (!_filterHasDataSource) {
+      return Center(
+        key: ValueKey('coming-soon-${_activeFilter.name}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            _comingSoonLabel(_activeFilter),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: s.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
     if (results.isEmpty) {
       final query = _query.trim();
       return Center(
@@ -290,10 +299,21 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
       ),
     );
   }
+
+  String _comingSoonLabel(_SearchFilter f) {
+    switch (f) {
+      case _SearchFilter.files:
+        return 'A pesquisa de arquivos ainda não está disponível.';
+      case _SearchFilter.images:
+        return 'A pesquisa de imagens ainda não está disponível.';
+      case _SearchFilter.videos:
+        return 'A pesquisa de vídeos ainda não está disponível.';
+      default:
+        return '';
+    }
+  }
 }
 
-/// Linha de toggles com scroll horizontal e efeito elástico (overscroll bounce)
-/// nas duas pontas, mesmo sem conteúdo suficiente para rolar.
 class _ElasticFilterRow extends StatelessWidget {
   final AppColorScheme s;
   final _SearchFilter active;
@@ -306,64 +326,51 @@ class _ElasticFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScrollConfiguration(
-      behavior: const _BouncyScrollBehavior(),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        padding: EdgeInsets.zero,
-        child: Row(
-          children: [
-            _FilterToggle(
-              s: s,
-              label: 'Tudo',
-              active: active == _SearchFilter.all,
-              onTap: () => onSelect(_SearchFilter.all),
-            ),
-            const SizedBox(width: 8),
-            _FilterToggle(
-              s: s,
-              label: 'Conversas',
-              active: active == _SearchFilter.conversations,
-              onTap: () => onSelect(_SearchFilter.conversations),
-            ),
-            const SizedBox(width: 8),
-            _FilterToggle(
-              s: s,
-              label: 'Arquivos',
-              active: active == _SearchFilter.files,
-              onTap: () => onSelect(_SearchFilter.files),
-            ),
-            const SizedBox(width: 8),
-            _FilterToggle(
-              s: s,
-              label: 'Imagens',
-              active: active == _SearchFilter.images,
-              onTap: () => onSelect(_SearchFilter.images),
-            ),
-            const SizedBox(width: 8),
-            _FilterToggle(
-              s: s,
-              label: 'Vídeos',
-              active: active == _SearchFilter.videos,
-              onTap: () => onSelect(_SearchFilter.videos),
-            ),
-          ],
-        ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      padding: EdgeInsets.zero,
+      child: Row(
+        children: [
+          _FilterToggle(
+            s: s,
+            label: 'Tudo',
+            active: active == _SearchFilter.all,
+            onTap: () => onSelect(_SearchFilter.all),
+          ),
+          const SizedBox(width: 8),
+          _FilterToggle(
+            s: s,
+            label: 'Conversas',
+            active: active == _SearchFilter.conversations,
+            onTap: () => onSelect(_SearchFilter.conversations),
+          ),
+          const SizedBox(width: 8),
+          _FilterToggle(
+            s: s,
+            label: 'Arquivos',
+            active: active == _SearchFilter.files,
+            onTap: () => onSelect(_SearchFilter.files),
+          ),
+          const SizedBox(width: 8),
+          _FilterToggle(
+            s: s,
+            label: 'Imagens',
+            active: active == _SearchFilter.images,
+            onTap: () => onSelect(_SearchFilter.images),
+          ),
+          const SizedBox(width: 8),
+          _FilterToggle(
+            s: s,
+            label: 'Vídeos',
+            active: active == _SearchFilter.videos,
+            onTap: () => onSelect(_SearchFilter.videos),
+          ),
+        ],
       ),
     );
-  }
-}
-
-class _BouncyScrollBehavior extends ScrollBehavior {
-  const _BouncyScrollBehavior();
-  @override
-  Widget buildOverscrollIndicator(
-      BuildContext context, Widget child, ScrollableDetails details) {
-    // Sem glow, apenas o efeito elástico do BouncingScrollPhysics.
-    return child;
   }
 }
 
@@ -381,8 +388,6 @@ class _FilterToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // No tema escuro, o toggle ativo é branco sólido, sem borda.
-    // No tema claro, o toggle ativo usa a cor primária, sem borda.
     final Color activeBg = s.isDark ? Colors.white : s.primary;
     final Color activeText = s.isDark ? Colors.black : Colors.white;
 
