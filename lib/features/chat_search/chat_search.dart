@@ -4,6 +4,7 @@ import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../drawer/drawermenu.dart';
 
+enum _SearchFilter { documents, files, images, videos }
 
 class ChatSearchScreen extends StatefulWidget {
   final AppColorScheme s;
@@ -22,6 +23,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
   final TextEditingController _ctrl = TextEditingController();
   final FocusNode _focus = FocusNode();
   String _query = '';
+  final Set<_SearchFilter> _activeFilters = {};
 
   @override
   void initState() {
@@ -65,6 +67,16 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
     Navigator.of(context).maybePop();
   }
 
+  void _toggleFilter(_SearchFilter f) {
+    setState(() {
+      if (_activeFilters.contains(f)) {
+        _activeFilters.remove(f);
+      } else {
+        _activeFilters.add(f);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -84,8 +96,8 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Espaço reservado para o appbar transparente por cima.
-                  const SizedBox(height: 58),
+                  // Espaço reservado para o appbar (título + toggles).
+                  const SizedBox(height: 108),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
@@ -171,8 +183,8 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                               shape: BoxShape.circle,
                               boxShadow: s.cardShadow,
                             ),
-                            child: AppIcon('close',
-                                color: s.onSurfaceVariant, size: 16),
+                            child: AppIcon('return',
+                                color: s.onSurfaceVariant, size: 18),
                           ),
                         ),
                       ]),
@@ -182,13 +194,12 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
               ),
             ),
 
-            // ── Appbar transparente progressivo, sem título ──────
+            // ── Appbar transparente progressivo, com toggles ─────
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: Container(
-                height: 58,
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -198,6 +209,48 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
                       s.pageBackground,
                       s.pageBackground.withOpacity(0.4),
                     ],
+                  ),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.zero,
+                      child: Row(
+                        children: [
+                          _FilterToggle(
+                            s: s,
+                            label: 'Documentos',
+                            active: _activeFilters.contains(_SearchFilter.documents),
+                            onTap: () => _toggleFilter(_SearchFilter.documents),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterToggle(
+                            s: s,
+                            label: 'Arquivos',
+                            active: _activeFilters.contains(_SearchFilter.files),
+                            onTap: () => _toggleFilter(_SearchFilter.files),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterToggle(
+                            s: s,
+                            label: 'Imagens',
+                            active: _activeFilters.contains(_SearchFilter.images),
+                            onTap: () => _toggleFilter(_SearchFilter.images),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterToggle(
+                            s: s,
+                            label: 'Vídeos',
+                            active: _activeFilters.contains(_SearchFilter.videos),
+                            onTap: () => _toggleFilter(_SearchFilter.videos),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -257,6 +310,50 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
             onTap: () => _openConversation(item.id),
           );
         },
+      ),
+    );
+  }
+}
+
+class _FilterToggle extends StatelessWidget {
+  final AppColorScheme s;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _FilterToggle({
+    required this.s,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: active ? s.primary.withOpacity(0.16) : s.cardBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active ? s.primary.withOpacity(0.5) : Colors.transparent,
+            width: 1,
+          ),
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: active ? s.primary : s.onSurfaceVariant,
+          ),
+          child: Text(label),
+        ),
       ),
     );
   }
@@ -333,13 +430,23 @@ class _SearchResultTileState extends State<_SearchResultTile> {
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
         margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: _h ? s.hover : s.cardBackground,
+          color: _h ? s.hover : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: s.cardShadow,
         ),
         child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: s.hover,
+              shape: BoxShape.circle,
+            ),
+            child: AppIcon('chat', color: s.onSurfaceVariant, size: 17),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: SelectionContainer.disabled(
               child: Column(

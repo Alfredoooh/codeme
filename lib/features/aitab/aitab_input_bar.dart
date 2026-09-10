@@ -1020,7 +1020,7 @@ class _RootPage extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _AttachOptionCard(
-                  s: s, assetName: 'folder_upload', label: 'Arquivo local', onTap: onLocalFile,
+                  s: s, assetName: 'attach', label: 'Arquivo local', onTap: onLocalFile,
                 ),
               ),
             ],
