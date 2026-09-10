@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab.dart
+// FILE: lib/features/aitab/aitab.dart
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -758,19 +758,17 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     );
   }
 
-  // ✅ FIX: agora chama a função de topo `showVoiceRecordSheet`
-  // definida no fim deste ficheiro.
-  void _openVoiceSheet() {
-    showVoiceRecordSheet(
-      context,
-      AppTheme.of(context),
-      onTranscribed: (text) {
-        setState(() {
-          _ctrl.text = text;
-          _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
-        });
-      },
-    );
+  /// ✅ FIX: substitui o antigo `_openVoiceSheet`.
+  /// O `ChatInput` (aitab_input_bar.dart) já tem o seu próprio modal
+  /// interno de gravação — este callback recebe o path do ficheiro
+  /// gravado quando o utilizador confirma com OK.
+  /// Deixei vazio para compilar; preenche com o que precisares
+  /// (ex.: enviar para transcrição, anexar como áudio, etc.).
+  void _onRecordingDone(String path) {
+    // TODO: tratar o ficheiro gravado (path).
+    // Ex.: _attachedFiles.add(...) com bytes do ficheiro,
+    // ou enviar `path` para um serviço de transcrição e preencher
+    // _ctrl.text com o texto resultante.
   }
 
   void _openCanvasPopup() {
@@ -1173,7 +1171,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     onSend: _send,
                     onPause: _pauseGeneration,
                     onAttach: _openAttachSheet,
-                    onRecord: _openVoiceSheet,
+                    onRecordingComplete: _onRecordingDone,
                     onRemoveFile: _onRemoveAttachedFile,
                   ),
                   AnimatedContainer(
@@ -1288,108 +1286,4 @@ class AiTabHostNavigation extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AiTabHostNavigation oldWidget) => true;
-}
-
-// ══════════════════════════════════════════════════════════════
-// ✅ FIX: showVoiceRecordSheet + bottom sheet de gravação de voz
-// ══════════════════════════════════════════════════════════════
-
-Future<void> showVoiceRecordSheet(
-  BuildContext context,
-  AppColorScheme s, {
-  required ValueChanged<String> onTranscribed,
-}) {
-  return showAppSheet<void>(
-    context,
-    builder: (ctx) => _VoiceRecordSheet(
-      s: s,
-      onTranscribed: onTranscribed,
-    ),
-  );
-}
-
-class _VoiceRecordSheet extends StatefulWidget {
-  final AppColorScheme s;
-  final ValueChanged<String> onTranscribed;
-  const _VoiceRecordSheet({
-    required this.s,
-    required this.onTranscribed,
-  });
-
-  @override
-  State<_VoiceRecordSheet> createState() => _VoiceRecordSheetState();
-}
-
-class _VoiceRecordSheetState extends State<_VoiceRecordSheet> {
-  bool _recording = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.s;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Gravação de voz',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: s.onSurface,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _recording ? 'A gravar… toca para parar' : 'Toca para começar a gravar',
-            style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
-          ),
-          const SizedBox(height: 18),
-          GestureDetector(
-            onTap: () => setState(() => _recording = !_recording),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                color: _recording ? s.primary : s.surface,
-                shape: BoxShape.circle,
-                boxShadow: _recording
-                    ? [BoxShadow(color: s.primary.withOpacity(0.35), blurRadius: 18, spreadRadius: 2)]
-                    : null,
-              ),
-              child: Icon(
-                _recording ? Icons.stop_rounded : Icons.mic_rounded,
-                color: s.onSurface,
-                size: 34,
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () {
-                    // Integração real com speech_to_text deve substituir
-                    // este placeholder devolvendo o texto transcrito.
-                    widget.onTranscribed('');
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Usar'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }
