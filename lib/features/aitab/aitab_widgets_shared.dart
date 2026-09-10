@@ -4,6 +4,8 @@
 // ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/animated_canvas_icon.dart';
@@ -11,11 +13,7 @@ import '../apps/app_types.dart';
 import 'aitab_models.dart';
 
 // ══════════════════════════════════════════════════════════════
-// SHEET GENÉRICO PLANO — showModalBottomSheet nativo (mesmo padrão
-// usado em drawermenu.dart e aitab_input_bar.dart). Substitui
-// app_sheet.dart, que não respondia corretamente ao gesto de
-// arrastar para baixo. Handlebar próprio, radius de topo, drag
-// nativo habilitado explicitamente.
+// SHEET GENÉRICO PLANO
 // ══════════════════════════════════════════════════════════════
 
 const double _kFlatModalRadius = 20.0;
@@ -139,48 +137,92 @@ class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStat
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOADER LOGO
+// NEXA BRAND LOGO — ícone do header da tela de chat (logo.svg)
+//
+// Substitui o NexaLoaderLogo APENAS onde ele era usado como ícone
+// fixo da tela de chat. O NexaLoaderLogo continua a existir (agora
+// como bola) e é esse que aparece na animação de "a responder".
 // ══════════════════════════════════════════════════════════════
 
-class _NexaDotSpec {
-  final double left;
-  final double top;
-  final Color color;
-  final double delaySeconds;
-  const _NexaDotSpec({
-    required this.left,
-    required this.top,
-    required this.color,
-    required this.delaySeconds,
+class NexaBrandLogo extends StatefulWidget {
+  final double size;
+  final bool animated;
+  const NexaBrandLogo({
+    super.key,
+    this.size = 40,
+    this.animated = true,
   });
+
+  @override
+  State<NexaBrandLogo> createState() => _NexaBrandLogoState();
 }
 
-final List<_NexaDotSpec> _kNexaDots = [
-  _NexaDotSpec(left: 28.21 / 128, top: 55.26 / 128, color: const Color.fromRGBO(88, 148, 247, 1),  delaySeconds: 0.00),
-  _NexaDotSpec(left: 42.30 / 128, top: 49.85 / 128, color: const Color.fromRGBO(91, 150, 247, 1),  delaySeconds: 0.07),
-  _NexaDotSpec(left: 35.05 / 128, top: 42.55 / 128, color: const Color.fromRGBO(99, 155, 247, 1),  delaySeconds: 0.13),
-  _NexaDotSpec(left: 42.45 / 128, top: 35.10 / 128, color: const Color.fromRGBO(112, 164, 248, 1), delaySeconds: 0.20),
-  _NexaDotSpec(left: 49.44 / 128, top: 42.51 / 128, color: const Color.fromRGBO(130, 175, 249, 1), delaySeconds: 0.27),
-  _NexaDotSpec(left: 55.21 / 128, top: 29.38 / 128, color: const Color.fromRGBO(150, 188, 250, 1), delaySeconds: 0.33),
-  _NexaDotSpec(left: 67.36 / 128, top: 29.33 / 128, color: const Color.fromRGBO(171, 201, 251, 1), delaySeconds: 0.40),
-  _NexaDotSpec(left: 72.92 / 128, top: 42.55 / 128, color: const Color.fromRGBO(193, 215, 252, 1), delaySeconds: 0.47),
-  _NexaDotSpec(left: 79.96 / 128, top: 35.10 / 128, color: const Color.fromRGBO(213, 228, 253, 1), delaySeconds: 0.53),
-  _NexaDotSpec(left: 87.37 / 128, top: 42.55 / 128, color: const Color.fromRGBO(230, 239, 253, 1), delaySeconds: 0.60),
-  _NexaDotSpec(left: 79.96 / 128, top: 49.85 / 128, color: const Color.fromRGBO(243, 247, 254, 1), delaySeconds: 0.67),
-  _NexaDotSpec(left: 94.05 / 128, top: 55.26 / 128, color: const Color.fromRGBO(252, 253, 254, 1), delaySeconds: 0.73),
-  _NexaDotSpec(left: 94.05 / 128, top: 67.82 / 128, color: const Color.fromRGBO(255, 255, 255, 1), delaySeconds: 0.80),
-  _NexaDotSpec(left: 79.96 / 128, top: 73.53 / 128, color: const Color.fromRGBO(252, 253, 254, 1), delaySeconds: 0.87),
-  _NexaDotSpec(left: 87.31 / 128, top: 80.78 / 128, color: const Color.fromRGBO(243, 247, 254, 1), delaySeconds: 0.93),
-  _NexaDotSpec(left: 79.96 / 128, top: 88.13 / 128, color: const Color.fromRGBO(230, 239, 253, 1), delaySeconds: 1.00),
-  _NexaDotSpec(left: 72.82 / 128, top: 80.78 / 128, color: const Color.fromRGBO(213, 228, 253, 1), delaySeconds: 1.07),
-  _NexaDotSpec(left: 67.30 / 128, top: 93.94 / 128, color: const Color.fromRGBO(193, 215, 252, 1), delaySeconds: 1.13),
-  _NexaDotSpec(left: 54.95 / 128, top: 93.94 / 128, color: const Color.fromRGBO(171, 201, 251, 1), delaySeconds: 1.20),
-  _NexaDotSpec(left: 49.44 / 128, top: 80.78 / 128, color: const Color.fromRGBO(150, 188, 250, 1), delaySeconds: 1.27),
-  _NexaDotSpec(left: 42.30 / 128, top: 88.13 / 128, color: const Color.fromRGBO(130, 175, 249, 1), delaySeconds: 1.33),
-  _NexaDotSpec(left: 34.95 / 128, top: 80.78 / 128, color: const Color.fromRGBO(112, 164, 248, 1), delaySeconds: 1.40),
-  _NexaDotSpec(left: 42.30 / 128, top: 73.53 / 128, color: const Color.fromRGBO(99, 155, 247, 1),  delaySeconds: 1.47),
-  _NexaDotSpec(left: 28.21 / 128, top: 67.81 / 128, color: const Color.fromRGBO(91, 150, 247, 1),  delaySeconds: 1.53),
-];
+class _NexaBrandLogoState extends State<NexaBrandLogo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    if (widget.animated) _c.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant NexaBrandLogo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.animated != oldWidget.animated) {
+      if (widget.animated) {
+        _c.repeat(reverse: true);
+      } else {
+        _c.stop();
+        _c.value = 0.0;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = SvgPicture.asset(
+      'assets/icons/png/logo.svg',
+      width: widget.size,
+      height: widget.size,
+    );
+    if (!widget.animated) return logo;
+
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        final v = Curves.easeInOut.transform(_c.value);
+        return Opacity(
+          opacity: 0.82 + 0.18 * v,
+          child: Transform.scale(
+            scale: 0.96 + 0.04 * v,
+            child: logo,
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// NEXA LOADER LOGO — bola única que cresce e encolhe.
+//
+// Usado na animação de "a responder" (StreamingBubble →
+// showLogoLoader). Cresce/encolhe devagar e suavemente, com easing
+// contínuo (sem saltos) e velocidade uniforme.
+// Cor: branco puro no tema escuro, preto puro no tema claro.
+// ══════════════════════════════════════════════════════════════
 
 class NexaLoaderLogo extends StatefulWidget {
   final double size;
@@ -200,28 +242,18 @@ class NexaLoaderLogo extends StatefulWidget {
 class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  late final AnimationController _shimmer;
-
-  static const double _cycleSeconds = 1.6;
-  static const double _dotFraction = 5.64 / 128;
 
   @override
   void initState() {
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: (_cycleSeconds * 1000).round()),
-    );
-    _shimmer = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1500),
     );
     if (widget.animated) {
-      _c.repeat();
-      _shimmer.repeat(reverse: true);
+      _c.repeat(reverse: true);
     } else {
-      _c.value = 0.5;
-      _shimmer.value = 0.5;
+      _c.value = 0.0;
     }
   }
 
@@ -230,11 +262,10 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
     super.didUpdateWidget(oldWidget);
     if (widget.animated != oldWidget.animated) {
       if (widget.animated) {
-        _c.repeat();
-        _shimmer.repeat(reverse: true);
+        _c.repeat(reverse: true);
       } else {
         _c.stop();
-        _shimmer.stop();
+        _c.value = 0.0;
       }
     }
   }
@@ -242,71 +273,37 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
   @override
   void dispose() {
     _c.dispose();
-    _shimmer.dispose();
     super.dispose();
-  }
-
-  double _opacityFor(double delaySeconds, double t) {
-    final delayFrac = delaySeconds / _cycleSeconds;
-    var local = (t - delayFrac) % 1.0;
-    if (local < 0) local += 1.0;
-    final phase = (local * 2).clamp(0.0, 2.0);
-    final eased = phase <= 1.0 ? phase : (2.0 - phase);
-    return 0.15 + (0.85 * eased);
   }
 
   @override
   Widget build(BuildContext context) {
-    final dotSize = widget.size * _dotFraction;
+    final s = AppTheme.of(context);
+    final ballColor = widget.tintColor
+        ?? (s.isDark ? Colors.white : Colors.black);
+
     return SizedBox(
       width: widget.size,
       height: widget.size,
-      child: AnimatedBuilder(
-        animation: Listenable.merge([_c, _shimmer]),
-        builder: (_, __) {
-          final shimmerX = (_shimmer.value * 2 - 1) * widget.size * 0.4;
-          final content = Stack(
-            children: [
-              for (final dot in _kNexaDots)
-                Positioned(
-                  left: dot.left * widget.size,
-                  top: dot.top * widget.size,
-                  child: Opacity(
-                    opacity: _opacityFor(dot.delaySeconds, _c.value),
-                    child: Container(
-                      width: dotSize,
-                      height: dotSize,
-                      decoration: BoxDecoration(
-                        color: widget.tintColor ?? dot.color,
-                        borderRadius: BorderRadius.circular(dotSize * 0.22),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-
-          if (widget.tintColor != null) {
-            return content;
-          }
-
-          return ShaderMask(
-            shaderCallback: (bounds) {
-              return LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.transparent,
-                  Colors.white.withOpacity(0.75),
-                  Colors.transparent,
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ).createShader(bounds.shift(Offset(shimmerX, 0)));
-            },
-            blendMode: BlendMode.srcIn,
-            child: content,
-          );
-        },
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (_, __) {
+            // Easing contínuo: parte devagar, acelera no meio e trava
+            // devagar novamente — sem nunca dar "salto".
+            final t = Curves.easeInOut.transform(_c.value);
+            // Diâmetro varia entre 40% e 100% do size.
+            final d = widget.size * (0.40 + 0.60 * t);
+            return Container(
+              width: d,
+              height: d,
+              decoration: BoxDecoration(
+                color: ballColor,
+                shape: BoxShape.circle,
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -631,6 +628,16 @@ class AiConversationMenuButton extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// HEADER MENU BUTTON — popup com animação estilo Android antigo.
+//
+// - Aparece SEMPRE ACIMA do botão.
+// - Animação: scale a crescer a partir do canto inferior direito +
+//   fade suave (mesma sensação dos popups das versões antigas do
+//   Android), com 180 ms de duração.
+// - Design dos itens inalterado.
+// ══════════════════════════════════════════════════════════════
+
 class _HeaderMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final bool hasMessages;
@@ -652,48 +659,19 @@ class _HeaderMenuButton extends StatelessWidget {
         final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
         if (box == null) return;
         final overlayState = Overlay.of(context);
-        final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-        final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+        final overlayBox =
+            overlayState.context.findRenderObject() as RenderBox;
+        final anchorTopLeft =
+            box.localToGlobal(Offset.zero, ancestor: overlayBox);
         final anchorSize = box.size;
 
-        final RelativeRect position = RelativeRect.fromLTRB(
-          anchorTopLeft.dx,
-          anchorTopLeft.dy + anchorSize.height,
-          overlayBox.size.width - (anchorTopLeft.dx + anchorSize.width),
-          overlayBox.size.height - (anchorTopLeft.dy + anchorSize.height),
-        );
-
-        final result = await showMenu<ConversationAction>(
-          context: context,
-          position: position,
-          color: s.floatingSurface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-            side: BorderSide(color: s.outline.withOpacity(0.25)),
-          ),
-          items: [
-            PopupMenuItem<ConversationAction>(
-              value: ConversationAction.newChat,
-              padding: EdgeInsets.zero,
-              child: _buildMenuItem(s, ConversationAction.newChat, false, false),
-            ),
-            PopupMenuItem<ConversationAction>(
-              value: ConversationAction.incognito,
-              enabled: !hasMessages,
-              padding: EdgeInsets.zero,
-              child: _buildMenuItem(s, ConversationAction.incognito, false, hasMessages),
-            ),
-            PopupMenuItem<ConversationAction>(
-              value: ConversationAction.rename,
-              padding: EdgeInsets.zero,
-              child: _buildMenuItem(s, ConversationAction.rename, false, false),
-            ),
-            PopupMenuItem<ConversationAction>(
-              value: ConversationAction.delete,
-              padding: EdgeInsets.zero,
-              child: _buildMenuItem(s, ConversationAction.delete, true, false),
-            ),
-          ],
+        final result = await _showHeaderPopupMenu(
+          context,
+          s,
+          anchorTopLeft: anchorTopLeft,
+          anchorSize: anchorSize,
+          overlaySize: overlayBox.size,
+          hasMessages: hasMessages,
         );
 
         if (result != null) onSelect(result);
@@ -706,19 +684,121 @@ class _HeaderMenuButton extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildMenuItem(
-    AppColorScheme s,
-    ConversationAction action,
-    bool destructive,
-    bool disabled,
-  ) {
-    final color = disabled
-        ? s.onSurfaceVariant.withOpacity(0.4)
-        : destructive
-            ? s.error
-            : s.onSurface;
-    return Container(
+Future<ConversationAction?> _showHeaderPopupMenu(
+  BuildContext context,
+  AppColorScheme s, {
+  required Offset anchorTopLeft,
+  required Size anchorSize,
+  required Size overlaySize,
+  required bool hasMessages,
+}) {
+  const double popupWidth = 220.0;
+  const double gap = 6.0;
+
+  // Alinha a borda DIREITA do popup com a borda DIREITA do botão.
+  final rawLeft = anchorTopLeft.dx + anchorSize.width - popupWidth;
+  final clampedLeft =
+      rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
+
+  // Coloca o popup ACIMA do botão:
+  //   bottom = distância do fundo do ecrã até ao topo do botão + gap
+  final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
+
+  return showGeneralDialog<ConversationAction>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Fechar menu',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (dialogCtx, anim, secAnim) {
+      return Stack(
+        children: [
+          Positioned(
+            left: clampedLeft,
+            bottom: popupBottom,
+            width: popupWidth,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: s.outline.withOpacity(0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          Colors.black.withOpacity(s.isDark ? 0.45 : 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeaderMenuItem(dialogCtx, s,
+                          ConversationAction.newChat, false, false),
+                      _buildHeaderMenuItem(dialogCtx, s,
+                          ConversationAction.incognito, false, hasMessages),
+                      _buildHeaderMenuItem(dialogCtx, s,
+                          ConversationAction.rename, false, false),
+                      _buildHeaderMenuItem(dialogCtx, s,
+                          ConversationAction.delete, true, false),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+    transitionBuilder: (dialogCtx, anim, secAnim, child) {
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          // Cresce a partir do canto inferior direito (o ponto do popup
+          // mais próximo do botão) — feel dos popups Android antigos.
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
+          alignment: Alignment.bottomRight,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildHeaderMenuItem(
+  BuildContext context,
+  AppColorScheme s,
+  ConversationAction action,
+  bool destructive,
+  bool disabled,
+) {
+  final color = disabled
+      ? s.onSurfaceVariant.withOpacity(0.4)
+      : destructive
+          ? s.error
+          : s.onSurface;
+
+  return InkWell(
+    onTap: disabled
+        ? null
+        : () {
+            HapticFeedback.lightImpact();
+            Navigator.of(context).pop(action);
+          },
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
       margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -739,8 +819,8 @@ class _HeaderMenuButton extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 void showMessageActionsPopup(
@@ -827,9 +907,7 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP — agora usando o showModalBottomSheet nativo
-// (_showSharedFlatBottomSheet) em vez de showAppSheet, que não
-// respondia corretamente ao gesto de arrastar para fechar.
+// ATTACH POPUP
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachPopup(
@@ -904,8 +982,6 @@ Future<void> showAttachPopup(
   );
 }
 
-// Card quadrado, mesmo estilo visual do DrawerSquareAction do
-// drawer (fundo s.cardBackground/s.hover, ícone + label centrados).
 class _AttachOptionCardShared extends StatefulWidget {
   final AppColorScheme s;
   final String assetName;
@@ -966,8 +1042,6 @@ class _AttachOptionCardSharedState extends State<_AttachOptionCardShared> {
   }
 }
 
-// Item de lista simples — usado só para a linha "Modelo" abaixo dos
-// cards.
 class _AttachSheetItem extends StatelessWidget {
   final AppColorScheme s;
   final String iconAsset;
