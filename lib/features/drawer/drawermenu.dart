@@ -21,6 +21,9 @@ import '../library/library_screen.dart';
 import '../scheduled_tasks/scheduled_tasks_screen.dart';
 import '../all_apps/all_apps_screen.dart';
 import '../apps/app_types.dart';
+import '../apps/app_shortcuts.dart';
+import '../apps/registry/app_registry.dart';
+import '../apps/app_detail_screen.dart';
 // TODO: depende de apps/docs.dart (split futuro); manter este import para a etapa futura de split.
 import '../apps/docs/docs.dart';
 import '../apps/sheets/sheets_app.dart';
@@ -231,17 +234,22 @@ class _AppDrawerState extends State<AppDrawer> {
     super.initState();
     conversationsController.addListener(_onConvsChanged);
     authController.addListener(_onAuthChanged);
+    appShortcutsController.addListener(_onShortcutsChanged);
     _syncConversations();
+    appShortcutsController.load();
   }
 
   @override
   void dispose() {
     conversationsController.removeListener(_onConvsChanged);
     authController.removeListener(_onAuthChanged);
+    appShortcutsController.removeListener(_onShortcutsChanged);
     super.dispose();
   }
 
   void _onConvsChanged() { if (mounted) setState(() {}); }
+
+  void _onShortcutsChanged() { if (mounted) setState(() {}); }
 
   void _onAuthChanged() {
     if (!mounted) return;
@@ -334,6 +342,26 @@ class _AppDrawerState extends State<AppDrawer> {
     _closeThenRun(() {
       Navigator.of(context).push(AppPageRoute(
         builder: (_) => const AllAppsScreen(),
+      ));
+    });
+  }
+
+  void _openAllAppsInSelectionMode(BuildContext context) {
+    HapticFeedback.lightImpact();
+    _closeThenRun(() {
+      Navigator.of(context).push(AppPageRoute(
+        builder: (_) => const AllAppsScreen(startInSelectionMode: true),
+      ));
+    });
+  }
+
+  void _openShortcutApp(BuildContext context, String slug) {
+    final entry = AppRegistry.bySlug(slug);
+    if (entry == null) return;
+    HapticFeedback.lightImpact();
+    _closeThenRun(() {
+      Navigator.of(context).push(AppPageRoute(
+        builder: (_) => AppDetailScreen(app: entry),
       ));
     });
   }
@@ -487,11 +515,10 @@ class _AppDrawerState extends State<AppDrawer> {
   ) {
     if (conversationsController.loading && conversationsController.items.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
         physics: const NeverScrollableScrollPhysics(),
-        children: [
-          for (int i = 0; i < 7; i++)
-            _ConversationSkeletonRow(s: s, delayMs: i * 70),
+        children: const [
+          _DrawerSkeleton(),
         ],
       );
     }
@@ -518,7 +545,7 @@ class _AppDrawerState extends State<AppDrawer> {
             child: DrawerSquareAction(
               s: s,
               iconAsset: 'plugins',
-              label: 'Apps e\nplugins',
+              label: 'Apps',
               onTap: () => _openAllApps(context),
             ),
           ),
@@ -541,6 +568,23 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           ),
         ],
+      ),
+    ));
+
+    sections.add(_ConversationGroupHeader(
+      s: s,
+      label: 'Atalhos de apps',
+      expanded: true,
+      interactive: false,
+      onTap: () {},
+    ));
+    sections.add(Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: _AppShortcutsRow(
+        s: s,
+        slugs: appShortcutsController.slugs,
+        onTapShortcut: (slug) => _openShortcutApp(context, slug),
+        onAddTap: () => _openAllAppsInSelectionMode(context),
       ),
     ));
 
@@ -687,16 +731,241 @@ class _DrawerSquareActionState extends State<DrawerSquareAction> {
   }
 }
 
-// ── Skeleton loader ─────────
+// ══════════════════════════════════════════════════════════════
+// SECÇÃO "Atalhos de apps" — lista horizontal de ícones circulares
+// dos apps escolhidos, seguida de um botão "+" circular (contorno
+// traço-a-traço, cor de fundo do corpo) que abre o AllAppsScreen em
+// modo de seleção.
+// ══════════════════════════════════════════════════════════════
 
-class _ConversationSkeletonRow extends StatefulWidget {
+class _AppShortcutsRow extends StatelessWidget {
   final AppColorScheme s;
-  final int delayMs;
-  const _ConversationSkeletonRow({required this.s, required this.delayMs});
-  @override State<_ConversationSkeletonRow> createState() => _ConversationSkeletonRowState();
+  final List<String> slugs;
+  final ValueChanged<String> onTapShortcut;
+  final VoidCallback onAddTap;
+  const _AppShortcutsRow({
+    required this.s,
+    required this.slugs,
+    required this.onTapShortcut,
+    required this.onAddTap,
+  });
+
+  static const double _itemSize = 56;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _itemSize,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          for (final slug in slugs)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: _AppShortcutIcon(
+                s: s,
+                slug: slug,
+                size: _itemSize,
+                onTap: () => onTapShortcut(slug),
+              ),
+            ),
+          _AddShortcutButton(s: s, size: _itemSize, onTap: onAddTap),
+        ],
+      ),
+    );
+  }
 }
 
-class _ConversationSkeletonRowState extends State<_ConversationSkeletonRow>
+class _AppShortcutIcon extends StatefulWidget {
+  final AppColorScheme s;
+  final String slug;
+  final double size;
+  final VoidCallback onTap;
+  const _AppShortcutIcon({
+    required this.s,
+    required this.slug,
+    required this.size,
+    required this.onTap,
+  });
+
+  @override
+  State<_AppShortcutIcon> createState() => _AppShortcutIconState();
+}
+
+class _AppShortcutIconState extends State<_AppShortcutIcon> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final entry = AppRegistry.bySlug(widget.slug);
+    if (entry == null) return const SizedBox.shrink();
+    final manifest = entry.manifest;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: _p ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(
+            manifest.isCircularIcon ? widget.size / 2 : 16,
+          ),
+          child: Container(
+            width: widget.size,
+            height: widget.size,
+            color: manifest.isCircularIcon ? Colors.white : s.cardBackground,
+            child: Image.asset(manifest.iconAsset, fit: BoxFit.cover),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddShortcutButton extends StatefulWidget {
+  final AppColorScheme s;
+  final double size;
+  final VoidCallback onTap;
+  const _AddShortcutButton({
+    required this.s,
+    required this.size,
+    required this.onTap,
+  });
+
+  @override
+  State<_AddShortcutButton> createState() => _AddShortcutButtonState();
+}
+
+class _AddShortcutButtonState extends State<_AddShortcutButton> {
+  bool _p = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown:   (_) => setState(() => _p = true),
+      onTapCancel: ()  => setState(() => _p = false),
+      onTapUp:     (_) => setState(() => _p = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: _p ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: s.cardBackground,
+            border: Border.all(
+              color: s.onSurfaceVariant.withOpacity(0.35),
+              width: 1.4,
+            ),
+          ),
+          child: AppIcon('plus', size: 20, color: s.onSurface),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Skeleton loader estruturado ─────────────────────────────
+// Reproduz a forma real da tela: 3 cards quadrados de ação,
+// cabeçalho de secção, uma linha de atalhos horizontais + botão,
+// e depois linhas de conversa (título + data) em dois grupos.
+// ══════════════════════════════════════════════════════════════
+
+class _DrawerSkeleton extends StatelessWidget {
+  const _DrawerSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: Row(
+            children: [
+              Expanded(child: _SkeletonSquare(s: s, delayMs: 0)),
+              const SizedBox(width: 10),
+              Expanded(child: _SkeletonSquare(s: s, delayMs: 60)),
+              const SizedBox(width: 10),
+              Expanded(child: _SkeletonSquare(s: s, delayMs: 120)),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: _SkeletonBlock(s: s, width: 110, height: 12, delayMs: 160),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                for (int i = 0; i < 4; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: _SkeletonCircle(s: s, size: 56, delayMs: 180 + i * 40),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+          child: _SkeletonBlock(s: s, width: 140, height: 12, delayMs: 360),
+        ),
+        for (int i = 0; i < 3; i++)
+          _SkeletonConvRow(s: s, delayMs: 400 + i * 70),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+          child: _SkeletonBlock(s: s, width: 160, height: 12, delayMs: 640),
+        ),
+        for (int i = 0; i < 4; i++)
+          _SkeletonConvRow(s: s, delayMs: 680 + i * 70),
+      ],
+    );
+  }
+}
+
+class _ShimmerBox extends StatefulWidget {
+  final AppColorScheme s;
+  final double? width;
+  final double height;
+  final BorderRadius borderRadius;
+  final int delayMs;
+  const _ShimmerBox({
+    required this.s,
+    this.width,
+    required this.height,
+    required this.borderRadius,
+    required this.delayMs,
+  });
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _shimmer;
@@ -704,7 +973,8 @@ class _ConversationSkeletonRowState extends State<_ConversationSkeletonRow>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+      ..repeat(reverse: true);
     _shimmer = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
     Future.delayed(Duration(milliseconds: widget.delayMs), () {
       if (mounted) _ctrl.forward(from: 0);
@@ -722,39 +992,109 @@ class _ConversationSkeletonRowState extends State<_ConversationSkeletonRow>
     final s = widget.s;
     final base = s.isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05);
     final highlight = s.isDark ? Colors.white.withOpacity(0.11) : Colors.black.withOpacity(0.09);
+    return AnimatedBuilder(
+      animation: _shimmer,
+      builder: (_, __) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Color.lerp(base, highlight, _shimmer.value),
+          borderRadius: widget.borderRadius,
+        ),
+      ),
+    );
+  }
+}
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      child: AnimatedBuilder(
-        animation: _shimmer,
-        builder: (_, __) {
-          final t = _shimmer.value;
-          return Row(
-            children: [
-              Expanded(
-                flex: 7,
-                child: Container(
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Color.lerp(base, highlight, t),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 3,
-                child: Container(
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Color.lerp(base, highlight, 1 - t),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+class _SkeletonSquare extends StatelessWidget {
+  final AppColorScheme s;
+  final int delayMs;
+  const _SkeletonSquare({required this.s, required this.delayMs});
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: _ShimmerBox(
+        s: s,
+        height: double.infinity,
+        borderRadius: BorderRadius.circular(18),
+        delayMs: delayMs,
+      ),
+    );
+  }
+}
+
+class _SkeletonCircle extends StatelessWidget {
+  final AppColorScheme s;
+  final double size;
+  final int delayMs;
+  const _SkeletonCircle({required this.s, required this.size, required this.delayMs});
+
+  @override
+  Widget build(BuildContext context) {
+    return _ShimmerBox(
+      s: s,
+      width: size,
+      height: size,
+      borderRadius: BorderRadius.circular(size / 2),
+      delayMs: delayMs,
+    );
+  }
+}
+
+class _SkeletonBlock extends StatelessWidget {
+  final AppColorScheme s;
+  final double width;
+  final double height;
+  final int delayMs;
+  const _SkeletonBlock({
+    required this.s,
+    required this.width,
+    required this.height,
+    required this.delayMs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ShimmerBox(
+      s: s,
+      width: width,
+      height: height,
+      borderRadius: BorderRadius.circular(6),
+      delayMs: delayMs,
+    );
+  }
+}
+
+class _SkeletonConvRow extends StatelessWidget {
+  final AppColorScheme s;
+  final int delayMs;
+  const _SkeletonConvRow({required this.s, required this.delayMs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ShimmerBox(
+            s: s,
+            width: double.infinity,
+            height: 15,
+            borderRadius: BorderRadius.circular(7),
+            delayMs: delayMs,
+          ),
+          const SizedBox(height: 6),
+          _ShimmerBox(
+            s: s,
+            width: 60,
+            height: 11,
+            borderRadius: BorderRadius.circular(6),
+            delayMs: delayMs + 40,
+          ),
+        ],
       ),
     );
   }
@@ -1187,7 +1527,6 @@ class _ConversationOptionsModalContent extends StatelessWidget {
             ),
           ),
         ),
-        Divider(height: 1, color: s.outline.withOpacity(0.15)),
         _modalItem(context, 'open', 'Abrir conversa', _ConversationPopupAction.open),
         _modalItem(
           context,

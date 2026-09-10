@@ -4,21 +4,124 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle;
+import 'package:animated_check/animated_check.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../apps/registry/app_registry.dart';
 import '../apps/app_detail_screen.dart';
+import '../apps/app_shortcuts.dart';
 import '../../core/navigation/app_page_route.dart';
 
 
-class AllAppsScreen extends StatelessWidget {
-  const AllAppsScreen({super.key});
+class AllAppsScreen extends StatefulWidget {
+  /// Se true, o ecrã abre já em modo de seleção (usado pelo botão "+"
+  /// da secção de atalhos do drawer). Quando false, o ecrã comporta-se
+  /// como antes (navegação normal para o detalhe do app).
+  final bool startInSelectionMode;
+
+  const AllAppsScreen({super.key, this.startInSelectionMode = false});
+
+  @override
+  State<AllAppsScreen> createState() => _AllAppsScreenState();
+}
+
+class _AllAppsScreenState extends State<AllAppsScreen> {
+  late bool _selectionMode;
+  final Set<String> _selected = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _selectionMode = widget.startInSelectionMode;
+  }
 
   void _openAppDetail(BuildContext context, AppEntry app) {
+    if (_selectionMode) {
+      _toggleSelected(app.manifest.slug);
+      return;
+    }
     HapticFeedback.lightImpact();
     Navigator.of(context).push(
       AppPageRoute(builder: (_) => AppDetailScreen(app: app)),
     );
+  }
+
+  void _toggleSelected(String slug) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_selected.contains(slug)) {
+        _selected.remove(slug);
+      } else {
+        _selected.add(slug);
+      }
+    });
+  }
+
+  void _enterSelectionMode() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _selectionMode = true;
+      _selected.clear();
+    });
+  }
+
+  void _exitSelectionMode() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _selectionMode = false;
+      _selected.clear();
+    });
+  }
+
+  Future<void> _confirmSelection() async {
+    if (_selected.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    final count = _selected.length;
+    await appShortcutsController.addAll(_selected);
+    if (!mounted) return;
+    setState(() {
+      _selectionMode = false;
+      _selected.clear();
+    });
+    final s = AppTheme.of(context);
+    final message = count == 1
+        ? 'Atalho adicionado com sucesso.'
+        : '$count atalhos adicionados com sucesso.';
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: s.cardBackground,
+        content: Row(
+          children: [
+            AppIcon('check', size: 18, color: s.onSurface),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: s.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        margin: const EdgeInsets.all(12),
+      ),
+    );
+  }
+
+  void _handleBackTap() {
+    if (_selectionMode) {
+      _exitSelectionMode();
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -37,25 +140,59 @@ class AllAppsScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                     child: Row(children: [
-                      _BackButton(s: s, onTap: () => Navigator.pop(context)),
+                      _MorphingBackButton(
+                        s: s,
+                        selectionMode: _selectionMode,
+                        onTap: _handleBackTap,
+                      ),
                       const SizedBox(width: 12),
-                      Text(
-                        'Apps',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: s.onSurface,
+                      Expanded(
+                        child: Text(
+                          'Apps',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: s.onSurface,
+                          ),
                         ),
+                      ),
+                      _ConcludeButton(
+                        s: s,
+                        visible: _selectionMode,
+                        enabled: _selected.isNotEmpty,
+                        onTap: _confirmSelection,
                       ),
                     ]),
                   ),
                 ),
+                if (!_selectionMode)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Mantém pressionado o botão "+" na secção de atalhos para escolher os apps que queres ter à mão.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.35,
+                                color: s.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
                   sliver: SliverToBoxAdapter(
                     child: _AppsGroup(
                       s: s,
                       apps: AppRegistry.all,
+                      selectionMode: _selectionMode,
+                      selected: _selected,
                       onTapApp: (app) => _openAppDetail(context, app),
                     ),
                   ),
@@ -79,10 +216,14 @@ class AllAppsScreen extends StatelessWidget {
 class _AppsGroup extends StatelessWidget {
   final AppColorScheme s;
   final List<AppEntry> apps;
+  final bool selectionMode;
+  final Set<String> selected;
   final ValueChanged<AppEntry> onTapApp;
   const _AppsGroup({
     required this.s,
     required this.apps,
+    required this.selectionMode,
+    required this.selected,
     required this.onTapApp,
   });
 
@@ -105,11 +246,14 @@ class _AppsGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final children = <Widget>[];
     for (var i = 0; i < apps.length; i++) {
+      final slug = apps[i].manifest.slug;
       children.add(_AppCard(
         s: s,
         radius: _radiusFor(i, apps.length),
         app: apps[i],
         index: i,
+        selectionMode: selectionMode,
+        isSelected: selected.contains(slug),
         onTap: () => onTapApp(apps[i]),
       ));
       if (i != apps.length - 1) children.add(const SizedBox(height: 2));
@@ -123,12 +267,16 @@ class _AppCard extends StatelessWidget {
   final BorderRadius radius;
   final AppEntry app;
   final int index;
+  final bool selectionMode;
+  final bool isSelected;
   final VoidCallback onTap;
   const _AppCard({
     required this.s,
     required this.radius,
     required this.app,
     required this.index,
+    required this.selectionMode,
+    required this.isSelected,
     required this.onTap,
   });
 
@@ -140,7 +288,14 @@ class _AppCard extends StatelessWidget {
           boxShadow: s.cardShadowSoft,
         ),
         clipBehavior: Clip.antiAlias,
-        child: _AppRow(s: s, app: app, index: index, onTap: onTap),
+        child: _AppRow(
+          s: s,
+          app: app,
+          index: index,
+          selectionMode: selectionMode,
+          isSelected: isSelected,
+          onTap: onTap,
+        ),
       );
 }
 
@@ -148,11 +303,15 @@ class _AppRow extends StatefulWidget {
   final AppColorScheme s;
   final AppEntry app;
   final int index;
+  final bool selectionMode;
+  final bool isSelected;
   final VoidCallback onTap;
   const _AppRow({
     required this.s,
     required this.app,
     required this.index,
+    required this.selectionMode,
+    required this.isSelected,
     required this.onTap,
   });
 
@@ -257,13 +416,233 @@ class _AppRowState extends State<_AppRow>
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
-                  child: Icon(
-                    CupertinoIcons.chevron_right,
-                    size: 16,
-                    color: s.onSurfaceVariant,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: widget.selectionMode
+                        ? _SelectionRadio(
+                            key: const ValueKey('radio'),
+                            s: s,
+                            selected: widget.isSelected,
+                          )
+                        : Icon(
+                            key: const ValueKey('chevron'),
+                            CupertinoIcons.chevron_right,
+                            size: 16,
+                            color: s.onSurfaceVariant,
+                          ),
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RADIO BUTTON DE SELEÇÃO — círculo com contorno; quando selecionado,
+// preenche com a cor primária e mostra o animated_check por dentro.
+// ══════════════════════════════════════════════════════════════
+
+class _SelectionRadio extends StatelessWidget {
+  final AppColorScheme s;
+  final bool selected;
+  const _SelectionRadio({super.key, required this.s, required this.selected});
+
+  static const double _size = 24;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? s.primary : Colors.transparent,
+        border: Border.all(
+          color: selected ? s.primary : s.onSurfaceVariant.withOpacity(0.45),
+          width: 1.6,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: 13,
+        height: 13,
+        child: CustomPaint(
+          painter: AnimatedCheckPainter(
+            progress: selected ? 1.0 : 0.0,
+            color: s.onPrimary,
+            strokeWidth: 2.0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO "Concluir" — surge no topo direito ao mesmo tempo que o
+// botão de voltar troca para "close". Fica esmaecido/inativo
+// enquanto nada estiver selecionado.
+// ══════════════════════════════════════════════════════════════
+
+class _ConcludeButton extends StatelessWidget {
+  final AppColorScheme s;
+  final bool visible;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _ConcludeButton({
+    required this.s,
+    required this.visible,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => ScaleTransition(
+        scale: animation,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: visible
+          ? _ConcludeButtonInner(
+              key: const ValueKey('conclude-visible'),
+              s: s,
+              enabled: enabled,
+              onTap: onTap,
+            )
+          : const SizedBox(key: ValueKey('conclude-hidden'), width: 0, height: 40),
+    );
+  }
+}
+
+class _ConcludeButtonInner extends StatefulWidget {
+  final AppColorScheme s;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _ConcludeButtonInner({
+    super.key,
+    required this.s,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  State<_ConcludeButtonInner> createState() => _ConcludeButtonInnerState();
+}
+
+class _ConcludeButtonInnerState extends State<_ConcludeButtonInner> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final baseColor = s.primary;
+    final color = widget.enabled ? baseColor : baseColor.withOpacity(0.35);
+    final textColor = widget.enabled ? s.onPrimary : s.onPrimary.withOpacity(0.7);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: widget.enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapCancel: widget.enabled ? () => setState(() => _pressed = false) : null,
+      onTapUp: widget.enabled ? (_) => setState(() => _pressed = false) : null,
+      onTap: widget.enabled ? widget.onTap : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.94 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            'Concluir',
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE VOLTAR "MORFANTE" — troca entre "back" e "close.svg"
+// com um efeito de encolher e nascer (scale down → scale up),
+// igual ao pedido: suave e rápido.
+// ══════════════════════════════════════════════════════════════
+
+class _MorphingBackButton extends StatefulWidget {
+  final AppColorScheme s;
+  final bool selectionMode;
+  final VoidCallback onTap;
+  const _MorphingBackButton({
+    required this.s,
+    required this.selectionMode,
+    required this.onTap,
+  });
+
+  @override
+  State<_MorphingBackButton> createState() => _MorphingBackButtonState();
+}
+
+class _MorphingBackButtonState extends State<_MorphingBackButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 110),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: s.cardBackground,
+            shape: BoxShape.circle,
+            boxShadow: s.cardShadow,
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: animation,
+              child: child,
+            ),
+            child: AppIcon(
+              widget.selectionMode ? 'close' : 'back',
+              key: ValueKey(widget.selectionMode ? 'close' : 'back'),
+              size: 18,
+              color: s.onSurface,
             ),
           ),
         ),
