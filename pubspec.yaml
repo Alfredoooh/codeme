@@ -13,6 +13,7 @@ dependencies:
   flutter:
     sdk: flutter
   camera: any
+  record: any
   animated_check: ^1.0.0
   google_fonts: ^6.2.1
   flutter_inappwebview: ^6.1.5
