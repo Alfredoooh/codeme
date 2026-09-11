@@ -7,11 +7,11 @@ import 'package:http/http.dart' as http;
 
 const String kApiBase = 'https://nexaai.alfredopjonas.workers.dev';
 
-// ── Provider "deepseek" único. "pro" foi removido — o Worker
-//    já não distingue modelos DeepSeek diferentes, só o parâmetro
-//    thinking (ver DEEPSEEK_MODELS no worker/index.js). Mantemos
-//    os 2 valores porque o Worker ainda espera "flash" ou
-//    "reasoning" no campo "model" do body.
+// ── Provider "deepseek" único. O V4.1-Flash é um modelo
+//    unificado: visão + tool calling + raciocínio configurável
+//    vivem todos no mesmo ID. As duas entradas abaixo são só
+//    perfis de uso (o Worker traduz "flash"/"reasoning" para o
+//    ID real "deepseek-flash").
 enum ApiProvider { deepseekFlash, deepseekReasoning }
 
 class ProviderConfig {
@@ -24,6 +24,43 @@ const Map<ApiProvider, ProviderConfig> kProviderMap = {
   ApiProvider.deepseekFlash:     ProviderConfig('deepseek', deepseekModel: 'flash'),
   ApiProvider.deepseekReasoning: ProviderConfig('deepseek', deepseekModel: 'reasoning'),
 };
+
+// ══════════════════════════════════════════════════════════════
+// ANEXO DE IMAGEM
+// O Worker filtra por mimeType (jpeg/png/gif/webp). O base64 deve
+// vir SEM o prefixo "data:image/...;base64," — o Worker reconstrói
+// esse prefixo.
+// ══════════════════════════════════════════════════════════════
+const Set<String> kSupportedImageMimes = {
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+};
+
+class Attachment {
+  final String base64;
+  final String mimeType;
+  final String? name;
+
+  /// Opcional — DeepSeek V4.1 Flash aceita "low" | "high" | "auto".
+  /// null = default do servidor.
+  final String? detail;
+
+  const Attachment({
+    required this.base64,
+    required this.mimeType,
+    this.name,
+    this.detail,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'base64': base64,
+        'mimeType': mimeType,
+        if (name != null) 'name': name,
+        if (detail != null) 'detail': detail,
+      };
+}
 
 // ══════════════════════════════════════════════════════════════
 // MENSAGEM DE CHAT
@@ -46,6 +83,19 @@ class ChatMessage {
     this.name,
     this.segments,
   });
+
+  /// Cria uma mensagem do utilizador com uma ou mais imagens.
+  /// O base64 de cada Attachment deve vir SEM o prefixo
+  /// "data:...;base64,".
+  factory ChatMessage.withImages({
+    String content = '',
+    required List<Attachment> images,
+  }) =>
+      ChatMessage(
+        role: 'user',
+        content: content,
+        attachments: images.map((a) => a.toJson()).toList(),
+      );
 
   Map<String, dynamic> toJson() => {
         'role': role,
@@ -889,7 +939,7 @@ Map<String, dynamic> _decode(String body) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TOOLS API — execução no servidor de tools
+// TOOLS API
 // ══════════════════════════════════════════════════════════════
 class ToolsApiService {
   static Future<Map<String, dynamic>> executeTool({
@@ -917,8 +967,7 @@ class ToolsApiService {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DEFINIÇÕES COMPLETAS DAS TOOLS — sincronizado com o catálogo
-// real do servidor: 36 tools ativas.
+// DEFINIÇÕES DAS TOOLS (inalterado)
 // ══════════════════════════════════════════════════════════════
 const List<ToolDefinition> kAllTools = [
   ToolDefinition(
@@ -1015,17 +1064,17 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'send_email',
-    description: 'Envia um email real através do servidor. Suporta HTML rico no corpo e imagens embutidas inline via Content-ID (CID): cada imagem em "images" recebe um content_id, e esse mesmo valor deve ser referenciado no HTML do "content" como <img src="cid:AQUELE_ID">, para a imagem aparecer embutida no corpo do email em vez de anexada. Usa apenas quando o utilizador pedir explicitamente o envio de um email — nunca envies sem confirmação clara do destinatário.',
+    description: 'Envia um email real através do servidor. Suporta HTML rico no corpo e imagens embutidas inline via Content-ID (CID).',
     parameters: {
       'type': 'object',
       'properties': {
         'to': {'type': 'string', 'description': 'Endereço de email do destinatário'},
         'subject': {'type': 'string', 'description': 'Assunto do email'},
-        'content': {'type': 'string', 'description': 'Corpo do email em HTML. Para embutir uma imagem de "images", usa <img src="cid:CONTENT_ID_DA_IMAGEM">'},
+        'content': {'type': 'string', 'description': 'Corpo do email em HTML'},
         'from_name': {'type': 'string', 'description': 'Nome do remetente a mostrar (opcional)'},
         'images': {
           'type': 'array',
-          'description': 'Imagens a embutir inline no corpo do email via CID. Cada uma deve ter um content_id único, referenciado no HTML de "content" como cid:content_id.',
+          'description': 'Imagens a embutir inline no corpo do email via CID.',
           'items': {
             'type': 'object',
             'properties': {
@@ -1093,7 +1142,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'generate_mindmap',
-    description: 'Gera um mapa mental hierárquico de alta qualidade como PNG base64: layout automático sem sobreposição, fundo branco, cores por nível, ligações curvas suaves, texto sempre bem enquadrado dentro do nó (nunca cortado). Usa estrutura de nó raiz com filhos aninhados até 4 níveis. Devolve content_base64 — exibe diretamente no chat.',
+    description: 'Gera um mapa mental hierárquico de alta qualidade como PNG base64. Devolve content_base64 — exibe diretamente no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1148,7 +1197,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'create_pdf',
-    description: 'Gera um PDF completo via reportlab, a partir de uma lista de secções ("sections") ou de campos soltos na raiz (title/paragraphs/bullet_list — tratados como 1 secção só, para pedidos simples). Suporta capa customizada ("cover"), índice automático ("toc"), múltiplas colunas ("columns"), marca d\'água ("watermark"), rodapé customizado ("footer") e faixa lateral colorida ("side_bar_color"). Devolve pdf_base64 — mostra botão de download no chat.',
+    description: 'Gera um PDF completo via reportlab. Devolve pdf_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1172,7 +1221,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'create_docx',
-    description: 'Gera um Word (.docx) via python-docx, a partir de uma lista de secções. Devolve docx_base64 — mostra botão de download no chat.',
+    description: 'Gera um Word (.docx) via python-docx. Devolve docx_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1199,7 +1248,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'create_pptx',
-    description: 'Gera um PowerPoint (.pptx) via python-pptx, a partir de uma lista de slides. Devolve pptx_base64 — mostra botão de download no chat.',
+    description: 'Gera um PowerPoint (.pptx) via python-pptx. Devolve pptx_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1216,7 +1265,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'create_file',
-    description: 'Cria um único ficheiro de texto/código genérico (não documento office) a partir de conteúdo e nome de ficheiro. Devolve content_base64 — mostra botão de download no chat.',
+    description: 'Cria um único ficheiro de texto/código genérico. Devolve content_base64 — mostra botão de download no chat.',
     parameters: {
       'type': 'object',
       'properties': {
@@ -1228,7 +1277,7 @@ const List<ToolDefinition> kAllTools = [
   ),
   ToolDefinition(
     name: 'read_zip_contents',
-    description: 'Lê o conteúdo de um ficheiro .zip enviado pelo utilizador. Descompacta e devolve a árvore de ficheiros com o texto de cada ficheiro de código/texto, e as imagens em base64.',
+    description: 'Lê o conteúdo de um ficheiro .zip enviado pelo utilizador.',
     parameters: {
       'type': 'object',
       'properties': {

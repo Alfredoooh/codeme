@@ -10,17 +10,24 @@ const CORS_HEADERS = {
 const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
 const TOOLS_SERVER_BASE = "https://aitools-nexa.onrender.com";
 
-// ═══ Modelo único (V4.1-Flash retirou o V4-Pro em 14 set 2026 —
-// pedidos a deepseek-v4-pro passam a ser servidos pelo Flash na
-// mesma. Deixamos de simular "modelos" diferentes: só existe
-// "thinking" ligado ou desligado, tal como a própria DeepSeek trata
-// isto hoje (parâmetro de request, não nome de modelo). A chave
-// "flash" cobre o uso normal; "reasoning" cobre o modo com raciocínio
-// visível. Mantidas as duas chaves para não partir chamadas antigas —
-// mas agora resolvem ao mesmo modelo. ═══
+// ═══ DeepSeek V4.1-Flash — modelo unificado.
+// ID na API: "deepseek-flash". Visão, tool calling e raciocínio
+// vivem todos no mesmo modelo. As duas chaves abaixo são apenas
+// perfis de uso — ambas apontam para o mesmo ID; a diferença é o
+// reasoning_effort e o max_tokens. ═══
 const DEEPSEEK_MODELS = {
-  flash: { model: "deepseek-v4.1-flash", max_tokens: 8192, temperature: 1.0, thinking: { type: "disabled" } },
-  reasoning: { model: "deepseek-v4.1-flash", max_tokens: 65536, thinking: { type: "enabled" }, reasoning_effort: "high" },
+  flash: {
+    model: "deepseek-flash",
+    max_tokens: 8192,
+    temperature: 1.0,
+    reasoning_effort: "low",
+  },
+  reasoning: {
+    model: "deepseek-flash",
+    max_tokens: 65536,
+    temperature: 1.0,
+    reasoning_effort: "high",
+  },
 };
 
 const GROQ_BASE = "https://api.groq.com/openai/v1";
@@ -34,18 +41,14 @@ const CREDIT_PACKAGES = {
 };
 
 // ═══ Limite de avatar — espelha kAvatarMaxImageBytes em
-// lib/features/settings/avatar_upload_utils.dart. Base: 1MB de
-// imagem binária, expandido para o tamanho equivalente em base64
-// (overhead de ~33.3%, arredondado para cima com uma pequena
-// margem para o prefixo "data:image/jpeg;base64,"). Se subires o
-// valor aqui, sobe também kAvatarMaxImageBytes no Flutter. ═══
+// lib/features/settings/avatar_upload_utils.dart. ═══
 const AVATAR_MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1MB
 const AVATAR_MAX_BASE64_CHARS = Math.ceil(AVATAR_MAX_IMAGE_BYTES * 4 / 3) + 100;
 
-// ═══ Password hashing — PBKDF2 nativo do Web Crypto, sem libs externas ═══
+// ═══ Password hashing — PBKDF2 nativo do Web Crypto ═══
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_SALT_BYTES = 16;
-const PBKDF2_KEY_LENGTH = 32; // bytes
+const PBKDF2_KEY_LENGTH = 32;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: Object.assign({}, CORS_HEADERS, { "Content-Type": "application/json" }) });
@@ -71,10 +74,7 @@ function base64UrlEncode(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-// ═══════════════════════════════════════════════════════════════
-// HASH DE PASSWORD — PBKDF2-SHA256, salt aleatório por utilizador.
-// Formato guardado: "pbkdf2:ITERAÇÕES:SALT_HEX:HASH_HEX"
-// ═══════════════════════════════════════════════════════════════
+// ═══ HASH DE PASSWORD — PBKDF2-SHA256 ═══
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES));
   const keyMaterial = await crypto.subtle.importKey(
@@ -113,22 +113,15 @@ async function verifyPassword(password, storedHash) {
   }
 }
 
-// ═══ Normalização de identificadores ═══
-function normalizeEmail(email) {
-  return String(email).toLowerCase().trim();
-}
+function normalizeEmail(email) { return String(email).toLowerCase().trim(); }
 function normalizePhone(phone) {
   const trimmed = String(phone).trim();
   const hasPlus = trimmed.startsWith("+");
   const digits = trimmed.replace(/[^\d]/g, "");
   return hasPlus ? "+" + digits : digits;
 }
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-function isValidPhone(phone) {
-  return /^\+?\d{8,15}$/.test(phone);
-}
+function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function isValidPhone(phone) { return /^\+?\d{8,15}$/.test(phone); }
 
 async function generateToken(payload, secret, env) {
   const jti = randomId(16);
@@ -177,7 +170,6 @@ async function requireAdmin(request, env) {
   return user;
 }
 
-// ═══ Envio de email via Resend (usado só para notificações admin) ═══
 async function sendResendEmail(env, { to, subject, text, html }) {
   if (!env.RESEND_API_KEY) throw new Error("Envio de email não configurado (falta RESEND_API_KEY)");
   const res = await fetch("https://api.resend.com/emails", {
@@ -222,7 +214,6 @@ async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, 
   const allMessages = buildDeepseekMessages(messages, systemPrompt, language);
   const requestBody = { model: cfg.model, messages: allMessages, max_tokens: cfg.max_tokens, stream: !!stream };
   if (cfg.temperature !== undefined) requestBody.temperature = cfg.temperature;
-  if (cfg.thinking !== undefined) requestBody.thinking = cfg.thinking;
   if (cfg.reasoning_effort !== undefined) requestBody.reasoning_effort = cfg.reasoning_effort;
   if (Array.isArray(tools) && tools.length > 0) requestBody.tools = tools;
   return fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey }, body: JSON.stringify(requestBody) });
@@ -232,7 +223,18 @@ async function deepseekGenerateTitle(apiKey, message, language) {
     ? "Generate a short, natural title (max 6 words) that summarizes the topic of a conversation that starts with this message: \"" + message + "\". Reply with ONLY the title text, no punctuation, no quotes, no prefix like 'Title:'."
     : "Gera um titulo curto e natural (max 6 palavras) que resuma o tema de uma conversa que comeca com esta mensagem: \"" + message + "\". Responde APENAS com o texto do titulo, sem pontuacao, sem aspas, sem prefixo como 'Titulo:'.";
   try {
-    const res = await fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey }, body: JSON.stringify({ model: "deepseek-v4.1-flash", messages: [{ role: "user", content: prompt }], max_tokens: 24, temperature: 0.4, thinking: { type: "disabled" }, stream: false }) });
+    const res = await fetch(DEEPSEEK_BASE + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+      body: JSON.stringify({
+        model: "deepseek-flash",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 24,
+        temperature: 0.4,
+        reasoning_effort: "low",
+        stream: false,
+      }),
+    });
     if (!res.ok) return null;
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || "";
@@ -242,32 +244,36 @@ async function deepseekGenerateTitle(apiKey, message, language) {
 }
 
 // ═══ ANEXOS — converte mensagens do utilizador com anexos de imagem
-// para o formato multimodal que a DeepSeek V4.1-Flash espera:
-// content passa a ser um array de blocos [{type:"text",...},
-// {type:"image_url",...}] em vez de string simples. Mensagens sem
-// anexos de imagem mantêm-se como string. Documentos não-imagem
-// (pdf, zip, docx...) continuam fora daqui — passam pelas tools
-// (read_pdf_contents, read_zip_contents, etc). ═══
+// para o formato multimodal do DeepSeek V4.1-Flash: content passa a
+// ser um array de blocos [{type:"text",...},{type:"image_url",...}].
+// Imagens suportadas: jpeg/png/gif/webp. Documentos não-imagem
+// continuam a passar pelas tools (read_pdf_contents, etc). ═══
+const SUPPORTED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
 function isImageAttachment(att) {
   const mime = (att && att.mimeType) || "";
-  return mime.startsWith("image/");
+  return SUPPORTED_IMAGE_MIMES.includes(String(mime).toLowerCase());
 }
-async function expandMessagesWithAttachments(messages) {
+
+function expandMessagesWithAttachments(messages) {
   return messages.map(m => {
     const out = { role: m.role };
-    const imageAttachments = Array.isArray(m.attachments) ? m.attachments.filter(isImageAttachment) : [];
+    const imageAttachments = Array.isArray(m.attachments)
+      ? m.attachments.filter(isImageAttachment)
+      : [];
 
     if (m.role === "user" && imageAttachments.length > 0) {
       const blocks = [];
-      if (m.content && m.content.trim().length > 0) {
+      if (typeof m.content === "string" && m.content.trim().length > 0) {
         blocks.push({ type: "text", text: m.content });
       }
       for (const att of imageAttachments) {
         const mime = att.mimeType || "image/jpeg";
-        blocks.push({
-          type: "image_url",
-          image_url: { url: "data:" + mime + ";base64," + att.base64 },
-        });
+        const imageUrl = { url: "data:" + mime + ";base64," + att.base64 };
+        if (att.detail && ["low", "high", "auto"].includes(att.detail)) {
+          imageUrl.detail = att.detail;
+        }
+        blocks.push({ type: "image_url", image_url: imageUrl });
       }
       out.content = blocks;
     } else {
@@ -281,7 +287,7 @@ async function expandMessagesWithAttachments(messages) {
   });
 }
 
-// ═══ TOOLS — proxy puro para o servidor externo. ═══
+// ═══ TOOLS — proxy para o servidor externo ═══
 async function handleToolsList(request, env) {
   const payload = await getAuthUser(request, env);
   if (!payload) return error("Não autenticado", 401);
@@ -423,12 +429,7 @@ export default {
   },
 };
 
-// ═══════════════════════════════════════════════════════════════
-// AUTH — registo e login próprios, por email OU telemóvel + senha.
-// Nenhum serviço externo envolvido; tudo guardado no KV com hash
-// PBKDF2. Cada utilizador tem OU email OU telefone (ou ambos, se
-// quiseres estender no futuro), e a senha protege qualquer um dos dois.
-// ═══════════════════════════════════════════════════════════════
+// ═══ AUTH ═══
 async function handleRegister(request, env) {
   const body = await request.json().catch(() => null);
   if (!body) return error("Body inválido");
@@ -649,7 +650,7 @@ async function handleCreateConversation(request, env) {
   if (!body) return error("Body inválido");
   const id = crypto.randomUUID();
   const now = Date.now();
-  const conversation = { id, userId: payload.id, title: body.title || "Nova conversa", messages: body.messages || [], model: body.model || "deepseek-v4.1-flash", pinned: false, archived: false, tags: body.tags || [], createdAt: now, updatedAt: now };
+  const conversation = { id, userId: payload.id, title: body.title || "Nova conversa", messages: body.messages || [], model: body.model || "deepseek-flash", pinned: false, archived: false, tags: body.tags || [], createdAt: now, updatedAt: now };
   await env.NEXA_USERS.put("conv:" + id, JSON.stringify(conversation));
   const raw = await env.NEXA_USERS.get("convs:" + payload.id);
   const ids = raw ? JSON.parse(raw) : [];
@@ -783,7 +784,7 @@ async function handleAiChat(request, env) {
   await env.NEXA_USERS.put("user:" + payload.id, JSON.stringify(userObj));
 
   const rawMessages = body.messages;
-  const messages = await expandMessagesWithAttachments(rawMessages);
+  const messages = expandMessagesWithAttachments(rawMessages);
   const stream = body.stream !== undefined ? body.stream : false;
   const language = body.language || "pt";
   const customSystemPrompt = body.systemPrompt || "";
@@ -816,14 +817,25 @@ async function handleAiSummarize(request, env) {
   const prompt = language === "en" ? "Summarize the following conversation in a few sentences:\n\n" : "Resume a seguinte conversa em poucas frases:\n\n";
   const text = body.messages.map(m => (m.role === "user" ? "User: " : "Assistant: ") + m.content).join("\n");
   if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
-  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY }, body: JSON.stringify({ model: "deepseek-v4.1-flash", messages: [{ role: "user", content: prompt + text }], max_tokens: 512, temperature: 0.5, thinking: { type: "disabled" }, stream: false }) });
+  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY },
+    body: JSON.stringify({
+      model: "deepseek-flash",
+      messages: [{ role: "user", content: prompt + text }],
+      max_tokens: 512,
+      temperature: 0.5,
+      reasoning_effort: "low",
+      stream: false,
+    }),
+  });
   if (!dsRes.ok) return error("Erro ao resumir", dsRes.status);
   const data = await dsRes.json();
   const summary = data.choices?.[0]?.message?.content || "";
   return json({ summary });
 }
 
-// ═══ TRANSCRIÇÃO — Groq (Whisper) como principal, Deepgram como fallback ═══
+// ═══ TRANSCRIÇÃO — Groq (Whisper) + Deepgram fallback ═══
 async function transcribeWithGroq(apiKey, audioFile, language, prompt) {
   const outForm = new FormData();
   outForm.append("file", audioFile);
