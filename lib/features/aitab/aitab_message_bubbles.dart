@@ -1,5 +1,18 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_message_bubbles.dart
+//
+// MUDANÇAS NESTA VERSÃO:
+// - Import `package:flutter_svg/flutter_svg.dart` e `package:pdfx/pdfx.dart`.
+// - UserBubble: anexos passaram para FORA da bolha (acima), com
+//   AnimatedSize para transição suave. Texto continua dentro do
+//   container arredondado.
+// - _UserAttachmentChip substituído por _UserAttachmentCard +
+//   _ImageAttachmentThumb (clicável, ecrã cheio) +
+//   _PdfAttachmentThumb (renderiza 1ª página do PDF com pdfx) +
+//   _FileAttachmentCard (ficheiro genérico).
+// - AssistantBubble: pensamento sempre no topo (antes do texto).
+// - StreamingBubble: loader de "a responder" passa a NexaLottieLoader.
+// - EmptyState: SvgPicture.asset('assets/images/logo.svg') direto.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:io';
@@ -7,8 +20,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/colors.dart';
@@ -22,9 +37,8 @@ import 'aitab_models.dart';
 import 'aitab_widgets_shared.dart';
 import 'aitab_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
+import 'aitab_image_viewer_screen.dart';
 
-// Fonte do sistema (sem fontFamily explícito — herda a fonte
-// padrão da app/tema), como pedido: nunca mais Times New Roman.
 TextStyle aiBodyTextStyle(AppColorScheme s) => TextStyle(
       fontSize: 15,
       height: 1.45,
@@ -75,6 +89,10 @@ Future<void> showOpenLinkDialog(
 
 // ──────────────────────────────────────────────────────────────
 // BOLHA DO UTILIZADOR
+//
+// Anexos ficam ACIMA da bolha de texto, fora do container
+// arredondado — nunca dentro dele. AnimatedSize dá a transição
+// suave quando a lista de anexos muda.
 // ──────────────────────────────────────────────────────────────
 
 class UserBubble extends StatefulWidget {
@@ -118,126 +136,369 @@ class _UserBubbleState extends State<UserBubble> {
 
     return Align(
       alignment: Alignment.centerRight,
-      child: GestureDetector(
-        onLongPress: () {
-          final box = context.findRenderObject() as RenderBox;
-          final off = box.localToGlobal(Offset.zero);
-          final sz = box.size;
-          showMessageActionsPopup(
-            context,
-            s,
-            anchorOffset: off,
-            anchorSize: sz,
-            onEdit: widget.onEdit,
-            onCopy: widget.onCopy,
-            onDelete: widget.onDelete,
-            onSelectText: widget.onSelectText,
-          );
-        },
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.75),
-          decoration: BoxDecoration(
-            color: bubbleColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: s.cardShadow,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
-                Wrap(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Anexos ACIMA da bolha, fora do container de texto.
+          if (widget.attachments != null && widget.attachments!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.centerRight,
+                child: Wrap(
                   alignment: WrapAlignment.end,
                   spacing: 6,
                   runSpacing: 6,
                   children: widget.attachments!
-                      .map((a) => _UserAttachmentChip(s: s, attachment: a))
+                      .map((a) => _UserAttachmentCard(s: s, attachment: a))
                       .toList(),
                 ),
-                if (widget.text.isNotEmpty) const SizedBox(height: 8),
-              ],
-              if (widget.text.isNotEmpty) ...[
-                Text(displayText, style: TextStyle(color: textColor, fontSize: 14)),
-                if (_isLong) ...[
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: () => setState(() => _expanded = !_expanded),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _expanded ? 'Mostrar menos' : 'Mostrar mais',
-                          style: TextStyle(
-                            color: textColor.withOpacity(0.85),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                          ),
+              ),
+            ),
+          if (widget.text.isNotEmpty)
+            GestureDetector(
+              onLongPress: () {
+                final box = context.findRenderObject() as RenderBox;
+                final off = box.localToGlobal(Offset.zero);
+                final sz = box.size;
+                showMessageActionsPopup(
+                  context,
+                  s,
+                  anchorOffset: off,
+                  anchorSize: sz,
+                  onEdit: widget.onEdit,
+                  onCopy: widget.onCopy,
+                  onDelete: widget.onDelete,
+                  onSelectText: widget.onSelectText,
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75),
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: s.cardShadow,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(displayText, style: TextStyle(color: textColor, fontSize: 14)),
+                    if (_isLong) ...[
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () => setState(() => _expanded = !_expanded),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _expanded ? 'Mostrar menos' : 'Mostrar mais',
+                              style: TextStyle(
+                                color: textColor.withOpacity(0.85),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            AnimatedRotation(
+                              turns: _expanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 180),
+                              child: Icon(Icons.keyboard_arrow_down, size: 16, color: textColor.withOpacity(0.85)),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 2),
-                        AnimatedRotation(
-                          turns: _expanded ? 0.5 : 0,
-                          duration: const Duration(milliseconds: 180),
-                          child: Icon(Icons.keyboard_arrow_down, size: 16, color: textColor.withOpacity(0.85)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// CARD DE ANEXO — dispatcher
+// ──────────────────────────────────────────────────────────────
+
+class _UserAttachmentCard extends StatelessWidget {
+  final AppColorScheme s;
+  final Map<String, dynamic> attachment;
+  const _UserAttachmentCard({required this.s, required this.attachment});
+
+  @override
+  Widget build(BuildContext context) {
+    final mimeType = attachment['mimeType']?.toString() ?? '';
+    final isImage = mimeType.startsWith('image/');
+    final isPdf = mimeType == 'application/pdf';
+
+    if (isImage) return _ImageAttachmentThumb(s: s, attachment: attachment);
+    if (isPdf) return _PdfAttachmentThumb(s: s, attachment: attachment);
+    return _FileAttachmentCard(s: s, attachment: attachment);
+  }
+}
+
+// ── Miniatura de imagem — clicável, abre em ecrã cheio ──
+class _ImageAttachmentThumb extends StatelessWidget {
+  final AppColorScheme s;
+  final Map<String, dynamic> attachment;
+  const _ImageAttachmentThumb({required this.s, required this.attachment});
+
+  Uint8List? get _bytes {
+    final b64 = attachment['base64']?.toString();
+    if (b64 == null || b64.isEmpty) return null;
+    try {
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _openFullScreen(BuildContext context) {
+    final bytes = _bytes;
+    if (bytes == null) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.92),
+        pageBuilder: (_, anim, __) => FadeTransition(
+          opacity: anim,
+          child: AitabImageViewerScreen(
+            file: AttachedFile(
+              id: attachment['id']?.toString() ?? UniqueKey().toString(),
+              name: attachment['name']?.toString() ?? 'imagem',
+              mimeType: attachment['mimeType']?.toString() ?? 'image/jpeg',
+              bytes: bytes,
+            ),
+            isImage: true,
           ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytes;
+    return GestureDetector(
+      onTap: () => _openFullScreen(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: bytes != null
+            ? Image.memory(bytes, width: 84, height: 84, fit: BoxFit.cover)
+            : Container(
+                width: 84,
+                height: 84,
+                color: s.cardBackground,
+                child: Icon(Icons.image, color: s.onSurfaceVariant),
+              ),
+      ),
+    );
+  }
+}
+
+// ── Miniatura de PDF — renderiza a 1ª página real como imagem ──
+class _PdfAttachmentThumb extends StatefulWidget {
+  final AppColorScheme s;
+  final Map<String, dynamic> attachment;
+  const _PdfAttachmentThumb({required this.s, required this.attachment});
+
+  @override
+  State<_PdfAttachmentThumb> createState() => _PdfAttachmentThumbState();
+}
+
+class _PdfAttachmentThumbState extends State<_PdfAttachmentThumb> {
+  Uint8List? _thumbBytes;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _renderFirstPage();
+  }
+
+  Future<void> _renderFirstPage() async {
+    final b64 = widget.attachment['base64']?.toString();
+    if (b64 == null || b64.isEmpty) {
+      if (mounted) setState(() => _failed = true);
+      return;
+    }
+    try {
+      final pdfBytes = base64Decode(b64);
+      final doc = await PdfDocument.openData(pdfBytes);
+      final page = await doc.getPage(1);
+      final rendered = await page.render(
+        width: page.width * 1.4,
+        height: page.height * 1.4,
+        format: PdfPageImageFormat.png,
+      );
+      await page.close();
+      await doc.close();
+      if (mounted && rendered != null) {
+        setState(() => _thumbBytes = rendered.bytes);
+      } else if (mounted) {
+        setState(() => _failed = true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  void _openFullScreen(BuildContext context) {
+    final b64 = widget.attachment['base64']?.toString();
+    if (b64 == null) return;
+    Uint8List bytes;
+    try {
+      bytes = base64Decode(b64);
+    } catch (_) {
+      return;
+    }
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.92),
+        pageBuilder: (_, anim, __) => FadeTransition(
+          opacity: anim,
+          child: AitabImageViewerScreen(
+            file: AttachedFile(
+              id: widget.attachment['id']?.toString() ?? UniqueKey().toString(),
+              name: widget.attachment['name']?.toString() ?? 'documento.pdf',
+              mimeType: 'application/pdf',
+              bytes: bytes,
+            ),
+            isImage: false,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.attachment['name']?.toString() ?? 'documento.pdf';
+
+    return GestureDetector(
+      onTap: () => _openFullScreen(context),
+      child: Container(
+        width: 130,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF262626),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 118,
+                height: 84,
+                child: _failed || _thumbBytes == null
+                    ? Container(
+                        color: Colors.white.withOpacity(0.08),
+                        alignment: Alignment.center,
+                        child: AppIcon('pdf', size: 26, color: Colors.white),
+                      )
+                    : Image.memory(_thumbBytes!, fit: BoxFit.cover),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _UserAttachmentChip extends StatelessWidget {
+// ── Card de ficheiro genérico (ex: .dart, .zip) ──
+class _FileAttachmentCard extends StatelessWidget {
   final AppColorScheme s;
   final Map<String, dynamic> attachment;
-  const _UserAttachmentChip({required this.s, required this.attachment});
+  const _FileAttachmentCard({required this.s, required this.attachment});
+
+  String get _formattedSize {
+    final b64 = attachment['base64']?.toString() ?? '';
+    if (b64.isEmpty) return '';
+    final approxBytes = (b64.length * 3 / 4).round();
+    if (approxBytes < 1024) return '$approxBytes B';
+    final kb = approxBytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)}KB'.replaceAll('.', ',');
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(1)}MB'.replaceAll('.', ',');
+  }
 
   @override
   Widget build(BuildContext context) {
-    final name = attachment['name']?.toString() ?? 'anexo';
+    final name = attachment['name']?.toString() ?? 'ficheiro';
     final mimeType = attachment['mimeType']?.toString() ?? '';
-    final isImage = mimeType.startsWith('image/');
-    final isPdf = mimeType == 'application/pdf';
     final isZip = mimeType == 'application/zip';
-    final iconName = isImage
-        ? 'image'
-        : (isPdf
-            ? 'pdf'
-            : (isZip ? 'folder_upload' : 'attach'));
-    // Cor herdada do texto da bolha (onSurface) em vez de branco
-    // fixo — no tema claro a bolha passou a ser quase branca e um
-    // chip branco fixo ficaria invisível. No tema escuro o
-    // resultado é praticamente o mesmo de antes.
-    final fg = s.userBubbleText;
+    final iconName = isZip ? 'folder_upload' : 'attach';
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      constraints: const BoxConstraints(minWidth: 140, maxWidth: 200),
       decoration: BoxDecoration(
-        color: fg.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(999),
+        color: const Color(0xFF262626),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppIcon(iconName, size: 12, color: fg),
-          const SizedBox(width: 4),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 100),
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 10.5,
-                  color: fg,
-                  fontWeight: FontWeight.w600),
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: AppIcon(iconName, size: 16, color: Colors.white),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (_formattedSize.isNotEmpty)
+                  Text(
+                    _formattedSize,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -386,10 +647,7 @@ class _FullscreenImageScreen extends StatelessWidget {
               boundaryMargin: const EdgeInsets.all(double.infinity),
               clipBehavior: Clip.none,
               child: Center(
-                child: Image.memory(
-                  bytes,
-                  fit: BoxFit.contain,
-                ),
+                child: Image.memory(bytes, fit: BoxFit.contain),
               ),
             ),
           ),
@@ -643,7 +901,6 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.s;
     final visibleImages = widget.images.where((img) {
       final url = img['imageUrl']?.toString() ?? '';
       return url.isNotEmpty && !_failedUrls.contains(url);
@@ -727,7 +984,6 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
   @override
   Widget build(BuildContext context) {
     final s = AppTheme.of(context);
-    final topInset = MediaQuery.of(context).padding.top;
     final currentTitle = widget.images[_current]['title']?.toString() ?? '${_current + 1}/${widget.images.length}';
 
     return Material(
@@ -979,6 +1235,9 @@ class _SourceModalRow extends StatelessWidget {
 
 // ──────────────────────────────────────────────────────────────
 // BOLHA DO ASSISTENTE
+//
+// Pensamento vem SEMPRE primeiro — é o passo que antecede a
+// resposta, tanto no streaming como no histórico já guardado.
 // ──────────────────────────────────────────────────────────────
 
 class AssistantBubble extends StatelessWidget {
@@ -1015,6 +1274,11 @@ class AssistantBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[];
+
+    // Pensamento SEMPRE primeiro.
+    if (thinking != null && thinking!.isNotEmpty) {
+      children.add(_ThinkingHistoryCollapsible(s: s, thinking: thinking!));
+    }
 
     for (final v in extractVisualResults(text)) {
       children.add(ToolResultImageCard(s: s, base64Png: v.base64Png, label: v.label));
@@ -1061,10 +1325,6 @@ class AssistantBubble extends StatelessWidget {
         onSuggestionTap: onSuggestionTap,
         bodyTextStyle: aiBodyTextStyle(s),
       ));
-    }
-
-    if (thinking != null && thinking!.isNotEmpty) {
-      children.add(_ThinkingHistoryCollapsible(s: s, thinking: thinking!));
     }
 
     for (final item in canvases) {
@@ -1370,12 +1630,10 @@ class _StreamingBubbleState extends State<StreamingBubble> {
     }
 
     if (!anyContent && thinking == null) {
-      // Loader de "a responder" passa a usar o anel gradiente
-      // giratório em vez da bola sólida que o NexaLoaderLogo
-      // desenhava. O NexaLoaderLogo continua a existir (é usado
-      // noutros sítios), só deixou de aparecer neste contexto.
+      // Loader de "a responder" agora é Lottie próprio do app,
+      // em vez do anel giratório.
       children.add(widget.showLogoLoader
-          ? const NexaSpinningRingLoader(size: 28)
+          ? const NexaLottieLoader(size: 28)
           : AiSmallDotsLoader(color: s.onSurfaceVariant));
     }
 
@@ -1394,10 +1652,7 @@ class _StreamingBubbleState extends State<StreamingBubble> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PENSAMENTO — agora o mesmo formato visual do "Em processo":
-// sem modal, sem ícone de cérebro, texto no mesmo tamanho. Shimmer
-// ativo apenas enquanto isActive for true; assim que o pensamento
-// termina, o texto passa a estático.
+// PENSAMENTO
 // ══════════════════════════════════════════════════════════════
 
 class ThinkingCollapsible extends StatefulWidget {
@@ -1584,13 +1839,11 @@ class EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // NexaBrandLogo estático (animated: false) em vez do
-                // NexaLoaderLogo animado — o logo da marca deixa de
-                // "pulsar" no estado vazio; o movimento fica
-                // reservado para o loader de "a responder".
-                const NexaBrandLogo(
-                  size: 112,
-                  animated: false,
+                // Logo estático da marca — SVG directo, sem pulsar.
+                SvgPicture.asset(
+                  'assets/images/logo.svg',
+                  width: 112,
+                  height: 112,
                 ),
                 const SizedBox(height: 14),
                 Text(

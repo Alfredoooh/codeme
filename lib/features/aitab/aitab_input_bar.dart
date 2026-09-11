@@ -2,23 +2,15 @@
 // FILE: lib/aitab/aitab_input_bar.dart
 //
 // MUDANÇAS NESTA VERSÃO:
-// 1) Input bar REVERTIDO ao comportamento original: está SEMPRE
-//    visível, sem morph, sem esconder-se — exatamente como antes
-//    de qualquer alteração experimental.
-// 2) O botão de gravar agora abre um MODAL PRÓPRIO deste ficheiro
-//    (showModalBottomSheet nativo, mesmo padrão do drawermenu —
-//    NÃO depende de app_sheet.dart), com:
-//    - Um único botão de topo: branco no tema escuro / preto no
-//      tema claro, alterna ícone play/pause.
-//    - Título fixo "Diz qualquer coisa", sem subtítulo.
-//    - SEM ícone de microfone.
-//    - Waveform tipo recorder real: barras PARADAS por omissão,
-//      só se movem com a amplitude real captada do microfone via
-//      pacote `record` (stream onAmplitudeChanged).
-//    - Dois botões lado a lado: play/pause (branco/preto conforme
-//      tema) e OK (sempre s.primary, independente de tema).
-// 3) Gravação em tempo real via pacote `record` — permissão pedida
-//    automaticamente pelo pacote ao iniciar.
+// - Controlo de pensamento saiu do sheet do "+" (switch) e passou
+//   a ser um texto puro "Rápido ⌄" / "Raciocínio ⌄" com chevron,
+//   encostado à direita do botão "+", dentro do rodapé do input.
+//   Abre um PopupMenuButton nativo (menu ancorado ao próprio texto,
+//   não modal centrado). O estado vive em `thinkingMode`
+//   (ThinkingModeNotifier, definido em aitab_models.dart) — este
+//   ficheiro apenas o lê e emite o toggle para cima.
+// - showAttachMenuSheet deixou de receber/trazer thinking: só
+//   mantém Canvas, Pesquisar web e Competências.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -37,8 +29,7 @@ import 'aitab_camera_screen.dart';
 import 'aitab_image_viewer_screen.dart';
 
 // ══════════════════════════════════════════════════════════════
-// SHEET GENÉRICO PLANO — showModalBottomSheet nativo, próprio
-// deste ficheiro. Mesmo padrão do drawermenu.dart.
+// SHEET GENÉRICO PLANO
 // ══════════════════════════════════════════════════════════════
 
 const double _kFlatModalRadius = 20.0;
@@ -178,7 +169,7 @@ class _HoverSurfaceState extends State<_HoverSurface> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CHAT INPUT — SEMPRE VISÍVEL, sem morph, como no original.
+// CHAT INPUT
 // ══════════════════════════════════════════════════════════════
 
 class ChatInput extends StatelessWidget {
@@ -190,6 +181,8 @@ class ChatInput extends StatelessWidget {
   final bool incognito;
   final bool sending;
   final GlobalKey attachButtonKey;
+  final bool thinkingEnabled;
+  final ValueChanged<bool> onThinkingChanged;
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
@@ -206,6 +199,8 @@ class ChatInput extends StatelessWidget {
     required this.incognito,
     required this.sending,
     required this.attachButtonKey,
+    required this.thinkingEnabled,
+    required this.onThinkingChanged,
     required this.onSend,
     required this.onPause,
     required this.onAttach,
@@ -256,6 +251,8 @@ class ChatInput extends StatelessWidget {
               attachButtonKey: attachButtonKey,
               ctrl: ctrl,
               focusNode: focusNode,
+              thinkingEnabled: thinkingEnabled,
+              onThinkingChanged: onThinkingChanged,
               onSend: onSend,
               onPause: onPause,
               onAttach: onAttach,
@@ -269,9 +266,7 @@ class ChatInput extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SHELL DO INPUT — voltou a ser um único Container fixo, sempre
-// visível. Sem AnimationController de morph, sem troca de forma.
-// O botão de gravar apenas ABRE o modal (_showRecordingModal).
+// SHELL DO INPUT
 // ══════════════════════════════════════════════════════════════
 
 class _ChatInputShell extends StatelessWidget {
@@ -284,6 +279,8 @@ class _ChatInputShell extends StatelessWidget {
   final GlobalKey attachButtonKey;
   final TextEditingController ctrl;
   final FocusNode focusNode;
+  final bool thinkingEnabled;
+  final ValueChanged<bool> onThinkingChanged;
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
@@ -302,6 +299,8 @@ class _ChatInputShell extends StatelessWidget {
     required this.attachButtonKey,
     required this.ctrl,
     required this.focusNode,
+    required this.thinkingEnabled,
+    required this.onThinkingChanged,
     required this.onSend,
     required this.onPause,
     required this.onAttach,
@@ -393,6 +392,12 @@ class _ChatInputShell extends StatelessWidget {
             child: Row(
               children: [
                 _attachButton(),
+                const SizedBox(width: 2),
+                ThinkingModeText(
+                  s: s,
+                  enabled: thinkingEnabled,
+                  onChanged: onThinkingChanged,
+                ),
                 const Spacer(),
                 _SendRecordCluster(
                   s: s,
@@ -413,6 +418,106 @@ class _ChatInputShell extends StatelessWidget {
       return DashedRRectBorder(color: s.outline, radius: 26, child: bar);
     }
     return bar;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONTROLRO DE PENSAMENTO — texto puro "Rápido ⌄" / "Raciocínio ⌄"
+// com PopupMenuButton ancorado ao próprio texto. Encostado à
+// direita do botão "+". O estado é lido/escrito pelo AiTabState via
+// thinkingMode (ThinkingModeNotifier em aitab_models.dart).
+// ══════════════════════════════════════════════════════════════
+
+class ThinkingModeText extends StatelessWidget {
+  final AppColorScheme s;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  const ThinkingModeText({
+    super.key,
+    required this.s,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<bool>(
+      tooltip: '',
+      onSelected: onChanged,
+      color: s.cardBackground,
+      elevation: 8,
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      itemBuilder: (ctx) => [
+        PopupMenuItem<bool>(
+          value: false,
+          height: 44,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 18,
+                child: !enabled
+                    ? AppIcon('check', size: 14, color: s.primary)
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Rápido',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: !enabled ? FontWeight.w700 : FontWeight.w500,
+                  color: s.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<bool>(
+          value: true,
+          height: 44,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 18,
+                child: enabled
+                    ? AppIcon('check', size: 14, color: s.primary)
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Raciocínio',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: enabled ? FontWeight.w700 : FontWeight.w500,
+                  color: s.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              enabled ? 'Raciocínio' : 'Rápido',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: s.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.expand_more, size: 16, color: s.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -734,7 +839,7 @@ class _RealWaveform extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CLUSTER: botão de gravar + botão de enviar (input bar principal)
+// CLUSTER: botão de gravar + botão de enviar
 // ══════════════════════════════════════════════════════════════
 
 class _SendRecordCluster extends StatelessWidget {
@@ -1185,24 +1290,18 @@ class _CanvasCard extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 // SHEET: MENU "+"
 //
-// MUDANÇA: linha "Modelo" (que abria a página de seleção de
-// modelo) substituída por um switch "Pensar antes de responder".
-// O modal de escolha de modelo deixou de existir porque a
-// DeepSeek retirou o V4-Pro (V4.1-Flash serve tudo) e trata
-// "raciocínio" como parâmetro, não como modelo separado. O estado
-// de "thinking" agora viaja por onThinkingToggled — o AiTabState
-// guarda-o em _thinkingEnabled e passa-o ao Worker via
-// AiModel.provider(thinkingEnabled: ...).
+// O controlo de pensamento já não vive aqui — passou a ser um
+// texto "Rápido ⌄" / "Raciocínio ⌄" no rodapé do input bar.
+// Este sheet só mantém: Câmera / Fotos / Arquivo local, Canvas,
+// Pesquisar web e Competências.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachMenuSheet(
   BuildContext context,
   AppColorScheme s, {
   required GlobalKey anchorKey,
-  required bool thinkingEnabled,
   required bool webSearchEnabled,
   required bool widgetsEnabled,
-  required ValueChanged<bool> onThinkingToggled,
   required ValueChanged<bool> onWebSearchChanged,
   required ValueChanged<bool> onWidgetsChanged,
   required VoidCallback onOpenCanvas,
@@ -1215,10 +1314,8 @@ Future<void> showAttachMenuSheet(
     s: s,
     builder: (ctx) => _AttachMenuSheetContent(
       s: s,
-      thinkingEnabled: thinkingEnabled,
       webSearchEnabled: webSearchEnabled,
       widgetsEnabled: widgetsEnabled,
-      onThinkingToggled: onThinkingToggled,
       onWebSearchChanged: onWebSearchChanged,
       onWidgetsChanged: onWidgetsChanged,
       onOpenCanvas: onOpenCanvas,
@@ -1231,10 +1328,8 @@ Future<void> showAttachMenuSheet(
 
 class _AttachMenuSheetContent extends StatefulWidget {
   final AppColorScheme s;
-  final bool thinkingEnabled;
   final bool webSearchEnabled;
   final bool widgetsEnabled;
-  final ValueChanged<bool> onThinkingToggled;
   final ValueChanged<bool> onWebSearchChanged;
   final ValueChanged<bool> onWidgetsChanged;
   final VoidCallback onOpenCanvas;
@@ -1244,10 +1339,8 @@ class _AttachMenuSheetContent extends StatefulWidget {
 
   const _AttachMenuSheetContent({
     required this.s,
-    required this.thinkingEnabled,
     required this.webSearchEnabled,
     required this.widgetsEnabled,
-    required this.onThinkingToggled,
     required this.onWebSearchChanged,
     required this.onWidgetsChanged,
     required this.onOpenCanvas,
@@ -1262,7 +1355,6 @@ class _AttachMenuSheetContent extends StatefulWidget {
 }
 
 class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
-  late bool _localThinking = widget.thinkingEnabled;
   late bool _localWeb = widget.webSearchEnabled;
   late bool _localWidgets = widget.widgetsEnabled;
 
@@ -1271,13 +1363,8 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
     final s = widget.s;
     return _RootPage(
       s: s,
-      thinkingEnabled: _localThinking,
       webSearchEnabled: _localWeb,
       widgetsEnabled: _localWidgets,
-      onThinkingChanged: (v) {
-        setState(() => _localThinking = v);
-        widget.onThinkingToggled(v);
-      },
       onCanvasTap: () {
         Navigator.pop(context);
         widget.onOpenCanvas();
@@ -1308,10 +1395,8 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
 
 class _RootPage extends StatelessWidget {
   final AppColorScheme s;
-  final bool thinkingEnabled;
   final bool webSearchEnabled;
   final bool widgetsEnabled;
-  final ValueChanged<bool> onThinkingChanged;
   final VoidCallback onCanvasTap;
   final ValueChanged<bool> onWebSearchChanged;
   final ValueChanged<bool> onWidgetsChanged;
@@ -1321,10 +1406,8 @@ class _RootPage extends StatelessWidget {
 
   const _RootPage({
     required this.s,
-    required this.thinkingEnabled,
     required this.webSearchEnabled,
     required this.widgetsEnabled,
-    required this.onThinkingChanged,
     required this.onCanvasTap,
     required this.onWebSearchChanged,
     required this.onWidgetsChanged,
@@ -1377,13 +1460,6 @@ class _RootPage extends StatelessWidget {
             assetName: 'stacks',
             title: 'Canvas',
             onTap: onCanvasTap,
-          ),
-          _PlainSwitchRow(
-            s: s,
-            assetName: 'brain',
-            title: 'Pensar antes de responder',
-            value: thinkingEnabled,
-            onChanged: onThinkingChanged,
           ),
           _PlainSwitchRow(
             s: s,
@@ -1536,9 +1612,6 @@ class _PlainSwitchRow extends StatelessWidget {
   }
 }
 
-// (As classes _ModelSelectPage e _ModelOptionRow foram removidas —
-// o modal de escolha de modelo deixou de existir.)
-
 // ══════════════════════════════════════════════════════════════
 // SHEET: APPS CONECTADOS
 // ══════════════════════════════════════════════════════════════
@@ -1690,7 +1763,7 @@ class _CustomSwitch extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Câmera própria do app (ficheiro separado)
+// Câmera própria do app
 // ══════════════════════════════════════════════════════════════
 
 Future<void> openAitabCamera(

@@ -6,25 +6,14 @@
 // [[THINKING]], [[sources:...]]). Zero UI neste arquivo.
 //
 // SINCRONIZADO com o catálogo real de 36 tools ativas (kAllTools em
-// api_service.dart). labelForToolName e kToolIconAssets removeram
-// toda entrada para tools que saíram do catálogo (search_place,
-// search_calendar_date, json_transform, html_to_docx/pdf/xlsx/pptx,
-// create_project_zip, create_pdf_structured, generate_random_avatar,
-// docx_to_html, get_image_colors, image_metadata, vectorize_image,
-// pdf_to_images, pptx_to_images, audio_duration_check,
-// format_markdown_to_html, youtube_thumbnail_extract,
-// extract_document_outline) e ganharam entrada própria para as que
-// faltavam (send_email, generate_barcode, create_file, xlsx_to_json,
-// convert_image_format, resize_image, crop_image, watermark_image,
-// ocr_extract_text, str_replace_file, diff_text,
-// extract_urls_from_text, count_tokens_estimate, text_summary_stats,
-// merge_pdfs, split_pdf_pages), em vez de caírem no fallback
-// genérico "A executar...".
+// api_service.dart).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show ChangeNotifier;
+import 'package:shared_preferences/shared_preferences.dart';
 // TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
 import '../../services/api_service.dart';
 import '../apps/app_types.dart';
@@ -49,15 +38,50 @@ EditorType editorTypeFromProgressTitle(String title) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// PREFERÊNCIA DE PENSAMENTO — persistida via shared_preferences.
+// Controla se o modelo pensa antes de responder (mais lento, mais
+// capaz) ou responde direto (mais rápido). O Worker traduz isto
+// para reasoning_effort na chamada à API DeepSeek.
+// ══════════════════════════════════════════════════════════════
+
+class ThinkingModeNotifier extends ChangeNotifier {
+  static const _kKey = 'ai_thinking_enabled';
+
+  bool enabled = false;
+
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      enabled = prefs.getBool(_kKey) ?? false;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  void setEnabled(bool value) {
+    if (enabled == value) return;
+    enabled = value;
+    notifyListeners();
+    _persist();
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kKey, enabled);
+    } catch (_) {}
+  }
+}
+
+final ThinkingModeNotifier thinkingMode = ThinkingModeNotifier();
+
+// ══════════════════════════════════════════════════════════════
 // MODELOS DE IA
 // ══════════════════════════════════════════════════════════════
 
-// Modelo único — a DeepSeek passou a tratar "raciocínio" como
-// parâmetro de request (thinking on/off), não como modelo separado,
-// e retirou o V4-Pro em 14 set 2026 (V4.1-Flash já supera V4-Pro e
-// passa a servir os pedidos de "pro" na mesma). O modal de escolha
-// de modelo deixou de fazer sentido: resta só o toggle de
-// pensar/raciocinar, controlado por AiModel.provider(thinkingEnabled).
+// Modelo único — V4.1-Flash unificado. A DeepSeek retirou o V4-Pro
+// em 14 set 2026 (o Flash serve agora esses pedidos na mesma). O
+// modal de escolha de modelo deixou de fazer sentido: resta só o
+// toggle pensar/raciocinar, controlado por AiModel.provider.
 enum AiModel { deepseek }
 
 extension AiModelX on AiModel {
@@ -189,9 +213,7 @@ sobre a fonte de forma natural no texto.
 ''';
 
 // ══════════════════════════════════════════════════════════════
-// SAUDAÇÕES DINÂMICAS — variam conforme o período do dia e alguns
-// dias especiais. Escolha pseudo-aleatória mas estável dentro do
-// mesmo dia + hora (não muda a cada rebuild).
+// SAUDAÇÕES DINÂMICAS
 // ══════════════════════════════════════════════════════════════
 
 String greetingForNow() {

@@ -81,13 +81,10 @@ class AppColorScheme {
   Color get onPrimaryContainer => isDark ? _lighten(primary, 0.55) : _darken(primary, 0.60);
 
   // ═══ Cores da bolha do utilizador ═══
-  // Tema claro: primary com +0.55 de luminosidade → fica quase
-  // branco mas mantém um ligeiro tom da cor primária escolhida
-  // (não é branco puro, é "branco tingido"). Como o fundo fica
-  // quase branco, o texto passa a onSurface (escuro) para haver
-  // contraste — já não pode ser onPrimary (branco), que ficaria
-  // invisível. Tema escuro fica inalterado.
-  Color get userBubbleBg   => isDark ? cardBackground : _lighten(primary, 0.55);
+  // Tema claro: primária com 16% de opacidade (quase branco tingido
+  // com a cor escolhida), texto onSurface para contraste. Tema escuro
+  // inalterado.
+  Color get userBubbleBg   => isDark ? cardBackground : primary.withOpacity(0.16);
   Color get userBubbleText => onSurface;
 
   static Color _lighten(Color c, double amount) {

@@ -1,5 +1,21 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/aitab/aitab.dart
+//
+// MUDANÇAS NESTA VERSÃO:
+// - O estado de "pensar antes de responder" saiu do estado local
+//   (_thinkingEnabled) e passou a viver em `thinkingMode`
+//   (ThinkingModeNotifier, definido em aitab_models.dart, persistido
+//   via shared_preferences). Este ficheiro só ouve o notifier e
+//   redesenha; o toggle em si é emitido pelo ThinkingModeText no
+//   aitab_input_bar.dart e chega aqui já traduzido para
+//   thinkingMode.setEnabled.
+// - `_onThinkingToggled` removido — deixou de haver dois sítios a
+//   escrever o mesmo estado.
+// - `_openAttachSheet` (popup) e `_openAiOptionsSheet` (sheet do "+")
+//   deixaram de passar thinking ao showAttachPopup/showAttachMenuSheet,
+//   porque o controlo já não vive aí.
+// - As duas chamadas a `_model.provider(...)` passam a ler
+//   thinkingMode.enabled.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -30,7 +46,7 @@ import '../../core/widgets/app_sheet.dart';
 
 export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
 export 'aitab_widgets_shared.dart'
-    show AiConversationMenuButton, NexaLoaderLogo, NexaSpinningRingLoader, ShimmerText;
+    show AiConversationMenuButton, NexaLoaderLogo, NexaLottieLoader, NexaSpinningRingLoader, ShimmerText;
 
 class _ClampedTopScrollPhysics extends ClampingScrollPhysics {
   const _ClampedTopScrollPhysics({super.parent});
@@ -72,7 +88,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _sending      = false;
   bool     _widgetsEnabled = true;
   bool     _webSearchEnabled = false;
-  bool     _thinkingEnabled = false;
   bool     _showScrollToBottom = false;
   String?  _conversationId;
   final AiModel _model   = AiModel.deepseek;
@@ -125,6 +140,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     enabledAppsController.setDefaultIfAbsent('slides', true);
     enabledAppsController.setDefaultIfAbsent('sound', false);
     enabledAppsController.addListener(_onEnabledAppsChanged);
+    thinkingMode.addListener(_onThinkingModeChanged);
+    thinkingMode.load();
     _scroll.addListener(_onScroll);
     _ctrl.addListener(_measureBottomBar);
     if (widget.initialConversationId != null) {
@@ -133,6 +150,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _onEnabledAppsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onThinkingModeChanged() {
     if (mounted) setState(() {});
   }
 
@@ -169,10 +190,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   void setWebSearchEnabled(bool v) {
     setState(() => _webSearchEnabled = v);
     _notifyHeader();
-  }
-
-  void _onThinkingToggled(bool value) {
-    setState(() => _thinkingEnabled = value);
   }
 
   void openCanvasPopupExternally() => _openCanvasPopup();
@@ -369,7 +386,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _streamSub = AiApiService.streamChat(
       token: token,
       messages: historyWithToolResults,
-      provider: _model.provider(thinkingEnabled: _thinkingEnabled),
+      provider: _model.provider(thinkingEnabled: thinkingMode.enabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
       tools: kAllTools,
@@ -438,7 +455,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _streamSub = AiApiService.streamChat(
       token: token,
       messages: _msgs,
-      provider: _model.provider(thinkingEnabled: _thinkingEnabled),
+      provider: _model.provider(thinkingEnabled: thinkingMode.enabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
       tools: _widgetsEnabled ? kAllTools : null,
@@ -741,8 +758,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
-      thinkingEnabled: _thinkingEnabled,
-      onThinkingToggled: _onThinkingToggled,
       onSelectTool: _onToolSelected,
     );
   }
@@ -765,10 +780,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       context,
       AppTheme.of(context),
       anchorKey: _attachButtonKey,
-      thinkingEnabled: _thinkingEnabled,
       webSearchEnabled: _webSearchEnabled,
       widgetsEnabled: _widgetsEnabled,
-      onThinkingToggled: _onThinkingToggled,
       onWebSearchChanged: setWebSearchEnabled,
       onWidgetsChanged: setWidgetsEnabled,
       onOpenCanvas: _openCanvasPopup,
@@ -942,6 +955,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   @override
   void dispose() {
     enabledAppsController.removeListener(_onEnabledAppsChanged);
+    thinkingMode.removeListener(_onThinkingModeChanged);
     _scroll.removeListener(_onScroll);
     _ctrl.removeListener(_measureBottomBar);
     _ctrl.dispose();
@@ -1148,6 +1162,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     incognito: _incognito,
                     sending: _sending,
                     attachButtonKey: _attachButtonKey,
+                    thinkingEnabled: thinkingMode.enabled,
+                    onThinkingChanged: thinkingMode.setEnabled,
                     onSend: _send,
                     onPause: _pauseGeneration,
                     onAttach: _openAttachSheet,

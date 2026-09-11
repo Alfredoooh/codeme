@@ -10,22 +10,25 @@ const CORS_HEADERS = {
 const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
 const TOOLS_SERVER_BASE = "https://aitools-nexa.onrender.com";
 
-// ═══ DeepSeek V4.1-Flash — modelo unificado.
-// ID na API: "deepseek-flash". Visão, tool calling e raciocínio
-// vivem todos no mesmo modelo. As duas chaves abaixo são apenas
-// perfis de uso — ambas apontam para o mesmo ID; a diferença é o
-// reasoning_effort e o max_tokens. ═══
+// ═══ DeepSeek V4.1-Flash — modelo unificado. ID: "deepseek-flash".
+// O campo que liga/desliga o raciocínio é "thinking" (enabled|disabled)
+// — SEM ele, a API assume thinking ATIVO por omissão (era isto que
+// causava o "está sempre a pensar"). "reasoning_effort" só controla
+// a intensidade quando thinking já está ligado (aceita "high"|"max",
+// nunca desliga nada sozinho) — por isso fica de fora do perfil
+// "flash", onde o pensamento está desligado. ═══
 const DEEPSEEK_MODELS = {
   flash: {
     model: "deepseek-flash",
     max_tokens: 8192,
     temperature: 1.0,
-    reasoning_effort: "low",
+    thinking: { type: "disabled" },
   },
   reasoning: {
     model: "deepseek-flash",
     max_tokens: 65536,
     temperature: 1.0,
+    thinking: { type: "enabled" },
     reasoning_effort: "high",
   },
 };
@@ -40,12 +43,9 @@ const CREDIT_PACKAGES = {
   premium: { credits: 1500, price: 7500, name: "Premium", productId: "db3b0e10-d3da-439b-9c0c-06c112ba524b" },
 };
 
-// ═══ Limite de avatar — espelha kAvatarMaxImageBytes em
-// lib/features/settings/avatar_upload_utils.dart. ═══
 const AVATAR_MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1MB
 const AVATAR_MAX_BASE64_CHARS = Math.ceil(AVATAR_MAX_IMAGE_BYTES * 4 / 3) + 100;
 
-// ═══ Password hashing — PBKDF2 nativo do Web Crypto ═══
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_SALT_BYTES = 16;
 const PBKDF2_KEY_LENGTH = 32;
@@ -74,7 +74,6 @@ function base64UrlEncode(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-// ═══ HASH DE PASSWORD — PBKDF2-SHA256 ═══
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES));
   const keyMaterial = await crypto.subtle.importKey(
@@ -214,6 +213,7 @@ async function deepseekChat(apiKey, messages, modelKey, systemPrompt, language, 
   const allMessages = buildDeepseekMessages(messages, systemPrompt, language);
   const requestBody = { model: cfg.model, messages: allMessages, max_tokens: cfg.max_tokens, stream: !!stream };
   if (cfg.temperature !== undefined) requestBody.temperature = cfg.temperature;
+  if (cfg.thinking !== undefined) requestBody.thinking = cfg.thinking;
   if (cfg.reasoning_effort !== undefined) requestBody.reasoning_effort = cfg.reasoning_effort;
   if (Array.isArray(tools) && tools.length > 0) requestBody.tools = tools;
   return fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey }, body: JSON.stringify(requestBody) });
@@ -231,7 +231,7 @@ async function deepseekGenerateTitle(apiKey, message, language) {
         messages: [{ role: "user", content: prompt }],
         max_tokens: 24,
         temperature: 0.4,
-        reasoning_effort: "low",
+        thinking: { type: "disabled" },
         stream: false,
       }),
     });
@@ -243,11 +243,6 @@ async function deepseekGenerateTitle(apiKey, message, language) {
   } catch (e) { console.error("[NEXA TITLE ERROR]", e.message); return null; }
 }
 
-// ═══ ANEXOS — converte mensagens do utilizador com anexos de imagem
-// para o formato multimodal do DeepSeek V4.1-Flash: content passa a
-// ser um array de blocos [{type:"text",...},{type:"image_url",...}].
-// Imagens suportadas: jpeg/png/gif/webp. Documentos não-imagem
-// continuam a passar pelas tools (read_pdf_contents, etc). ═══
 const SUPPORTED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
 function isImageAttachment(att) {
@@ -287,7 +282,6 @@ function expandMessagesWithAttachments(messages) {
   });
 }
 
-// ═══ TOOLS — proxy para o servidor externo ═══
 async function handleToolsList(request, env) {
   const payload = await getAuthUser(request, env);
   if (!payload) return error("Não autenticado", 401);
@@ -429,7 +423,6 @@ export default {
   },
 };
 
-// ═══ AUTH ═══
 async function handleRegister(request, env) {
   const body = await request.json().catch(() => null);
   if (!body) return error("Body inválido");
@@ -825,7 +818,7 @@ async function handleAiSummarize(request, env) {
       messages: [{ role: "user", content: prompt + text }],
       max_tokens: 512,
       temperature: 0.5,
-      reasoning_effort: "low",
+      thinking: { type: "disabled" },
       stream: false,
     }),
   });
@@ -835,7 +828,6 @@ async function handleAiSummarize(request, env) {
   return json({ summary });
 }
 
-// ═══ TRANSCRIÇÃO — Groq (Whisper) + Deepgram fallback ═══
 async function transcribeWithGroq(apiKey, audioFile, language, prompt) {
   const outForm = new FormData();
   outForm.append("file", audioFile);

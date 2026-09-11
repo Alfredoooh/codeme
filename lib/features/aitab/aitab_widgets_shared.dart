@@ -1,12 +1,22 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_widgets_shared.dart
-// Loaders reutilizáveis, popups genéricos, e o card simples de canvas.
+//
+// MUDANÇAS NESTA VERSÃO:
+// - Adicionado import `package:lottie/lottie.dart`.
+// - Nova classe `NexaLottieLoader` (a seguir ao `NexaLoaderLogo`).
+//   Usada pelo `StreamingBubble` como loader de "a responder".
+// - `showAttachPopup` deixou de receber `thinkingEnabled` /
+//   `onThinkingToggled` e a linha "Pensar antes de responder" foi
+//   removida — o controlo de pensamento vive agora no texto
+//   "Rápido ⌄ / Raciocínio ⌄" do input bar (ThinkingModeText em
+//   aitab_input_bar.dart).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lottie/lottie.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
 import '../../core/widgets/animated_canvas_icon.dart';
@@ -313,6 +323,31 @@ class _RingGradientPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RingGradientPainter oldDelegate) =>
       oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
+}
+
+// ══════════════════════════════════════════════════════════════
+// NEXA LOTTIE LOADER — loader de "a responder" via animação Lottie
+// própria do app (assets/icons/lottie/loader.json). Usado apenas
+// no StreamingBubble; o NexaLoaderLogo continua a existir caso
+// seja usado noutro sítio.
+// ══════════════════════════════════════════════════════════════
+
+class NexaLottieLoader extends StatelessWidget {
+  final double size;
+  const NexaLottieLoader({super.key, this.size = 28});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Lottie.asset(
+        'assets/icons/lottie/loader.json',
+        fit: BoxFit.contain,
+        repeat: true,
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -988,6 +1023,10 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
 
 // ══════════════════════════════════════════════════════════════
 // ATTACH POPUP
+//
+// O controlo de pensamento deixou de viver aqui — passou a ser o
+// ThinkingModeText no rodapé do input bar. Este popup só abre as
+// três opções de anexo (Arquivos / Fotos / Câmera).
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachPopup(
@@ -996,8 +1035,6 @@ Future<void> showAttachPopup(
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
-  required bool thinkingEnabled,
-  required ValueChanged<bool> onThinkingToggled,
   required ValueChanged<EditorType> onSelectTool,
 }) async {
   await _showSharedFlatBottomSheet<void>(
@@ -1005,58 +1042,42 @@ Future<void> showAttachPopup(
     s,
     builder: (sheetContext) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _AttachOptionCardShared(
-                  s: s,
-                  assetName: 'attach',
-                  label: 'Arquivos',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    onFiles();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _AttachOptionCardShared(
-                  s: s,
-                  assetName: 'image',
-                  label: 'Fotos',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    onPhotos();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _AttachOptionCardShared(
-                  s: s,
-                  assetName: 'camera',
-                  label: 'Câmera',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    onCamera();
-                  },
-                ),
-              ),
-            ],
+          Expanded(
+            child: _AttachOptionCardShared(
+              s: s,
+              assetName: 'attach',
+              label: 'Arquivos',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                onFiles();
+              },
+            ),
           ),
-          const SizedBox(height: 10),
-          _AttachSheetToggleItem(
-            s: s,
-            iconAsset: 'brain',
-            label: 'Pensar antes de responder',
-            value: thinkingEnabled,
-            onChanged: (v) {
-              onThinkingToggled(v);
-              Navigator.pop(sheetContext);
-            },
+          const SizedBox(width: 8),
+          Expanded(
+            child: _AttachOptionCardShared(
+              s: s,
+              assetName: 'image',
+              label: 'Fotos',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                onPhotos();
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _AttachOptionCardShared(
+              s: s,
+              assetName: 'camera',
+              label: 'Câmera',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                onCamera();
+              },
+            ),
           ),
         ],
       ),
@@ -1158,53 +1179,6 @@ class _AttachSheetItem extends StatelessWidget {
               ),
             ),
             AppIcon('chevron_forward', size: 14, color: s.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AttachSheetToggleItem extends StatelessWidget {
-  final AppColorScheme s;
-  final String iconAsset;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _AttachSheetToggleItem({
-    required this.s,
-    required this.iconAsset,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: s.cardBackground,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            AppIcon(iconAsset, size: 18, color: s.onSurface),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500),
-              ),
-            ),
-            Switch.adaptive(
-              value: value,
-              onChanged: onChanged,
-              activeColor: s.primary,
-            ),
           ],
         ),
       ),
