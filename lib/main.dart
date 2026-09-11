@@ -29,15 +29,14 @@ void main() async {
       DeviceOrientation.portraitDown,
     ]);
   }
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarDividerColor: Colors.transparent,
-  ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   await appTheme.load();
   await appPreferences.load();
+
+  SystemChrome.setSystemUIOverlayStyle(
+    AppColorScheme(appTheme.isDark, appTheme.primaryPairIndex).statusBarStyle,
+  );
 
   try {
     await AppRegistry.loadManifests();
@@ -76,16 +75,8 @@ class _CraftLabAppState extends State<CraftLabApp> {
   }
 
   void _syncSystemUi() {
-    final isDark = appTheme.isDark;
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness:
-          isDark ? Brightness.light : Brightness.dark,
-      systemNavigationBarDividerColor: Colors.transparent,
-    ));
+    final s = AppColorScheme(appTheme.isDark, appTheme.primaryPairIndex);
+    SystemChrome.setSystemUIOverlayStyle(s.statusBarStyle);
   }
 
   @override
@@ -272,136 +263,143 @@ class _RootShellState extends State<RootShell>
         };
         Navigator.of(context).push(AppPageRoute(builder: (_) => screen));
       },
-      child: Scaffold(
-        backgroundColor: s.surface,
-        body: Stack(
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.deferToChild,
-              onHorizontalDragStart: (_) {
-                _drawerCtrl.stop();
-              },
-              onHorizontalDragUpdate: (d) {
-                final delta = d.delta.dx / _drawerWidth;
-                _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
-              },
-              onHorizontalDragEnd: (d) {
-                final velocity = d.velocity.pixelsPerSecond.dx;
-                if (velocity.abs() > 300) {
-                  if (velocity > 0) {
-                    _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
-                  } else {
-                    _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
-                  }
-                } else if (_drawerCtrl.value > 0.5) {
-                  _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
-                } else {
-                  _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
-                }
-              },
-              child: AnimatedBuilder(
-                animation: _drawerCtrl,
-                builder: (_, child) {
-                  final t = _drawerCtrl.value;
-                  return Transform.translate(
-                    offset: Offset(_drawerWidth * 0.25 * t, 0),
-                    child: child,
-                  );
+      child: PopScope(
+        canPop: !_drawerOpen,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          if (_drawerOpen) _closeDrawer();
+        },
+        child: Scaffold(
+          backgroundColor: s.surface,
+          body: Stack(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.deferToChild,
+                onHorizontalDragStart: (_) {
+                  _drawerCtrl.stop();
                 },
-                child: bodyContent,
-              ),
-            ),
-
-            AnimatedBuilder(
-              animation: _drawerCtrl,
-              builder: (_, __) {
-                final t = _drawerCtrl.value;
-                return Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: t < 0.01,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _closeDrawer,
-                      onHorizontalDragStart: (_) {
-                        _drawerCtrl.stop();
-                      },
-                      onHorizontalDragUpdate: (d) {
-                        final delta = d.delta.dx / _drawerWidth;
-                        _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
-                      },
-                      onHorizontalDragEnd: (d) {
-                        final velocity = d.velocity.pixelsPerSecond.dx;
-                        if (velocity.abs() > 300) {
-                          if (velocity > 0) {
-                            _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
-                          } else {
-                            _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
-                          }
-                        } else if (_drawerCtrl.value > 0.5) {
-                          _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
-                        } else {
-                          _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
-                        }
-                      },
-                      child: Container(
-                        color: Colors.black.withOpacity(0.3 * t),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            Positioned(
-              top: 0, bottom: 0, left: 0,
-              width: _drawerWidth,
-              child: AnimatedBuilder(
-                animation: _drawerCtrl,
-                builder: (_, child) {
-                  final t = _drawerCtrl.value;
-                  return Transform.translate(
-                    offset: Offset(-_drawerWidth * (1.0 - t), 0),
-                    child: child,
-                  );
+                onHorizontalDragUpdate: (d) {
+                  final delta = d.delta.dx / _drawerWidth;
+                  _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
                 },
-                child: GestureDetector(
-                  onHorizontalDragUpdate: (d) {
-                    final delta = d.delta.dx / _drawerWidth;
-                    _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
-                  },
-                  onHorizontalDragEnd: (d) {
-                    final velocity = d.velocity.pixelsPerSecond.dx;
-                    if (velocity.abs() > 300) {
-                      if (velocity > 0) {
-                        _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
-                      } else {
-                        _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
-                      }
-                    } else if (_drawerCtrl.value > 0.5) {
+                onHorizontalDragEnd: (d) {
+                  final velocity = d.velocity.pixelsPerSecond.dx;
+                  if (velocity.abs() > 300) {
+                    if (velocity > 0) {
                       _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
                     } else {
                       _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
                     }
+                  } else if (_drawerCtrl.value > 0.5) {
+                    _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                  } else {
+                    _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                  }
+                },
+                child: AnimatedBuilder(
+                  animation: _drawerCtrl,
+                  builder: (_, child) {
+                    final t = _drawerCtrl.value;
+                    return Transform.translate(
+                      offset: Offset(_drawerWidth * 0.25 * t, 0),
+                      child: child,
+                    );
                   },
-                  child: Material(
-                    color: s.surface,
-                    child: AnimatedBuilder(
-                      animation: _AiTabHeaderRefresh.of(context),
-                      builder: (_, __) => AppDrawer(
-                        s: s,
-                        onCloseAnimated: _closeDrawer,
-                        onSettings: _openSettings,
-                        onOpenConversation: _onOpenConversation,
-                        onNewChat: () =>
-                            _onConversationAction(ConversationAction.newChat),
-                        activeConversationId: _aiTabKey.currentState?.conversationId,
+                  child: bodyContent,
+                ),
+              ),
+
+              AnimatedBuilder(
+                animation: _drawerCtrl,
+                builder: (_, __) {
+                  final t = _drawerCtrl.value;
+                  return Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: t < 0.01,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _closeDrawer,
+                        onHorizontalDragStart: (_) {
+                          _drawerCtrl.stop();
+                        },
+                        onHorizontalDragUpdate: (d) {
+                          final delta = d.delta.dx / _drawerWidth;
+                          _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+                        },
+                        onHorizontalDragEnd: (d) {
+                          final velocity = d.velocity.pixelsPerSecond.dx;
+                          if (velocity.abs() > 300) {
+                            if (velocity > 0) {
+                              _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                            } else {
+                              _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                            }
+                          } else if (_drawerCtrl.value > 0.5) {
+                            _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                          } else {
+                            _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                          }
+                        },
+                        child: Container(
+                          color: Colors.black.withOpacity(0.3 * t),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              Positioned(
+                top: 0, bottom: 0, left: 0,
+                width: _drawerWidth,
+                child: AnimatedBuilder(
+                  animation: _drawerCtrl,
+                  builder: (_, child) {
+                    final t = _drawerCtrl.value;
+                    return Transform.translate(
+                      offset: Offset(-_drawerWidth * (1.0 - t), 0),
+                      child: child,
+                    );
+                  },
+                  child: GestureDetector(
+                    onHorizontalDragUpdate: (d) {
+                      final delta = d.delta.dx / _drawerWidth;
+                      _drawerCtrl.value = (_drawerCtrl.value + delta).clamp(0.0, 1.0);
+                    },
+                    onHorizontalDragEnd: (d) {
+                      final velocity = d.velocity.pixelsPerSecond.dx;
+                      if (velocity.abs() > 300) {
+                        if (velocity > 0) {
+                          _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                        } else {
+                          _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                        }
+                      } else if (_drawerCtrl.value > 0.5) {
+                        _drawerCtrl.animateTo(1.0, curve: _drawerCurve, duration: _drawerAnim);
+                      } else {
+                        _drawerCtrl.animateTo(0.0, curve: _drawerCurve, duration: _drawerAnim);
+                      }
+                    },
+                    child: Material(
+                      color: s.surface,
+                      child: AnimatedBuilder(
+                        animation: _AiTabHeaderRefresh.of(context),
+                        builder: (_, __) => AppDrawer(
+                          s: s,
+                          onCloseAnimated: _closeDrawer,
+                          onSettings: _openSettings,
+                          onOpenConversation: _onOpenConversation,
+                          onNewChat: () =>
+                              _onConversationAction(ConversationAction.newChat),
+                          activeConversationId: _aiTabKey.currentState?.conversationId,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -101,7 +101,7 @@ class AppColorScheme {
   Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
   Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
   Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF0D0D0D) : const Color(0xFFFFFFFF);
+  Color get pageBackground     => isDark ? const Color(0xFF050505) : const Color(0xFFFFFFFF);
 
   Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF5F5F5);
   Color get floatingSurface    => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
@@ -160,9 +160,9 @@ class AppColorScheme {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarColor: pageBackground,
         systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarDividerColor: pageBackground,
       );
 }
 

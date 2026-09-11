@@ -821,7 +821,7 @@ Future<ConversationAction?> _showHeaderPopupMenu(
   final rawLeft = anchorTopLeft.dx + anchorSize.width - popupWidth;
   final clampedLeft =
       rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
-  final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
+  final popupTop = anchorTopLeft.dy + anchorSize.height + gap;
 
   return showGeneralDialog<ConversationAction>(
     context: context,
@@ -834,7 +834,7 @@ Future<ConversationAction?> _showHeaderPopupMenu(
         children: [
           Positioned(
             left: clampedLeft,
-            bottom: popupBottom,
+            top: popupTop,
             width: popupWidth,
             child: Material(
               color: Colors.transparent,
@@ -884,7 +884,7 @@ Future<ConversationAction?> _showHeaderPopupMenu(
         opacity: curved,
         child: ScaleTransition(
           scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
-          alignment: Alignment.bottomRight,
+          alignment: Alignment.topRight,
           child: child,
         ),
       );
