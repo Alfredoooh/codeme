@@ -52,32 +52,20 @@ EditorType editorTypeFromProgressTitle(String title) {
 // MODELOS DE IA
 // ══════════════════════════════════════════════════════════════
 
-enum AiModel { deepseekFlash, deepseekPro, deepseekReasoning }
+// Modelo único — a DeepSeek passou a tratar "raciocínio" como
+// parâmetro de request (thinking on/off), não como modelo separado,
+// e retirou o V4-Pro em 14 set 2026 (V4.1-Flash já supera V4-Pro e
+// passa a servir os pedidos de "pro" na mesma). O modal de escolha
+// de modelo deixou de fazer sentido: resta só o toggle de
+// pensar/raciocinar, controlado por AiModel.provider(thinkingEnabled).
+enum AiModel { deepseek }
 
 extension AiModelX on AiModel {
-  String get label => const {
-        AiModel.deepseekFlash:     'DeepSeek Flash',
-        AiModel.deepseekPro:       'DeepSeek Pro',
-        AiModel.deepseekReasoning: 'DeepSeek Raciocínio',
-      }[this]!;
+  String get label => 'DeepSeek V4.1';
+  String get description => 'Rápido, com raciocínio quando precisares';
 
-  String get badge => const {
-        AiModel.deepseekFlash:     'Rápido',
-        AiModel.deepseekPro:       'Avançado',
-        AiModel.deepseekReasoning: 'Raciocínio',
-      }[this]!;
-
-  String get description => const {
-        AiModel.deepseekFlash:     'Respostas rápidas para o dia a dia',
-        AiModel.deepseekPro:       'Mais capacidade para tarefas complexas',
-        AiModel.deepseekReasoning: 'Pensa passo a passo antes de responder',
-      }[this]!;
-
-  ApiProvider get provider => const {
-        AiModel.deepseekFlash:     ApiProvider.deepseekFlash,
-        AiModel.deepseekPro:       ApiProvider.deepseekPro,
-        AiModel.deepseekReasoning: ApiProvider.deepseekReasoning,
-      }[this]!;
+  ApiProvider provider({bool thinkingEnabled = false}) =>
+      thinkingEnabled ? ApiProvider.deepseekReasoning : ApiProvider.deepseekFlash;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -85,35 +73,22 @@ extension AiModelX on AiModel {
 // ══════════════════════════════════════════════════════════════
 
 const String kAiSystemPrompt = '''
-Respondes sempre em português europeu, de forma clara e bem estruturada.
-Usa formatação markdown completa sempre que ajudar a organizar a informação:
-negrito para destacar termos-chave, listas com marcadores ou numeradas para
-sequências e opções, tabelas para comparações ou dados tabulares, linhas
-horizontais (---) para separar secções distintas, e títulos curtos quando a
-resposta tiver várias secções. Dentro de células de tabela podes usar
-negrito (**texto**) normalmente — a aplicação processa a formatação em
-qualquer parte do texto, incluindo dentro de tabelas. Evita parágrafos
-longos e densos quando a informação pode ser organizada visualmente.
+Responde sempre no idioma em que o utilizador escreveu a última mensagem,
+de forma clara e bem estruturada.
 
-Para blocos de nota, dica, aviso ou informação indispensável, usa o formato
-de admonition ao estilo GitHub, exatamente assim:
+Formatação: usa markdown (negrito, listas, tabelas, títulos curtos, ---
+para separar secções) quando ajudar a organizar a resposta; evita
+parágrafos longos quando a informação pode ser visual. Negrito funciona
+normalmente dentro de tabelas.
 
+Admonitions (nota/dica/aviso importante) usam este formato exato:
 > [!NOTE]
-> Texto da nota aqui.
+Tipos: NOTE, TIP, IMPORTANT, WARNING, CAUTION. A app converte isto num
+cartão visual automaticamente — nunca descrevas o cartão em texto.
 
-Os tipos disponíveis são NOTE (nota neutra), TIP (dica), IMPORTANT
-(informação indispensável), WARNING (aviso) e CAUTION (cuidado/perigo).
-A aplicação transforma isto automaticamente num cartão visual — nunca
-precisas de explicar ou descrever visualmente o cartão, apenas escrever
-o bloco neste formato exato.
-
-Para expressões matemáticas, usa \$expressão\$ para matemática dentro do
-texto corrido e \$\$expressão\$\$ numa linha própria para fórmulas em destaque.
-Podes usar notação LaTeX-like: frações com \\frac{a}{b}, raízes com \\sqrt{x} ou \\sqrt[n]{x}, potências com x^2 ou x^{10}, índices com x_1 ou
-x_{ij}, letras gregas com \\alpha, \\beta, \\pi, \\Delta, etc., e operadores
-como \\leq, \\geq, \\neq, \\times, \\cdot, \\sum, \\int, \\infty, \\rightarrow.
-A aplicação converte tudo automaticamente para uma apresentação visual
-correta — nunca precisas de explicar a notação, apenas escrevê-la.
+Matemática: \$expressão\$ inline, \$\$expressão\$\$ em destaque, notação
+LaTeX-like (\\frac, \\sqrt, x^2, x_1, \\alpha, \\leq, \\sum, etc.) — a app
+renderiza tudo automaticamente, nunca expliques a notação.
 ''';
 
 const String kAiWidgetsInstructions = '''
@@ -214,6 +189,81 @@ sobre a fonte de forma natural no texto.
 ''';
 
 // ══════════════════════════════════════════════════════════════
+// SAUDAÇÕES DINÂMICAS — variam conforme o período do dia e alguns
+// dias especiais. Escolha pseudo-aleatória mas estável dentro do
+// mesmo dia + hora (não muda a cada rebuild).
+// ══════════════════════════════════════════════════════════════
+
+String greetingForNow() {
+  final now = DateTime.now();
+  final hour = now.hour;
+  final weekday = now.weekday;
+
+  List<String> pool;
+
+  if (hour >= 0 && hour < 5) {
+    pool = [
+      'Ainda acordado pela madrugada, vamos nessa!',
+      'A esta hora? Respeito. O que criamos?',
+      'Madrugada produtiva. Diz o que precisas.',
+      'A cidade dorme, nós trabalhamos.',
+      'Silêncio lá fora, ideias aqui dentro.',
+    ];
+  } else if (hour >= 5 && hour < 12) {
+    pool = [
+      'Bom dia! O que vamos criar hoje?',
+      'Café pronto? Vamos a isto.',
+      'Manhã fresca, ideias novas.',
+      'Bom dia! Por onde começamos?',
+      'Começar o dia com o pé direito.',
+    ];
+  } else if (hour >= 12 && hour < 14) {
+    pool = [
+      'Boa tarde! Já almoçaste? Vamos trabalhar.',
+      'Meio do dia, meio do caminho.',
+      'Boa tarde! O que temos para hoje?',
+    ];
+  } else if (hour >= 14 && hour < 19) {
+    pool = [
+      'Boa tarde! Em que estamos a trabalhar?',
+      'A tarde é longa, o tempo é curto. Vamos lá.',
+      'Boa tarde! Diz o que precisas.',
+      'A meio da tarde, cheio de ideias?',
+    ];
+  } else if (hour >= 19 && hour < 23) {
+    pool = [
+      'Boa noite! Vamos fechar o dia com chave de ouro.',
+      'Boa noite! O que criamos agora?',
+      'A noite é jovem, as ideias também.',
+      'Boa noite! Diz-me o que tens em mente.',
+    ];
+  } else {
+    pool = [
+      'É tarde, mas as boas ideias não têm hora.',
+      'Quase meia-noite e ainda a criar. Adoro.',
+      'Última hora do dia, primeira boa ideia.',
+    ];
+  }
+
+  if (weekday == DateTime.friday && hour >= 16) {
+    pool = [...pool, 'Sexta à tarde! Vamos fechar isto com estilo.'];
+  }
+  if (weekday == DateTime.saturday || weekday == DateTime.sunday) {
+    pool = [...pool, 'Fim de semana e continuas a criar? Isso é dedicação.'];
+  }
+  if (now.month == 1 && now.day == 1) {
+    pool = ['Feliz Ano Novo! Vamos começar bem.'];
+  }
+  if (now.month == 12 && now.day == 25) {
+    pool = ['Feliz Natal! O que vamos criar hoje?'];
+  }
+
+  final seed = now.year * 100000 + now.month * 1000 + now.day * 24 + hour;
+  final index = seed % pool.length;
+  return pool[index];
+}
+
+// ══════════════════════════════════════════════════════════════
 // REGEX DE MARCADORES
 // ══════════════════════════════════════════════════════════════
 
@@ -288,9 +338,6 @@ List<Map<String, dynamic>> extractImages(String text) {
   return items;
 }
 
-/// Constrói o marcador [[images:...]] a partir do resultado bruto
-/// da tool search_images (formato do server.js: {found, images:[{imageUrl,title,...}]}).
-/// Usado localmente em vez de deixar o modelo reescrever URLs em prosa.
 String buildImagesMarker(Map<String, dynamic> toolResult) {
   final images = toolResult['images'];
   if (images is! List || images.isEmpty) return '';
@@ -521,9 +568,6 @@ List<StreamElement> parseStreamingContent(String raw, String Function() idGen) {
   final widgetParse = parseAiWidgetBlocks(canvasScan.textWithMarkers);
   var remaining = widgetParse.textWithMarkers;
 
-  // Remove os marcadores VISUAL/DOCUMENT/images do texto residual —
-  // já foram extraídos acima e vão virar os seus próprios StreamElement,
-  // não devem sobrar como texto nem ser descartados em silêncio.
   remaining = remaining
       .replaceAll(kVisualResultRe, '')
       .replaceAll(kDocumentResultRe, '')
@@ -540,10 +584,6 @@ List<StreamElement> parseStreamingContent(String raw, String Function() idGen) {
 
   final elements = <StreamElement>[];
 
-  // Cards locais primeiro (imagens, documentos, visuais) — são
-  // resultado direto de tool call já resolvida, não dependem de o
-  // texto do modelo estar completo, por isso podem aparecer assim
-  // que o marcador surgir no stream, antes do resto do texto.
   for (final v in visuals) {
     elements.add(StreamVisualResult(base64Png: v.base64Png, label: v.label));
   }
@@ -631,8 +671,6 @@ String labelForWidgetId(String widgetId) => switch (widgetId) {
       _ => 'Criando widget...',
     };
 
-/// Mapa central nome-da-tool → texto de progresso ("A pesquisar na web...").
-/// Sincronizado com as 36 tools ativas em kAllTools (api_service.dart).
 String labelForToolName(String toolName) => switch (toolName) {
       'web_search'                  => 'A pesquisar na web...',
       'read_website'                => 'A ler página...',
@@ -674,10 +712,6 @@ String labelForToolName(String toolName) => switch (toolName) {
       _                             => 'A executar...',
     };
 
-/// Mapa central nome-da-tool → asset SVG específico. Tools sem entrada
-/// aqui (ou cujo ficheiro não exista em assets/icons/outline/) caem
-/// automaticamente no fallback 'tools' via ToolIcon (ver aitab_tools.dart).
-/// Sincronizado com as 36 tools ativas em kAllTools (api_service.dart).
 const Map<String, String> kToolIconAssets = {
   'web_search':                 'globe',
   'read_website':               'globe',
@@ -807,11 +841,7 @@ bool endsWithPartialMarker(String text) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// PROCESSO DE TRABALHO — passos acumulados de tool calls, exibidos
-// no collapsible "Em processo" (separado do "Pensamento"). A lista
-// NUNCA perde itens nem oculta um processo já adicionado — só
-// acumula, do início ao fim de uma resposta, e persiste no
-// histórico salvo (sempre fechado por defeito ao reabrir).
+// PROCESSO DE TRABALHO
 // ══════════════════════════════════════════════════════════════
 
 class ProcessStep {
@@ -869,9 +899,6 @@ class ProcessStep {
       );
 }
 
-/// Extrai a lista de domínios (host, sem "www.") visitados/citados
-/// num resultado de tool de pesquisa, para exibir favicons em
-/// miniatura dentro do passo do processo.
 List<String> extractVisitedDomains(String toolName, Map<String, dynamic> resultJson) {
   final domains = <String>[];
   void addFromUrl(String? url) {
@@ -896,16 +923,6 @@ List<String> extractVisitedDomains(String toolName, Map<String, dynamic> resultJ
   return domains.take(6).toList();
 }
 
-/// Gera o resumo curto e automático mostrado ao lado de cada passo
-/// concluído do processo. Nunca usa texto bruto da tool — apenas
-/// contagens/estados simples por categoria.
-///
-/// NOTA DE IMPLEMENTAÇÃO: esta função referencia os conjuntos
-/// kVisualTools/kDocumentTools definidos em aitab_tools.dart. Se o
-/// compilador acusar import cíclico entre aitab_models.dart e
-/// aitab_tools.dart, mover esta função para aitab_tools.dart em vez
-/// de a deixar aqui — funcionalmente é equivalente, o importante é
-/// que exista e seja chamada a partir de processToolCalls.
 String summaryForToolResult(String toolName, Map<String, dynamic> resultJson) {
   if (toolName == 'web_search') {
     final results = resultJson['results'];
@@ -947,10 +964,7 @@ String summaryForToolResult(String toolName, Map<String, dynamic> resultJson) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SEGMENTOS DE RESPOSTA — permite intercalar texto, "Em processo"
-// e carrosséis de imagens na ordem exata em que a IA os produziu,
-// em vez de um único bloco de processo fixo no topo. Cada segmento
-// guarda a que ponto do texto (afirmação da IA) ele pertence.
+// SEGMENTOS DE RESPOSTA
 // ══════════════════════════════════════════════════════════════
 
 sealed class ResponseSegment {}

@@ -10,10 +10,17 @@ const CORS_HEADERS = {
 const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
 const TOOLS_SERVER_BASE = "https://aitools-nexa.onrender.com";
 
+// ═══ Modelo único (V4.1-Flash retirou o V4-Pro em 14 set 2026 —
+// pedidos a deepseek-v4-pro passam a ser servidos pelo Flash na
+// mesma. Deixamos de simular "modelos" diferentes: só existe
+// "thinking" ligado ou desligado, tal como a própria DeepSeek trata
+// isto hoje (parâmetro de request, não nome de modelo). A chave
+// "flash" cobre o uso normal; "reasoning" cobre o modo com raciocínio
+// visível. Mantidas as duas chaves para não partir chamadas antigas —
+// mas agora resolvem ao mesmo modelo. ═══
 const DEEPSEEK_MODELS = {
-  flash: { model: "deepseek-v4-flash", max_tokens: 8192, temperature: 1.0, thinking: { type: "disabled" } },
-  pro: { model: "deepseek-v4-pro", max_tokens: 8192, temperature: 1.0, thinking: { type: "disabled" } },
-  reasoning: { model: "deepseek-v4-flash", max_tokens: 65536, thinking: { type: "enabled" }, reasoning_effort: "high" },
+  flash: { model: "deepseek-v4.1-flash", max_tokens: 8192, temperature: 1.0, thinking: { type: "disabled" } },
+  reasoning: { model: "deepseek-v4.1-flash", max_tokens: 65536, thinking: { type: "enabled" }, reasoning_effort: "high" },
 };
 
 const GROQ_BASE = "https://api.groq.com/openai/v1";
@@ -96,7 +103,6 @@ async function verifyPassword(password, storedHash) {
       PBKDF2_KEY_LENGTH * 8
     );
     const derivedHex = bytesToHex(derivedBits);
-    // Comparação em tempo constante para evitar timing attacks.
     if (derivedHex.length !== expectedHex.length) return false;
     let diff = 0;
     for (let i = 0; i < derivedHex.length; i++) diff |= derivedHex.charCodeAt(i) ^ expectedHex.charCodeAt(i);
@@ -112,7 +118,6 @@ function normalizeEmail(email) {
   return String(email).toLowerCase().trim();
 }
 function normalizePhone(phone) {
-  // Mantém apenas dígitos e o '+' inicial, se houver.
   const trimmed = String(phone).trim();
   const hasPlus = trimmed.startsWith("+");
   const digits = trimmed.replace(/[^\d]/g, "");
@@ -122,7 +127,6 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 function isValidPhone(phone) {
-  // Mínimo 8 dígitos, aceita '+' opcional no início.
   return /^\+?\d{8,15}$/.test(phone);
 }
 
@@ -228,7 +232,7 @@ async function deepseekGenerateTitle(apiKey, message, language) {
     ? "Generate a short, natural title (max 6 words) that summarizes the topic of a conversation that starts with this message: \"" + message + "\". Reply with ONLY the title text, no punctuation, no quotes, no prefix like 'Title:'."
     : "Gera um titulo curto e natural (max 6 palavras) que resuma o tema de uma conversa que comeca com esta mensagem: \"" + message + "\". Responde APENAS com o texto do titulo, sem pontuacao, sem aspas, sem prefixo como 'Titulo:'.";
   try {
-    const res = await fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey }, body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: prompt }], max_tokens: 24, temperature: 0.4, thinking: { type: "disabled" }, stream: false }) });
+    const res = await fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey }, body: JSON.stringify({ model: "deepseek-v4.1-flash", messages: [{ role: "user", content: prompt }], max_tokens: 24, temperature: 0.4, thinking: { type: "disabled" }, stream: false }) });
     if (!res.ok) return null;
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || "";
@@ -236,9 +240,40 @@ async function deepseekGenerateTitle(apiKey, message, language) {
     return cleaned.length > 0 ? cleaned : null;
   } catch (e) { console.error("[NEXA TITLE ERROR]", e.message); return null; }
 }
+
+// ═══ ANEXOS — converte mensagens do utilizador com anexos de imagem
+// para o formato multimodal que a DeepSeek V4.1-Flash espera:
+// content passa a ser um array de blocos [{type:"text",...},
+// {type:"image_url",...}] em vez de string simples. Mensagens sem
+// anexos de imagem mantêm-se como string. Documentos não-imagem
+// (pdf, zip, docx...) continuam fora daqui — passam pelas tools
+// (read_pdf_contents, read_zip_contents, etc). ═══
+function isImageAttachment(att) {
+  const mime = (att && att.mimeType) || "";
+  return mime.startsWith("image/");
+}
 async function expandMessagesWithAttachments(messages) {
   return messages.map(m => {
-    const out = { role: m.role, content: m.content };
+    const out = { role: m.role };
+    const imageAttachments = Array.isArray(m.attachments) ? m.attachments.filter(isImageAttachment) : [];
+
+    if (m.role === "user" && imageAttachments.length > 0) {
+      const blocks = [];
+      if (m.content && m.content.trim().length > 0) {
+        blocks.push({ type: "text", text: m.content });
+      }
+      for (const att of imageAttachments) {
+        const mime = att.mimeType || "image/jpeg";
+        blocks.push({
+          type: "image_url",
+          image_url: { url: "data:" + mime + ";base64," + att.base64 },
+        });
+      }
+      out.content = blocks;
+    } else {
+      out.content = m.content;
+    }
+
     if (m.tool_call_id !== undefined) out.tool_call_id = m.tool_call_id;
     if (m.tool_calls !== undefined) out.tool_calls = m.tool_calls;
     if (m.name !== undefined) out.name = m.name;
@@ -417,7 +452,6 @@ async function handleRegister(request, env) {
     if (!isValidPhone(phone)) return error("Número de telemóvel inválido");
   }
 
-  // Verifica duplicados.
   if (email) {
     const existing = await env.NEXA_USERS.get("email:" + email);
     if (existing) return error("Este email já está registado.");
@@ -549,7 +583,6 @@ async function handleUpdateMe(request, env) {
   if (body.name) user.name = String(body.name).trim();
   if (body.preferences && typeof body.preferences === "object") user.preferences = Object.assign({}, user.preferences || {}, body.preferences);
 
-  // Troca de password: exige a password atual correta.
   if (body.password) {
     const currentPassword = body.currentPassword ? String(body.currentPassword) : "";
     if (!currentPassword) return error("Indica a password atual para a alterar.");
@@ -558,7 +591,6 @@ async function handleUpdateMe(request, env) {
     const newPassword = String(body.password);
     if (newPassword.length < 6) return error("A nova password deve ter pelo menos 6 caracteres");
     user.passwordHash = await hashPassword(newPassword);
-    // Invalida sessões noutros dispositivos por segurança.
     await env.NEXA_USERS.put("session_epoch:" + user.id, String(Date.now()));
   }
 
@@ -591,9 +623,6 @@ async function handleUpdateAvatar(request, env) {
   if (!payload) return error("Não autenticado", 401);
   const body = await request.json().catch(() => null);
   if (!body || !body.avatar) return error("avatar obrigatório");
-  // Limite subido de ~200KB para ~1MB de imagem — ver
-  // AVATAR_MAX_BASE64_CHARS no topo deste ficheiro, espelhado em
-  // kAvatarMaxImageBytes no Flutter (avatar_upload_utils.dart).
   if (body.avatar.length > AVATAR_MAX_BASE64_CHARS) return error("Imagem demasiado grande (máx ~1MB)");
   const userData = await env.NEXA_USERS.get("user:" + payload.id);
   if (!userData) return error("Utilizador não encontrado", 404);
@@ -620,7 +649,7 @@ async function handleCreateConversation(request, env) {
   if (!body) return error("Body inválido");
   const id = crypto.randomUUID();
   const now = Date.now();
-  const conversation = { id, userId: payload.id, title: body.title || "Nova conversa", messages: body.messages || [], model: body.model || "deepseek-v4-flash", pinned: false, archived: false, tags: body.tags || [], createdAt: now, updatedAt: now };
+  const conversation = { id, userId: payload.id, title: body.title || "Nova conversa", messages: body.messages || [], model: body.model || "deepseek-v4.1-flash", pinned: false, archived: false, tags: body.tags || [], createdAt: now, updatedAt: now };
   await env.NEXA_USERS.put("conv:" + id, JSON.stringify(conversation));
   const raw = await env.NEXA_USERS.get("convs:" + payload.id);
   const ids = raw ? JSON.parse(raw) : [];
@@ -787,7 +816,7 @@ async function handleAiSummarize(request, env) {
   const prompt = language === "en" ? "Summarize the following conversation in a few sentences:\n\n" : "Resume a seguinte conversa em poucas frases:\n\n";
   const text = body.messages.map(m => (m.role === "user" ? "User: " : "Assistant: ") + m.content).join("\n");
   if (!env.DEEPSEEK_API_KEY) return error("DeepSeek não configurado", 500);
-  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY }, body: JSON.stringify({ model: "deepseek-v4-flash", messages: [{ role: "user", content: prompt + text }], max_tokens: 512, temperature: 0.5, thinking: { type: "disabled" }, stream: false }) });
+  const dsRes = await fetch(DEEPSEEK_BASE + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.DEEPSEEK_API_KEY }, body: JSON.stringify({ model: "deepseek-v4.1-flash", messages: [{ role: "user", content: prompt + text }], max_tokens: 512, temperature: 0.5, thinking: { type: "disabled" }, stream: false }) });
   if (!dsRes.ok) return error("Erro ao resumir", dsRes.status);
   const data = await dsRes.json();
   const summary = data.choices?.[0]?.message?.content || "";

@@ -417,19 +417,7 @@ class _ChatInputShell extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// MODAL DE GRAVAÇÃO — modal PRÓPRIO deste ficheiro (showModalBottomSheet
-// nativo com enableDrag: true, mesmo padrão do drawermenu.dart).
-// Retorna o transcript (String?) quando o utilizador confirma com OK;
-// null se cancelar.
-//
-// Conteúdo:
-// - Botão único no topo: branco (tema escuro) / preto (tema claro),
-//   alterna ícone play/pause ao gravar/pausar.
-// - Título fixo "Diz qualquer coisa" — sem subtítulo.
-// - SEM ícone de microfone.
-// - Waveform tipo recorder real: barras PARADAS por omissão, só se
-//   movem com a amplitude real do microfone (pacote `record`).
-// - Dois botões lado a lado: play/pause + OK (s.primary sempre).
+// MODAL DE GRAVAÇÃO
 // ══════════════════════════════════════════════════════════════
 
 Future<String?> showRecordingModal(BuildContext context, AppColorScheme s) {
@@ -453,18 +441,14 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<Amplitude>? _amplitudeSub;
 
-  bool _playing = false; // true = a gravar (ícone mostra pause); false = pausado (ícone mostra play)
+  bool _playing = false;
   bool _hasStarted = false;
   int _elapsed = 0;
   Timer? _sessionTimer;
   String? _recordingPath;
 
-  // Amplitude corrente normalizada (0.0 a 1.0). A waveform só se
-  // move quando isto sobe acima do "silêncio" — parada por omissão.
   double _currentAmplitude = 0.0;
 
-  // Histórico curto de amplitude por barra, para dar leitura de
-  // "forma de onda" real em vez de um único valor a pulsar.
   static const int _barCount = 32;
   final List<double> _barHistory = List.filled(_barCount, 0.0);
 
@@ -510,9 +494,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
       if (mounted && _playing) setState(() => _elapsed++);
     });
 
-    // Amplitude real do microfone — só aqui a waveform ganha vida.
-    // Valores tipicamente entre -160 (silêncio) e 0 (pico) em dBFS;
-    // normalizamos para 0..1 com um piso de silêncio.
     _amplitudeSub?.cancel();
     _amplitudeSub = _recorder
         .onAmplitudeChanged(const Duration(milliseconds: 90))
@@ -563,10 +544,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
     _amplitudeSub?.cancel();
     _sessionTimer?.cancel();
     if (!mounted) return;
-    // Este widget não faz transcrição — devolve o path do ficheiro
-    // gravado para o chamador decidir o que fazer (enviar para
-    // transcrição, anexar como áudio, etc.). O tipo de retorno do
-    // showRecordingModal é String?, usado aqui como o path.
     Navigator.of(context).pop(path);
   }
 
@@ -579,8 +556,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    // Botão de topo: branco no tema escuro, preto no tema claro —
-    // pedido explícito, independente da cor primária do tema.
     final topButtonBg = s.isDark ? Colors.white : Colors.black;
     final topButtonIcon = s.isDark ? Colors.black : Colors.white;
 
@@ -591,8 +566,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Botão único de topo — alterna play/pause, cor invertida
-          // conforme o tema (branco no escuro, preto no claro).
           GestureDetector(
             onTap: _togglePlayPause,
             child: Container(
@@ -615,8 +588,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
             ),
           ),
           const SizedBox(height: 18),
-
-          // Título fixo, sem subtítulo.
           Text(
             'Diz qualquer coisa',
             style: TextStyle(
@@ -626,12 +597,8 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
             ),
           ),
           const SizedBox(height: 22),
-
-          // Waveform tipo recorder real — parada até haver amplitude
-          // real do microfone acima do piso de silêncio.
           _RealWaveform(s: s, barHistory: _barHistory, active: _playing),
           const SizedBox(height: 10),
-
           Text(
             _formattedElapsed,
             style: TextStyle(
@@ -641,8 +608,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
             ),
           ),
           const SizedBox(height: 26),
-
-          // Dois botões lado a lado: play/pause + OK.
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -655,8 +620,6 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
               const SizedBox(width: 18),
               _ModalCircleButton(
                 icon: 'check',
-                // OK: sempre s.primary, independente do tema —
-                // pedido explícito.
                 background: s.primary,
                 iconColor: Colors.white,
                 onTap: _confirmOk,
@@ -722,15 +685,6 @@ class _ModalCircleButtonState extends State<_ModalCircleButton> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Waveform "real" — barras que só se movem com amplitude real de
-// fala/som. barHistory já vem normalizado (0.0 = silêncio/parado,
-// 1.0 = pico), atualizado a partir de onAmplitudeChanged do
-// microfone real. Quando active=false (pausado) ou toda a história
-// está em zero (silêncio contínuo), as barras ficam completamente
-// paradas na altura mínima — sem nenhuma animação sintética.
-// ─────────────────────────────────────────────────────────────
-
 class _RealWaveform extends StatelessWidget {
   final AppColorScheme s;
   final List<double> barHistory;
@@ -766,9 +720,6 @@ class _RealWaveform extends StatelessWidget {
                 duration: const Duration(milliseconds: 90),
                 curve: Curves.easeOut,
                 width: _barWidth,
-                // Sem amplitude real (parado/pausado/silêncio) a
-                // barra fica na altura mínima — não há movimento
-                // sintético nenhum.
                 height: _minHeight + amplitude * (_maxHeight - _minHeight),
                 decoration: BoxDecoration(
                   color: color,
@@ -1233,18 +1184,25 @@ class _CanvasCard extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // SHEET: MENU "+"
+//
+// MUDANÇA: linha "Modelo" (que abria a página de seleção de
+// modelo) substituída por um switch "Pensar antes de responder".
+// O modal de escolha de modelo deixou de existir porque a
+// DeepSeek retirou o V4-Pro (V4.1-Flash serve tudo) e trata
+// "raciocínio" como parâmetro, não como modelo separado. O estado
+// de "thinking" agora viaja por onThinkingToggled — o AiTabState
+// guarda-o em _thinkingEnabled e passa-o ao Worker via
+// AiModel.provider(thinkingEnabled: ...).
 // ══════════════════════════════════════════════════════════════
-
-enum _AttachMenuPageKind { root, modelSelect }
 
 Future<void> showAttachMenuSheet(
   BuildContext context,
   AppColorScheme s, {
   required GlobalKey anchorKey,
-  required AiModel currentModel,
+  required bool thinkingEnabled,
   required bool webSearchEnabled,
   required bool widgetsEnabled,
-  required ValueChanged<AiModel> onModelSelected,
+  required ValueChanged<bool> onThinkingToggled,
   required ValueChanged<bool> onWebSearchChanged,
   required ValueChanged<bool> onWidgetsChanged,
   required VoidCallback onOpenCanvas,
@@ -1257,10 +1215,10 @@ Future<void> showAttachMenuSheet(
     s: s,
     builder: (ctx) => _AttachMenuSheetContent(
       s: s,
-      currentModel: currentModel,
+      thinkingEnabled: thinkingEnabled,
       webSearchEnabled: webSearchEnabled,
       widgetsEnabled: widgetsEnabled,
-      onModelSelected: onModelSelected,
+      onThinkingToggled: onThinkingToggled,
       onWebSearchChanged: onWebSearchChanged,
       onWidgetsChanged: onWidgetsChanged,
       onOpenCanvas: onOpenCanvas,
@@ -1273,10 +1231,10 @@ Future<void> showAttachMenuSheet(
 
 class _AttachMenuSheetContent extends StatefulWidget {
   final AppColorScheme s;
-  final AiModel currentModel;
+  final bool thinkingEnabled;
   final bool webSearchEnabled;
   final bool widgetsEnabled;
-  final ValueChanged<AiModel> onModelSelected;
+  final ValueChanged<bool> onThinkingToggled;
   final ValueChanged<bool> onWebSearchChanged;
   final ValueChanged<bool> onWidgetsChanged;
   final VoidCallback onOpenCanvas;
@@ -1286,10 +1244,10 @@ class _AttachMenuSheetContent extends StatefulWidget {
 
   const _AttachMenuSheetContent({
     required this.s,
-    required this.currentModel,
+    required this.thinkingEnabled,
     required this.webSearchEnabled,
     required this.widgetsEnabled,
-    required this.onModelSelected,
+    required this.onThinkingToggled,
     required this.onWebSearchChanged,
     required this.onWidgetsChanged,
     required this.onOpenCanvas,
@@ -1304,98 +1262,56 @@ class _AttachMenuSheetContent extends StatefulWidget {
 }
 
 class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
-  _AttachMenuPageKind _page = _AttachMenuPageKind.root;
-  late AiModel _selectedModel = widget.currentModel;
+  late bool _localThinking = widget.thinkingEnabled;
   late bool _localWeb = widget.webSearchEnabled;
   late bool _localWidgets = widget.widgetsEnabled;
-
-  void _goToModelSelect() =>
-      setState(() => _page = _AttachMenuPageKind.modelSelect);
-  void _backToRoot() => setState(() => _page = _AttachMenuPageKind.root);
-
-  void _pickModel(AiModel model) {
-    setState(() => _selectedModel = model);
-    widget.onModelSelected(model);
-    _backToRoot();
-  }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, anim) {
-          final isModelPage = child.key == const ValueKey('model_page');
-          final beginOffset = isModelPage
-              ? const Offset(0.06, 0)
-              : const Offset(-0.06, 0);
-          return FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: beginOffset, end: Offset.zero)
-                  .animate(CurvedAnimation(
-                      parent: anim, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-        child: _page == _AttachMenuPageKind.root
-            ? _RootPage(
-                key: const ValueKey('root_page'),
-                s: s,
-                selectedModel: _selectedModel,
-                webSearchEnabled: _localWeb,
-                widgetsEnabled: _localWidgets,
-                onModelTap: _goToModelSelect,
-                onCanvasTap: () {
-                  Navigator.pop(context);
-                  widget.onOpenCanvas();
-                },
-                onWebSearchChanged: (v) {
-                  setState(() => _localWeb = v);
-                  widget.onWebSearchChanged(v);
-                },
-                onWidgetsChanged: (v) {
-                  setState(() => _localWidgets = v);
-                  widget.onWidgetsChanged(v);
-                },
-                onCamera: () {
-                  Navigator.pop(context);
-                  widget.onCamera();
-                },
-                onPhotos: () {
-                  Navigator.pop(context);
-                  widget.onPhotos();
-                },
-                onLocalFile: () {
-                  Navigator.pop(context);
-                  widget.onLocalFile();
-                },
-              )
-            : _ModelSelectPage(
-                key: const ValueKey('model_page'),
-                s: s,
-                selectedModel: _selectedModel,
-                onBack: _backToRoot,
-                onPick: _pickModel,
-              ),
-      ),
+    return _RootPage(
+      s: s,
+      thinkingEnabled: _localThinking,
+      webSearchEnabled: _localWeb,
+      widgetsEnabled: _localWidgets,
+      onThinkingChanged: (v) {
+        setState(() => _localThinking = v);
+        widget.onThinkingToggled(v);
+      },
+      onCanvasTap: () {
+        Navigator.pop(context);
+        widget.onOpenCanvas();
+      },
+      onWebSearchChanged: (v) {
+        setState(() => _localWeb = v);
+        widget.onWebSearchChanged(v);
+      },
+      onWidgetsChanged: (v) {
+        setState(() => _localWidgets = v);
+        widget.onWidgetsChanged(v);
+      },
+      onCamera: () {
+        Navigator.pop(context);
+        widget.onCamera();
+      },
+      onPhotos: () {
+        Navigator.pop(context);
+        widget.onPhotos();
+      },
+      onLocalFile: () {
+        Navigator.pop(context);
+        widget.onLocalFile();
+      },
     );
   }
 }
 
 class _RootPage extends StatelessWidget {
   final AppColorScheme s;
-  final AiModel selectedModel;
+  final bool thinkingEnabled;
   final bool webSearchEnabled;
   final bool widgetsEnabled;
-  final VoidCallback onModelTap;
+  final ValueChanged<bool> onThinkingChanged;
   final VoidCallback onCanvasTap;
   final ValueChanged<bool> onWebSearchChanged;
   final ValueChanged<bool> onWidgetsChanged;
@@ -1404,12 +1320,11 @@ class _RootPage extends StatelessWidget {
   final VoidCallback onLocalFile;
 
   const _RootPage({
-    super.key,
     required this.s,
-    required this.selectedModel,
+    required this.thinkingEnabled,
     required this.webSearchEnabled,
     required this.widgetsEnabled,
-    required this.onModelTap,
+    required this.onThinkingChanged,
     required this.onCanvasTap,
     required this.onWebSearchChanged,
     required this.onWidgetsChanged,
@@ -1459,16 +1374,16 @@ class _RootPage extends StatelessWidget {
           const SizedBox(height: 16),
           _PlainMenuRow(
             s: s,
-            assetName: 'sliders',
-            title: 'Modelo',
-            subtitle: selectedModel.label,
-            onTap: onModelTap,
-          ),
-          _PlainMenuRow(
-            s: s,
             assetName: 'stacks',
             title: 'Canvas',
             onTap: onCanvasTap,
+          ),
+          _PlainSwitchRow(
+            s: s,
+            assetName: 'brain',
+            title: 'Pensar antes de responder',
+            value: thinkingEnabled,
+            onChanged: onThinkingChanged,
           ),
           _PlainSwitchRow(
             s: s,
@@ -1621,119 +1536,8 @@ class _PlainSwitchRow extends StatelessWidget {
   }
 }
 
-class _ModelSelectPage extends StatelessWidget {
-  final AppColorScheme s;
-  final AiModel selectedModel;
-  final VoidCallback onBack;
-  final ValueChanged<AiModel> onPick;
-
-  const _ModelSelectPage({
-    super.key,
-    required this.s,
-    required this.selectedModel,
-    required this.onBack,
-    required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              GestureDetector(
-                onTap: onBack,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child:
-                      AppIcon('chevron_back', size: 20, color: s.onSurface),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text('Modelo',
-                  style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: s.onSurface)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          for (final model in AiModel.values)
-            _ModelOptionRow(
-              s: s,
-              model: model,
-              selected: model == selectedModel,
-              onTap: () => onPick(model),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModelOptionRow extends StatelessWidget {
-  final AppColorScheme s;
-  final AiModel model;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ModelOptionRow({
-    required this.s,
-    required this.model,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: _HoverSurface(
-        s: s,
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    model.label,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: selected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: s.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    model.description,
-                    style: TextStyle(
-                        fontSize: 12, color: s.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            if (selected)
-              AppIcon('check', color: s.primary, size: 20)
-            else
-              const SizedBox(width: 20),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// (As classes _ModelSelectPage e _ModelOptionRow foram removidas —
+// o modal de escolha de modelo deixou de existir.)
 
 // ══════════════════════════════════════════════════════════════
 // SHEET: APPS CONECTADOS

@@ -212,16 +212,21 @@ class _UserAttachmentChip extends StatelessWidget {
         : (isPdf
             ? 'pdf'
             : (isZip ? 'folder_upload' : 'attach'));
+    // Cor herdada do texto da bolha (onSurface) em vez de branco
+    // fixo — no tema claro a bolha passou a ser quase branca e um
+    // chip branco fixo ficaria invisível. No tema escuro o
+    // resultado é praticamente o mesmo de antes.
+    final fg = s.userBubbleText;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: fg.withOpacity(0.10),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppIcon(iconName, size: 12, color: Colors.white),
+          AppIcon(iconName, size: 12, color: fg),
           const SizedBox(width: 4),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 100),
@@ -229,9 +234,9 @@ class _UserAttachmentChip extends StatelessWidget {
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 10.5,
-                  color: Colors.white,
+                  color: fg,
                   fontWeight: FontWeight.w600),
             ),
           ),
@@ -1365,8 +1370,12 @@ class _StreamingBubbleState extends State<StreamingBubble> {
     }
 
     if (!anyContent && thinking == null) {
+      // Loader de "a responder" passa a usar o anel gradiente
+      // giratório em vez da bola sólida que o NexaLoaderLogo
+      // desenhava. O NexaLoaderLogo continua a existir (é usado
+      // noutros sítios), só deixou de aparecer neste contexto.
       children.add(widget.showLogoLoader
-          ? const NexaLoaderLogo(size: 28)
+          ? const NexaSpinningRingLoader(size: 28)
           : AiSmallDotsLoader(color: s.onSurfaceVariant));
     }
 
@@ -1575,13 +1584,17 @@ class EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                NexaLoaderLogo(
+                // NexaBrandLogo estático (animated: false) em vez do
+                // NexaLoaderLogo animado — o logo da marca deixa de
+                // "pulsar" no estado vazio; o movimento fica
+                // reservado para o loader de "a responder".
+                const NexaBrandLogo(
                   size: 112,
-                  tintColor: s.isDark ? null : s.primary,
+                  animated: false,
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Olá, o que vamos criar hoje?',
+                  greetingForNow(),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 20,

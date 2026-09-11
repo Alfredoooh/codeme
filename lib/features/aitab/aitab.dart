@@ -29,7 +29,8 @@ import '../../core/navigation/app_page_route.dart';
 import '../../core/widgets/app_sheet.dart';
 
 export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
-export 'aitab_widgets_shared.dart' show AiConversationMenuButton, NexaLoaderLogo, ShimmerText;
+export 'aitab_widgets_shared.dart'
+    show AiConversationMenuButton, NexaLoaderLogo, NexaSpinningRingLoader, ShimmerText;
 
 class _ClampedTopScrollPhysics extends ClampingScrollPhysics {
   const _ClampedTopScrollPhysics({super.parent});
@@ -71,9 +72,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _sending      = false;
   bool     _widgetsEnabled = true;
   bool     _webSearchEnabled = false;
+  bool     _thinkingEnabled = false;
   bool     _showScrollToBottom = false;
   String?  _conversationId;
-  AiModel  _model        = AiModel.deepseekFlash;
+  final AiModel _model   = AiModel.deepseek;
   EditorType? _attachedTool;
   int      _canvasIdSeq  = 0;
 
@@ -167,6 +169,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   void setWebSearchEnabled(bool v) {
     setState(() => _webSearchEnabled = v);
     _notifyHeader();
+  }
+
+  void _onThinkingToggled(bool value) {
+    setState(() => _thinkingEnabled = value);
   }
 
   void openCanvasPopupExternally() => _openCanvasPopup();
@@ -363,7 +369,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _streamSub = AiApiService.streamChat(
       token: token,
       messages: historyWithToolResults,
-      provider: _model.provider,
+      provider: _model.provider(thinkingEnabled: _thinkingEnabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
       tools: kAllTools,
@@ -432,7 +438,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     _streamSub = AiApiService.streamChat(
       token: token,
       messages: _msgs,
-      provider: _model.provider,
+      provider: _model.provider(thinkingEnabled: _thinkingEnabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
       tools: _widgetsEnabled ? kAllTools : null,
@@ -662,10 +668,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     });
   }
 
-  void _onModelSelected(AiModel model) {
-    setState(() => _model = model);
-  }
-
   void _onAttachFiles() async {
     final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
     if (result == null || result.files.isEmpty) return;
@@ -739,36 +741,14 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
-      onChooseModel: _openModelSelectSheet,
+      thinkingEnabled: _thinkingEnabled,
+      onThinkingToggled: _onThinkingToggled,
       onSelectTool: _onToolSelected,
     );
   }
 
-  void _openModelSelectSheet() {
-    showAppSheet<void>(
-      context,
-      builder: (ctx) => _StandaloneModelSelectSheet(
-        s: AppTheme.of(context),
-        currentModel: _model,
-        onPick: (model) {
-          _onModelSelected(model);
-          Navigator.pop(ctx);
-        },
-      ),
-    );
-  }
-
-  /// ✅ FIX: substitui o antigo `_openVoiceSheet`.
-  /// O `ChatInput` (aitab_input_bar.dart) já tem o seu próprio modal
-  /// interno de gravação — este callback recebe o path do ficheiro
-  /// gravado quando o utilizador confirma com OK.
-  /// Deixei vazio para compilar; preenche com o que precisares
-  /// (ex.: enviar para transcrição, anexar como áudio, etc.).
   void _onRecordingDone(String path) {
     // TODO: tratar o ficheiro gravado (path).
-    // Ex.: _attachedFiles.add(...) com bytes do ficheiro,
-    // ou enviar `path` para um serviço de transcrição e preencher
-    // _ctrl.text com o texto resultante.
   }
 
   void _openCanvasPopup() {
@@ -785,10 +765,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       context,
       AppTheme.of(context),
       anchorKey: _attachButtonKey,
-      currentModel: _model,
+      thinkingEnabled: _thinkingEnabled,
       webSearchEnabled: _webSearchEnabled,
       widgetsEnabled: _widgetsEnabled,
-      onModelSelected: _onModelSelected,
+      onThinkingToggled: _onThinkingToggled,
       onWebSearchChanged: setWebSearchEnabled,
       onWidgetsChanged: setWidgetsEnabled,
       onOpenCanvas: _openCanvasPopup,
@@ -1203,71 +1183,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
               ),
             ),
         ]),
-      ),
-    );
-  }
-}
-
-class _StandaloneModelSelectSheet extends StatelessWidget {
-  final AppColorScheme s;
-  final AiModel currentModel;
-  final ValueChanged<AiModel> onPick;
-  const _StandaloneModelSelectSheet({
-    required this.s,
-    required this.currentModel,
-    required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Modelo',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
-          const SizedBox(height: 10),
-          for (final model in AiModel.values)
-            GestureDetector(
-              onTap: () => onPick(model),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: model == currentModel ? s.primary.withOpacity(0.1) : s.surface,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            model.label,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: model == currentModel ? FontWeight.w600 : FontWeight.w500,
-                              color: s.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            model.description,
-                            style: TextStyle(fontSize: 11.5, color: s.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (model == currentModel)
-                      AppIcon('check', color: s.primary, size: 20),
-                  ],
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

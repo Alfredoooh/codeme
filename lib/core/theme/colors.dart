@@ -1,3 +1,7 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/core/theme/colors.dart
+// ══════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -76,9 +80,15 @@ class AppColorScheme {
   Color get primaryContainer   => isDark ? _darken(primary, 0.55) : _lighten(primary, 0.85);
   Color get onPrimaryContainer => isDark ? _lighten(primary, 0.55) : _darken(primary, 0.60);
 
-  // Cores da bolha do usuário
-  Color get userBubbleBg   => isDark ? cardBackground : primary;
-  Color get userBubbleText => isDark ? onSurface : onPrimary;
+  // ═══ Cores da bolha do utilizador ═══
+  // Tema claro: primary com +0.55 de luminosidade → fica quase
+  // branco mas mantém um ligeiro tom da cor primária escolhida
+  // (não é branco puro, é "branco tingido"). Como o fundo fica
+  // quase branco, o texto passa a onSurface (escuro) para haver
+  // contraste — já não pode ser onPrimary (branco), que ficaria
+  // invisível. Tema escuro fica inalterado.
+  Color get userBubbleBg   => isDark ? cardBackground : _lighten(primary, 0.55);
+  Color get userBubbleText => onSurface;
 
   static Color _lighten(Color c, double amount) {
     final hsl = HSLColor.fromColor(c);

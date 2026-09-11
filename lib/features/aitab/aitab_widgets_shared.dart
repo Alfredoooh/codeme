@@ -3,6 +3,7 @@
 // Loaders reutilizáveis, popups genéricos, e o card simples de canvas.
 // ══════════════════════════════════════════════════════════════
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_svg/flutter_svg.dart';
@@ -138,10 +139,6 @@ class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStat
 
 // ══════════════════════════════════════════════════════════════
 // NEXA BRAND LOGO — ícone do header da tela de chat (logo.svg)
-//
-// Substitui o NexaLoaderLogo APENAS onde ele era usado como ícone
-// fixo da tela de chat. O NexaLoaderLogo continua a existir (agora
-// como bola) e é esse que aparece na animação de "a responder".
 // ══════════════════════════════════════════════════════════════
 
 class NexaBrandLogo extends StatefulWidget {
@@ -216,12 +213,110 @@ class _NexaBrandLogoState extends State<NexaBrandLogo>
 }
 
 // ══════════════════════════════════════════════════════════════
+// NEXA SPINNING RING LOADER — anel com gradiente que gira
+// continuamente. Usado no loader de "a responder"
+// (StreamingBubble → showLogoLoader), substituindo a bola sólida
+// do NexaLoaderLogo nesse contexto específico.
+// ══════════════════════════════════════════════════════════════
+
+class NexaSpinningRingLoader extends StatefulWidget {
+  final double size;
+  final Color? color;
+  final double strokeWidth;
+  const NexaSpinningRingLoader({
+    super.key,
+    this.size = 28,
+    this.color,
+    this.strokeWidth = 2.5,
+  });
+
+  @override
+  State<NexaSpinningRingLoader> createState() => _NexaSpinningRingLoaderState();
+}
+
+class _NexaSpinningRingLoaderState extends State<NexaSpinningRingLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    final ringColor = widget.color ?? (s.isDark ? Colors.white : s.primary);
+
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        return Transform.rotate(
+          angle: _c.value * 2 * math.pi,
+          child: SizedBox(
+            width: widget.size,
+            height: widget.size,
+            child: CustomPaint(
+              painter: _RingGradientPainter(
+                color: ringColor,
+                strokeWidth: widget.strokeWidth,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RingGradientPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+  const _RingGradientPainter({required this.color, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final gradient = SweepGradient(
+      startAngle: 0.0,
+      endAngle: 2 * math.pi,
+      colors: [
+        color.withOpacity(0.0),
+        color.withOpacity(0.15),
+        color,
+      ],
+      stops: const [0.0, 0.55, 1.0],
+    );
+
+    final paint = Paint()
+      ..shader = gradient.createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, 0, 2 * math.pi * 0.92, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingGradientPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.strokeWidth != strokeWidth;
+}
+
+// ══════════════════════════════════════════════════════════════
 // NEXA LOADER LOGO — bola única que cresce e encolhe.
-//
-// Usado na animação de "a responder" (StreamingBubble →
-// showLogoLoader). Cresce/encolhe devagar e suavemente, com easing
-// contínuo (sem saltos) e velocidade uniforme.
-// Cor: branco puro no tema escuro, preto puro no tema claro.
 // ══════════════════════════════════════════════════════════════
 
 class NexaLoaderLogo extends StatefulWidget {
@@ -289,10 +384,7 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
         child: AnimatedBuilder(
           animation: _c,
           builder: (_, __) {
-            // Easing contínuo: parte devagar, acelera no meio e trava
-            // devagar novamente — sem nunca dar "salto".
             final t = Curves.easeInOut.transform(_c.value);
-            // Diâmetro varia entre 40% e 100% do size.
             final d = widget.size * (0.40 + 0.60 * t);
             return Container(
               width: d,
@@ -629,13 +721,7 @@ class AiConversationMenuButton extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// HEADER MENU BUTTON — popup com animação estilo Android antigo.
-//
-// - Aparece SEMPRE ACIMA do botão.
-// - Animação: scale a crescer a partir do canto inferior direito +
-//   fade suave (mesma sensação dos popups das versões antigas do
-//   Android), com 180 ms de duração.
-// - Design dos itens inalterado.
+// HEADER MENU BUTTON
 // ══════════════════════════════════════════════════════════════
 
 class _HeaderMenuButton extends StatelessWidget {
@@ -697,13 +783,9 @@ Future<ConversationAction?> _showHeaderPopupMenu(
   const double popupWidth = 220.0;
   const double gap = 6.0;
 
-  // Alinha a borda DIREITA do popup com a borda DIREITA do botão.
   final rawLeft = anchorTopLeft.dx + anchorSize.width - popupWidth;
   final clampedLeft =
       rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
-
-  // Coloca o popup ACIMA do botão:
-  //   bottom = distância do fundo do ecrã até ao topo do botão + gap
   final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
 
   return showGeneralDialog<ConversationAction>(
@@ -766,8 +848,6 @@ Future<ConversationAction?> _showHeaderPopupMenu(
       return FadeTransition(
         opacity: curved,
         child: ScaleTransition(
-          // Cresce a partir do canto inferior direito (o ponto do popup
-          // mais próximo do botão) — feel dos popups Android antigos.
           scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
           alignment: Alignment.bottomRight,
           child: child,
@@ -916,7 +996,8 @@ Future<void> showAttachPopup(
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
-  required VoidCallback onChooseModel,
+  required bool thinkingEnabled,
+  required ValueChanged<bool> onThinkingToggled,
   required ValueChanged<EditorType> onSelectTool,
 }) async {
   await _showSharedFlatBottomSheet<void>(
@@ -967,13 +1048,14 @@ Future<void> showAttachPopup(
             ],
           ),
           const SizedBox(height: 10),
-          _AttachSheetItem(
+          _AttachSheetToggleItem(
             s: s,
-            iconAsset: 'sliders',
-            label: 'Modelo',
-            onTap: () {
+            iconAsset: 'brain',
+            label: 'Pensar antes de responder',
+            value: thinkingEnabled,
+            onChanged: (v) {
+              onThinkingToggled(v);
               Navigator.pop(sheetContext);
-              onChooseModel();
             },
           ),
         ],
@@ -1076,6 +1158,53 @@ class _AttachSheetItem extends StatelessWidget {
               ),
             ),
             AppIcon('chevron_forward', size: 14, color: s.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachSheetToggleItem extends StatelessWidget {
+  final AppColorScheme s;
+  final String iconAsset;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _AttachSheetToggleItem({
+    required this.s,
+    required this.iconAsset,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: s.cardBackground,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            AppIcon(iconAsset, size: 18, color: s.onSurface),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 15, color: s.onSurface, fontWeight: FontWeight.w500),
+              ),
+            ),
+            Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              activeColor: s.primary,
+            ),
           ],
         ),
       ),
