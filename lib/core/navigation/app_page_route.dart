@@ -8,6 +8,9 @@
 //  - Sem sombra/parallax do CupertinoPageRoute.
 //  - Sem glow de overscroll do Android (tratado à parte via
 //    AppScrollBehavior, aplicado uma única vez no MaterialApp).
+//  - PopScope(canPop: true) explícito em cada rota: garante que o
+//    gesto/botão de voltar do Android nunca é interceptado por esta
+//    rota, sempre fazendo pop natural para a tela anterior.
 //
 // Uso:
 //   Navigator.of(context).push(AppPageRoute(builder: (_) => const Foo()));
@@ -23,8 +26,10 @@ class AppPageRoute<T> extends PageRouteBuilder<T> {
     Duration duration = const Duration(milliseconds: 300),
     Duration reverseDuration = const Duration(milliseconds: 260),
   }) : super(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              builder(context),
+          pageBuilder: (context, animation, secondaryAnimation) => PopScope(
+            canPop: true,
+            child: builder(context),
+          ),
           transitionDuration: duration,
           reverseTransitionDuration: reverseDuration,
           opaque: true,
