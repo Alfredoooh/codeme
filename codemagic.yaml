@@ -39,6 +39,7 @@ workflows:
           mkdir -p "$ROOT/app/src/main/res/values"
           mkdir -p "$ROOT/app/src/main/res/mipmap-anydpi-v26"
           mkdir -p "$ROOT/app/src/main/res/drawable"
+          mkdir -p "$ROOT/app/src/main/res/xml"
           mkdir -p "$ROOT/app/src/main/assets/webruntime"
           mkdir -p "$ROOT/app/src/main/assets/templates/html_basic"
           mkdir -p "$ROOT/app/src/main/assets/templates/react_basic/src"
@@ -86,6 +87,7 @@ workflows:
           android.useAndroidX=true
           kotlin.code.style=official
           android.nonTransitiveRClass=true
+          android.suppressUnsupportedCompileSdk=35
           EOF
 
           cat > "$ROOT/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
@@ -98,6 +100,8 @@ workflows:
 
       # ──────────────────────────────────────────────────────
       # 3. app/build.gradle.kts + Manifest
+      #    (kotlinx.serialization rebaixado para 1.6.3, compatível
+      #     com Kotlin 1.9.24 — corrige o erro do log)
       # ──────────────────────────────────────────────────────
       - name: Write app module Gradle + Manifest
         script: |
@@ -165,7 +169,9 @@ workflows:
               implementation("androidx.navigation:navigation-compose:2.8.3")
 
               implementation("androidx.datastore:datastore-preferences:1.1.1")
-              implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+              // ATENÇÃO: 1.6.3 é a última versão de kotlinx.serialization
+              // compatível com Kotlin 1.9.x. Versões 1.7.x exigem Kotlin 2.0+.
+              implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
               implementation("org.nanohttpd:nanohttpd:2.3.1")
               implementation("org.apache.commons:commons-compress:1.27.1")
@@ -179,9 +185,20 @@ workflows:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+              <!-- Internet só é usada pelo CÓDIGO IMPORTADO pelo usuário
+                   (fetch/API/imagens remotas). O IDE em si roda 100% local. -->
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+              <!-- Necessárias para o seletor de arquivos conseguir ler
+                   o .zip escolhido pelo usuário em qualquer origem
+                   (armazenamento local, Drive, Downloads, etc.) -->
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                  android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+              <!-- Para o modo "rodar em segundo plano" -->
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
               <application
@@ -191,7 +208,8 @@ workflows:
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:label="Code IDE"
                   android:theme="@style/Theme.CodeIDE"
-                  android:usesCleartextTraffic="true">
+                  android:usesCleartextTraffic="true"
+                  android:requestLegacyExternalStorage="true">
 
                   <activity
                       android:name=".MainActivity"
@@ -517,11 +535,6 @@ workflows:
                   return destDir
               }
 
-              /**
-               * Copia um template embutido em assets/templates/<id> para
-               * a pasta de projetos do usuário, para que ele possa editar
-               * e rodar sem afetar o template original.
-               */
               fun importFromAssetsTemplate(templateId: String, projectName: String): File {
                   val destDir = File(projectsRoot, projectName)
                   if (destDir.exists()) destDir.deleteRecursively()
@@ -534,7 +547,6 @@ workflows:
                   val assets = context.assets
                   val items = assets.list(assetPath) ?: return
                   if (items.isEmpty()) {
-                      // é um arquivo
                       destDir.parentFile?.mkdirs()
                       assets.open(assetPath).use { input ->
                           FileOutputStream(destDir).use { output -> input.copyTo(output) }
@@ -608,6 +620,8 @@ workflows:
 
       # ──────────────────────────────────────────────────────
       # 8. Application + MainActivity (upload de zip real)
+      #    Usa GetContent("*/*") pois muitos file pickers reportam
+      #    mimetype genérico para .zip — filtramos pela extensão.
       # ──────────────────────────────────────────────────────
       - name: Write Application and MainActivity
         script: |
@@ -629,6 +643,7 @@ workflows:
 
           import android.net.Uri
           import android.os.Bundle
+          import android.provider.OpenableColumns
           import androidx.activity.ComponentActivity
           import androidx.activity.compose.rememberLauncherForActivityResult
           import androidx.activity.compose.setContent
@@ -655,13 +670,29 @@ workflows:
 
                   setContent {
                       var pickedZipPath by remember { mutableStateOf<String?>(null) }
+                      var pickError by remember { mutableStateOf<String?>(null) }
                       val themeMode by prefsRepo.themeMode.collectAsState(initial = AppThemeMode.SYSTEM)
                       val systemDark = isSystemInDarkTheme()
 
+                      // "*/*" porque muitos provedores (Drive, Downloads,
+                      // gerenciadores de arquivo) não relatam
+                      // application/zip corretamente. Validamos a
+                      // extensão depois de copiar para o cache.
                       val pickZipLauncher = rememberLauncherForActivityResult(
                           contract = ActivityResultContracts.GetContent()
                       ) { uri: Uri? ->
-                          if (uri != null) pickedZipPath = copyUriToCache(uri)
+                          if (uri == null) return@rememberLauncherForActivityResult
+                          val displayName = queryDisplayName(uri) ?: ""
+                          if (!displayName.lowercase().endsWith(".zip")) {
+                              pickError = "Selecione um arquivo .zip válido"
+                              return@rememberLauncherForActivityResult
+                          }
+                          val copied = copyUriToCache(uri)
+                          if (copied == null) {
+                              pickError = "Não foi possível ler o arquivo selecionado"
+                          } else {
+                              pickedZipPath = copied
+                          }
                       }
 
                       CodeIdeTheme(themeMode = themeMode, systemDark = systemDark) {
@@ -670,10 +701,23 @@ workflows:
                                   prefsRepo = prefsRepo,
                                   pickedZipPath = pickedZipPath,
                                   onZipConsumed = { pickedZipPath = null },
-                                  onRequestZipPick = { pickZipLauncher.launch("*/*") }
+                                  onRequestZipPick = { pickZipLauncher.launch("*/*") },
+                                  pickError = pickError,
+                                  onPickErrorShown = { pickError = null }
                               )
                           }
                       }
+                  }
+              }
+
+              private fun queryDisplayName(uri: Uri): String? {
+                  return try {
+                      contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                          val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                          if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else uri.lastPathSegment
+                      } ?: uri.lastPathSegment
+                  } catch (e: Exception) {
+                      uri.lastPathSegment
                   }
               }
 
@@ -683,7 +727,7 @@ workflows:
                       val outFile = File(cacheDir, fileName)
                       contentResolver.openInputStream(uri)?.use { input ->
                           FileOutputStream(outFile).use { output -> input.copyTo(output) }
-                      }
+                      } ?: return null
                       outFile.absolutePath
                   } catch (e: Exception) {
                       null
@@ -694,6 +738,7 @@ workflows:
 
       # ──────────────────────────────────────────────────────
       # 9. UI: Drawer (com projetos persistidos)
+      #    CORRIGIDO: WidgetsPlusSlash -> Widgets, import Alignment
       # ──────────────────────────────────────────────────────
       - name: Write AppDrawerContent (persisted projects list)
         script: |
@@ -712,9 +757,10 @@ workflows:
           import androidx.compose.material.icons.rounded.FolderOpen
           import androidx.compose.material.icons.rounded.Settings
           import androidx.compose.material.icons.rounded.UploadFile
-          import androidx.compose.material.icons.rounded.WidgetsPlusSlash
+          import androidx.compose.material.icons.rounded.Widgets
           import androidx.compose.material3.*
           import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.unit.dp
           import $PKG.data.SavedProject
@@ -755,7 +801,7 @@ workflows:
                   NavigationDrawerItem(
                       label = { Text("Novo a partir de template") },
                       selected = false,
-                      icon = { Icon(Icons.Rounded.WidgetsPlusSlash, contentDescription = null) },
+                      icon = { Icon(Icons.Rounded.Widgets, contentDescription = null) },
                       onClick = onNewFromTemplateClick,
                       shape = MaterialTheme.shapes.large,
                       modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
@@ -770,23 +816,26 @@ workflows:
                           modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
                       )
                       savedProjects.forEach { proj ->
-                          NavigationDrawerItem(
-                              label = { Text(proj.name) },
-                              selected = proj.name == projectName,
-                              icon = { Icon(Icons.Rounded.FolderOpen, contentDescription = null) },
-                              badge = {
-                                  IconButton(onClick = { onRemoveSavedProject(proj) }) {
-                                      Icon(
-                                          Icons.Rounded.Description,
-                                          contentDescription = "Remover",
-                                          modifier = Modifier.size(16.dp)
-                                      )
-                                  }
-                              },
-                              onClick = { onOpenSavedProject(proj) },
-                              shape = MaterialTheme.shapes.large,
-                              modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
-                          )
+                          Row(
+                              modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                              verticalAlignment = Alignment.CenterVertically
+                          ) {
+                              NavigationDrawerItem(
+                                  label = { Text(proj.name) },
+                                  selected = proj.name == projectName,
+                                  icon = { Icon(Icons.Rounded.FolderOpen, contentDescription = null) },
+                                  onClick = { onOpenSavedProject(proj) },
+                                  shape = MaterialTheme.shapes.large,
+                                  modifier = Modifier.weight(1f)
+                              )
+                              IconButton(onClick = { onRemoveSavedProject(proj) }) {
+                                  Icon(
+                                      Icons.Rounded.Description,
+                                      contentDescription = "Remover",
+                                      modifier = Modifier.size(16.dp)
+                                  )
+                              }
+                          }
                       }
                   }
 
@@ -900,6 +949,7 @@ workflows:
 
       # ──────────────────────────────────────────────────────
       # 11. UI: Settings screen
+      #    CORRIGIDO: import Alignment, import clickable
       # ──────────────────────────────────────────────────────
       - name: Write SettingsScreen
         script: |
@@ -911,6 +961,7 @@ workflows:
           cat > "$UI/settings/SettingsScreen.kt" << EOF
           package $PKG.ui.settings
 
+          import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
           import androidx.compose.material.icons.Icons
           import androidx.compose.material.icons.rounded.ArrowBack
@@ -919,7 +970,9 @@ workflows:
           import androidx.compose.material.icons.rounded.SettingsSuggest
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.vector.ImageVector
           import androidx.compose.ui.unit.dp
           import kotlinx.coroutines.launch
           import $PKG.data.AppThemeMode
@@ -974,7 +1027,8 @@ workflows:
 
                       Row(
                           modifier = Modifier.fillMaxWidth(),
-                          horizontalArrangement = Arrangement.SpaceBetween
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
                       ) {
                           Column(modifier = Modifier.weight(1f)) {
                               Text("Rodar servidor em segundo plano", style = MaterialTheme.typography.titleMedium)
@@ -996,12 +1050,15 @@ workflows:
           @Composable
           private fun ThemeOptionRow(
               label: String,
-              icon: androidx.compose.ui.graphics.vector.ImageVector,
+              icon: ImageVector,
               selected: Boolean,
               onClick: () -> Unit
           ) {
               Row(
-                  modifier = Modifier.fillMaxWidth().clickableRow(onClick).padding(vertical = 12.dp),
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .clickable(onClick = onClick)
+                      .padding(vertical = 12.dp),
                   verticalAlignment = Alignment.CenterVertically
               ) {
                   Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -1010,13 +1067,11 @@ workflows:
                   RadioButton(selected = selected, onClick = onClick)
               }
           }
-
-          private fun Modifier.clickableRow(onClick: () -> Unit): Modifier =
-              this.then(androidx.compose.foundation.clickable(onClick = onClick))
           EOF
 
       # ──────────────────────────────────────────────────────
-      # 12. UI: IdeRootScreen (junta tudo: projetos, tema, settings)
+      # 12. UI: IdeRootScreen
+      #    CORRIGIDO: import clickable, WidgetsPlusSlash -> Widgets
       # ──────────────────────────────────────────────────────
       - name: Write IdeRootScreen
         script: |
@@ -1028,6 +1083,7 @@ workflows:
           cat > "$UI/IdeRootScreen.kt" << EOF
           package $PKG.ui
 
+          import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
           import androidx.compose.material.icons.Icons
           import androidx.compose.material.icons.rounded.Menu
@@ -1060,7 +1116,9 @@ workflows:
               prefsRepo: PreferencesRepository,
               pickedZipPath: String?,
               onZipConsumed: () -> Unit,
-              onRequestZipPick: () -> Unit
+              onRequestZipPick: () -> Unit,
+              pickError: String? = null,
+              onPickErrorShown: () -> Unit = {}
           ) {
               val context = LocalContext.current
               val repo = remember { ProjectRepository(context) }
@@ -1089,7 +1147,13 @@ workflows:
                   isRunning = false
               }
 
-              // Restaura o último projeto aberto ao iniciar o app.
+              LaunchedEffect(pickError) {
+                  if (pickError != null) {
+                      snackbarHostState.showSnackbar(pickError)
+                      onPickErrorShown()
+                  }
+              }
+
               LaunchedEffect(lastOpenPath, savedProjects) {
                   if (!didAutoRestore && lastOpenPath != null && currentProject == null) {
                       val match = savedProjects.find { it.path == lastOpenPath }
@@ -1107,9 +1171,9 @@ workflows:
                       val dir = repo.importZip(path, name)
                       openDir(dir)
                       prefsRepo.addOrUpdateProject(SavedProject(name = dir.name, path = dir.absolutePath))
-                      scope.launch { snackbarHostState.showSnackbar("Projeto importado: \${dir.name}") }
+                      snackbarHostState.showSnackbar("Projeto importado: \${dir.name}")
                   } catch (e: Exception) {
-                      scope.launch { snackbarHostState.showSnackbar("Erro ao importar: \${e.message}") }
+                      snackbarHostState.showSnackbar("Erro ao importar: \${e.message}")
                   } finally {
                       isImporting = false
                       onZipConsumed()
@@ -1264,9 +1328,9 @@ workflows:
           private fun TemplateRow(label: String, onClick: () -> Unit) {
               ListItem(
                   headlineContent = { Text(label) },
-                  modifier = Modifier.fillMaxWidth().let {
-                      it.then(androidx.compose.foundation.clickable(onClick = onClick))
-                  }
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .clickable(onClick = onClick)
               )
           }
           EOF
@@ -1280,7 +1344,6 @@ workflows:
           ROOT="$CM_BUILD_DIR/$APP_DIR"
           TPL="$ROOT/app/src/main/assets/templates"
 
-          # ── Template: HTML/CSS/JS básico ──
           cat > "$TPL/html_basic/index.html" << 'EOF'
           <!DOCTYPE html>
           <html lang="pt">
@@ -1324,7 +1387,6 @@ workflows:
           });
           EOF
 
-          # ── Template: React puro (client-side, sem SSR) ──
           cat > "$TPL/react_basic/index.html" << 'EOF'
           <!DOCTYPE html>
           <html lang="pt">
@@ -1362,7 +1424,6 @@ workflows:
           createRoot(document.getElementById('root')).render(<App />);
           EOF
 
-          # ── Template: TypeScript puro ──
           cat > "$TPL/ts_basic/index.html" << 'EOF'
           <!DOCTYPE html>
           <html lang="pt">
