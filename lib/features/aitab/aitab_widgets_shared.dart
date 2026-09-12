@@ -189,10 +189,15 @@ class _NexaBrandLogoState extends State<NexaBrandLogo>
 
   @override
   Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
     final logo = SvgPicture.asset(
       'assets/icons/png/logo.svg',
       width: widget.size,
       height: widget.size,
+      colorFilter: ColorFilter.mode(
+        s.isDark ? Colors.white : Colors.black,
+        BlendMode.srcIn,
+      ),
     );
     if (!widget.animated) return logo;
 
@@ -929,7 +934,9 @@ Widget _buildHeaderMenuItem(
 }
 
 // Item de incógnito com estado "filled" quando ativo: fundo com a
-// cor primária no tema claro, branco puro no tema escuro.
+// cor primária no tema claro, branco puro no tema escuro. Ícone
+// troca entre 'incognito' (outline) e 'incognito_filled' consoante
+// o estado, e o label alterna entre ligar/desligar.
 Widget _buildIncognitoMenuItem(
   BuildContext context,
   AppColorScheme s,
@@ -944,6 +951,8 @@ Widget _buildIncognitoMenuItem(
       : isIncognito
           ? (s.isDark ? Colors.black : Colors.white)
           : s.onSurface;
+  final String iconAsset = isIncognito ? 'incognito_filled' : 'incognito';
+  final String label = isIncognito ? 'Desativar conversa incógnita' : 'Conversa incógnita';
 
   return InkWell(
     onTap: disabled
@@ -962,10 +971,10 @@ Widget _buildIncognitoMenuItem(
       ),
       child: Row(
         children: [
-          AppIcon(ConversationAction.incognito.assetName, size: 18, color: contentColor),
+          AppIcon(iconAsset, size: 18, color: contentColor),
           const SizedBox(width: 10),
           Text(
-            ConversationAction.incognito.label,
+            label,
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: contentColor),
           ),
         ],
@@ -1307,62 +1316,131 @@ Widget _buildMessageMenuItemTappable(
 }
 
 // ══════════════════════════════════════════════════════════════
-// ATTACH POPUP
+// ATTACH POPUP — popup ancorado ao botão "+", não bottom sheet.
+// Cards em tamanho fixo (72x72) para não dependerem de Expanded.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachPopup(
   BuildContext context,
   AppColorScheme s, {
+  required GlobalKey anchorKey,
   required VoidCallback onFiles,
   required VoidCallback onPhotos,
   required VoidCallback onCamera,
   required ValueChanged<EditorType> onSelectTool,
 }) async {
-  await _showSharedFlatBottomSheet<void>(
-    context,
-    s,
-    builder: (sheetContext) => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Row(
+  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (box == null) return;
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  final anchorSize = box.size;
+  final overlaySize = overlayBox.size;
+
+  const double popupWidth = 268.0;
+  const double gap = 6.0;
+  final rawLeft = anchorTopLeft.dx;
+  final clampedLeft = rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
+  final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
+
+  await showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Fechar menu',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (dialogCtx, anim, secAnim) {
+      return Stack(
         children: [
-          Expanded(
-            child: _AttachOptionCardShared(
-              s: s,
-              assetName: 'attach',
-              label: 'Arquivos',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                onFiles();
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _AttachOptionCardShared(
-              s: s,
-              assetName: 'image',
-              label: 'Fotos',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                onPhotos();
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _AttachOptionCardShared(
-              s: s,
-              assetName: 'camera',
-              label: 'Câmera',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                onCamera();
-              },
+          Positioned(
+            left: clampedLeft,
+            bottom: popupBottom,
+            width: popupWidth,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: s.outline.withOpacity(0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: _AttachOptionCardShared(
+                          s: s,
+                          assetName: 'attach',
+                          label: 'Arquivos',
+                          onTap: () {
+                            Navigator.pop(dialogCtx);
+                            onFiles();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: _AttachOptionCardShared(
+                          s: s,
+                          assetName: 'image',
+                          label: 'Fotos',
+                          onTap: () {
+                            Navigator.pop(dialogCtx);
+                            onPhotos();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: _AttachOptionCardShared(
+                          s: s,
+                          assetName: 'camera',
+                          label: 'Câmera',
+                          onTap: () {
+                            Navigator.pop(dialogCtx);
+                            onCamera();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],
-      ),
-    ),
+      );
+    },
+    transitionBuilder: (dialogCtx, anim, secAnim, child) {
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
+          alignment: Alignment.bottomLeft,
+          child: child,
+        ),
+      );
+    },
   );
 }
 
@@ -1397,28 +1475,25 @@ class _AttachOptionCardSharedState extends State<_AttachOptionCardShared> {
         scale: _p ? 0.95 : 1.0,
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Container(
-            decoration: BoxDecoration(
-              color: _p ? s.hover : s.cardBackground,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AppIcon(widget.assetName, size: 22, color: s.onSurface),
-                const SizedBox(height: 8),
-                Text(
-                  widget.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: s.onSurface),
-                ),
-              ],
-            ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _p ? s.hover : s.cardBackground,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AppIcon(widget.assetName, size: 22, color: s.onSurface),
+              const SizedBox(height: 8),
+              Text(
+                widget.label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: s.onSurface),
+              ),
+            ],
           ),
         ),
       ),

@@ -748,6 +748,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     showAttachPopup(
       context,
       AppTheme.of(context),
+      anchorKey: _attachButtonKey,
       onFiles: _onAttachFiles,
       onPhotos: _onAttachPhotos,
       onCamera: _onOpenCamera,
@@ -825,12 +826,16 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _notifyHeader();
         break;
       case ConversationAction.incognito:
-        if (_hasMessages) return;
+        // Alterna: se já está incógnita, DESATIVA (mesmo com
+        // mensagens presentes — sair do incógnito é sempre
+        // permitido). Se não está incógnita, só liga se a conversa
+        // atual ainda não tiver mensagens.
+        if (!_incognito && _hasMessages) return;
         _streamSub?.cancel();
         setState(() {
           _msgs.clear();
           _canvases.clear();
-          _incognito = true;
+          _incognito = !_incognito;
           _sending = false;
           _conversationId = null;
           _attachedFiles.clear();
@@ -1175,7 +1180,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             Positioned(
               left: 0,
               right: 0,
-              bottom: _bottomBarHeight + 8,
+              bottom: _bottomBarHeight + 3,
               child: Center(
                 child: AnimatedOpacity(
                   opacity: _showScrollToBottom ? 1.0 : 0.0,
