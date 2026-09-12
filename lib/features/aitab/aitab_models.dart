@@ -872,6 +872,7 @@ class ProcessStep {
   final String? summary;
   final bool done;
   final List<String> faviconDomains;
+  final List<String> sourceUrls;
   final List<Map<String, dynamic>> foundImages;
 
   const ProcessStep({
@@ -880,6 +881,7 @@ class ProcessStep {
     this.summary,
     this.done = false,
     this.faviconDomains = const [],
+    this.sourceUrls = const [],
     this.foundImages = const [],
   });
 
@@ -887,6 +889,7 @@ class ProcessStep {
     String? summary,
     bool? done,
     List<String>? faviconDomains,
+    List<String>? sourceUrls,
     List<Map<String, dynamic>>? foundImages,
   }) =>
       ProcessStep(
@@ -895,6 +898,7 @@ class ProcessStep {
         summary: summary ?? this.summary,
         done: done ?? this.done,
         faviconDomains: faviconDomains ?? this.faviconDomains,
+        sourceUrls: sourceUrls ?? this.sourceUrls,
         foundImages: foundImages ?? this.foundImages,
       );
 
@@ -904,6 +908,7 @@ class ProcessStep {
         if (summary != null) 'summary': summary,
         'done': done,
         if (faviconDomains.isNotEmpty) 'faviconDomains': faviconDomains,
+        if (sourceUrls.isNotEmpty) 'sourceUrls': sourceUrls,
         if (foundImages.isNotEmpty) 'foundImages': foundImages,
       };
 
@@ -915,34 +920,55 @@ class ProcessStep {
         faviconDomains: (j['faviconDomains'] is List)
             ? (j['faviconDomains'] as List).map((e) => e.toString()).toList()
             : const [],
+        sourceUrls: (j['sourceUrls'] is List)
+            ? (j['sourceUrls'] as List).map((e) => e.toString()).toList()
+            : const [],
         foundImages: (j['foundImages'] is List)
             ? (j['foundImages'] as List).whereType<Map<String, dynamic>>().toList()
             : const [],
       );
 }
 
-List<String> extractVisitedDomains(String toolName, Map<String, dynamic> resultJson) {
-  final domains = <String>[];
-  void addFromUrl(String? url) {
+/// Extrai a lista de URLs completos visitados/citados num
+/// resultado de tool de pesquisa. Usada em dois sítios: gera os
+/// favicons em miniatura dentro do passo do processo (só os
+/// primeiros 6, por espaço visual) E alimenta a lista agregada de
+/// TODAS as fontes de uma resposta, mostrada no modal de Fontes
+/// (essa não corta em 6 — usa allSourceUrlsFromSegments sem limite).
+List<String> extractVisitedUrls(String toolName, Map<String, dynamic> resultJson) {
+  final urls = <String>[];
+  void addUrl(String? url) {
     if (url == null || url.isEmpty) return;
-    try {
-      final host = Uri.parse(url).host.replaceFirst('www.', '');
-      if (host.isNotEmpty && !domains.contains(host)) domains.add(host);
-    } catch (_) {}
+    if (!urls.contains(url)) urls.add(url);
   }
 
   if (toolName == 'web_search') {
     final results = resultJson['results'];
     if (results is List) {
       for (final r in results) {
-        if (r is Map) addFromUrl(r['url']?.toString() ?? r['link']?.toString());
+        if (r is Map) addUrl(r['url']?.toString() ?? r['link']?.toString());
       }
     }
   } else if (toolName == 'read_website') {
-    addFromUrl(resultJson['url']?.toString());
+    addUrl(resultJson['url']?.toString());
   }
 
-  return domains.take(6).toList();
+  return urls;
+}
+
+/// Só os domínios (host, sem "www.") dos primeiros N urls — usado
+/// para os favicons em miniatura dentro do passo do processo, onde
+/// o espaço visual é limitado.
+List<String> urlsToFaviconDomains(List<String> urls, {int limit = 6}) {
+  final domains = <String>[];
+  for (final url in urls) {
+    try {
+      final host = Uri.parse(url).host.replaceFirst('www.', '');
+      if (host.isNotEmpty && !domains.contains(host)) domains.add(host);
+    } catch (_) {}
+    if (domains.length >= limit) break;
+  }
+  return domains;
 }
 
 String summaryForToolResult(String toolName, Map<String, dynamic> resultJson) {
@@ -1004,4 +1030,25 @@ class ProcessSegment extends ResponseSegment {
 class ImagesSegment extends ResponseSegment {
   final List<Map<String, dynamic>> images;
   ImagesSegment(this.images);
+}
+
+/// Agrega TODOS os sourceUrls de TODOS os ProcessStep de tipo
+/// web_search/read_website ao longo de uma resposta inteira — ao
+/// contrário de extractSources(text), que só lê o resumo final
+/// que a IA escreve no texto (e que pode ficar truncado a poucas
+/// entradas mesmo quando dezenas de páginas foram pesquisadas).
+/// Usada para alimentar o modal de Fontes com a lista completa e
+/// real do que foi efetivamente visitado.
+List<String> allSourceUrlsFromSegments(List<ResponseSegment> segments) {
+  final urls = <String>[];
+  for (final seg in segments) {
+    if (seg is ProcessSegment) {
+      for (final step in seg.steps) {
+        for (final url in step.sourceUrls) {
+          if (!urls.contains(url)) urls.add(url);
+        }
+      }
+    }
+  }
+  return urls;
 }

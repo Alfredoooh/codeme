@@ -1063,8 +1063,21 @@ class SourcesRow extends StatelessWidget {
   String _faviconUrl(String url) => 'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
 
   void _openSourcesModal(BuildContext context) {
-    showAppSheet<void>(
-      context,
+    // showModalBottomSheet nativo do Flutter — sem depender de
+    // showAppSheet. isScrollControlled: true é obrigatório para o
+    // DraggableScrollableSheet interno poder ocupar mais do que a
+    // altura default do bottom sheet.
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: s.cardBackground,
+      barrierColor: Colors.black.withOpacity(0.35),
+      isScrollControlled: true,
+      enableDrag: true,
+      isDismissible: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (sheetContext) => _SourcesModalContent(s: s, urls: urls),
     );
   }
@@ -1128,39 +1141,61 @@ class _SourcesModalContent extends StatelessWidget {
     return DraggableScrollableSheet(
       initialChildSize: 0.5,
       minChildSize: 0.3,
-      maxChildSize: 0.92,
+      // Quase ao statusbar — 0.95 deixa só uma margem mínima de
+      // segurança, já que useSafeArea: true no showModalBottomSheet
+      // já impede sobrepor a área do statusbar em si.
+      maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Text('Fontes',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
-            ),
-            Expanded(
-              child: ListView.separated(
-                controller: scrollController,
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                itemCount: urls.length,
-                separatorBuilder: (_, __) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Divider(
-                    height: 1,
-                    thickness: 0.6,
-                    color: s.outline.withOpacity(0.3),
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handlebar — antes desenhado automaticamente por
+              // showAppSheet, agora explícito já que chamamos
+              // showModalBottomSheet diretamente.
+              Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 4),
+                child: Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: s.onSurfaceVariant.withOpacity(0.35),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
-                itemBuilder: (_, i) {
-                  final url = urls[i];
-                  return _SourceModalRow(s: s, url: url);
-                },
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Text('Fontes',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  controller: scrollController,
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  itemCount: urls.length,
+                  separatorBuilder: (_, __) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Divider(
+                      height: 1,
+                      thickness: 0.6,
+                      color: s.outline.withOpacity(0.3),
+                    ),
+                  ),
+                  itemBuilder: (_, i) {
+                    final url = urls[i];
+                    return _SourceModalRow(s: s, url: url);
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1316,13 +1351,20 @@ class AssistantBubble extends StatelessWidget {
     }
 
     children.add(const SizedBox(height: 6));
+    // Fontes reais: agrega TODOS os sourceUrls de TODOS os passos
+    // de pesquisa da resposta (segments), não só o resumo que a IA
+    // escreveu no texto final — que pode ficar truncado a poucas
+    // entradas mesmo quando dezenas de páginas foram percorridas.
+    // Mantém extractSources(text) como fallback para mensagens
+    // antigas do histórico que não tenham segments guardados.
+    final aggregatedSources = allSourceUrlsFromSegments(segments);
     children.add(_AssistantActionBar(
       s: s,
       onThumbUp: onThumbUp,
       onThumbDown: onThumbDown,
       onCopy: onCopy,
       onRefresh: onRefresh,
-      sources: extractSources(text),
+      sources: aggregatedSources.isNotEmpty ? aggregatedSources : extractSources(text),
     ));
 
     return Align(

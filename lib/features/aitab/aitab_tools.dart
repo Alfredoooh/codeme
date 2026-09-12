@@ -229,8 +229,15 @@ class ToolExecutionOutcome {
 /// foundImages (para search_images) diretamente no passo, para que
 /// fiquem visíveis dentro do collapsible sem precisar de outro
 /// widget solto.
+///
+/// CORREÇÃO: passa a usar extractVisitedUrls (URLs completos, sem
+/// limite) e urlsToFaviconDomains (só os primeiros 6 domínios, para
+/// os favicons em miniatura). O campo sourceUrls fica preenchido
+/// com a lista completa — é essa que o modal de Fontes agrega via
+/// allSourceUrlsFromSegments, para nunca perder fontes.
 ProcessStep buildCompletedProcessStep(String toolName, Map<String, dynamic> resultJson) {
-  final domains = extractVisitedDomains(toolName, resultJson);
+  final urls = extractVisitedUrls(toolName, resultJson);
+  final domains = urlsToFaviconDomains(urls);
   final images = toolName == 'search_images' && resultJson['images'] is List
       ? (resultJson['images'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
       : <Map<String, dynamic>>[];
@@ -240,6 +247,7 @@ ProcessStep buildCompletedProcessStep(String toolName, Map<String, dynamic> resu
     summary: summaryForToolResult(toolName, resultJson),
     done: true,
     faviconDomains: domains,
+    sourceUrls: urls,
     foundImages: images,
   );
 }
