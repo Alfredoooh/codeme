@@ -246,6 +246,7 @@ class _RootShellState extends State<RootShell>
               trailing: AiConversationMenuButton(
                 s: s,
                 hasMessages: _hasMessages,
+                isIncognito: _aiTabKey.currentState?.isIncognito ?? false,
                 onSelect: _onConversationAction,
               ),
             );

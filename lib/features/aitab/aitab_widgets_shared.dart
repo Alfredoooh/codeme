@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_widgets_shared.dart
+// FILE: lib/features/aitab/aitab_widgets_shared.dart
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:math' as math;
@@ -721,12 +721,14 @@ class AiConversationMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final ValueChanged<ConversationAction> onSelect;
   final bool hasMessages;
+  final bool isIncognito;
 
   const AiConversationMenuButton({
     super.key,
     required this.s,
     required this.onSelect,
     required this.hasMessages,
+    this.isIncognito = false,
   });
 
   @override
@@ -734,6 +736,7 @@ class AiConversationMenuButton extends StatelessWidget {
     return _HeaderMenuButton(
       s: s,
       hasMessages: hasMessages,
+      isIncognito: isIncognito,
       onSelect: onSelect,
     );
   }
@@ -746,11 +749,13 @@ class AiConversationMenuButton extends StatelessWidget {
 class _HeaderMenuButton extends StatelessWidget {
   final AppColorScheme s;
   final bool hasMessages;
+  final bool isIncognito;
   final ValueChanged<ConversationAction> onSelect;
 
   const _HeaderMenuButton({
     required this.s,
     required this.hasMessages,
+    required this.isIncognito,
     required this.onSelect,
   });
 
@@ -777,6 +782,7 @@ class _HeaderMenuButton extends StatelessWidget {
           anchorSize: anchorSize,
           overlaySize: overlayBox.size,
           hasMessages: hasMessages,
+          isIncognito: isIncognito,
         );
 
         if (result != null) onSelect(result);
@@ -798,6 +804,7 @@ Future<ConversationAction?> _showHeaderPopupMenu(
   required Size anchorSize,
   required Size overlaySize,
   required bool hasMessages,
+  required bool isIncognito,
 }) {
   const double popupWidth = 220.0;
   const double gap = 6.0;
@@ -843,8 +850,7 @@ Future<ConversationAction?> _showHeaderPopupMenu(
                     children: [
                       _buildHeaderMenuItem(dialogCtx, s,
                           ConversationAction.newChat, false, false),
-                      _buildHeaderMenuItem(dialogCtx, s,
-                          ConversationAction.incognito, false, hasMessages),
+                      _buildIncognitoMenuItem(dialogCtx, s, isIncognito, hasMessages),
                       _buildHeaderMenuItem(dialogCtx, s,
                           ConversationAction.rename, false, false),
                       _buildHeaderMenuItem(dialogCtx, s,
@@ -922,12 +928,55 @@ Widget _buildHeaderMenuItem(
   );
 }
 
+// Item de incógnito com estado "filled" quando ativo: fundo com a
+// cor primária no tema claro, branco puro no tema escuro.
+Widget _buildIncognitoMenuItem(
+  BuildContext context,
+  AppColorScheme s,
+  bool isIncognito,
+  bool disabled,
+) {
+  final Color? fillColor = isIncognito
+      ? (s.isDark ? Colors.white : s.primary)
+      : null;
+  final Color contentColor = disabled
+      ? s.onSurfaceVariant.withOpacity(0.4)
+      : isIncognito
+          ? (s.isDark ? Colors.black : Colors.white)
+          : s.onSurface;
+
+  return InkWell(
+    onTap: disabled
+        ? null
+        : () {
+            HapticFeedback.lightImpact();
+            Navigator.of(context).pop(ConversationAction.incognito);
+          },
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: fillColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          AppIcon(ConversationAction.incognito.assetName, size: 18, color: contentColor),
+          const SizedBox(width: 10),
+          Text(
+            ConversationAction.incognito.label,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: contentColor),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // POPUP DE OPÇÕES DO INPUT BAR
-// (Canvas / Pesquisar web / Competências) — mesmo padrão visual
-// e de animação do popup de opções do cabeçalho
-// (_showHeaderPopupMenu), ancorado ao botão que o abriu, em vez
-// de bottom sheet.
+// (Canvas / Pesquisar web / Competências).
 // ══════════════════════════════════════════════════════════════
 
 enum InputBarOption { canvas, webSearch, widgets }
@@ -1108,9 +1157,7 @@ class _CustomSwitchSmall extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// POPUP DE AÇÕES DE MENSAGEM — mesmo padrão (showGeneralDialog +
-// Positioned + ScaleTransition) do _showHeaderPopupMenu. Deixou
-// de usar showMenu nativo.
+// POPUP DE AÇÕES DE MENSAGEM
 // ══════════════════════════════════════════════════════════════
 
 void showMessageActionsPopup(
@@ -1227,9 +1274,6 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
   );
 }
 
-// Versão com InkWell + Navigator.pop(value) — necessária porque
-// showGeneralDialog não fecha nem devolve valor automaticamente ao
-// tocar, ao contrário de PopupMenuItem dentro de showMenu.
 Widget _buildMessageMenuItemTappable(
   BuildContext context,
   AppColorScheme s,

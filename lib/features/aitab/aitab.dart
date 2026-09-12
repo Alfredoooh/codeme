@@ -94,6 +94,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool get widgetsEnabled => _widgetsEnabled;
   bool get webSearchEnabled => _webSearchEnabled;
   String? get conversationId => _conversationId;
+  bool get isIncognito => _incognito;
 
   bool get _hasMessages => _msgs.isNotEmpty;
 
@@ -118,11 +119,10 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     'get_weather',
   };
 
-  List<ToolDefinition> get _availableTools {
-    if (!_incognito) return kAllTools;
-    return kAllTools
-        .where((t) => !_webDependentToolNames.contains(t.name))
-        .toList();
+  List<ToolDefinition>? _filterToolsForIncognito(List<ToolDefinition>? tools) {
+    if (tools == null || !_incognito) return tools;
+    final filtered = tools.where((t) => !_webDependentToolNames.contains(t.name)).toList();
+    return filtered.isEmpty ? null : filtered;
   }
 
   @override
@@ -382,7 +382,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       provider: _model.provider(thinkingEnabled: thinkingMode.enabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
-      tools: _availableTools,
+      tools: _filterToolsForIncognito(kAllTools),
     ).listen(
       (event) => _handleStreamEvent(event, isFirst, originalUserText, historyWithToolResults),
       onError: (e) => _handleStreamError(e),
@@ -451,7 +451,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       provider: _model.provider(thinkingEnabled: thinkingMode.enabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
-      tools: _widgetsEnabled ? _availableTools : null,
+      tools: _filterToolsForIncognito(_widgetsEnabled ? kAllTools : null),
     ).listen(
       (event) => _handleStreamEvent(event, isFirst, t, _msgs),
       onError: (e) => _handleStreamError(e),
