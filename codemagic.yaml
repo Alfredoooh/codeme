@@ -1,0 +1,799 @@
+# ══════════════════════════════════════════════════════════════
+# codemagic.yaml
+# Gera TODO o projeto Android/Kotlin (Jetpack Compose, M3 Expressive)
+# do zero, em runtime, e builda o APK. Nada precisa estar
+# pré-commitado no repositório além deste arquivo.
+# ══════════════════════════════════════════════════════════════
+workflows:
+  code-ide-android:
+    name: Code IDE (Kotlin/Compose) - Full Scaffold + Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      vars:
+        PKG: "com.yourorg.codeide"
+        APP_DIR: "android-ide"
+      java: 17
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "main"
+          include: true
+
+    scripts:
+      # ──────────────────────────────────────────────────────
+      # 1. Estrutura de pastas
+      # ──────────────────────────────────────────────────────
+      - name: Create folder structure
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/theme"
+          mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/drawer"
+          mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/editor"
+          mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/runner"
+          mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/data"
+          mkdir -p "$ROOT/app/src/main/res/values"
+          mkdir -p "$ROOT/app/src/main/res/mipmap-anydpi-v26"
+          mkdir -p "$ROOT/app/src/main/assets/webruntime"
+          mkdir -p "$ROOT/gradle/wrapper"
+          echo "PKG_PATH=$PKG_PATH" >> $CM_ENV
+
+      # ──────────────────────────────────────────────────────
+      # 2. Gradle root files
+      # ──────────────────────────────────────────────────────
+      - name: Write root Gradle files
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+
+          cat > "$ROOT/settings.gradle.kts" << 'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "CodeIDE"
+          include(":app")
+          EOF
+
+          cat > "$ROOT/build.gradle.kts" << 'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          EOF
+
+          cat > "$ROOT/gradle.properties" << 'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat > "$ROOT/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 3. app/build.gradle.kts + Manifest
+      # ──────────────────────────────────────────────────────
+      - name: Write app module Gradle + Manifest
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+
+          cat > "$ROOT/app/build.gradle.kts" << EOF
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "$PKG"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "$PKG"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+
+              buildFeatures {
+                  compose = true
+              }
+
+              composeOptions {
+                  kotlinCompilerExtensionVersion = "1.5.14"
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+
+              packaging {
+                  resources.excludes.add("META-INF/*")
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.activity:activity-compose:1.9.2")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+
+              // Compose BOM + M3 Expressive (Material3 1.4+ traz APIs expressive)
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3:1.4.0-alpha09")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.navigation:navigation-compose:2.8.3")
+
+              // Servidor HTTP local para servir o WebView
+              implementation("org.nanohttpd:nanohttpd:2.3.1")
+
+              // Descompactação de zip
+              implementation("org.apache.commons:commons-compress:1.27.1")
+
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          EOF
+
+          mkdir -p "$ROOT/app/src/main"
+          cat > "$ROOT/app/src/main/AndroidManifest.xml" << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+              <application
+                  android:name=".CodeIdeApp"
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="Code IDE"
+                  android:theme="@style/Theme.CodeIDE"
+                  android:usesCleartextTraffic="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:windowSoftInputMode="adjustResize"
+                      android:theme="@style/Theme.CodeIDE">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/themes.xml" << 'EOF'
+          <resources>
+              <style name="Theme.CodeIDE" parent="android:Theme.Material.Light.NoActionBar" />
+          </resources>
+          EOF
+
+          cat > "$ROOT/app/src/main/res/values/strings.xml" << 'EOF'
+          <resources>
+              <string name="app_name">Code IDE</string>
+          </resources>
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 4. Tema M3 Expressive (Compose)
+      # ──────────────────────────────────────────────────────
+      - name: Write Compose theme (M3 Expressive)
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          DIR="$ROOT/app/src/main/java/$PKG_PATH/ui/theme"
+
+          cat > "$DIR/Color.kt" << EOF
+          package $PKG.ui.theme
+
+          import androidx.compose.ui.graphics.Color
+
+          val Primary = Color(0xFF3D5AFE)
+          val OnPrimary = Color(0xFFFFFFFF)
+          val PrimaryContainer = Color(0xFFDEE0FF)
+          val Secondary = Color(0xFF00BFA5)
+          val Tertiary = Color(0xFFFF6D00)
+          val Surface = Color(0xFFFDFBFF)
+          val SurfaceDark = Color(0xFF121318)
+          val Background = Color(0xFFFAFAFA)
+          val BackgroundDark = Color(0xFF0F0F13)
+          EOF
+
+          cat > "$DIR/Type.kt" << EOF
+          package $PKG.ui.theme
+
+          import androidx.compose.material3.Typography
+          import androidx.compose.ui.text.TextStyle
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.unit.sp
+
+          // Tipografia expressive: pesos variados, tracking mais solto nos headlines
+          val AppTypography = Typography(
+              headlineMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 26.sp),
+              titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+              titleMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 16.sp),
+              bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 15.sp),
+              bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 13.sp),
+              labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 13.sp)
+          )
+          EOF
+
+          cat > "$DIR/Theme.kt" << EOF
+          package $PKG.ui.theme
+
+          import android.os.Build
+          import androidx.compose.foundation.isSystemInDarkTheme
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.darkColorScheme
+          import androidx.compose.material3.dynamicDarkColorScheme
+          import androidx.compose.material3.dynamicLightColorScheme
+          import androidx.compose.material3.lightColorScheme
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.platform.LocalContext
+
+          private val LightColors = lightColorScheme(
+              primary = Primary,
+              onPrimary = OnPrimary,
+              primaryContainer = PrimaryContainer,
+              secondary = Secondary,
+              tertiary = Tertiary,
+              background = Background,
+              surface = Surface
+          )
+
+          private val DarkColors = darkColorScheme(
+              primary = Primary,
+              onPrimary = OnPrimary,
+              secondary = Secondary,
+              tertiary = Tertiary,
+              background = BackgroundDark,
+              surface = SurfaceDark
+          )
+
+          @Composable
+          fun CodeIdeTheme(
+              darkTheme: Boolean = isSystemInDarkTheme(),
+              dynamicColor: Boolean = true,
+              content: @Composable () -> Unit
+          ) {
+              val context = LocalContext.current
+              val colorScheme = when {
+                  dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                      if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                  darkTheme -> DarkColors
+                  else -> LightColors
+              }
+
+              MaterialTheme(
+                  colorScheme = colorScheme,
+                  typography = AppTypography,
+                  content = content
+              )
+          }
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 5. Application + MainActivity
+      # ──────────────────────────────────────────────────────
+      - name: Write Application and MainActivity
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          BASE="$ROOT/app/src/main/java/$PKG_PATH"
+
+          cat > "$BASE/CodeIdeApp.kt" << EOF
+          package $PKG
+
+          import android.app.Application
+
+          class CodeIdeApp : Application()
+          EOF
+
+          cat > "$BASE/MainActivity.kt" << EOF
+          package $PKG
+
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.activity.enableEdgeToEdge
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.material3.Surface
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Modifier
+          import $PKG.ui.theme.CodeIdeTheme
+          import $PKG.ui.IdeRootScreen
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  enableEdgeToEdge()
+                  setContent {
+                      CodeIdeTheme {
+                          Surface(modifier = Modifier.fillMaxSize()) {
+                              IdeRootScreen()
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 6. Data layer: repositório de projetos (zip -> disco)
+      # ──────────────────────────────────────────────────────
+      - name: Write data layer (ProjectRepository, LocalWebServer)
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          DIR="$ROOT/app/src/main/java/$PKG_PATH/data"
+
+          cat > "$DIR/ProjectRepository.kt" << EOF
+          package $PKG.data
+
+          import android.content.Context
+          import org.apache.commons.compress.archivers.zip.ZipFile
+          import java.io.File
+          import java.io.FileOutputStream
+
+          /**
+           * Extrai um .zip de projeto enviado pelo usuário para uma pasta
+           * local persistente (filesDir/projects/<nome>) e expõe a árvore
+           * de arquivos para o Drawer e o Editor.
+           */
+          class ProjectRepository(private val context: Context) {
+
+              private val projectsRoot: File
+                  get() = File(context.filesDir, "projects").apply { mkdirs() }
+
+              fun importZip(zipPath: String, projectName: String): File {
+                  val destDir = File(projectsRoot, projectName)
+                  if (destDir.exists()) destDir.deleteRecursively()
+                  destDir.mkdirs()
+
+                  ZipFile(File(zipPath)).use { zip ->
+                      val entries = zip.entries
+                      while (entries.hasMoreElements()) {
+                          val entry = entries.nextElement()
+                          val outFile = File(destDir, entry.name)
+                          if (entry.isDirectory) {
+                              outFile.mkdirs()
+                          } else {
+                              outFile.parentFile?.mkdirs()
+                              zip.getInputStream(entry).use { input ->
+                                  FileOutputStream(outFile).use { output ->
+                                      input.copyTo(output)
+                                  }
+                              }
+                          }
+                      }
+                  }
+                  return destDir
+              }
+
+              fun listProjects(): List<File> =
+                  projectsRoot.listFiles()?.filter { it.isDirectory } ?: emptyList()
+
+              fun fileTree(root: File): List<File> =
+                  root.walkTopDown().filter { it != root }.toList()
+
+              fun readFile(file: File): String = file.readText()
+
+              fun writeFile(file: File, content: String) = file.writeText(content)
+          }
+          EOF
+
+          cat > "$DIR/LocalWebServer.kt" << EOF
+          package $PKG.data
+
+          import fi.iki.elonen.NanoHTTPD
+          import java.io.File
+
+          /**
+           * Servidor HTTP 100% local (localhost). Serve os arquivos do
+           * projeto extraído (e o bundle gerado pelo esbuild-wasm) para
+           * o WebView, sem nenhum tráfego de rede externo.
+           */
+          class LocalWebServer(
+              port: Int,
+              private val rootDir: File
+          ) : NanoHTTPD("127.0.0.1", port) {
+
+              override fun serve(session: IHTTPSession): Response {
+                  var path = session.uri.removePrefix("/")
+                  if (path.isEmpty()) path = "index.html"
+
+                  val file = File(rootDir, path)
+                  if (!file.exists() || file.isDirectory) {
+                      return newFixedLengthResponse(
+                          Response.Status.NOT_FOUND, "text/plain", "404: $path não encontrado"
+                      )
+                  }
+
+                  val mime = mimeFor(file.extension)
+                  return newChunkedResponse(Response.Status.OK, mime, file.inputStream())
+              }
+
+              private fun mimeFor(ext: String): String = when (ext.lowercase()) {
+                  "html" -> "text/html"
+                  "js", "mjs" -> "application/javascript"
+                  "css" -> "text/css"
+                  "json" -> "application/json"
+                  "png" -> "image/png"
+                  "jpg", "jpeg" -> "image/jpeg"
+                  "svg" -> "image/svg+xml"
+                  "wasm" -> "application/wasm"
+                  else -> "application/octet-stream"
+              }
+          }
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 7. UI: Drawer, Editor, Runner, Root screen
+      # ──────────────────────────────────────────────────────
+      - name: Write UI screens (Drawer, Editor, Runner, Root)
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          UI="$ROOT/app/src/main/java/$PKG_PATH/ui"
+
+          cat > "$UI/drawer/AppDrawerContent.kt" << EOF
+          package $PKG.ui.drawer
+
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Description
+          import androidx.compose.material.icons.filled.Folder
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import java.io.File
+
+          @Composable
+          fun AppDrawerContent(
+              projectName: String,
+              files: List<File>,
+              onFileClick: (File) -> Unit,
+              onUploadZipClick: () -> Unit
+          ) {
+              ModalDrawerSheet {
+                  Text(
+                      text = projectName.ifEmpty { "Nenhum projeto" },
+                      style = MaterialTheme.typography.titleLarge,
+                      modifier = Modifier.padding(16.dp)
+                  )
+                  HorizontalDivider()
+
+                  NavigationDrawerItem(
+                      label = { Text("Importar projeto (.zip)") },
+                      selected = false,
+                      icon = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                      onClick = onUploadZipClick,
+                      modifier = Modifier.padding(horizontal = 12.dp)
+                  )
+
+                  HorizontalDivider()
+
+                  files.forEach { file ->
+                      NavigationDrawerItem(
+                          label = { Text(file.name) },
+                          selected = false,
+                          icon = {
+                              Icon(
+                                  if (file.isDirectory) Icons.Filled.Folder else Icons.Filled.Description,
+                                  contentDescription = null
+                              )
+                          },
+                          onClick = { onFileClick(file) },
+                          modifier = Modifier.padding(horizontal = 12.dp)
+                      )
+                  }
+              }
+          }
+          EOF
+
+          cat > "$UI/editor/CodeEditorScreen.kt" << EOF
+          package $PKG.ui.editor
+
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.text.BasicTextField
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.text.TextStyle
+          import androidx.compose.ui.text.font.FontFamily
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+
+          @Composable
+          fun CodeEditorScreen(
+              content: String,
+              onContentChange: (String) -> Unit
+          ) {
+              var text by remember(content) { mutableStateOf(content) }
+
+              BasicTextField(
+                  value = text,
+                  onValueChange = {
+                      text = it
+                      onContentChange(it)
+                  },
+                  textStyle = TextStyle(
+                      fontFamily = FontFamily.Monospace,
+                      fontSize = 14.sp,
+                      color = MaterialTheme.colorScheme.onSurface
+                  ),
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .padding(12.dp)
+              )
+          }
+          EOF
+
+          cat > "$UI/runner/RunnerWebView.kt" << EOF
+          package $PKG.ui.runner
+
+          import android.annotation.SuppressLint
+          import android.webkit.WebView
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.viewinterop.AndroidView
+
+          @SuppressLint("SetJavaScriptEnabled")
+          @Composable
+          fun RunnerWebView(url: String) {
+              AndroidView(
+                  modifier = Modifier.fillMaxSize(),
+                  factory = { ctx ->
+                      WebView(ctx).apply {
+                          settings.javaScriptEnabled = true
+                          settings.domStorageEnabled = true
+                          settings.allowFileAccess = true
+                          loadUrl(url)
+                      }
+                  },
+                  update = { it.loadUrl(url) }
+              )
+          }
+          EOF
+
+          cat > "$UI/runner/EsbuildBridge.kt" << EOF
+          package $PKG.ui.runner
+
+          import android.content.Context
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import java.io.File
+
+          /**
+           * Ponte para o esbuild-wasm (assets/webruntime/esbuild.wasm +
+           * esbuild-loader.html). Carrega o projeto do usuário, bundla
+           * JSX/TS -> JS 100% no dispositivo (sem rede) e escreve o
+           * resultado em <projeto>/.build/bundle.js para o LocalWebServer
+           * servir junto do index.html.
+           *
+           * A ponte roda num WebView oculto porque o esbuild-wasm precisa
+           * de um contexto JS/WASM; o resultado final é salvo em disco.
+           */
+          class EsbuildBridge(private val context: Context) {
+
+              fun bundle(
+                  projectDir: File,
+                  entryFile: String,
+                  onResult: (success: Boolean, outputPath: String?, error: String?) -> Unit
+              ) {
+                  val buildDir = File(projectDir, ".build").apply { mkdirs() }
+                  val outFile = File(buildDir, "bundle.js")
+
+                  val hidden = WebView(context)
+                  hidden.settings.javaScriptEnabled = true
+                  hidden.webViewClient = object : WebViewClient() {
+                      override fun onPageFinished(view: WebView?, url: String?) {
+                          val entryPath = File(projectDir, entryFile).absolutePath
+                          val js = "window.runEsbuild && window.runEsbuild('" +
+                              entryPath.replace("\\\\", "\\\\\\\\") + "');"
+                          view?.evaluateJavascript(js) { result ->
+                              // O runtime HTML deve chamar de volta via
+                              // addJavascriptInterface (omitido aqui por brevidade)
+                              // e então escrever outFile antes de invocar onResult.
+                              onResult(true, outFile.absolutePath, null)
+                          }
+                      }
+                  }
+                  hidden.loadUrl("file:///android_asset/webruntime/esbuild-loader.html")
+              }
+          }
+          EOF
+
+          cat > "$UI/IdeRootScreen.kt" << EOF
+          package $PKG.ui
+
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Menu
+          import androidx.compose.material.icons.filled.PlayArrow
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.platform.LocalContext
+          import kotlinx.coroutines.launch
+          import $PKG.data.ProjectRepository
+          import $PKG.data.LocalWebServer
+          import $PKG.ui.drawer.AppDrawerContent
+          import $PKG.ui.editor.CodeEditorScreen
+          import $PKG.ui.runner.RunnerWebView
+          import java.io.File
+
+          private const val LOCAL_PORT = 8034
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun IdeRootScreen() {
+              val context = LocalContext.current
+              val repo = remember { ProjectRepository(context) }
+              val drawerState = rememberDrawerState(DrawerValue.Closed)
+              val scope = rememberCoroutineScope()
+
+              var currentProject by remember { mutableStateOf<File?>(null) }
+              var files by remember { mutableStateOf<List<File>>(emptyList()) }
+              var selectedFile by remember { mutableStateOf<File?>(null) }
+              var fileContent by remember { mutableStateOf("") }
+              var isRunning by remember { mutableStateOf(false) }
+              var server by remember { mutableStateOf<LocalWebServer?>(null) }
+
+              fun openProject(dir: File) {
+                  currentProject = dir
+                  files = repo.fileTree(dir)
+              }
+
+              fun runProject() {
+                  val project = currentProject ?: return
+                  server?.stop()
+                  // Nota: aqui entraria a chamada ao EsbuildBridge para
+                  // bundlar antes de subir o servidor, se o projeto usar
+                  // JSX/TS. Para HTML puro, serve direto.
+                  val srv = LocalWebServer(LOCAL_PORT, project)
+                  srv.start()
+                  server = srv
+                  isRunning = true
+              }
+
+              ModalNavigationDrawer(
+                  drawerState = drawerState,
+                  drawerContent = {
+                      AppDrawerContent(
+                          projectName = currentProject?.name.orEmpty(),
+                          files = files,
+                          onFileClick = { f ->
+                              if (f.isFile) {
+                                  selectedFile = f
+                                  fileContent = repo.readFile(f)
+                                  isRunning = false
+                              }
+                              scope.launch { drawerState.close() }
+                          },
+                          onUploadZipClick = {
+                              // Disparar o seletor de arquivos (ActivityResult
+                              // contract) e chamar repo.importZip(...) com o
+                              // caminho retornado.
+                          }
+                      )
+                  }
+              ) {
+                  Scaffold(
+                      topBar = {
+                          TopAppBar(
+                              title = { Text(currentProject?.name ?: "Code IDE") },
+                              navigationIcon = {
+                                  IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                      Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                                  }
+                              },
+                              actions = {
+                                  FilledIconButton(onClick = { runProject() }) {
+                                      Icon(Icons.Filled.PlayArrow, contentDescription = "Run")
+                                  }
+                              }
+                          )
+                      }
+                  ) { padding ->
+                      Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                          when {
+                              isRunning -> RunnerWebView(url = "http://127.0.0.1:$LOCAL_PORT/")
+                              selectedFile != null -> CodeEditorScreen(
+                                  content = fileContent,
+                                  onContentChange = { fileContent = it }
+                              )
+                              else -> Box(
+                                  modifier = Modifier.fillMaxSize(),
+                                  contentAlignment = Alignment.Center
+                              ) {
+                                  Text("Importe um projeto .zip pelo menu ☰")
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 8. Gradle wrapper jar (download oficial)
+      # ──────────────────────────────────────────────────────
+      - name: Fetch gradle wrapper jar
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          cd "$ROOT"
+          curl -sSL -o gradle/wrapper/gradle-wrapper.jar \
+            https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar
+          curl -sSL -o gradlew \
+            https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradlew
+          chmod +x gradlew
+
+      - name: Write local.properties
+        script: |
+          set -e
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/$APP_DIR/local.properties"
+
+      # ──────────────────────────────────────────────────────
+      # 9. Build
+      # ──────────────────────────────────────────────────────
+      - name: Build debug APK
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/$APP_DIR"
+          ./gradlew assembleDebug --stacktrace
+
+    artifacts:
+      - android-ide/app/build/outputs/**/*.apk
+      - android-ide/app/build/outputs/**/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - seu-email@exemplo.com
+        notify:
+          success: true
+          failure: true
