@@ -7,7 +7,7 @@
 workflows:
   code-ide-android:
     name: Code IDE (Kotlin/Compose) - Full Scaffold + Build
-    max_build_duration: 60
+    max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
       vars:
@@ -34,11 +34,15 @@ workflows:
           mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/drawer"
           mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/editor"
           mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/runner"
+          mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/ui/settings"
           mkdir -p "$ROOT/app/src/main/java/$PKG_PATH/data"
           mkdir -p "$ROOT/app/src/main/res/values"
           mkdir -p "$ROOT/app/src/main/res/mipmap-anydpi-v26"
           mkdir -p "$ROOT/app/src/main/res/drawable"
           mkdir -p "$ROOT/app/src/main/assets/webruntime"
+          mkdir -p "$ROOT/app/src/main/assets/templates/html_basic"
+          mkdir -p "$ROOT/app/src/main/assets/templates/react_basic/src"
+          mkdir -p "$ROOT/app/src/main/assets/templates/ts_basic/src"
           mkdir -p "$ROOT/gradle/wrapper"
           echo "PKG_PATH=$PKG_PATH" >> $CM_ENV
 
@@ -73,6 +77,7 @@ workflows:
           plugins {
               id("com.android.application") version "8.5.2" apply false
               id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+              id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24" apply false
           }
           EOF
 
@@ -103,6 +108,7 @@ workflows:
           plugins {
               id("com.android.application")
               id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.serialization")
           }
 
           android {
@@ -155,8 +161,11 @@ workflows:
               implementation("androidx.compose.ui:ui-graphics")
               implementation("androidx.compose.ui:ui-tooling-preview")
               implementation("androidx.compose.material3:material3:1.4.0-alpha09")
-              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.compose.material:material-icons-extended:1.7.5")
               implementation("androidx.navigation:navigation-compose:2.8.3")
+
+              implementation("androidx.datastore:datastore-preferences:1.1.1")
+              implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
               implementation("org.nanohttpd:nanohttpd:2.3.1")
               implementation("org.apache.commons:commons-compress:1.27.1")
@@ -172,6 +181,8 @@ workflows:
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
               <application
                   android:name=".CodeIdeApp"
@@ -209,7 +220,7 @@ workflows:
           EOF
 
       # ──────────────────────────────────────────────────────
-      # 4. Ícone do app (adaptive icon, 100% vetor, sem PNG)
+      # 4. Ícone do app (adaptive icon, 100% vetor)
       # ──────────────────────────────────────────────────────
       - name: Write app icon (adaptive vector)
         script: |
@@ -217,55 +228,28 @@ workflows:
           ROOT="$CM_BUILD_DIR/$APP_DIR"
           RES="$ROOT/app/src/main/res"
 
-          mkdir -p "$RES/mipmap-anydpi-v26"
-          mkdir -p "$RES/drawable"
-          mkdir -p "$RES/values"
-
-          cat > "$RES/values/ic_launcher_background.xml" << 'EOF'
-          <resources>
-              <color name="ic_launcher_background">#3D5AFE</color>
-          </resources>
-          EOF
-
           cat > "$RES/drawable/ic_launcher_background.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#3D5AFE"
-                  android:pathData="M0,0h108v108h-108z" />
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#3D5AFE" android:pathData="M0,0h108v108h-108z" />
           </vector>
           EOF
 
           cat > "$RES/drawable/ic_launcher_foreground.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#00000000"
-                  android:strokeColor="#FFFFFF"
-                  android:strokeWidth="6"
-                  android:strokeLineCap="round"
-                  android:strokeLineJoin="round"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#00000000" android:strokeColor="#FFFFFF"
+                  android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round"
                   android:pathData="M35,40 L20,54 L35,68" />
-              <path
-                  android:fillColor="#00000000"
-                  android:strokeColor="#FFFFFF"
-                  android:strokeWidth="6"
-                  android:strokeLineCap="round"
-                  android:strokeLineJoin="round"
+              <path android:fillColor="#00000000" android:strokeColor="#FFFFFF"
+                  android:strokeWidth="6" android:strokeLineCap="round" android:strokeLineJoin="round"
                   android:pathData="M73,40 L88,54 L73,68" />
-              <path
-                  android:fillColor="#00000000"
-                  android:strokeColor="#FFFFFF"
-                  android:strokeWidth="6"
-                  android:strokeLineCap="round"
+              <path android:fillColor="#00000000" android:strokeColor="#FFFFFF"
+                  android:strokeWidth="6" android:strokeLineCap="round"
                   android:pathData="M62,32 L46,76" />
           </vector>
           EOF
@@ -287,9 +271,9 @@ workflows:
           EOF
 
       # ──────────────────────────────────────────────────────
-      # 5. Tema M3 Expressive (Compose)
+      # 5. Tema M3 Expressive (Compose) — claro + escuro
       # ──────────────────────────────────────────────────────
-      - name: Write Compose theme (M3 Expressive)
+      - name: Write Compose theme (M3 Expressive, light+dark)
         script: |
           set -e
           ROOT="$CM_BUILD_DIR/$APP_DIR"
@@ -304,12 +288,16 @@ workflows:
           val Primary = Color(0xFF3D5AFE)
           val OnPrimary = Color(0xFFFFFFFF)
           val PrimaryContainer = Color(0xFFDEE0FF)
+          val OnPrimaryContainer = Color(0xFF00107A)
           val Secondary = Color(0xFF00BFA5)
           val Tertiary = Color(0xFFFF6D00)
           val Surface = Color(0xFFFDFBFF)
+          val OnSurface = Color(0xFF1B1B1F)
           val SurfaceDark = Color(0xFF121318)
+          val OnSurfaceDark = Color(0xFFE4E1E9)
           val Background = Color(0xFFFAFAFA)
           val BackgroundDark = Color(0xFF0F0F13)
+          val SurfaceVariantDark = Color(0xFF1E2027)
           EOF
 
           cat > "$DIR/Type.kt" << EOF
@@ -334,7 +322,6 @@ workflows:
           package $PKG.ui.theme
 
           import android.os.Build
-          import androidx.compose.foundation.isSystemInDarkTheme
           import androidx.compose.material3.MaterialTheme
           import androidx.compose.material3.darkColorScheme
           import androidx.compose.material3.dynamicDarkColorScheme
@@ -342,32 +329,34 @@ workflows:
           import androidx.compose.material3.lightColorScheme
           import androidx.compose.runtime.Composable
           import androidx.compose.ui.platform.LocalContext
+          import $PKG.data.AppThemeMode
 
           private val LightColors = lightColorScheme(
-              primary = Primary,
-              onPrimary = OnPrimary,
-              primaryContainer = PrimaryContainer,
-              secondary = Secondary,
-              tertiary = Tertiary,
-              background = Background,
-              surface = Surface
+              primary = Primary, onPrimary = OnPrimary,
+              primaryContainer = PrimaryContainer, onPrimaryContainer = OnPrimaryContainer,
+              secondary = Secondary, tertiary = Tertiary,
+              background = Background, surface = Surface, onSurface = OnSurface
           )
 
           private val DarkColors = darkColorScheme(
-              primary = Primary,
-              onPrimary = OnPrimary,
-              secondary = Secondary,
-              tertiary = Tertiary,
-              background = BackgroundDark,
-              surface = SurfaceDark
+              primary = Primary, onPrimary = OnPrimary,
+              secondary = Secondary, tertiary = Tertiary,
+              background = BackgroundDark, surface = SurfaceDark, onSurface = OnSurfaceDark,
+              surfaceVariant = SurfaceVariantDark
           )
 
           @Composable
           fun CodeIdeTheme(
-              darkTheme: Boolean = isSystemInDarkTheme(),
-              dynamicColor: Boolean = true,
+              themeMode: AppThemeMode,
+              systemDark: Boolean,
+              dynamicColor: Boolean = false,
               content: @Composable () -> Unit
           ) {
+              val darkTheme = when (themeMode) {
+                  AppThemeMode.LIGHT -> false
+                  AppThemeMode.DARK -> true
+                  AppThemeMode.SYSTEM -> systemDark
+              }
               val context = LocalContext.current
               val colorScheme = when {
                   dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
@@ -385,48 +374,99 @@ workflows:
           EOF
 
       # ──────────────────────────────────────────────────────
-      # 6. Application + MainActivity
+      # 6. Data layer: preferências (tema + projetos persistidos)
       # ──────────────────────────────────────────────────────
-      - name: Write Application and MainActivity
+      - name: Write PreferencesRepository (theme + saved projects)
         script: |
           set -e
           ROOT="$CM_BUILD_DIR/$APP_DIR"
           PKG_PATH=$(echo "$PKG" | tr '.' '/')
-          BASE="$ROOT/app/src/main/java/$PKG_PATH"
+          DIR="$ROOT/app/src/main/java/$PKG_PATH/data"
 
-          cat > "$BASE/CodeIdeApp.kt" << EOF
-          package $PKG
+          cat > "$DIR/PreferencesRepository.kt" << EOF
+          package $PKG.data
 
-          import android.app.Application
+          import android.content.Context
+          import androidx.datastore.preferences.core.*
+          import androidx.datastore.preferences.preferencesDataStore
+          import kotlinx.coroutines.flow.Flow
+          import kotlinx.coroutines.flow.map
+          import kotlinx.serialization.Serializable
+          import kotlinx.serialization.encodeToString
+          import kotlinx.serialization.decodeFromString
+          import kotlinx.serialization.json.Json
 
-          class CodeIdeApp : Application()
-          EOF
+          private val Context.dataStore by preferencesDataStore(name = "code_ide_prefs")
 
-          cat > "$BASE/MainActivity.kt" << EOF
-          package $PKG
+          enum class AppThemeMode { LIGHT, DARK, SYSTEM }
 
-          import android.os.Bundle
-          import androidx.activity.ComponentActivity
-          import androidx.activity.compose.setContent
-          import androidx.activity.enableEdgeToEdge
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.material3.Surface
-          import androidx.compose.runtime.Composable
-          import androidx.compose.ui.Modifier
-          import $PKG.ui.theme.CodeIdeTheme
-          import $PKG.ui.IdeRootScreen
+          @Serializable
+          data class SavedProject(
+              val name: String,
+              val path: String,
+              val importedAt: Long = System.currentTimeMillis()
+          )
 
-          class MainActivity : ComponentActivity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  enableEdgeToEdge()
-                  setContent {
-                      CodeIdeTheme {
-                          Surface(modifier = Modifier.fillMaxSize()) {
-                              IdeRootScreen()
-                          }
-                      }
+          class PreferencesRepository(private val context: Context) {
+
+              private object Keys {
+                  val THEME_MODE = stringPreferencesKey("theme_mode")
+                  val PROJECTS_JSON = stringPreferencesKey("projects_json")
+                  val LAST_OPEN_PROJECT_PATH = stringPreferencesKey("last_open_project_path")
+                  val RUN_IN_BACKGROUND = booleanPreferencesKey("run_in_background")
+              }
+
+              val themeMode: Flow<AppThemeMode> = context.dataStore.data.map { prefs ->
+                  when (prefs[Keys.THEME_MODE]) {
+                      "LIGHT" -> AppThemeMode.LIGHT
+                      "DARK" -> AppThemeMode.DARK
+                      else -> AppThemeMode.SYSTEM
                   }
+              }
+
+              suspend fun setThemeMode(mode: AppThemeMode) {
+                  context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+              }
+
+              val runInBackground: Flow<Boolean> = context.dataStore.data.map {
+                  it[Keys.RUN_IN_BACKGROUND] ?: false
+              }
+
+              suspend fun setRunInBackground(value: Boolean) {
+                  context.dataStore.edit { it[Keys.RUN_IN_BACKGROUND] = value }
+              }
+
+              val savedProjects: Flow<List<SavedProject>> = context.dataStore.data.map { prefs ->
+                  val json = prefs[Keys.PROJECTS_JSON] ?: "[]"
+                  try {
+                      Json.decodeFromString<List<SavedProject>>(json)
+                  } catch (e: Exception) {
+                      emptyList()
+                  }
+              }
+
+              suspend fun addOrUpdateProject(project: SavedProject) {
+                  context.dataStore.edit { prefs ->
+                      val current = try {
+                          Json.decodeFromString<List<SavedProject>>(prefs[Keys.PROJECTS_JSON] ?: "[]")
+                      } catch (e: Exception) { emptyList() }
+                      val updated = current.filter { it.path != project.path } + project
+                      prefs[Keys.PROJECTS_JSON] = Json.encodeToString(updated)
+                      prefs[Keys.LAST_OPEN_PROJECT_PATH] = project.path
+                  }
+              }
+
+              suspend fun removeProject(path: String) {
+                  context.dataStore.edit { prefs ->
+                      val current = try {
+                          Json.decodeFromString<List<SavedProject>>(prefs[Keys.PROJECTS_JSON] ?: "[]")
+                      } catch (e: Exception) { emptyList() }
+                      prefs[Keys.PROJECTS_JSON] = Json.encodeToString(current.filter { it.path != path })
+                  }
+              }
+
+              val lastOpenProjectPath: Flow<String?> = context.dataStore.data.map {
+                  it[Keys.LAST_OPEN_PROJECT_PATH]
               }
           }
           EOF
@@ -469,9 +509,7 @@ workflows:
                           } else {
                               outFile.parentFile?.mkdirs()
                               zip.getInputStream(entry).use { input ->
-                                  FileOutputStream(outFile).use { output ->
-                                      input.copyTo(output)
-                                  }
+                                  FileOutputStream(outFile).use { output -> input.copyTo(output) }
                               }
                           }
                       }
@@ -479,15 +517,53 @@ workflows:
                   return destDir
               }
 
-              fun listProjects(): List<File> =
-                  projectsRoot.listFiles()?.filter { it.isDirectory } ?: emptyList()
+              /**
+               * Copia um template embutido em assets/templates/<id> para
+               * a pasta de projetos do usuário, para que ele possa editar
+               * e rodar sem afetar o template original.
+               */
+              fun importFromAssetsTemplate(templateId: String, projectName: String): File {
+                  val destDir = File(projectsRoot, projectName)
+                  if (destDir.exists()) destDir.deleteRecursively()
+                  destDir.mkdirs()
+                  copyAssetDir("templates/\$templateId", destDir)
+                  return destDir
+              }
+
+              private fun copyAssetDir(assetPath: String, destDir: File) {
+                  val assets = context.assets
+                  val items = assets.list(assetPath) ?: return
+                  if (items.isEmpty()) {
+                      // é um arquivo
+                      destDir.parentFile?.mkdirs()
+                      assets.open(assetPath).use { input ->
+                          FileOutputStream(destDir).use { output -> input.copyTo(output) }
+                      }
+                      return
+                  }
+                  destDir.mkdirs()
+                  for (item in items) {
+                      val childAssetPath = "\$assetPath/\$item"
+                      val childDest = File(destDir, item)
+                      val childItems = assets.list(childAssetPath)
+                      if (childItems.isNullOrEmpty()) {
+                          assets.open(childAssetPath).use { input ->
+                              FileOutputStream(childDest).use { output -> input.copyTo(output) }
+                          }
+                      } else {
+                          copyAssetDir(childAssetPath, childDest)
+                      }
+                  }
+              }
 
               fun fileTree(root: File): List<File> =
-                  root.walkTopDown().filter { it != root }.toList()
+                  root.walkTopDown().filter { it != root }.sortedBy { it.path }.toList()
 
               fun readFile(file: File): String = file.readText()
 
               fun writeFile(file: File, content: String) = file.writeText(content)
+
+              fun exists(path: String): Boolean = File(path).exists()
           }
           EOF
 
@@ -513,13 +589,12 @@ workflows:
                       )
                   }
 
-                  val mime = mimeFor(file.extension)
-                  return newChunkedResponse(Response.Status.OK, mime, file.inputStream())
+                  return newChunkedResponse(Response.Status.OK, mimeFor(file.extension), file.inputStream())
               }
 
               private fun mimeFor(ext: String): String = when (ext.lowercase()) {
                   "html" -> "text/html"
-                  "js", "mjs" -> "application/javascript"
+                  "js", "mjs", "jsx", "tsx", "ts" -> "application/javascript"
                   "css" -> "text/css"
                   "json" -> "application/json"
                   "png" -> "image/png"
@@ -532,9 +607,95 @@ workflows:
           EOF
 
       # ──────────────────────────────────────────────────────
-      # 8. UI: Drawer, Editor, Runner, Root screen
+      # 8. Application + MainActivity (upload de zip real)
       # ──────────────────────────────────────────────────────
-      - name: Write UI screens (Drawer, Editor, Runner, Root)
+      - name: Write Application and MainActivity
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          BASE="$ROOT/app/src/main/java/$PKG_PATH"
+
+          cat > "$BASE/CodeIdeApp.kt" << EOF
+          package $PKG
+
+          import android.app.Application
+
+          class CodeIdeApp : Application()
+          EOF
+
+          cat > "$BASE/MainActivity.kt" << EOF
+          package $PKG
+
+          import android.net.Uri
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.activity.compose.setContent
+          import androidx.activity.enableEdgeToEdge
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.isSystemInDarkTheme
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.material3.Surface
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import $PKG.data.AppThemeMode
+          import $PKG.data.PreferencesRepository
+          import $PKG.ui.IdeRootScreen
+          import $PKG.ui.theme.CodeIdeTheme
+          import java.io.File
+          import java.io.FileOutputStream
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  enableEdgeToEdge()
+
+                  val prefsRepo = PreferencesRepository(applicationContext)
+
+                  setContent {
+                      var pickedZipPath by remember { mutableStateOf<String?>(null) }
+                      val themeMode by prefsRepo.themeMode.collectAsState(initial = AppThemeMode.SYSTEM)
+                      val systemDark = isSystemInDarkTheme()
+
+                      val pickZipLauncher = rememberLauncherForActivityResult(
+                          contract = ActivityResultContracts.GetContent()
+                      ) { uri: Uri? ->
+                          if (uri != null) pickedZipPath = copyUriToCache(uri)
+                      }
+
+                      CodeIdeTheme(themeMode = themeMode, systemDark = systemDark) {
+                          Surface(modifier = Modifier.fillMaxSize()) {
+                              IdeRootScreen(
+                                  prefsRepo = prefsRepo,
+                                  pickedZipPath = pickedZipPath,
+                                  onZipConsumed = { pickedZipPath = null },
+                                  onRequestZipPick = { pickZipLauncher.launch("*/*") }
+                              )
+                          }
+                      }
+                  }
+              }
+
+              private fun copyUriToCache(uri: Uri): String? {
+                  return try {
+                      val fileName = "import_\${System.currentTimeMillis()}.zip"
+                      val outFile = File(cacheDir, fileName)
+                      contentResolver.openInputStream(uri)?.use { input ->
+                          FileOutputStream(outFile).use { output -> input.copyTo(output) }
+                      }
+                      outFile.absolutePath
+                  } catch (e: Exception) {
+                      null
+                  }
+              }
+          }
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 9. UI: Drawer (com projetos persistidos)
+      # ──────────────────────────────────────────────────────
+      - name: Write AppDrawerContent (persisted projects list)
         script: |
           set -e
           ROOT="$CM_BUILD_DIR/$APP_DIR"
@@ -544,58 +705,140 @@ workflows:
           cat > "$UI/drawer/AppDrawerContent.kt" << EOF
           package $PKG.ui.drawer
 
-          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.layout.*
           import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.Description
-          import androidx.compose.material.icons.filled.Folder
+          import androidx.compose.material.icons.rounded.Description
+          import androidx.compose.material.icons.rounded.Folder
+          import androidx.compose.material.icons.rounded.FolderOpen
+          import androidx.compose.material.icons.rounded.Settings
+          import androidx.compose.material.icons.rounded.UploadFile
+          import androidx.compose.material.icons.rounded.WidgetsPlusSlash
           import androidx.compose.material3.*
           import androidx.compose.runtime.Composable
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.unit.dp
+          import $PKG.data.SavedProject
           import java.io.File
 
           @Composable
           fun AppDrawerContent(
               projectName: String,
-              files: List<File>,
+              savedProjects: List<SavedProject>,
+              currentFiles: List<File>,
               onFileClick: (File) -> Unit,
-              onUploadZipClick: () -> Unit
+              onOpenSavedProject: (SavedProject) -> Unit,
+              onRemoveSavedProject: (SavedProject) -> Unit,
+              onUploadZipClick: () -> Unit,
+              onNewFromTemplateClick: () -> Unit,
+              onSettingsClick: () -> Unit
           ) {
-              ModalDrawerSheet {
-                  Text(
-                      text = projectName.ifEmpty { "Nenhum projeto" },
-                      style = MaterialTheme.typography.titleLarge,
-                      modifier = Modifier.padding(16.dp)
-                  )
+              ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
+                  Column(modifier = Modifier.padding(16.dp)) {
+                      Text(text = "Code IDE", style = MaterialTheme.typography.titleLarge)
+                      Text(
+                          text = projectName.ifEmpty { "Nenhum projeto aberto" },
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant
+                      )
+                  }
                   HorizontalDivider()
 
                   NavigationDrawerItem(
                       label = { Text("Importar projeto (.zip)") },
                       selected = false,
-                      icon = { Icon(Icons.Filled.Folder, contentDescription = null) },
+                      icon = { Icon(Icons.Rounded.UploadFile, contentDescription = null) },
                       onClick = onUploadZipClick,
-                      modifier = Modifier.padding(horizontal = 12.dp)
+                      shape = MaterialTheme.shapes.large,
+                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                   )
 
-                  HorizontalDivider()
+                  NavigationDrawerItem(
+                      label = { Text("Novo a partir de template") },
+                      selected = false,
+                      icon = { Icon(Icons.Rounded.WidgetsPlusSlash, contentDescription = null) },
+                      onClick = onNewFromTemplateClick,
+                      shape = MaterialTheme.shapes.large,
+                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                  )
 
-                  files.forEach { file ->
-                      NavigationDrawerItem(
-                          label = { Text(file.name) },
-                          selected = false,
-                          icon = {
-                              Icon(
-                                  if (file.isDirectory) Icons.Filled.Folder else Icons.Filled.Description,
-                                  contentDescription = null
-                              )
-                          },
-                          onClick = { onFileClick(file) },
-                          modifier = Modifier.padding(horizontal = 12.dp)
+                  if (savedProjects.isNotEmpty()) {
+                      HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                      Text(
+                          text = "Meus projetos",
+                          style = MaterialTheme.typography.labelLarge,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
                       )
+                      savedProjects.forEach { proj ->
+                          NavigationDrawerItem(
+                              label = { Text(proj.name) },
+                              selected = proj.name == projectName,
+                              icon = { Icon(Icons.Rounded.FolderOpen, contentDescription = null) },
+                              badge = {
+                                  IconButton(onClick = { onRemoveSavedProject(proj) }) {
+                                      Icon(
+                                          Icons.Rounded.Description,
+                                          contentDescription = "Remover",
+                                          modifier = Modifier.size(16.dp)
+                                      )
+                                  }
+                              },
+                              onClick = { onOpenSavedProject(proj) },
+                              shape = MaterialTheme.shapes.large,
+                              modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                          )
+                      }
                   }
+
+                  if (currentFiles.isNotEmpty()) {
+                      HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                      Text(
+                          text = "Arquivos do projeto atual",
+                          style = MaterialTheme.typography.labelLarge,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp)
+                      )
+                      currentFiles.forEach { file ->
+                          NavigationDrawerItem(
+                              label = { Text(file.name) },
+                              selected = false,
+                              icon = {
+                                  Icon(
+                                      if (file.isDirectory) Icons.Rounded.Folder else Icons.Rounded.Description,
+                                      contentDescription = null
+                                  )
+                              },
+                              onClick = { onFileClick(file) },
+                              shape = MaterialTheme.shapes.large,
+                              modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                          )
+                      }
+                  }
+
+                  Spacer(modifier = Modifier.weight(1f))
+                  HorizontalDivider()
+                  NavigationDrawerItem(
+                      label = { Text("Configurações") },
+                      selected = false,
+                      icon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                      onClick = onSettingsClick,
+                      shape = MaterialTheme.shapes.large,
+                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                  )
+                  Spacer(modifier = Modifier.height(8.dp))
               }
           }
           EOF
+
+      # ──────────────────────────────────────────────────────
+      # 10. UI: Editor + Runner
+      # ──────────────────────────────────────────────────────
+      - name: Write Editor and Runner screens
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          UI="$ROOT/app/src/main/java/$PKG_PATH/ui"
 
           cat > "$UI/editor/CodeEditorScreen.kt" << EOF
           package $PKG.ui.editor
@@ -611,26 +854,18 @@ workflows:
           import androidx.compose.ui.unit.sp
 
           @Composable
-          fun CodeEditorScreen(
-              content: String,
-              onContentChange: (String) -> Unit
-          ) {
+          fun CodeEditorScreen(content: String, onContentChange: (String) -> Unit) {
               var text by remember(content) { mutableStateOf(content) }
 
               BasicTextField(
                   value = text,
-                  onValueChange = {
-                      text = it
-                      onContentChange(it)
-                  },
+                  onValueChange = { text = it; onContentChange(it) },
                   textStyle = TextStyle(
                       fontFamily = FontFamily.Monospace,
                       fontSize = 14.sp,
                       color = MaterialTheme.colorScheme.onSurface
                   ),
-                  modifier = Modifier
-                      .fillMaxSize()
-                      .padding(12.dp)
+                  modifier = Modifier.fillMaxSize().padding(12.dp)
               )
           }
           EOF
@@ -663,77 +898,223 @@ workflows:
           }
           EOF
 
-          cat > "$UI/runner/EsbuildBridge.kt" << EOF
-          package $PKG.ui.runner
+      # ──────────────────────────────────────────────────────
+      # 11. UI: Settings screen
+      # ──────────────────────────────────────────────────────
+      - name: Write SettingsScreen
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          UI="$ROOT/app/src/main/java/$PKG_PATH/ui"
 
-          import android.content.Context
-          import android.webkit.WebView
-          import android.webkit.WebViewClient
-          import java.io.File
+          cat > "$UI/settings/SettingsScreen.kt" << EOF
+          package $PKG.ui.settings
 
-          class EsbuildBridge(private val context: Context) {
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.rounded.ArrowBack
+          import androidx.compose.material.icons.rounded.DarkMode
+          import androidx.compose.material.icons.rounded.LightMode
+          import androidx.compose.material.icons.rounded.SettingsSuggest
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import kotlinx.coroutines.launch
+          import $PKG.data.AppThemeMode
+          import $PKG.data.PreferencesRepository
 
-              fun bundle(
-                  projectDir: File,
-                  entryFile: String,
-                  onResult: (success: Boolean, outputPath: String?, error: String?) -> Unit
-              ) {
-                  val buildDir = File(projectDir, ".build").apply { mkdirs() }
-                  val outFile = File(buildDir, "bundle.js")
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun SettingsScreen(
+              prefsRepo: PreferencesRepository,
+              onBack: () -> Unit
+          ) {
+              val scope = rememberCoroutineScope()
+              val themeMode by prefsRepo.themeMode.collectAsState(initial = AppThemeMode.SYSTEM)
+              val runInBackground by prefsRepo.runInBackground.collectAsState(initial = false)
 
-                  val hidden = WebView(context)
-                  hidden.settings.javaScriptEnabled = true
-                  hidden.webViewClient = object : WebViewClient() {
-                      override fun onPageFinished(view: WebView?, url: String?) {
-                          val entryPath = File(projectDir, entryFile).absolutePath
-                          val js = "window.runEsbuild && window.runEsbuild('" +
-                              entryPath.replace("\\\\", "\\\\\\\\") + "');"
-                          view?.evaluateJavascript(js) { result ->
-                              onResult(true, outFile.absolutePath, null)
+              Scaffold(
+                  topBar = {
+                      TopAppBar(
+                          title = { Text("Configurações") },
+                          navigationIcon = {
+                              IconButton(onClick = onBack) {
+                                  Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+                              }
                           }
+                      )
+                  }
+              ) { padding ->
+                  Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+                      Text("Tema", style = MaterialTheme.typography.titleMedium)
+                      Spacer(modifier = Modifier.height(8.dp))
+
+                      ThemeOptionRow(
+                          label = "Claro",
+                          icon = Icons.Rounded.LightMode,
+                          selected = themeMode == AppThemeMode.LIGHT,
+                          onClick = { scope.launch { prefsRepo.setThemeMode(AppThemeMode.LIGHT) } }
+                      )
+                      ThemeOptionRow(
+                          label = "Escuro",
+                          icon = Icons.Rounded.DarkMode,
+                          selected = themeMode == AppThemeMode.DARK,
+                          onClick = { scope.launch { prefsRepo.setThemeMode(AppThemeMode.DARK) } }
+                      )
+                      ThemeOptionRow(
+                          label = "Padrão do sistema",
+                          icon = Icons.Rounded.SettingsSuggest,
+                          selected = themeMode == AppThemeMode.SYSTEM,
+                          onClick = { scope.launch { prefsRepo.setThemeMode(AppThemeMode.SYSTEM) } }
+                      )
+
+                      HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween
+                      ) {
+                          Column(modifier = Modifier.weight(1f)) {
+                              Text("Rodar servidor em segundo plano", style = MaterialTheme.typography.titleMedium)
+                              Text(
+                                  "Mantém o preview ativo mesmo com o app minimizado",
+                                  style = MaterialTheme.typography.bodyMedium,
+                                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                              )
+                          }
+                          Switch(
+                              checked = runInBackground,
+                              onCheckedChange = { scope.launch { prefsRepo.setRunInBackground(it) } }
+                          )
                       }
                   }
-                  hidden.loadUrl("file:///android_asset/webruntime/esbuild-loader.html")
               }
           }
+
+          @Composable
+          private fun ThemeOptionRow(
+              label: String,
+              icon: androidx.compose.ui.graphics.vector.ImageVector,
+              selected: Boolean,
+              onClick: () -> Unit
+          ) {
+              Row(
+                  modifier = Modifier.fillMaxWidth().clickableRow(onClick).padding(vertical = 12.dp),
+                  verticalAlignment = Alignment.CenterVertically
+              ) {
+                  Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                  Spacer(modifier = Modifier.width(16.dp))
+                  Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                  RadioButton(selected = selected, onClick = onClick)
+              }
+          }
+
+          private fun Modifier.clickableRow(onClick: () -> Unit): Modifier =
+              this.then(androidx.compose.foundation.clickable(onClick = onClick))
           EOF
+
+      # ──────────────────────────────────────────────────────
+      # 12. UI: IdeRootScreen (junta tudo: projetos, tema, settings)
+      # ──────────────────────────────────────────────────────
+      - name: Write IdeRootScreen
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          PKG_PATH=$(echo "$PKG" | tr '.' '/')
+          UI="$ROOT/app/src/main/java/$PKG_PATH/ui"
 
           cat > "$UI/IdeRootScreen.kt" << EOF
           package $PKG.ui
 
           import androidx.compose.foundation.layout.*
           import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.Menu
-          import androidx.compose.material.icons.filled.PlayArrow
+          import androidx.compose.material.icons.rounded.Menu
+          import androidx.compose.material.icons.rounded.PlayArrow
+          import androidx.compose.material.icons.rounded.UploadFile
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
           import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.unit.dp
           import kotlinx.coroutines.launch
+          import $PKG.data.PreferencesRepository
           import $PKG.data.ProjectRepository
           import $PKG.data.LocalWebServer
+          import $PKG.data.SavedProject
           import $PKG.ui.drawer.AppDrawerContent
           import $PKG.ui.editor.CodeEditorScreen
           import $PKG.ui.runner.RunnerWebView
+          import $PKG.ui.settings.SettingsScreen
           import java.io.File
 
           private const val LOCAL_PORT = 8034
 
+          private enum class Screen { IDE, SETTINGS }
+
           @OptIn(ExperimentalMaterial3Api::class)
           @Composable
-          fun IdeRootScreen() {
+          fun IdeRootScreen(
+              prefsRepo: PreferencesRepository,
+              pickedZipPath: String?,
+              onZipConsumed: () -> Unit,
+              onRequestZipPick: () -> Unit
+          ) {
               val context = LocalContext.current
               val repo = remember { ProjectRepository(context) }
               val drawerState = rememberDrawerState(DrawerValue.Closed)
               val scope = rememberCoroutineScope()
+              val snackbarHostState = remember { SnackbarHostState() }
 
+              val savedProjects by prefsRepo.savedProjects.collectAsState(initial = emptyList())
+              val lastOpenPath by prefsRepo.lastOpenProjectPath.collectAsState(initial = null)
+
+              var screen by remember { mutableStateOf(Screen.IDE) }
               var currentProject by remember { mutableStateOf<File?>(null) }
               var files by remember { mutableStateOf<List<File>>(emptyList()) }
               var selectedFile by remember { mutableStateOf<File?>(null) }
               var fileContent by remember { mutableStateOf("") }
               var isRunning by remember { mutableStateOf(false) }
+              var isImporting by remember { mutableStateOf(false) }
               var server by remember { mutableStateOf<LocalWebServer?>(null) }
+              var showTemplateSheet by remember { mutableStateOf(false) }
+              var didAutoRestore by remember { mutableStateOf(false) }
+
+              fun openDir(dir: File) {
+                  currentProject = dir
+                  files = repo.fileTree(dir)
+                  selectedFile = null
+                  isRunning = false
+              }
+
+              // Restaura o último projeto aberto ao iniciar o app.
+              LaunchedEffect(lastOpenPath, savedProjects) {
+                  if (!didAutoRestore && lastOpenPath != null && currentProject == null) {
+                      val match = savedProjects.find { it.path == lastOpenPath }
+                      val dir = match?.let { File(it.path) } ?: File(lastOpenPath!!)
+                      if (dir.exists()) openDir(dir)
+                      didAutoRestore = true
+                  }
+              }
+
+              LaunchedEffect(pickedZipPath) {
+                  val path = pickedZipPath ?: return@LaunchedEffect
+                  isImporting = true
+                  try {
+                      val name = "projeto_\${System.currentTimeMillis()}"
+                      val dir = repo.importZip(path, name)
+                      openDir(dir)
+                      prefsRepo.addOrUpdateProject(SavedProject(name = dir.name, path = dir.absolutePath))
+                      scope.launch { snackbarHostState.showSnackbar("Projeto importado: \${dir.name}") }
+                  } catch (e: Exception) {
+                      scope.launch { snackbarHostState.showSnackbar("Erro ao importar: \${e.message}") }
+                  } finally {
+                      isImporting = false
+                      onZipConsumed()
+                  }
+              }
 
               fun runProject() {
                   val project = currentProject ?: return
@@ -744,12 +1125,55 @@ workflows:
                   isRunning = true
               }
 
+              fun createFromTemplate(templateId: String, label: String) {
+                  scope.launch {
+                      isImporting = true
+                      try {
+                          val name = "\${label}_\${System.currentTimeMillis()}"
+                          val dir = repo.importFromAssetsTemplate(templateId, name)
+                          openDir(dir)
+                          prefsRepo.addOrUpdateProject(SavedProject(name = dir.name, path = dir.absolutePath))
+                          snackbarHostState.showSnackbar("Projeto criado: \${dir.name}")
+                      } catch (e: Exception) {
+                          snackbarHostState.showSnackbar("Erro ao criar projeto: \${e.message}")
+                      } finally {
+                          isImporting = false
+                          showTemplateSheet = false
+                      }
+                  }
+              }
+
+              if (screen == Screen.SETTINGS) {
+                  SettingsScreen(prefsRepo = prefsRepo, onBack = { screen = Screen.IDE })
+                  return
+              }
+
+              if (showTemplateSheet) {
+                  ModalBottomSheet(onDismissRequest = { showTemplateSheet = false }) {
+                      Column(modifier = Modifier.padding(16.dp).padding(bottom = 24.dp)) {
+                          Text("Escolha um template", style = MaterialTheme.typography.titleLarge)
+                          Spacer(modifier = Modifier.height(12.dp))
+                          TemplateRow("HTML / CSS / JS básico") { createFromTemplate("html_basic", "html") }
+                          TemplateRow("React (JSX, client-side)") { createFromTemplate("react_basic", "react") }
+                          TemplateRow("TypeScript puro") { createFromTemplate("ts_basic", "ts") }
+                          Spacer(modifier = Modifier.height(8.dp))
+                          Text(
+                              "Obs.: este IDE compila localmente com esbuild (sem Node). " +
+                              "Templates de frameworks com servidor (como Next.js) não são suportados.",
+                              style = MaterialTheme.typography.bodyMedium,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant
+                          )
+                      }
+                  }
+              }
+
               ModalNavigationDrawer(
                   drawerState = drawerState,
                   drawerContent = {
                       AppDrawerContent(
                           projectName = currentProject?.name.orEmpty(),
-                          files = files,
+                          savedProjects = savedProjects,
+                          currentFiles = files,
                           onFileClick = { f ->
                               if (f.isFile) {
                                   selectedFile = f
@@ -758,51 +1182,214 @@ workflows:
                               }
                               scope.launch { drawerState.close() }
                           },
+                          onOpenSavedProject = { proj ->
+                              val dir = File(proj.path)
+                              if (dir.exists()) openDir(dir)
+                              scope.launch { drawerState.close() }
+                          },
+                          onRemoveSavedProject = { proj ->
+                              scope.launch { prefsRepo.removeProject(proj.path) }
+                          },
                           onUploadZipClick = {
-                              // Activity Result API entra aqui
+                              scope.launch { drawerState.close() }
+                              onRequestZipPick()
+                          },
+                          onNewFromTemplateClick = {
+                              scope.launch { drawerState.close() }
+                              showTemplateSheet = true
+                          },
+                          onSettingsClick = {
+                              scope.launch { drawerState.close() }
+                              screen = Screen.SETTINGS
                           }
                       )
                   }
               ) {
                   Scaffold(
+                      snackbarHost = { SnackbarHost(snackbarHostState) },
                       topBar = {
                           TopAppBar(
                               title = { Text(currentProject?.name ?: "Code IDE") },
                               navigationIcon = {
                                   IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                      Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                                      Icon(Icons.Rounded.Menu, contentDescription = "Menu")
                                   }
                               },
                               actions = {
-                                  FilledIconButton(onClick = { runProject() }) {
-                                      Icon(Icons.Filled.PlayArrow, contentDescription = "Run")
+                                  FilledIconButton(onClick = { runProject() }, enabled = currentProject != null) {
+                                      Icon(Icons.Rounded.PlayArrow, contentDescription = "Run")
                                   }
+                                  Spacer(modifier = Modifier.width(8.dp))
                               }
                           )
                       }
                   ) { padding ->
                       Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                           when {
+                              isImporting -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                      CircularProgressIndicator()
+                                      Spacer(modifier = Modifier.height(12.dp))
+                                      Text("Preparando projeto...")
+                                  }
+                              }
                               isRunning -> RunnerWebView(url = "http://127.0.0.1:\$LOCAL_PORT/")
                               selectedFile != null -> CodeEditorScreen(
                                   content = fileContent,
-                                  onContentChange = { fileContent = it }
+                                  onContentChange = { fileContent = it; selectedFile?.let { f -> repo.writeFile(f, fileContent) } }
                               )
-                              else -> Box(
-                                  modifier = Modifier.fillMaxSize(),
-                                  contentAlignment = Alignment.Center
-                              ) {
-                                  Text("Importe um projeto .zip pelo menu ☰")
+                              else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                      Icon(
+                                          Icons.Rounded.UploadFile, contentDescription = null,
+                                          modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary
+                                      )
+                                      Spacer(modifier = Modifier.height(12.dp))
+                                      Text("Importe um .zip ou escolha um template")
+                                      Spacer(modifier = Modifier.height(16.dp))
+                                      Row {
+                                          FilledTonalButton(onClick = onRequestZipPick) { Text("Importar .zip") }
+                                          Spacer(modifier = Modifier.width(12.dp))
+                                          FilledTonalButton(onClick = { showTemplateSheet = true }) { Text("Templates") }
+                                      }
+                                  }
                               }
                           }
                       }
                   }
               }
           }
+
+          @Composable
+          private fun TemplateRow(label: String, onClick: () -> Unit) {
+              ListItem(
+                  headlineContent = { Text(label) },
+                  modifier = Modifier.fillMaxWidth().let {
+                      it.then(androidx.compose.foundation.clickable(onClick = onClick))
+                  }
+              )
+          }
           EOF
 
       # ──────────────────────────────────────────────────────
-      # 9. Gradle wrapper jar + local.properties
+      # 13. Templates prontos embutidos em assets
+      # ──────────────────────────────────────────────────────
+      - name: Write bundled project templates
+        script: |
+          set -e
+          ROOT="$CM_BUILD_DIR/$APP_DIR"
+          TPL="$ROOT/app/src/main/assets/templates"
+
+          # ── Template: HTML/CSS/JS básico ──
+          cat > "$TPL/html_basic/index.html" << 'EOF'
+          <!DOCTYPE html>
+          <html lang="pt">
+          <head>
+            <meta charset="UTF-8" />
+            <title>Projeto HTML</title>
+            <link rel="stylesheet" href="style.css" />
+          </head>
+          <body>
+            <h1>Olá, Code IDE!</h1>
+            <button id="btn">Clique aqui</button>
+            <script src="script.js"></script>
+          </body>
+          </html>
+          EOF
+
+          cat > "$TPL/html_basic/style.css" << 'EOF'
+          body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #fafafa;
+          }
+          button {
+            padding: 12px 24px;
+            border-radius: 999px;
+            border: none;
+            background: #3D5AFE;
+            color: white;
+            font-size: 16px;
+          }
+          EOF
+
+          cat > "$TPL/html_basic/script.js" << 'EOF'
+          document.getElementById('btn').addEventListener('click', () => {
+            alert('Funcionando!');
+          });
+          EOF
+
+          # ── Template: React puro (client-side, sem SSR) ──
+          cat > "$TPL/react_basic/index.html" << 'EOF'
+          <!DOCTYPE html>
+          <html lang="pt">
+          <head>
+            <meta charset="UTF-8" />
+            <title>Projeto React</title>
+          </head>
+          <body>
+            <div id="root"></div>
+            <script type="module" src="src/main.jsx"></script>
+          </body>
+          </html>
+          EOF
+
+          cat > "$TPL/react_basic/src/App.jsx" << 'EOF'
+          import { useState } from 'react';
+
+          export default function App() {
+            const [count, setCount] = useState(0);
+            return (
+              <div style={{ fontFamily: 'sans-serif', textAlign: 'center', marginTop: 60 }}>
+                <h1>Olá, React!</h1>
+                <p>Contador: {count}</p>
+                <button onClick={() => setCount(count + 1)}>Incrementar</button>
+              </div>
+            );
+          }
+          EOF
+
+          cat > "$TPL/react_basic/src/main.jsx" << 'EOF'
+          import React from 'react';
+          import { createRoot } from 'react-dom/client';
+          import App from './App.jsx';
+
+          createRoot(document.getElementById('root')).render(<App />);
+          EOF
+
+          # ── Template: TypeScript puro ──
+          cat > "$TPL/ts_basic/index.html" << 'EOF'
+          <!DOCTYPE html>
+          <html lang="pt">
+          <head>
+            <meta charset="UTF-8" />
+            <title>Projeto TypeScript</title>
+          </head>
+          <body>
+            <h1>Olá, TypeScript!</h1>
+            <script type="module" src="src/main.ts"></script>
+          </body>
+          </html>
+          EOF
+
+          cat > "$TPL/ts_basic/src/main.ts" << 'EOF'
+          function saudacao(nome: string): string {
+            return `Olá, ${nome}!`;
+          }
+
+          document.body.insertAdjacentHTML(
+            'beforeend',
+            `<p>${saudacao('Code IDE')}</p>`
+          );
+          EOF
+
+      # ──────────────────────────────────────────────────────
+      # 14. Gradle wrapper jar + local.properties
       # ──────────────────────────────────────────────────────
       - name: Fetch gradle wrapper jar
         script: |
@@ -821,7 +1408,7 @@ workflows:
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/$APP_DIR/local.properties"
 
       # ──────────────────────────────────────────────────────
-      # 10. Build
+      # 15. Build
       # ──────────────────────────────────────────────────────
       - name: Build debug APK
         script: |
