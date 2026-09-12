@@ -425,6 +425,47 @@ class _NexaLoaderLogoState extends State<NexaLoaderLogo>
   }
 }
 
+class NexaLottieLoader extends StatelessWidget {
+  final double size;
+  const NexaLottieLoader({super.key, this.size = 28});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppTheme.of(context);
+    final themeColor = s.isDark ? Colors.white : Colors.black;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Lottie.asset(
+        'assets/icons/lottie/loader.json',
+        fit: BoxFit.contain,
+        repeat: true,
+        delegates: LottieDelegates(
+          values: [
+            // Keypath aponta ao grupo "Group 2" > "Fill 1" dentro
+            // de comp_1 (o círculo desenhado no Lottie). O '**'
+            // cobre qualquer profundidade de camada/asset pai, para
+            // não depender da árvore exata de comps aninhados.
+            ValueDelegate.color(
+              const ['**', 'Group 2', 'Fill 1'],
+              value: themeColor,
+            ),
+            // Fallback: alguns exports do Lottie nomeiam o shape
+            // group de forma ligeiramente diferente conforme a
+            // versão do After Effects/plugin — este delegate mais
+            // amplo garante que qualquer nó do tipo Fill dentro da
+            // composição recebe a cor do tema.
+            ValueDelegate.color(
+              const ['**'],
+              value: themeColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 // ══════════════════════════════════════════════════════════════
 // BLINKING GRID LOADER
 // ══════════════════════════════════════════════════════════════

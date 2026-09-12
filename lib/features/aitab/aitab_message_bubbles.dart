@@ -86,10 +86,6 @@ class UserBubble extends StatefulWidget {
   final VoidCallback onCopy;
   final VoidCallback onDelete;
   final VoidCallback onSelectText;
-  // true quando esta mensagem específica está a ser editada no
-  // input — bloqueia o long-press (que abriria o popup de ações
-  // com "Editar/Copiar/Selecionar/Eliminar") para não permitir
-  // apagar ou editar de novo a bolha enquanto se edita.
   final bool isBeingEdited;
   const UserBubble({
     super.key,
@@ -133,7 +129,7 @@ class _UserBubbleState extends State<UserBubble> {
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: AnimatedSize(
-                duration: const Duration(milliseconds: 260),
+                duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.centerRight,
                 child: Wrap(
@@ -148,9 +144,6 @@ class _UserBubbleState extends State<UserBubble> {
             ),
           if (widget.text.isNotEmpty)
             GestureDetector(
-              // Bloqueia o long-press enquanto esta mensagem está a
-              // ser editada — evita que o utilizador apague a bolha
-              // original no meio da edição.
               onLongPress: widget.isBeingEdited
                   ? null
                   : () {
@@ -201,7 +194,8 @@ class _UserBubbleState extends State<UserBubble> {
                             const SizedBox(width: 2),
                             AnimatedRotation(
                               turns: _expanded ? 0.5 : 0,
-                              duration: const Duration(milliseconds: 180),
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
                               child: Icon(Icons.keyboard_arrow_down, size: 16, color: textColor.withOpacity(0.85)),
                             ),
                           ],
@@ -704,7 +698,8 @@ class _CircularBackButtonDarkState extends State<_CircularBackButtonDark> {
       onTapUp: (_) => setState(() => _p = false),
       onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 110),
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
         width: 36,
         height: 36,
         alignment: Alignment.center,
@@ -738,7 +733,8 @@ class _CircularBackButtonState extends State<_CircularBackButton> {
       onTapUp: (_) => setState(() => _p = false),
       onTap: widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 110),
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
         width: 36,
         height: 36,
         alignment: Alignment.center,
@@ -903,7 +899,7 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
         height: 160,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          physics: const ClampingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(vertical: 4),
           itemCount: visibleImages.length,
           separatorBuilder: (_, __) => const SizedBox(width: 10),
@@ -926,8 +922,8 @@ class _ImageSearchCarouselState extends State<ImageSearchCarousel> {
                     if (wasSynchronouslyLoaded) return child;
                     return AnimatedOpacity(
                       opacity: frame == null ? 0 : 1,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
                       child: child,
                     );
                   },
@@ -986,7 +982,7 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
               Positioned.fill(
                 child: PageView.builder(
                   controller: _pageCtrl,
-                  physics: const ClampingScrollPhysics(),
+                  physics: const BouncingScrollPhysics(),
                   itemCount: widget.images.length,
                   onPageChanged: (i) => setState(() => _current = i),
                   itemBuilder: (_, i) {
@@ -1074,10 +1070,6 @@ class SourcesRow extends StatelessWidget {
   String _faviconUrl(String url) => 'https://www.google.com/s2/favicons?sz=64&domain=${_domain(url)}';
 
   void _openSourcesModal(BuildContext context) {
-    // showModalBottomSheet nativo do Flutter — sem depender de
-    // showAppSheet. isScrollControlled: true é obrigatório para o
-    // DraggableScrollableSheet interno poder ocupar mais do que a
-    // altura default do bottom sheet.
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: s.cardBackground,
@@ -1152,9 +1144,6 @@ class _SourcesModalContent extends StatelessWidget {
     return DraggableScrollableSheet(
       initialChildSize: 0.5,
       minChildSize: 0.3,
-      // Quase ao statusbar — 0.95 deixa só uma margem mínima de
-      // segurança, já que useSafeArea: true no showModalBottomSheet
-      // já impede sobrepor a área do statusbar em si.
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
@@ -1164,9 +1153,6 @@ class _SourcesModalContent extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handlebar — antes desenhado automaticamente por
-              // showAppSheet, agora explícito já que chamamos
-              // showModalBottomSheet diretamente.
               Padding(
                 padding: const EdgeInsets.only(top: 10, bottom: 4),
                 child: Center(
@@ -1188,7 +1174,7 @@ class _SourcesModalContent extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   controller: scrollController,
-                  physics: const ClampingScrollPhysics(),
+                  physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   itemCount: urls.length,
                   separatorBuilder: (_, __) => Padding(
@@ -1362,12 +1348,6 @@ class AssistantBubble extends StatelessWidget {
     }
 
     children.add(const SizedBox(height: 6));
-    // Fontes reais: agrega TODOS os sourceUrls de TODOS os passos
-    // de pesquisa da resposta (segments), não só o resumo que a IA
-    // escreveu no texto final — que pode ficar truncado a poucas
-    // entradas mesmo quando dezenas de páginas foram percorridas.
-    // Mantém extractSources(text) como fallback para mensagens
-    // antigas do histórico que não tenham segments guardados.
     final aggregatedSources = allSourceUrlsFromSegments(segments);
     children.add(_AssistantActionBar(
       s: s,
@@ -1470,7 +1450,8 @@ class _AssistantActionIconState extends State<_AssistantActionIcon> {
       onTapUp:     (_) => setState(() => _h = false),
       onTap:       widget.onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
         width: 28, height: 28,
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -1754,14 +1735,18 @@ class _ThinkingCollapsibleState extends State<ThinkingCollapsible> {
                 const SizedBox(width: 6),
                 AnimatedRotation(
                   turns: _expanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
                   child: AppIcon('chevron_down', size: 14, color: s.onSurfaceVariant),
                 ),
               ],
             ),
           ),
           AnimatedCrossFade(
-            duration: const Duration(milliseconds: 220),
+            duration: const Duration(milliseconds: 260),
+            firstCurve: Curves.easeOutCubic,
+            secondCurve: Curves.easeInCubic,
+            sizeCurve: Curves.easeOutCubic,
             crossFadeState: _expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
             firstChild: Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -1821,6 +1806,13 @@ class DisclaimerFooter extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// BOTÃO DE DESCER — agora um CÍRCULO PERFEITO (44x44), sem mais
+// forma de cápsula. A posição (canto direito, acima do input bar)
+// é controlada pelo Positioned no aitab.dart; este widget só
+// desenha o círculo em si e a animação de press.
+// ══════════════════════════════════════════════════════════════
+
 class ScrollToBottomButton extends StatefulWidget {
   final AppColorScheme s;
   final VoidCallback onTap;
@@ -1831,6 +1823,9 @@ class ScrollToBottomButton extends StatefulWidget {
 
 class _ScrollToBottomButtonState extends State<ScrollToBottomButton> {
   bool _p = false;
+
+  static const double _size = 44.0;
+
   @override
   Widget build(BuildContext context) {
     final s = widget.s;
@@ -1841,20 +1836,19 @@ class _ScrollToBottomButtonState extends State<ScrollToBottomButton> {
       onTapUp:     (_) => setState(() => _p = false),
       onTap:       widget.onTap,
       child: AnimatedScale(
-        scale: _p ? 0.92 : 1.0,
-        duration: const Duration(milliseconds: 110),
+        scale: _p ? 0.90 : 1.0,
+        duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
         child: Container(
-          width: 52, height: 34,
+          width: _size,
+          height: _size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            // Tema claro: fundo levemente mais branco que o
-            // cardBackground padrão, para o botão se destacar mais.
             color: s.isDark ? s.cardBackground : Colors.white,
-            borderRadius: BorderRadius.circular(17),
+            shape: BoxShape.circle,
             boxShadow: s.floatingShadow,
           ),
-          child: AppIcon('arrow_down', color: s.onSurface, size: 16),
+          child: AppIcon('arrow_down', color: s.onSurface, size: 18),
         ),
       ),
     );
@@ -1875,11 +1869,16 @@ class EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SvgPicture.asset(
-                  'assets/images/logo.svg',
-                  width: 112,
-                  height: 112,
-                ),
+                // ── Logo com tema + shimmer ──────────────────
+                // Antes: SvgPicture.asset direto sem colorFilter,
+                // por isso ficava sempre com o fill="#000000"
+                // original do arquivo, preto em qualquer tema.
+                // Agora usa o mesmo padrão de colorFilter que
+                // AppIcon/NexaBrandLogo já usam nos outros ícones
+                // (branco no escuro, preto no claro), injetado via
+                // ShaderMask por cima do colorFilter — não altera
+                // o ficheiro logo.svg em si.
+                ShimmeringThemedLogo(s: s, size: 112),
                 const SizedBox(height: 14),
                 Text(
                   greetingForNow(),
@@ -1895,4 +1894,84 @@ class EmptyState extends StatelessWidget {
           ),
         ),
       );
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOGO COM TEMA + SHIMMER
+// Recolore o logo.svg via colorFilter (branco no escuro, preto no
+// claro — igual à lógica de AppIcon para todos os outros ícones do
+// app) e sobrepõe um brilho contínuo com ShaderMask. Nenhum
+// ficheiro .svg é tocado; a cor é 100% injetada em runtime.
+// ══════════════════════════════════════════════════════════════
+
+class ShimmeringThemedLogo extends StatefulWidget {
+  final AppColorScheme s;
+  final double size;
+  const ShimmeringThemedLogo({super.key, required this.s, this.size = 112});
+
+  @override
+  State<ShimmeringThemedLogo> createState() => _ShimmeringThemedLogoState();
+}
+
+class _ShimmeringThemedLogoState extends State<ShimmeringThemedLogo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.s;
+    final themeColor = s.isDark ? Colors.white : Colors.black;
+
+    // 1ª camada: o SVG recolorido pelo tema (mesma técnica que
+    // AppIcon usa nos outros ícones — colorFilter com BlendMode.srcIn
+    // sobrescreve qualquer fill="#..." definido dentro do arquivo).
+    final themedLogo = SvgPicture.asset(
+      'assets/images/logo.svg',
+      width: widget.size,
+      height: widget.size,
+      colorFilter: ColorFilter.mode(themeColor, BlendMode.srcIn),
+    );
+
+    // 2ª camada: ShaderMask com gradiente deslizante por cima —
+    // dá o efeito de brilho passando pelo logo, em loop contínuo.
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            final shift = (_c.value * 2 - 1) * bounds.width * 1.5;
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                themeColor.withOpacity(0.0),
+                themeColor.withOpacity(0.0),
+                (s.isDark ? Colors.white : Colors.black87).withOpacity(0.55),
+                themeColor.withOpacity(0.0),
+                themeColor.withOpacity(0.0),
+              ],
+              stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+            ).createShader(bounds.shift(Offset(shift, 0)));
+          },
+          child: themedLogo,
+        );
+      },
+    );
+  }
 }

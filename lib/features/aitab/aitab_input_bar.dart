@@ -144,7 +144,7 @@ class _HoverSurfaceState extends State<_HoverSurface> {
         onTapCancel: tappable ? () => setState(() => _pressed = false) : null,
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 130),
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           padding: widget.padding,
           decoration: BoxDecoration(
@@ -173,8 +173,6 @@ class ChatInput extends StatelessWidget {
   final GlobalKey attachButtonKey;
   final bool thinkingEnabled;
   final ValueChanged<bool> onThinkingChanged;
-  // Quando true, o input está em modo de edição — mostra um card
-  // cancelável acima do campo de texto.
   final bool isEditing;
   final VoidCallback onCancelEdit;
   final VoidCallback onSend;
@@ -228,11 +226,6 @@ class ChatInput extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (isEditing)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _EditingBanner(s: s, onCancel: onCancelEdit),
-              ),
             if (attachedFiles.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -242,6 +235,9 @@ class ChatInput extends StatelessWidget {
                   onRemove: onRemoveFile,
                 ),
               ),
+            // O card "A editar mensagem" agora vive DENTRO do shell
+            // do input (ver _ChatInputShell), não mais fora — passa
+            // isEditing/onCancelEdit para lá.
             _ChatInputShell(
               s: s,
               hasText: hasText,
@@ -254,6 +250,8 @@ class ChatInput extends StatelessWidget {
               focusNode: focusNode,
               thinkingEnabled: thinkingEnabled,
               onThinkingChanged: onThinkingChanged,
+              isEditing: isEditing,
+              onCancelEdit: onCancelEdit,
               onSend: onSend,
               onPause: onPause,
               onAttach: onAttach,
@@ -267,7 +265,9 @@ class ChatInput extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// BANNER "A editar mensagem" — cancelável, com close_circular
+// BANNER "A editar mensagem" — agora vive DENTRO do shell do
+// input, no topo, com bordas super curvas (24) e sem margem
+// própria (o espaçamento é feito pelo pai).
 // ══════════════════════════════════════════════════════════════
 
 class _EditingBanner extends StatelessWidget {
@@ -280,12 +280,15 @@ class _EditingBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: s.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: s.outline.withOpacity(0.3)),
+        color: s.isDark
+            ? Colors.white.withOpacity(0.06)
+            : s.hover,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
         children: [
+          AppIcon('pencil', size: 15, color: s.onSurfaceVariant),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               'A editar mensagem',
@@ -327,12 +330,14 @@ class _ChatInputShell extends StatelessWidget {
   final FocusNode focusNode;
   final bool thinkingEnabled;
   final ValueChanged<bool> onThinkingChanged;
+  final bool isEditing;
+  final VoidCallback onCancelEdit;
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
   final ValueChanged<String> onRecordingComplete;
 
-  static const double _maxInputHeight = 168.0;
+  static const double _maxInputHeight = 220.0;
   static const double _minInputHeight = 52.0;
 
   const _ChatInputShell({
@@ -347,6 +352,8 @@ class _ChatInputShell extends StatelessWidget {
     required this.focusNode,
     required this.thinkingEnabled,
     required this.onThinkingChanged,
+    required this.isEditing,
+    required this.onCancelEdit,
     required this.onSend,
     required this.onPause,
     required this.onAttach,
@@ -425,10 +432,24 @@ class _ChatInputShell extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Card "A editar mensagem" — agora DENTRO do shell,
+          // acima do texto, com AnimatedSize para entrada/saída
+          // suave (sem "pulo" quando isEditing muda).
+          AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: isEditing
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                    child: _EditingBanner(s: s, onCancel: onCancelEdit),
+                  )
+                : const SizedBox(width: double.infinity, height: 0),
+          ),
           _toolPillRow(),
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               reverse: true,
               child: _textField(),
             ),
@@ -468,11 +489,7 @@ class _ChatInputShell extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONTROLO DE PENSAMENTO — texto puro "Rápido ⌄" / "Raciocínio ⌄",
-// abre popup ancorado ao próprio texto (GestureDetector + GlobalKey
-// + showGeneralDialog), EXATAMENTE o mesmo mecanismo de âncora e
-// animação do popup de opções do cabeçalho (_showHeaderPopupMenu).
-// Itens SEM ícone, ao contrário do popup do cabeçalho.
+// CONTROLO DE PENSAMENTO
 // ══════════════════════════════════════════════════════════════
 
 class ThinkingModeText extends StatelessWidget {
@@ -533,10 +550,6 @@ class ThinkingModeText extends StatelessWidget {
   }
 }
 
-// Popup do controlo de pensamento — geometria e animação idênticas
-// a _showHeaderPopupMenu (aitab_widgets_shared.dart): o botão fica
-// no RODAPÉ do ecrã, por isso o popup abre ACIMA dele (usa `bottom:`
-// em vez de `top:`), com a mesma curva/duração de transição.
 Future<bool?> _showThinkingPopupMenu(
   BuildContext context,
   AppColorScheme s, {
@@ -557,7 +570,7 @@ Future<bool?> _showThinkingPopupMenu(
     barrierDismissible: true,
     barrierLabel: 'Fechar menu',
     barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 180),
+    transitionDuration: const Duration(milliseconds: 220),
     pageBuilder: (dialogCtx, anim, secAnim) {
       return Stack(
         children: [
@@ -605,7 +618,7 @@ Future<bool?> _showThinkingPopupMenu(
       return FadeTransition(
         opacity: curved,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
+          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
           alignment: Alignment.bottomLeft,
           child: child,
         ),
@@ -632,9 +645,6 @@ Widget _buildThinkingMenuItem(
       margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       alignment: Alignment.centerLeft,
-      // Sem ícone — apenas o texto, ao contrário do popup do
-      // cabeçalho (que tem AppIcon antes do label). Alinhado à
-      // esquerda em vez de centrado.
       child: Text(
         label,
         textAlign: TextAlign.left,
@@ -809,7 +819,9 @@ class _RecordingModalContentState extends State<_RecordingModalContent>
                 shape: BoxShape.circle,
               ),
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 160),
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
                 child: AppIcon(
                   _playing ? 'pause' : 'play',
                   key: ValueKey(_playing),
@@ -892,8 +904,8 @@ class _ModalCircleButtonState extends State<_ModalCircleButton> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.92 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
         child: Container(
           width: 56,
           height: 56,
@@ -903,7 +915,9 @@ class _ModalCircleButtonState extends State<_ModalCircleButton> {
             shape: BoxShape.circle,
           ),
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
             child: AppIcon(
               widget.icon,
               key: ValueKey(widget.icon),
@@ -949,8 +963,8 @@ class _RealWaveform extends StatelessWidget {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: _barSpacing / 2),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 90),
-                curve: Curves.easeOut,
+                duration: const Duration(milliseconds: 130),
+                curve: Curves.easeOutCubic,
                 width: _barWidth,
                 height: _minHeight + amplitude * (_maxHeight - _minHeight),
                 decoration: BoxDecoration(
@@ -1058,7 +1072,7 @@ class _SendButton extends StatelessWidget {
     return GestureDetector(
       onTap: sending ? onPause : (hasText ? onSend : null),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         width: _size,
         height: _size,
@@ -1208,9 +1222,6 @@ class _FloatingAttachmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Adaptado ao tema: escuro mantém o cinza quase-preto original,
-    // claro usa cardBackground (claro) com texto/ícone escuros —
-    // antes era sempre 0xFF262626 + branco, independente do tema.
     final bgColor = s.isDark ? const Color(0xFF262626) : s.cardBackground;
     final contentColor = s.isDark ? Colors.white : s.onSurface;
     final removeButtonBg = s.isDark
@@ -1865,7 +1876,7 @@ class _CustomSwitch extends StatelessWidget {
       onTap: () => onChanged(!value),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         width: 44,
         height: 26,
@@ -1875,7 +1886,7 @@ class _CustomSwitch extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
         ),
         child: AnimatedAlign(
-          duration: const Duration(milliseconds: 160),
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           alignment:
               value ? Alignment.centerRight : Alignment.centerLeft,
@@ -1904,7 +1915,7 @@ Future<void> openAitabCamera(
   final result = await Navigator.of(context).push<AttachedFile>(
     PageRouteBuilder(
       opaque: true,
-      transitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (_, anim, __) => FadeTransition(
         opacity: anim,
         child: const AitabCameraScreen(),

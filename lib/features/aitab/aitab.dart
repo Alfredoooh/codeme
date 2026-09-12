@@ -65,10 +65,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _webSearchEnabled = false;
   bool     _showScrollToBottom = false;
   String?  _conversationId;
-  // null = não em edição; caso contrário, índice em _msgs sendo
-  // editado. A bolha original só é substituída quando o envio for
-  // confirmado (ver _send()); cancelar (_onCancelEdit) não mexe em
-  // _msgs.
   int?     _editingIndex;
   final AiModel _model   = AiModel.deepseek;
   EditorType? _attachedTool;
@@ -113,7 +109,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
   static const double _kTopScrollLimit = 12.0;
 
-  // Tools de pesquisa/leitura web — bloqueadas em modo incógnito.
   static const Set<String> _webDependentToolNames = {
     'web_search',
     'read_website',
@@ -398,9 +393,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   Future<void> _send() async {
     final t = _ctrl.text.trim();
     if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
-    // Confirmação de uma edição: a bolha original (e tudo o que
-    // vinha depois dela, incluindo a resposta antiga) só é removida
-    // agora — nunca ao entrar em modo de edição nem ao digitar.
     if (_editingIndex != null) {
       _msgs.removeRange(_editingIndex!, _msgs.length);
     }
@@ -682,8 +674,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         if (animated) {
-          _scroll.animateTo(_scroll.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+          _scroll.animateTo(
+            _scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeOutQuart,
+          );
         } else {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
         }
@@ -840,10 +835,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
         _notifyHeader();
         break;
       case ConversationAction.incognito:
-        // Alterna: se já está incógnita, DESATIVA (mesmo com
-        // mensagens presentes — sair do incógnito é sempre
-        // permitido). Se não está incógnita, só liga se a conversa
-        // atual ainda não tiver mensagens.
         if (!_incognito && _hasMessages) return;
         _streamSub?.cancel();
         setState(() {
@@ -924,9 +915,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _ctrl.text = msg.content;
       _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
     });
-    // A bolha original permanece visível e intacta enquanto se
-    // edita — só é substituída quando o envio for confirmado
-    // (ver _send()). Cancelar (_onCancelEdit) não mexe em _msgs.
     _inputFocus.requestFocus();
   }
 
@@ -945,9 +933,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   void _onBubbleDelete(int index) {
     setState(() {
       _msgs.removeAt(index);
-      // Se a mensagem apagada era a que estava em edição (ou uma
-      // anterior a ela), o índice deixa de fazer sentido — sai
-      // sempre do modo de edição por precaução.
       if (_editingIndex != null) {
         if (index == _editingIndex) {
           _editingIndex = null;
@@ -1095,6 +1080,9 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
                             padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
@@ -1209,7 +1197,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     onRemoveFile: _onRemoveAttachedFile,
                   ),
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
+                    duration: const Duration(milliseconds: 260),
                     curve: Curves.easeOutCubic,
                     height: keyboardInset > 0
                         ? keyboardInset + 16
@@ -1220,15 +1208,24 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             ),
           ),
 
+          // ── Botão de descer ──────────────────────────────────
+          // Agora um círculo perfeito 44x44, ancorado no canto
+          // direito, flutuando por cima do input bar (não mais
+          // centralizado). Só visível quando o scroll está a mais
+          // de 240px do fim (ver _onScroll). Curva e duração mais
+          // suaves para não parecer um "pop" abrupto.
           if (!_incognito && (_msgs.isNotEmpty || _streamingTextNotifier.value.isNotEmpty))
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: _bottomBarHeight + 1,
-              child: Center(
+              right: 16,
+              bottom: _bottomBarHeight + 12,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                offset: _showScrollToBottom ? Offset.zero : const Offset(0, 0.3),
                 child: AnimatedOpacity(
                   opacity: _showScrollToBottom ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
                   child: IgnorePointer(
                     ignoring: !_showScrollToBottom,
                     child: ScrollToBottomButton(
