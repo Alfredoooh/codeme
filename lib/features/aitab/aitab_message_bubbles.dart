@@ -86,6 +86,11 @@ class UserBubble extends StatefulWidget {
   final VoidCallback onCopy;
   final VoidCallback onDelete;
   final VoidCallback onSelectText;
+  // true quando esta mensagem específica está a ser editada no
+  // input — bloqueia o long-press (que abriria o popup de ações
+  // com "Editar/Copiar/Selecionar/Eliminar") para não permitir
+  // apagar ou editar de novo a bolha enquanto se edita.
+  final bool isBeingEdited;
   const UserBubble({
     super.key,
     required this.s,
@@ -95,6 +100,7 @@ class UserBubble extends StatefulWidget {
     required this.onCopy,
     required this.onDelete,
     required this.onSelectText,
+    this.isBeingEdited = false,
   });
 
   @override
@@ -142,21 +148,26 @@ class _UserBubbleState extends State<UserBubble> {
             ),
           if (widget.text.isNotEmpty)
             GestureDetector(
-              onLongPress: () {
-                final box = context.findRenderObject() as RenderBox;
-                final off = box.localToGlobal(Offset.zero);
-                final sz = box.size;
-                showMessageActionsPopup(
-                  context,
-                  s,
-                  anchorOffset: off,
-                  anchorSize: sz,
-                  onEdit: widget.onEdit,
-                  onCopy: widget.onCopy,
-                  onDelete: widget.onDelete,
-                  onSelectText: widget.onSelectText,
-                );
-              },
+              // Bloqueia o long-press enquanto esta mensagem está a
+              // ser editada — evita que o utilizador apague a bolha
+              // original no meio da edição.
+              onLongPress: widget.isBeingEdited
+                  ? null
+                  : () {
+                      final box = context.findRenderObject() as RenderBox;
+                      final off = box.localToGlobal(Offset.zero);
+                      final sz = box.size;
+                      showMessageActionsPopup(
+                        context,
+                        s,
+                        anchorOffset: off,
+                        anchorSize: sz,
+                        onEdit: widget.onEdit,
+                        onCopy: widget.onCopy,
+                        onDelete: widget.onDelete,
+                        onSelectText: widget.onSelectText,
+                      );
+                    },
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1837,7 +1848,9 @@ class _ScrollToBottomButtonState extends State<ScrollToBottomButton> {
           width: 52, height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: s.cardBackground,
+            // Tema claro: fundo levemente mais branco que o
+            // cardBackground padrão, para o botão se destacar mais.
+            color: s.isDark ? s.cardBackground : Colors.white,
             borderRadius: BorderRadius.circular(17),
             boxShadow: s.floatingShadow,
           ),

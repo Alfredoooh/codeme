@@ -65,6 +65,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   bool     _webSearchEnabled = false;
   bool     _showScrollToBottom = false;
   String?  _conversationId;
+  // null = não em edição; caso contrário, índice em _msgs sendo
+  // editado. A bolha original só é substituída quando o envio for
+  // confirmado (ver _send()); cancelar (_onCancelEdit) não mexe em
+  // _msgs.
+  int?     _editingIndex;
   final AiModel _model   = AiModel.deepseek;
   EditorType? _attachedTool;
   int      _canvasIdSeq  = 0;
@@ -208,6 +213,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _conversationId = id;
       _incognito = false;
       _sending = false;
+      _editingIndex = null;
       _attachedFiles.clear();
     });
     _streamingTextNotifier.value = '';
@@ -392,6 +398,12 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   Future<void> _send() async {
     final t = _ctrl.text.trim();
     if ((t.isEmpty && _attachedFiles.isEmpty) || _sending) return;
+    // Confirmação de uma edição: a bolha original (e tudo o que
+    // vinha depois dela, incluindo a resposta antiga) só é removida
+    // agora — nunca ao entrar em modo de edição nem ao digitar.
+    if (_editingIndex != null) {
+      _msgs.removeRange(_editingIndex!, _msgs.length);
+    }
     final isFirst = _msgs.isEmpty;
 
     final pendingAttachments = List<AttachedFile>.from(_attachedFiles);
@@ -416,6 +428,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       _attachedTool = null;
       _attachedFiles.clear();
       _sending = true;
+      _editingIndex = null;
     });
     _streamingTextNotifier.value = '';
     _streamingThinkNotifier.value = null;
@@ -809,6 +822,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _incognito = false;
           _sending = false;
           _conversationId = null;
+          _editingIndex = null;
           _attachedFiles.clear();
         });
         _streamingTextNotifier.value = '';
@@ -838,6 +852,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _incognito = !_incognito;
           _sending = false;
           _conversationId = null;
+          _editingIndex = null;
           _attachedFiles.clear();
         });
         _streamingTextNotifier.value = '';
@@ -881,6 +896,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
           _incognito = false;
           _sending = false;
           _conversationId = null;
+          _editingIndex = null;
           _attachedFiles.clear();
         });
         _streamingTextNotifier.value = '';
@@ -904,9 +920,20 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     final msg = _msgs[index];
     if (msg.role != 'user') return;
     setState(() {
+      _editingIndex = index;
       _ctrl.text = msg.content;
       _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
-      _msgs.removeRange(index, _msgs.length);
+    });
+    // A bolha original permanece visível e intacta enquanto se
+    // edita — só é substituída quando o envio for confirmado
+    // (ver _send()). Cancelar (_onCancelEdit) não mexe em _msgs.
+    _inputFocus.requestFocus();
+  }
+
+  void _onCancelEdit() {
+    setState(() {
+      _editingIndex = null;
+      _ctrl.clear();
     });
   }
 
@@ -916,7 +943,20 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _onBubbleDelete(int index) {
-    setState(() => _msgs.removeAt(index));
+    setState(() {
+      _msgs.removeAt(index);
+      // Se a mensagem apagada era a que estava em edição (ou uma
+      // anterior a ela), o índice deixa de fazer sentido — sai
+      // sempre do modo de edição por precaução.
+      if (_editingIndex != null) {
+        if (index == _editingIndex) {
+          _editingIndex = null;
+          _ctrl.clear();
+        } else if (index < _editingIndex!) {
+          _editingIndex = _editingIndex! - 1;
+        }
+      }
+    });
     _persistConversation();
   }
 
@@ -943,6 +983,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
     setState(() {
       _msgs.removeRange(userIdx, _msgs.length);
       _ctrl.text = userText;
+      _editingIndex = null;
     });
     _send();
   }
@@ -1095,6 +1136,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                                     s: s,
                                     text: msg.content,
                                     attachments: msg.attachments,
+                                    isBeingEdited: _editingIndex == i,
                                     onEdit: () => _onBubbleEdit(i),
                                     onCopy: () => _onBubbleCopy(i),
                                     onDelete: () => _onBubbleDelete(i),
@@ -1158,6 +1200,8 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                     attachButtonKey: _attachButtonKey,
                     thinkingEnabled: thinkingMode.enabled,
                     onThinkingChanged: thinkingMode.setEnabled,
+                    isEditing: _editingIndex != null,
+                    onCancelEdit: _onCancelEdit,
                     onSend: _send,
                     onPause: _pauseGeneration,
                     onAttach: _openAttachSheet,
@@ -1180,7 +1224,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
             Positioned(
               left: 0,
               right: 0,
-              bottom: _bottomBarHeight + 3,
+              bottom: _bottomBarHeight + 1,
               child: Center(
                 child: AnimatedOpacity(
                   opacity: _showScrollToBottom ? 1.0 : 0.0,

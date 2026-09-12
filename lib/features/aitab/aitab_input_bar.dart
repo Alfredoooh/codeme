@@ -173,6 +173,10 @@ class ChatInput extends StatelessWidget {
   final GlobalKey attachButtonKey;
   final bool thinkingEnabled;
   final ValueChanged<bool> onThinkingChanged;
+  // Quando true, o input está em modo de edição — mostra um card
+  // cancelável acima do campo de texto.
+  final bool isEditing;
+  final VoidCallback onCancelEdit;
   final VoidCallback onSend;
   final VoidCallback onPause;
   final VoidCallback onAttach;
@@ -191,6 +195,8 @@ class ChatInput extends StatelessWidget {
     required this.attachButtonKey,
     required this.thinkingEnabled,
     required this.onThinkingChanged,
+    required this.isEditing,
+    required this.onCancelEdit,
     required this.onSend,
     required this.onPause,
     required this.onAttach,
@@ -222,6 +228,11 @@ class ChatInput extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (isEditing)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _EditingBanner(s: s, onCancel: onCancelEdit),
+              ),
             if (attachedFiles.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -251,6 +262,51 @@ class ChatInput extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BANNER "A editar mensagem" — cancelável, com close_circular
+// ══════════════════════════════════════════════════════════════
+
+class _EditingBanner extends StatelessWidget {
+  final AppColorScheme s;
+  final VoidCallback onCancel;
+  const _EditingBanner({required this.s, required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: s.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: s.outline.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'A editar mensagem',
+              style: TextStyle(
+                fontSize: 13.5,
+                color: s.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onCancel,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: AppIcon('close_circular',
+                  size: 20, color: s.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -372,7 +428,7 @@ class _ChatInputShell extends StatelessWidget {
           _toolPillRow(),
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
               reverse: true,
               child: _textField(),
             ),
@@ -572,12 +628,16 @@ Widget _buildThinkingMenuItem(
     },
     borderRadius: BorderRadius.circular(14),
     child: Container(
+      width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      alignment: Alignment.centerLeft,
       // Sem ícone — apenas o texto, ao contrário do popup do
-      // cabeçalho (que tem AppIcon antes do label).
+      // cabeçalho (que tem AppIcon antes do label). Alinhado à
+      // esquerda em vez de centrado.
       child: Text(
         label,
+        textAlign: TextAlign.left,
         style: TextStyle(
           fontSize: 14,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -1148,6 +1208,15 @@ class _FloatingAttachmentChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Adaptado ao tema: escuro mantém o cinza quase-preto original,
+    // claro usa cardBackground (claro) com texto/ícone escuros —
+    // antes era sempre 0xFF262626 + branco, independente do tema.
+    final bgColor = s.isDark ? const Color(0xFF262626) : s.cardBackground;
+    final contentColor = s.isDark ? Colors.white : s.onSurface;
+    final removeButtonBg = s.isDark
+        ? Colors.white.withOpacity(0.16)
+        : s.onSurface.withOpacity(0.08);
+
     return GestureDetector(
       onTap: () => _openFullScreen(context),
       behavior: HitTestBehavior.opaque,
@@ -1155,7 +1224,7 @@ class _FloatingAttachmentChip extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.only(left: 14, right: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF262626),
+          color: bgColor,
           borderRadius: BorderRadius.circular(999),
           boxShadow: [
             BoxShadow(
@@ -1174,10 +1243,10 @@ class _FloatingAttachmentChip extends StatelessWidget {
                 file.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: contentColor,
                 ),
               ),
             ),
@@ -1189,11 +1258,11 @@ class _FloatingAttachmentChip extends StatelessWidget {
                 height: 26,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.16),
+                  color: removeButtonBg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close,
-                    size: 15, color: Colors.white),
+                child: AppIcon('close_circular',
+                    size: 15, color: contentColor),
               ),
             ),
           ],
