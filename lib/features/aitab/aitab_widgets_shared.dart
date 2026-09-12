@@ -1,15 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_widgets_shared.dart
-//
-// MUDANÇAS NESTA VERSÃO:
-// - Adicionado import `package:lottie/lottie.dart`.
-// - Nova classe `NexaLottieLoader` (a seguir ao `NexaLoaderLogo`).
-//   Usada pelo `StreamingBubble` como loader de "a responder".
-// - `showAttachPopup` deixou de receber `thinkingEnabled` /
-//   `onThinkingToggled` e a linha "Pensar antes de responder" foi
-//   removida — o controlo de pensamento vive agora no texto
-//   "Rápido ⌄ / Raciocínio ⌄" do input bar (ThinkingModeText em
-//   aitab_input_bar.dart).
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:math' as math;
@@ -148,7 +138,7 @@ class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStat
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA BRAND LOGO — ícone do header da tela de chat (logo.svg)
+// NEXA BRAND LOGO
 // ══════════════════════════════════════════════════════════════
 
 class NexaBrandLogo extends StatefulWidget {
@@ -223,10 +213,7 @@ class _NexaBrandLogoState extends State<NexaBrandLogo>
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA SPINNING RING LOADER — anel com gradiente que gira
-// continuamente. Usado no loader de "a responder"
-// (StreamingBubble → showLogoLoader), substituindo a bola sólida
-// do NexaLoaderLogo nesse contexto específico.
+// NEXA SPINNING RING LOADER
 // ══════════════════════════════════════════════════════════════
 
 class NexaSpinningRingLoader extends StatefulWidget {
@@ -326,10 +313,7 @@ class _RingGradientPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOTTIE LOADER — loader de "a responder" via animação Lottie
-// própria do app (assets/icons/lottie/loader.json). Usado apenas
-// no StreamingBubble; o NexaLoaderLogo continua a existir caso
-// seja usado noutro sítio.
+// NEXA LOTTIE LOADER
 // ══════════════════════════════════════════════════════════════
 
 class NexaLottieLoader extends StatelessWidget {
@@ -351,7 +335,7 @@ class NexaLottieLoader extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOADER LOGO — bola única que cresce e encolhe.
+// NEXA LOADER LOGO
 // ══════════════════════════════════════════════════════════════
 
 class NexaLoaderLogo extends StatefulWidget {
@@ -938,6 +922,197 @@ Widget _buildHeaderMenuItem(
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// POPUP DE OPÇÕES DO INPUT BAR
+// (Canvas / Pesquisar web / Competências) — mesmo padrão visual
+// e de animação do popup de opções do cabeçalho
+// (_showHeaderPopupMenu), ancorado ao botão que o abriu, em vez
+// de bottom sheet.
+// ══════════════════════════════════════════════════════════════
+
+enum InputBarOption { canvas, webSearch, widgets }
+
+Future<void> showAttachOptionsPopup(
+  BuildContext context,
+  AppColorScheme s, {
+  required GlobalKey anchorKey,
+  required bool webSearchEnabled,
+  required bool widgetsEnabled,
+  required VoidCallback onOpenCanvas,
+  required ValueChanged<bool> onWebSearchChanged,
+  required ValueChanged<bool> onWidgetsChanged,
+}) async {
+  final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+  if (box == null) return;
+  final overlayState = Overlay.of(context);
+  final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+  final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  final anchorSize = box.size;
+  final overlaySize = overlayBox.size;
+
+  const double popupWidth = 240.0;
+  const double gap = 6.0;
+
+  final rawLeft = anchorTopLeft.dx;
+  final clampedLeft = rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
+  final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
+
+  await showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Fechar menu',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (dialogCtx, anim, secAnim) {
+      return Stack(
+        children: [
+          Positioned(
+            left: clampedLeft,
+            bottom: popupBottom,
+            width: popupWidth,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: s.outline.withOpacity(0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(dialogCtx).pop();
+                          onOpenCanvas();
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          child: Row(
+                            children: [
+                              AppIcon('stacks', size: 18, color: s.onSurface),
+                              const SizedBox(width: 10),
+                              Text('Canvas',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurface)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      _buildToggleMenuItem(
+                        dialogCtx, s, 'globe', 'Pesquisar web', webSearchEnabled, onWebSearchChanged,
+                      ),
+                      _buildToggleMenuItem(
+                        dialogCtx, s, 'skills', 'Competências', widgetsEnabled, onWidgetsChanged,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+    transitionBuilder: (dialogCtx, anim, secAnim, child) {
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
+          alignment: Alignment.bottomLeft,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildToggleMenuItem(
+  BuildContext context,
+  AppColorScheme s,
+  String assetName,
+  String label,
+  bool value,
+  ValueChanged<bool> onChanged,
+) {
+  return InkWell(
+    onTap: () {
+      HapticFeedback.lightImpact();
+      onChanged(!value);
+    },
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          AppIcon(assetName, size: 18, color: s.onSurface),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: s.onSurface)),
+          ),
+          _CustomSwitchSmall(value: value, onChanged: onChanged, s: s),
+        ],
+      ),
+    ),
+  );
+}
+
+class _CustomSwitchSmall extends StatelessWidget {
+  final AppColorScheme s;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _CustomSwitchSmall({required this.s, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      width: 40,
+      height: 24,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: value ? s.primary : s.outline,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// POPUP DE AÇÕES DE MENSAGEM — mesmo padrão (showGeneralDialog +
+// Positioned + ScaleTransition) do _showHeaderPopupMenu. Deixou
+// de usar showMenu nativo.
+// ══════════════════════════════════════════════════════════════
+
 void showMessageActionsPopup(
   BuildContext context,
   AppColorScheme s, {
@@ -950,45 +1125,76 @@ void showMessageActionsPopup(
 }) async {
   final overlayState = Overlay.of(context);
   final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-  final screenSize = overlayBox.size;
+  final overlaySize = overlayBox.size;
 
-  final RelativeRect position = RelativeRect.fromLTRB(
-    anchorOffset.dx,
-    anchorOffset.dy,
-    screenSize.width - (anchorOffset.dx + anchorSize.width),
-    screenSize.height - (anchorOffset.dy + anchorSize.height),
-  );
+  const double popupWidth = 200.0;
+  const double gap = 6.0;
 
-  final result = await showMenu<int>(
+  final rawLeft = anchorOffset.dx + anchorSize.width - popupWidth;
+  final clampedLeft = rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
+  final popupTop = anchorOffset.dy + anchorSize.height + gap;
+
+  final result = await showGeneralDialog<int>(
     context: context,
-    position: position,
-    color: s.floatingSurface,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(22),
-      side: BorderSide(color: s.outline.withOpacity(0.25)),
-    ),
-    items: [
-      PopupMenuItem<int>(
-        value: 0,
-        padding: EdgeInsets.zero,
-        child: _buildMessageMenuItem(s, 'pencil', 'Editar'),
-      ),
-      PopupMenuItem<int>(
-        value: 1,
-        padding: EdgeInsets.zero,
-        child: _buildMessageMenuItem(s, 'copy', 'Copiar'),
-      ),
-      PopupMenuItem<int>(
-        value: 2,
-        padding: EdgeInsets.zero,
-        child: _buildMessageMenuItem(s, 'select_text', 'Selecionar texto'),
-      ),
-      PopupMenuItem<int>(
-        value: 3,
-        padding: EdgeInsets.zero,
-        child: _buildMessageMenuItem(s, 'trash', 'Eliminar', destructive: true),
-      ),
-    ],
+    barrierDismissible: true,
+    barrierLabel: 'Fechar menu',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (dialogCtx, anim, secAnim) {
+      return Stack(
+        children: [
+          Positioned(
+            left: clampedLeft,
+            top: popupTop,
+            width: popupWidth,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: s.outline.withOpacity(0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMessageMenuItemTappable(dialogCtx, s, 'pencil', 'Editar', 0),
+                      _buildMessageMenuItemTappable(dialogCtx, s, 'copy', 'Copiar', 1),
+                      _buildMessageMenuItemTappable(dialogCtx, s, 'select_text', 'Selecionar texto', 2),
+                      _buildMessageMenuItemTappable(dialogCtx, s, 'trash', 'Eliminar', 3, destructive: true),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+    transitionBuilder: (dialogCtx, anim, secAnim, child) {
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
+          alignment: Alignment.topRight,
+          child: child,
+        ),
+      );
+    },
   );
 
   switch (result) {
@@ -1021,12 +1227,43 @@ Widget _buildMessageMenuItem(AppColorScheme s, String assetName, String label, {
   );
 }
 
+// Versão com InkWell + Navigator.pop(value) — necessária porque
+// showGeneralDialog não fecha nem devolve valor automaticamente ao
+// tocar, ao contrário de PopupMenuItem dentro de showMenu.
+Widget _buildMessageMenuItemTappable(
+  BuildContext context,
+  AppColorScheme s,
+  String assetName,
+  String label,
+  int value, {
+  bool destructive = false,
+}) {
+  final color = destructive ? s.error : s.onSurface;
+  return InkWell(
+    onTap: () {
+      HapticFeedback.lightImpact();
+      Navigator.of(context).pop(value);
+    },
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          AppIcon(assetName, size: 18, color: color),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: color),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // ATTACH POPUP
-//
-// O controlo de pensamento deixou de viver aqui — passou a ser o
-// ThinkingModeText no rodapé do input bar. Este popup só abre as
-// três opções de anexo (Arquivos / Fotos / Câmera).
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachPopup(

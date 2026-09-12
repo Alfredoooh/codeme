@@ -1,7 +1,12 @@
+// ══════════════════════════════════════════════════════════════
+// FILE: lib/core/widgets/widgets.dart
+// ══════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/colors.dart';
 
+export 'scroll_behavior.dart';
 
 // ══════════════════════════════════════════════════════════════
 // ÍCONES SVG

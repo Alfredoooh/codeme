@@ -586,8 +586,6 @@ class _AppHeader extends StatelessWidget {
       ]),
     );
 
-    // Appbar sempre sólido: sem blur, sem opacidade, mesma cor
-    // independentemente do valor de `transparent` recebido.
     return Container(color: headerBackground, child: content);
   }
 }

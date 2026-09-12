@@ -1,21 +1,11 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_input_bar.dart
-//
-// MUDANÇAS NESTA VERSÃO:
-// - Controlo de pensamento saiu do sheet do "+" (switch) e passou
-//   a ser um texto puro "Rápido ⌄" / "Raciocínio ⌄" com chevron,
-//   encostado à direita do botão "+", dentro do rodapé do input.
-//   Abre um PopupMenuButton nativo (menu ancorado ao próprio texto,
-//   não modal centrado). O estado vive em `thinkingMode`
-//   (ThinkingModeNotifier, definido em aitab_models.dart) — este
-//   ficheiro apenas o lê e emite o toggle para cima.
-// - showAttachMenuSheet deixou de receber/trazer thinking: só
-//   mantém Canvas, Pesquisar web e Competências.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:record/record.dart';
 import '../../core/theme/colors.dart';
 import '../../core/widgets/widgets.dart';
@@ -422,17 +412,17 @@ class _ChatInputShell extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// CONTROLRO DE PENSAMENTO — texto puro "Rápido ⌄" / "Raciocínio ⌄"
-// com PopupMenuButton ancorado ao próprio texto. Encostado à
-// direita do botão "+". O estado é lido/escrito pelo AiTabState via
-// thinkingMode (ThinkingModeNotifier em aitab_models.dart).
+// CONTROLO DE PENSAMENTO — texto puro "Rápido ⌄" / "Raciocínio ⌄",
+// abre popup ancorado ao próprio texto (GestureDetector + GlobalKey
+// + showGeneralDialog), EXATAMENTE o mesmo mecanismo de âncora e
+// animação do popup de opções do cabeçalho (_showHeaderPopupMenu).
+// Itens SEM ícone, ao contrário do popup do cabeçalho.
 // ══════════════════════════════════════════════════════════════
 
 class ThinkingModeText extends StatelessWidget {
   final AppColorScheme s;
   final bool enabled;
   final ValueChanged<bool> onChanged;
-
   const ThinkingModeText({
     super.key,
     required this.s,
@@ -442,63 +432,29 @@ class ThinkingModeText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<bool>(
-      tooltip: '',
-      onSelected: onChanged,
-      color: s.cardBackground,
-      elevation: 8,
-      position: PopupMenuPosition.under,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      itemBuilder: (ctx) => [
-        PopupMenuItem<bool>(
-          value: false,
-          height: 44,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 18,
-                child: !enabled
-                    ? AppIcon('check', size: 14, color: s.primary)
-                    : const SizedBox.shrink(),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Rápido',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: !enabled ? FontWeight.w700 : FontWeight.w500,
-                  color: s.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<bool>(
-          value: true,
-          height: 44,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 18,
-                child: enabled
-                    ? AppIcon('check', size: 14, color: s.primary)
-                    : const SizedBox.shrink(),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Raciocínio',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: enabled ? FontWeight.w700 : FontWeight.w500,
-                  color: s.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    final GlobalKey anchorKey = GlobalKey();
+    return GestureDetector(
+      key: anchorKey,
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+        if (box == null) return;
+        final overlayState = Overlay.of(context);
+        final overlayBox = overlayState.context.findRenderObject() as RenderBox;
+        final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+        final anchorSize = box.size;
+
+        final result = await _showThinkingPopupMenu(
+          context,
+          s,
+          anchorTopLeft: anchorTopLeft,
+          anchorSize: anchorSize,
+          overlaySize: overlayBox.size,
+          enabled: enabled,
+        );
+
+        if (result != null) onChanged(result);
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         child: Row(
@@ -519,6 +475,117 @@ class ThinkingModeText extends StatelessWidget {
       ),
     );
   }
+}
+
+// Popup do controlo de pensamento — geometria e animação idênticas
+// a _showHeaderPopupMenu (aitab_widgets_shared.dart): o botão fica
+// no RODAPÉ do ecrã, por isso o popup abre ACIMA dele (usa `bottom:`
+// em vez de `top:`), com a mesma curva/duração de transição.
+Future<bool?> _showThinkingPopupMenu(
+  BuildContext context,
+  AppColorScheme s, {
+  required Offset anchorTopLeft,
+  required Size anchorSize,
+  required Size overlaySize,
+  required bool enabled,
+}) {
+  const double popupWidth = 160.0;
+  const double gap = 6.0;
+
+  final rawLeft = anchorTopLeft.dx;
+  final clampedLeft = rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
+  final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
+
+  return showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Fechar menu',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 180),
+    pageBuilder: (dialogCtx, anim, secAnim) {
+      return Stack(
+        children: [
+          Positioned(
+            left: clampedLeft,
+            bottom: popupBottom,
+            width: popupWidth,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: s.floatingSurface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: s.outline.withOpacity(0.25)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildThinkingMenuItem(dialogCtx, s, 'Rápido', !enabled, false),
+                      _buildThinkingMenuItem(dialogCtx, s, 'Raciocínio', enabled, true),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+    transitionBuilder: (dialogCtx, anim, secAnim, child) {
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curved),
+          alignment: Alignment.bottomLeft,
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildThinkingMenuItem(
+  BuildContext context,
+  AppColorScheme s,
+  String label,
+  bool selected,
+  bool value,
+) {
+  return InkWell(
+    onTap: () {
+      HapticFeedback.lightImpact();
+      Navigator.of(context).pop(value);
+    },
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      // Sem ícone — apenas o texto, ao contrário do popup do
+      // cabeçalho (que tem AppIcon antes do label).
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          color: selected ? s.primary : s.onSurface,
+        ),
+      ),
+    ),
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1289,11 +1356,6 @@ class _CanvasCard extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // SHEET: MENU "+"
-//
-// O controlo de pensamento já não vive aqui — passou a ser um
-// texto "Rápido ⌄" / "Raciocínio ⌄" no rodapé do input bar.
-// Este sheet só mantém: Câmera / Fotos / Arquivo local, Canvas,
-// Pesquisar web e Competências.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachMenuSheet(

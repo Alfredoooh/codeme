@@ -1,18 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_message_bubbles.dart
-//
-// MUDANÇAS NESTA VERSÃO:
-// - Import `package:flutter_svg/flutter_svg.dart` e `package:pdfx/pdfx.dart`.
-// - UserBubble: anexos passaram para FORA da bolha (acima), com
-//   AnimatedSize para transição suave. Texto continua dentro do
-//   container arredondado.
-// - _UserAttachmentChip substituído por _UserAttachmentCard +
-//   _ImageAttachmentThumb (clicável, ecrã cheio) +
-//   _PdfAttachmentThumb (renderiza 1ª página do PDF com pdfx) +
-//   _FileAttachmentCard (ficheiro genérico).
-// - AssistantBubble: pensamento sempre no topo (antes do texto).
-// - StreamingBubble: loader de "a responder" passa a NexaLottieLoader.
-// - EmptyState: SvgPicture.asset('assets/images/logo.svg') direto.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:io';
@@ -89,10 +76,6 @@ Future<void> showOpenLinkDialog(
 
 // ──────────────────────────────────────────────────────────────
 // BOLHA DO UTILIZADOR
-//
-// Anexos ficam ACIMA da bolha de texto, fora do container
-// arredondado — nunca dentro dele. AnimatedSize dá a transição
-// suave quando a lista de anexos muda.
 // ──────────────────────────────────────────────────────────────
 
 class UserBubble extends StatefulWidget {
@@ -140,7 +123,6 @@ class _UserBubbleState extends State<UserBubble> {
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Anexos ACIMA da bolha, fora do container de texto.
           if (widget.attachments != null && widget.attachments!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
@@ -246,7 +228,6 @@ class _UserAttachmentCard extends StatelessWidget {
   }
 }
 
-// ── Miniatura de imagem — clicável, abre em ecrã cheio ──
 class _ImageAttachmentThumb extends StatelessWidget {
   final AppColorScheme s;
   final Map<String, dynamic> attachment;
@@ -305,7 +286,6 @@ class _ImageAttachmentThumb extends StatelessWidget {
   }
 }
 
-// ── Miniatura de PDF — renderiza a 1ª página real como imagem ──
 class _PdfAttachmentThumb extends StatefulWidget {
   final AppColorScheme s;
   final Map<String, dynamic> attachment;
@@ -430,7 +410,6 @@ class _PdfAttachmentThumbState extends State<_PdfAttachmentThumb> {
   }
 }
 
-// ── Card de ficheiro genérico (ex: .dart, .zip) ──
 class _FileAttachmentCard extends StatelessWidget {
   final AppColorScheme s;
   final Map<String, dynamic> attachment;
@@ -1122,7 +1101,7 @@ class SourcesRow extends StatelessWidget {
                           child: Image.network(
                             _faviconUrl(urls[i]),
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(Icons.public, size: 10, color: s.onSurfaceVariant),
+                            errorBuilder: (_, __, ___) => AppIcon('globe', size: 10, color: s.onSurfaceVariant),
                           ),
                         ),
                       ),
@@ -1162,11 +1141,19 @@ class _SourcesModalContent extends StatelessWidget {
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: s.onSurface)),
             ),
             Expanded(
-              child: ListView.builder(
+              child: ListView.separated(
                 controller: scrollController,
                 physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 itemCount: urls.length,
+                separatorBuilder: (_, __) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Divider(
+                    height: 1,
+                    thickness: 0.6,
+                    color: s.outline.withOpacity(0.3),
+                  ),
+                ),
                 itemBuilder: (_, i) {
                   final url = urls[i];
                   return _SourceModalRow(s: s, url: url);
@@ -1212,7 +1199,7 @@ class _SourceModalRow extends StatelessWidget {
                 child: Image.network(
                   _faviconUrl(url),
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.public, size: 14, color: s.onSurfaceVariant),
+                  errorBuilder: (_, __, ___) => AppIcon('globe', size: 14, color: s.onSurfaceVariant),
                 ),
               ),
             ),
@@ -1235,9 +1222,6 @@ class _SourceModalRow extends StatelessWidget {
 
 // ──────────────────────────────────────────────────────────────
 // BOLHA DO ASSISTENTE
-//
-// Pensamento vem SEMPRE primeiro — é o passo que antecede a
-// resposta, tanto no streaming como no histórico já guardado.
 // ──────────────────────────────────────────────────────────────
 
 class AssistantBubble extends StatelessWidget {
@@ -1275,7 +1259,6 @@ class AssistantBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final children = <Widget>[];
 
-    // Pensamento SEMPRE primeiro.
     if (thinking != null && thinking!.isNotEmpty) {
       children.add(_ThinkingHistoryCollapsible(s: s, thinking: thinking!));
     }
@@ -1630,8 +1613,6 @@ class _StreamingBubbleState extends State<StreamingBubble> {
     }
 
     if (!anyContent && thinking == null) {
-      // Loader de "a responder" agora é Lottie próprio do app,
-      // em vez do anel giratório.
       children.add(widget.showLogoLoader
           ? const NexaLottieLoader(size: 28)
           : AiSmallDotsLoader(color: s.onSurfaceVariant));
@@ -1811,14 +1792,14 @@ class _ScrollToBottomButtonState extends State<ScrollToBottomButton> {
         duration: const Duration(milliseconds: 110),
         curve: Curves.easeOutCubic,
         child: Container(
-          width: 38, height: 38,
+          width: 52, height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: s.cardBackground,
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(17),
             boxShadow: s.floatingShadow,
           ),
-          child: AppIcon('double_chevron_down', color: s.onSurface, size: 18),
+          child: AppIcon('arrow_down', color: s.onSurface, size: 16),
         ),
       ),
     );
@@ -1839,7 +1820,6 @@ class EmptyState extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo estático da marca — SVG directo, sem pulsar.
                 SvgPicture.asset(
                   'assets/images/logo.svg',
                   width: 112,

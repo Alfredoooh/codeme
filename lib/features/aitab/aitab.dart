@@ -1,21 +1,5 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/features/aitab/aitab.dart
-//
-// MUDANÇAS NESTA VERSÃO:
-// - O estado de "pensar antes de responder" saiu do estado local
-//   (_thinkingEnabled) e passou a viver em `thinkingMode`
-//   (ThinkingModeNotifier, definido em aitab_models.dart, persistido
-//   via shared_preferences). Este ficheiro só ouve o notifier e
-//   redesenha; o toggle em si é emitido pelo ThinkingModeText no
-//   aitab_input_bar.dart e chega aqui já traduzido para
-//   thinkingMode.setEnabled.
-// - `_onThinkingToggled` removido — deixou de haver dois sítios a
-//   escrever o mesmo estado.
-// - `_openAttachSheet` (popup) e `_openAiOptionsSheet` (sheet do "+")
-//   deixaram de passar thinking ao showAttachPopup/showAttachMenuSheet,
-//   porque o controlo já não vive aí.
-// - As duas chamadas a `_model.provider(...)` passam a ler
-//   thinkingMode.enabled.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:async';
@@ -47,15 +31,6 @@ import '../../core/widgets/app_sheet.dart';
 export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
 export 'aitab_widgets_shared.dart'
     show AiConversationMenuButton, NexaLoaderLogo, NexaLottieLoader, NexaSpinningRingLoader, ShimmerText;
-
-class _ClampedTopScrollPhysics extends ClampingScrollPhysics {
-  const _ClampedTopScrollPhysics({super.parent});
-
-  @override
-  _ClampedTopScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return _ClampedTopScrollPhysics(parent: buildParent(ancestor));
-  }
-}
 
 class AiTab extends StatefulWidget {
   final VoidCallback onFirstMessage;
@@ -131,6 +106,24 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   double _bottomBarHeight = 96;
 
   static const double _kTopScrollLimit = 12.0;
+
+  // Tools de pesquisa/leitura web — bloqueadas em modo incógnito.
+  static const Set<String> _webDependentToolNames = {
+    'web_search',
+    'read_website',
+    'search_images',
+    'search_videos',
+    'search_books',
+    'search_market',
+    'get_weather',
+  };
+
+  List<ToolDefinition> get _availableTools {
+    if (!_incognito) return kAllTools;
+    return kAllTools
+        .where((t) => !_webDependentToolNames.contains(t.name))
+        .toList();
+  }
 
   @override
   void initState() {
@@ -389,7 +382,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       provider: _model.provider(thinkingEnabled: thinkingMode.enabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
-      tools: kAllTools,
+      tools: _availableTools,
     ).listen(
       (event) => _handleStreamEvent(event, isFirst, originalUserText, historyWithToolResults),
       onError: (e) => _handleStreamError(e),
@@ -458,7 +451,7 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       provider: _model.provider(thinkingEnabled: thinkingMode.enabled),
       language: 'pt',
       systemPrompt: _effectiveSystemPrompt,
-      tools: _widgetsEnabled ? kAllTools : null,
+      tools: _widgetsEnabled ? _availableTools : null,
     ).listen(
       (event) => _handleStreamEvent(event, isFirst, t, _msgs),
       onError: (e) => _handleStreamError(e),
@@ -776,18 +769,15 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
   }
 
   void _openAiOptionsSheet() {
-    showAttachMenuSheet(
+    showAttachOptionsPopup(
       context,
       AppTheme.of(context),
       anchorKey: _attachButtonKey,
       webSearchEnabled: _webSearchEnabled,
       widgetsEnabled: _widgetsEnabled,
+      onOpenCanvas: _openCanvasPopup,
       onWebSearchChanged: setWebSearchEnabled,
       onWidgetsChanged: setWidgetsEnabled,
-      onOpenCanvas: _openCanvasPopup,
-      onCamera: _onOpenCamera,
-      onPhotos: _onAttachPhotos,
-      onLocalFile: _onAttachFiles,
     );
   }
 
@@ -1059,7 +1049,6 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
                         ? EmptyState(s: s, topPadding: headerHeight)
                         : ListView.builder(
                             controller: _scroll,
-                            physics: const _ClampedTopScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(16, headerHeight, 16, _bottomBarHeight + 12),
                             itemCount: totalCount,
                             itemBuilder: (_, i) {
@@ -1184,16 +1173,19 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
 
           if (!_incognito && (_msgs.isNotEmpty || _streamingTextNotifier.value.isNotEmpty))
             Positioned(
-              right: 16,
+              left: 0,
+              right: 0,
               bottom: _bottomBarHeight + 8,
-              child: AnimatedOpacity(
-                opacity: _showScrollToBottom ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 180),
-                child: IgnorePointer(
-                  ignoring: !_showScrollToBottom,
-                  child: ScrollToBottomButton(
-                    s: s,
-                    onTap: () => _scrollToEnd(),
+              child: Center(
+                child: AnimatedOpacity(
+                  opacity: _showScrollToBottom ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 180),
+                  child: IgnorePointer(
+                    ignoring: !_showScrollToBottom,
+                    child: ScrollToBottomButton(
+                      s: s,
+                      onTap: () => _scrollToEnd(),
+                    ),
                   ),
                 ),
               ),
