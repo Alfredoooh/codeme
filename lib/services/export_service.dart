@@ -12,7 +12,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../features/apps/app_types.dart' show LocalCanvasItem, LocalCanvasKind;
+import '../screens/apps/app_types.dart' show LocalCanvasItem, LocalCanvasKind;
 // TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
 
 // TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
