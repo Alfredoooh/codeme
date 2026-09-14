@@ -1,14 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_models.dart
-// Tipos de dados puros do AiTab: mensagens auxiliares, modelos de
-// IA, ações de conversa, e todos os parsers de marcadores
-// ([[VISUAL:...]], [[DOCUMENT:...]], [[images:...]], [[canvas:...]],
-// [[THINKING]], [[sources:...]]). Zero UI neste arquivo.
-//
-// SINCRONIZADO com o catálogo real de 36 tools ativas (kAllTools em
-// api_service.dart).
-// ══════════════════════════════════════════════════════════════
-
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -20,7 +9,7 @@ import '../apps/app_types.dart';
 // TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
 // Import necessário para summaryForToolResult aceder a kVisualTools/kDocumentTools.
-import 'aitab_tools.dart';
+import 'chat_tools.dart';
 
 
 String iconForEditorType(EditorType type) {

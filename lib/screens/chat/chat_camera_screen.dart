@@ -1,19 +1,7 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_camera_screen.dart
-//
-// Tela de câmera própria do app, sem depender do picker do sistema
-// operativo. Usa o pacote `camera` diretamente, com um layout
-// próprio: preview em tela cheia, obturador central, alternância
-// frontal/traseira e toggle de flash.
-//
-// Dependência necessária no pubspec.yaml:
-//   camera: ^0.10.5+9  (ou versão compatível)
-// ══════════════════════════════════════════════════════════════
-
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'aitab_models.dart';
+import 'chat_models.dart';
 
 class AitabCameraScreen extends StatefulWidget {
   const AitabCameraScreen({super.key});

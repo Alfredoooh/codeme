@@ -13,10 +13,10 @@ import '../../widgets/animated_canvas_icon.dart';
 import '../apps/app_types.dart';
 import '../apps/registry/app_registry.dart';
 import '../apps/sheets/sheets_screen.dart';
-import 'aitab_models.dart';
-import 'aitab_widgets_shared.dart';
-import 'aitab_camera_screen.dart';
-import 'aitab_image_viewer_screen.dart';
+import 'chat_models.dart';
+import 'widgets/chat_widgets_shared.dart';
+import 'chat_camera_screen.dart';
+import 'chat_image_viewer_screen.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SHEET GENÉRICO PLANO

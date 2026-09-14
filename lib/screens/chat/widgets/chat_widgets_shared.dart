@@ -11,7 +11,7 @@ import '../../../core/theme/colors.dart';
 import '../../../widgets/widgets.dart';
 import '../../../widgets/animated_canvas_icon.dart';
 import '../../apps/app_types.dart';
-import 'aitab_models.dart';
+import '../chat_models.dart';
 
 // ══════════════════════════════════════════════════════════════
 // SHEET GENÉRICO PLANO

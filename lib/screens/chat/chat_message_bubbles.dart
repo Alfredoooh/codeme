@@ -1,7 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_message_bubbles.dart
-// ══════════════════════════════════════════════════════════════
-
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -20,11 +16,11 @@ import '../../widgets/app_sheet.dart';
 import '../ai_widgets/ai_widgets.dart';
 import '../apps/app_types.dart';
 import '../apps/sheets/sheets_screen.dart';
-import 'aitab_models.dart';
-import 'aitab_widgets_shared.dart';
-import 'aitab_progress_cards.dart';
+import 'chat_models.dart';
+import 'chat_widgets_shared.dart';
+import 'chat_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
-import 'aitab_image_viewer_screen.dart';
+import 'chat_image_viewer_screen.dart';
 
 TextStyle aiBodyTextStyle(AppColorScheme s) => TextStyle(
       fontSize: 15,

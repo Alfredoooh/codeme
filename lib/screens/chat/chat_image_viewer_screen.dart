@@ -1,15 +1,6 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_image_viewer_screen.dart
-//
-// Tela de visualização em ecrã inteiro de um ficheiro anexado
-// (imagem com zoom/pan, ou cartão genérico para outros tipos).
-// Extraída para ficheiro próprio a partir do antigo
-// _FullScreenFileView de aitab_input_bar.dart.
-// ══════════════════════════════════════════════════════════════
-
 import 'package:flutter/material.dart';
 import '../../widgets/widgets.dart';
-import 'aitab_models.dart';
+import 'chat_models.dart';
 
 class AitabImageViewerScreen extends StatelessWidget {
   final AttachedFile file;

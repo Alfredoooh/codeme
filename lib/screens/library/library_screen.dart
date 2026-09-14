@@ -1,14 +1,9 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/library_screen.dart
-// ══════════════════════════════════════════════════════════════
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../../core/theme/colors.dart';
 import '../../widgets/widgets.dart';
-// TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../apps/app_types.dart';

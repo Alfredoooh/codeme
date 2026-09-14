@@ -1,62 +1,3 @@
-=====================================================================
-lib/screens/chat/chat_tools.dart  (COMPLETO)
-=====================================================================
-
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_tools.dart
-// Execução de tool calls e o widget de ícone por-tool com fallback.
-//
-// SINCRONIZADO com o catálogo real de 36 tools ativas (kAllTools em
-// api_service.dart):
-// - Removidos os cases 'search_place' e 'search_calendar_date' (as
-//   tools correspondentes saíram do catálogo enviado ao modelo — o
-//   modelo nunca mais vai gerar essas chamadas, e as funções
-//   resolvePlaceQuery/resolveCalendarDateQuery deixam de ser usadas
-//   aqui; ficam disponíveis noutro módulo caso voltem a ser
-//   necessárias).
-// - kVisualTools perdeu generate_random_avatar (removida do
-//   catálogo) e ganhou generate_barcode (existe no catálogo e
-//   devolve content_base64 tal como as outras tools visuais).
-// - kDocumentTools perdeu create_pdf_structured (absorvida por
-//   create_pdf — já não é um nome de tool separado) e
-//   html_to_docx/html_to_pdf/html_to_xlsx/html_to_pptx/
-//   create_project_zip (removidas do catálogo); ganhou create_file
-//   (devolve content_base64 + filename, mesmo formato de download).
-// - kToolAttachmentFields perdeu as entradas para tools removidas
-//   (extract_document_outline, docx_to_html, pdf_to_images,
-//   pptx_to_images, audio_duration_check, get_image_colors,
-//   image_metadata, vectorize_image) — mantidas só as que
-//   correspondem a tools do catálogo atual.
-//
-// CORREÇÃO NESTA VERSÃO — CAMPO DE RESPOSTA NÃO NORMALIZADO:
-// documents.py devolve o documento sob uma chave própria por tool
-// (pdf_base64/docx_base64/xlsx_base64/pptx_base64), NÃO sob
-// content_base64. O Worker passa isto adiante sem renomear — é o
-// mesmo comportamento que o testador HTML de documentos já
-// documenta e resolve via RAW_FIELD_BY_TOOL. extractDocumentPayload
-// replica exatamente essa lógica aqui: para as 4 tools do
-// documents.py, lê o campo certo por nome de tool; para as
-// restantes kDocumentTools (create_file, csv_to_xlsx, merge_pdfs,
-// split_pdf_pages), continua a ler content_base64 como já
-// funcionava. Sem isto, os 4 documentos do documents.py caíam
-// sempre no passthrough e nunca mostravam o ToolResultDownloadCard.
-//
-// NOVO NESTA VERSÃO — EXECUÇÃO LOCAL:
-// executeToolCall passa a consultar kLocallyExecutableTools (28 das
-// 36 tools) ANTES de tocar a rede. Se a tool tiver implementação
-// local (lib/tools/tool_registry.dart), corre inteiramente no
-// dispositivo via chat_tools_local_bridge.dart — sem round-trip à
-// API, sem gastar créditos. As 9 tools que dependem de serviço
-// externo (web_search, search_images, search_videos, search_books,
-// get_weather, read_website, send_email, search_market,
-// download_image_for_project) continuam a ir sempre via
-// ToolsApiService.executeTool, exatamente como antes. Todo o resto
-// do pipeline (kVisualTools, kDocumentTools, extractDocumentPayload,
-// processToolCalls) é agnóstico a essa divisão — recebe sempre o
-// mesmo shape achatado de Map<String, dynamic>, venha ele do
-// dispositivo ou da API.
-// ══════════════════════════════════════════════════════════════
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -64,9 +5,8 @@ import '../../core/theme/colors.dart';
 // TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
-// TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
-import 'aitab_models.dart';
+import 'chat_models.dart';
 import 'chat_tools_local_bridge.dart';
 
 

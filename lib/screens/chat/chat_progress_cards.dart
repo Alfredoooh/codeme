@@ -1,20 +1,3 @@
-// ══════════════════════════════════════════════════════════════
-// FILE: lib/aitab/aitab_progress_cards.dart
-// Cards de progresso mostrados durante o streaming (canvas, widget,
-// tool call genérico) e os modais que os expandem.
-//
-// CORREÇÃO: _ToolCallProgressCard agora usa ToolIcon (SVG por-tool
-// com fallback) em vez do ícone fixo 'tools', e o texto está
-// explicitamente alinhado à esquerda dentro do Expanded.
-// AJUSTE VISUAL: ícones e textos de progresso sem azul e sem bold
-// excessivo.
-//
-// NOVO: _ProcessStepRow agora mostra favicons de domínios visitados
-// (web_search/read_website) e miniaturas de imagens encontradas
-// (search_images) diretamente dentro do passo do processo, sem
-// precisar de widgets soltos.
-// ══════════════════════════════════════════════════════════════
-
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../widgets/widgets.dart';
@@ -28,9 +11,9 @@ import '../../widgets/app_sheet.dart';
 // TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
 import '../apps/sheets/sheets_screen.dart';
-import 'aitab_models.dart';
-import 'aitab_widgets_shared.dart';
-import 'aitab_tools.dart';
+import 'chat_models.dart';
+import 'widgets/chat_widgets_shared.dart';
+import 'chat_tools.dart';
 
 
 class StreamingMarkdownCard extends StatelessWidget {
