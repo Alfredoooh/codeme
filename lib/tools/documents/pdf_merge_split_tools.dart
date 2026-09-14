@@ -1,7 +1,3 @@
-=====================================================================
-lib/tools/documents/pdf_merge_split_tools.dart  (IMPLEMENTADO — sem placeholders)
-=====================================================================
-
 // merge_pdfs, split_pdf_pages
 //
 // Operam sobre PDFs JÁ EXISTENTES (bytes) — manipulação de baixo
@@ -9,6 +5,7 @@ lib/tools/documents/pdf_merge_split_tools.dart  (IMPLEMENTADO — sem placeholde
 
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:ui' show Offset;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../shared/tool_result.dart';
@@ -44,11 +41,7 @@ class PdfMergeSplitTools {
         for (int i = 0; i < doc.pages.count; i++) {
           final template = doc.pages[i].createTemplate();
           final newPage = merged.pages.add();
-          newPage.graphics.drawPdfTemplate(
-            template,
-            const Offset(0, 0),
-            Size(newPage.getClientSize().width, newPage.getClientSize().height),
-          );
+          newPage.graphics.drawPdfTemplate(template, const Offset(0, 0));
           totalPages++;
         }
       }
@@ -108,11 +101,7 @@ class PdfMergeSplitTools {
 
         final template = source.pages[idx].createTemplate();
         final newPage = output.pages.add();
-        newPage.graphics.drawPdfTemplate(
-          template,
-          const Offset(0, 0),
-          Size(newPage.getClientSize().width, newPage.getClientSize().height),
-        );
+        newPage.graphics.drawPdfTemplate(template, const Offset(0, 0));
       }
 
       if (output.pages.count == 0) {

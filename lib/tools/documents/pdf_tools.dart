@@ -1,149 +1,45 @@
-=====================================================================
-lib/tools/documents/pdf_tools.dart
-=====================================================================
+// read_pdf_contents
+//
+// Extrai texto e contagem de páginas de um PDF existente via
+// syncfusion_flutter_pdf (PdfTextExtractor).
 
-// create_pdf, create_pdf_structured
-//
-// ESTRATÉGIA: gerar PDF a partir de HTML/CSS formatado, não montando
-// o PDF campo a campo no pacote `pdf`. Isso permite documentos ricos
-// (tabelas, estilos, layout complexo) com fidelidade real.
-//
-// flutter_inappwebview (já presente no pubspec) tem suporte nativo a
-// exportação de PDF a partir do conteúdo renderizado da WebView, via
-// InAppWebViewController.createPdf() (Android/iOS). É a forma mais
-// fiel de converter HTML complexo em PDF sem reescrever um motor de
-// layout CSS em Dart puro.
-//
-// Este arquivo depende de server/tools_queue.dart para garantir que
-// apenas uma renderização aconteça por vez (ver discussão de RAM/fila
-// serial já feita na conversa).
-
-import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'dart:convert';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../shared/tool_result.dart';
 import '../server/tools_queue.dart';
 
-class PdfTools {
-  // Instância única de HeadlessInAppWebView, reaproveitada entre
-  // chamadas — nunca cria uma nova WebView por requisição.
-  static HeadlessInAppWebView? _headlessWebView;
-  static InAppWebViewController? _controller;
-
-  static const int _renderTimeoutMs = 20000;
-
-  /// create_pdf
-  /// input: { html: String, page_format?: String }
-  static Future<ToolResult> createPdf(Map<String, dynamic> input) {
-    return ToolsQueue.instance.enqueue(() => _renderHtmlToPdf(input));
+class PdfReaderTool {
+  /// read_pdf_contents
+  /// input: { pdf_base64: String }
+  static Future<ToolResult> readPdfContents(Map<String, dynamic> input) {
+    return ToolsQueue.instance.enqueue(() => _readImpl(input));
   }
 
-  /// create_pdf_structured
-  /// input: { title?: String, html: String }
-  /// Diferença de create_pdf: injeta um wrapper de estilo padrão
-  /// (título + margens consistentes) antes de renderizar, garantindo
-  /// aparência de "documento estruturado" mesmo que o HTML de entrada
-  /// seja só um corpo solto.
-  static Future<ToolResult> createPdfStructured(Map<String, dynamic> input) {
-    final String rawHtml = (input['html'] as String?) ?? '';
-    final String? title = input['title'] as String?;
-
-    final wrappedHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body { font-family: -apple-system, Arial, sans-serif; margin: 40px; color: #1a1a1a; }
-  h1.doc-title { font-size: 24px; margin-bottom: 24px; border-bottom: 2px solid #333; padding-bottom: 8px; }
-  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-  th { background: #f2f2f2; }
-</style>
-</head>
-<body>
-  ${title != null ? '<h1 class="doc-title">$title</h1>' : ''}
-  $rawHtml
-</body>
-</html>
-''';
-
-    return ToolsQueue.instance.enqueue(
-      () => _renderHtmlToPdf({...input, 'html': wrappedHtml}),
-    );
-  }
-
-  static Future<ToolResult> _renderHtmlToPdf(Map<String, dynamic> input) async {
-    final String? html = input['html'] as String?;
-    if (html == null || html.trim().isEmpty) {
-      return ToolResult.error('Parâmetro "html" é obrigatório.', code: 'INVALID_INPUT');
+  static Future<ToolResult> _readImpl(Map<String, dynamic> input) async {
+    final String? pdfBase64 = input['pdf_base64'] as String?;
+    if (pdfBase64 == null || pdfBase64.isEmpty) {
+      return ToolResult.error('Parâmetro "pdf_base64" é obrigatório.', code: 'INVALID_INPUT');
     }
 
+    PdfDocument? doc;
     try {
-      final Uint8List? pdfBytes = await _renderInHeadlessWebView(html)
-          .timeout(const Duration(milliseconds: _renderTimeoutMs));
+      final bytes = base64Decode(pdfBase64);
+      doc = PdfDocument(inputBytes: bytes);
 
-      if (pdfBytes == null) {
-        return ToolResult.error('Falha ao gerar PDF: retorno vazio.', code: 'RENDER_FAILED');
-      }
+      final extractor = PdfTextExtractor(doc);
+      final String fullText = extractor.extractText();
+      final int pageCount = doc.pages.count;
 
       return ToolResult.ok({
-        'pdf_base64': base64EncodeBytes(pdfBytes),
-        'size_bytes': pdfBytes.length,
+        'text': fullText,
+        'page_count': pageCount,
+        'byte_size': bytes.length,
       });
-    } on TimeoutException {
-      return ToolResult.error('Timeout ao renderizar PDF.', code: 'TIMEOUT');
     } catch (e) {
-      return ToolResult.error('Erro ao gerar PDF: $e', code: 'RENDER_ERROR');
+      return ToolResult.error('Erro ao ler PDF: $e', code: 'READ_ERROR');
     } finally {
-      // Libera a WebView headless após cada geração — PDF costuma
-      // ser conteúdo maior/mais pesado que uma captura de imagem
-      // simples, então não vale a pena mantê-la viva entre chamadas.
-      await _disposeHeadlessWebView();
+      doc?.dispose();
     }
   }
-
-  static Future<Uint8List?> _renderInHeadlessWebView(String html) async {
-    final completer = Completer<Uint8List?>();
-
-    _headlessWebView = HeadlessInAppWebView(
-      initialData: InAppWebViewInitialData(data: html, mimeType: 'text/html'),
-      onWebViewCreated: (controller) {
-        _controller = controller;
-      },
-      onLoadStop: (controller, url) async {
-        try {
-          // Pequeno delay para garantir que fontes/imagens/CSS
-          // terminaram de aplicar antes de exportar.
-          await Future.delayed(const Duration(milliseconds: 300));
-          final pdfBytes = await controller.createPdf(
-            iosWKPdfConfiguration: IOSWKPdfConfiguration(),
-          );
-          if (!completer.isCompleted) completer.complete(pdfBytes);
-        } catch (e) {
-          if (!completer.isCompleted) completer.completeError(e);
-        }
-      },
-      onReceivedError: (controller, request, error) {
-        if (!completer.isCompleted) {
-          completer.completeError('Erro ao carregar HTML: ${error.description}');
-        }
-      },
-    );
-
-    await _headlessWebView!.run();
-    return completer.future;
-  }
-
-  static Future<void> _disposeHeadlessWebView() async {
-    await _headlessWebView?.dispose();
-    _headlessWebView = null;
-    _controller = null;
-  }
-}
-
-// Helper local — evita import direto de dart:convert espalhado.
-String base64EncodeBytes(Uint8List bytes) {
-  return const Base64Encoder().convert(bytes);
 }

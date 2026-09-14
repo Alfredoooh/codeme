@@ -11,9 +11,9 @@
 //
 // NOTA: qr_flutter precisa ser adicionado ao pubspec.yaml.
 //
-// NOTA (qr 3.x): a classe QrCode não expõe mais `isDark(row, col)`
-// — a leitura dos módulos agora é feita direto via `modules[y][x]`,
-// onde 1 = escuro e 0 = claro.
+// NOTA (qr 3.x): a leitura dos módulos é feita via `isDark(row, col)`,
+// que continua existindo na classe QrCode desta versão — não há
+// campo `modules` público.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -144,14 +144,11 @@ class QrcodeTool {
       return false;
     }
 
-    // Acesso direto aos módulos (compatível com qr 3.x — não há mais
-    // `isDark`). 1 = escuro, 0 = claro, null = não inicializado.
-    final modules = qrCode.modules;
-
-    // Módulos normais (fora dos olhos)
+    // Módulos normais (fora dos olhos). isDark(row, col) é a API
+    // pública de QrCode no pacote qr 3.x — sem equivalente `modules`.
     for (int x = 0; x < moduleCount; x++) {
       for (int y = 0; y < moduleCount; y++) {
-        if (modules[y][x] != 1) continue;
+        if (!qrCode.isDark(y, x)) continue;
         if (_isInsideAnyEye(x, y)) continue;
 
         final rect =

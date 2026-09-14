@@ -12,7 +12,9 @@
 //   - `bc.make(content, width:, height:, drawText:, fontHeight:)`
 //     devolve `Iterable<BarcodeElement>`.
 //   - Subclasses relevantes: `BarcodeBar` (barra preta ou branca) e
-//     `BarcodeText` (texto do rótulo).
+//     `BarcodeText` (texto do rótulo — expõe left/top/width/height/
+//     text, sem campo `fontHeight` próprio; o tamanho do rótulo vem
+//     de `height`).
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -135,14 +137,14 @@ class BarcodeTool {
             Rect.fromLTWH(elem.left, elem.top, elem.width, elem.height);
         canvas.drawRect(rect, elem.black ? blackPaint : whitePaint);
       } else if (elem is BarcodeText) {
-        // BarcodeText traz o conteúdo e a posição; desenhamos com
-        // TextPainter para casar com o resto do Canvas.
+        // BarcodeText não expõe fontHeight — o tamanho do rótulo é o
+        // próprio campo `height` herdado de BarcodeElement.
         final tp = TextPainter(
           text: TextSpan(
             text: elem.text,
             style: TextStyle(
               color: Colors.black,
-              fontSize: elem.fontHeight,
+              fontSize: elem.height,
               fontFamily: 'monospace',
             ),
           ),

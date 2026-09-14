@@ -1,7 +1,3 @@
-=====================================================================
-lib/tools/documents/xlsx_tools.dart  (IMPLEMENTADO — sem placeholders)
-=====================================================================
-
 // create_xlsx, csv_to_xlsx, xlsx_to_json
 //
 // Usa package:excel (adicionado ao pubspec.yaml) para gerar e ler
