@@ -1,12 +1,13 @@
 // lib/tools/charts/math_sheet_tool.dart
+//
 // generate_math_sheet
 //
-// Gera uma folha visual com o passo a passo de uma expressão, mais
-// gráfico opcional. Reaproveita FunctionPlotTool para o gráfico e
-// math_expressions para simplificação/avaliação. O "passo a passo"
-// em si é uma simplificação — math_expressions não gera derivação
-// pedagógica automaticamente, então aqui é montado um resumo (forma
-// original, forma simplificada, resultado numérico se aplicável).
+// Gera uma folha visual com passo a passo resumido de uma expressão,
+// mais gráfico opcional. Reaproveita FunctionPlotTool para o gráfico
+// e math_expressions para simplificação/avaliação.
+//
+// math_expressions 2.x: parser é `Parser` (não GrammarParser nem
+// ShuntingYardParser).
 
 import 'package:math_expressions/math_expressions.dart';
 
@@ -26,11 +27,9 @@ class MathSheetTool {
     final bool showGraph = (input['show_graph'] as bool?) ?? false;
 
     try {
-      // math_expressions 2.x: ShuntingYardParser substitui o antigo
-      // GrammarParser (removido a partir da 2.0).
-      final parser = ShuntingYardParser();
-      final exp = parser.parse(expr);
-      final simplified = exp.simplify();
+      final parser = Parser();
+      final Expression exp = parser.parse(expr);
+      final Expression simplified = exp.simplify();
 
       String? graphImageBase64;
       if (showGraph) {

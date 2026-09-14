@@ -1,10 +1,14 @@
 // lib/tools/charts/function_plot_tool.dart
+//
 // generate_function_plot
 //
-// Usa math_expressions (já presente no pubspec) para parsear e
-// avaliar a expressão matemática ponto a ponto, depois desenha a
-// curva direto via Canvas — sem depender de lib de gráfico, já que
-// é uma única linha/curva simples.
+// Usa math_expressions para parsear e avaliar a expressão matemática
+// ponto a ponto, depois desenha a curva direto via Canvas.
+//
+// math_expressions 2.x: a classe do parser é `Parser` (exportada
+// pelo barrel math_expressions.dart). `GrammarParser` (1.x) e
+// `ShuntingYardParser` (algumas versões 2.5+, mas não em todas) NÃO
+// estão disponíveis de forma confiável. Use `Parser`.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -36,12 +40,16 @@ class FunctionPlotTool {
     final String? title = input['title'] as String?;
     final bool highlightRoots = (input['highlight_roots'] as bool?) ?? false;
 
+    if (xMin >= xMax) {
+      return ToolResult.error('"x_min" deve ser menor que "x_max".',
+          code: 'INVALID_INPUT');
+    }
+
     try {
-      // math_expressions 2.x: o parser é ShuntingYardParser
-      // (GrammarParser existia na 1.x e foi removido).
-      final parser = ShuntingYardParser();
-      final exp = parser.parse(expr);
-      final contextModel = ContextModel();
+      // Parser público e estável do math_expressions 2.x.
+      final parser = Parser();
+      final Expression exp = parser.parse(expr);
+      final ContextModel contextModel = ContextModel();
 
       const int samples = 400;
       final points = <Offset>[];
@@ -51,7 +59,7 @@ class FunctionPlotTool {
       for (int i = 0; i <= samples; i++) {
         final x = xMin + (xMax - xMin) * i / samples;
         contextModel.bindVariable(Variable('x'), Number(x));
-        final y =
+        final double y =
             (exp.evaluate(EvaluationType.REAL, contextModel) as num)
                 .toDouble();
         points.add(Offset(x, y));

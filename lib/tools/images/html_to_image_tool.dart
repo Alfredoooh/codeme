@@ -1,17 +1,17 @@
 // lib/tools/images/html_to_image_tool.dart
+//
 // render_html_to_image
 //
 // Converte HTML formatado em imagem PNG. A IA decide a dimensão —
-// ou seja, `width`/`height` são OPCIONAIS: se não vierem no input,
-// a tool primeiro mede o conteúdo real renderizado (altura natural
-// do HTML a uma largura padrão) e usa isso como dimensão final, em
-// vez de forçar um tamanho fixo arbitrário. Isso evita imagens
-// cortadas ou com espaço em branco sobrando.
+// `width`/`height` são OPCIONAIS: se não vierem no input, a tool
+// mede a altura real do conteúdo renderizado e usa isso como
+// dimensão final.
 //
-// Usa flutter_inappwebview (headless). API v6: a dimensão é definida
-// via `size:` no construtor do HeadlessInAppWebView e ajustada em
-// runtime via `headless.setSize(...)` (não existe mais
-// `controller.setSize`).
+// API flutter_inappwebview 6.x:
+//   - HeadlessInAppWebView usa `initialSize:` (NÃO `size:`).
+//   - Não existe mais `controller.setSize` — redimensão é feita em
+//     `headless.setSize(...)`.
+//   - `headless` é anulável: use `?.run()` / `?.dispose()`.
 
 import 'dart:async';
 import 'dart:convert';
@@ -85,16 +85,14 @@ class HtmlToImageTool {
     required double scale,
   }) async {
     final completer = Completer<_RenderOutput>();
-    HeadlessInAppWebView? headless;
+
+    late final HeadlessInAppWebView headless;
 
     headless = HeadlessInAppWebView(
-      // v6: usa `size:` (não existe mais `initialSize:`)
-      size: Size(width, requestedHeight ?? 600),
+      // v6: parâmetro é `initialSize:` (não `size:`).
+      initialSize: Size(width, requestedHeight ?? 600),
       initialData: InAppWebViewInitialData(data: html, mimeType: 'text/html'),
       initialSettings: InAppWebViewSettings(
-        // garante que o viewport do WebView tenha o tamanho exato
-        // solicitado, sem escalonar por meta-viewport do HTML
-        useShouldOverrideUrlLoading: false,
         transparentBackground: true,
         disableHorizontalScroll: true,
         disableVerticalScroll: true,
@@ -107,7 +105,6 @@ class HtmlToImageTool {
 
           double finalHeight = requestedHeight ?? 600;
 
-          // IA não especificou altura -> mede o conteúdo real via JS.
           if (requestedHeight == null) {
             final measured = await controller.evaluateJavascript(
               source: 'document.body.scrollHeight',
@@ -116,10 +113,9 @@ class HtmlToImageTool {
                 (measured is num) ? measured.toDouble() : null;
             if (measuredHeight != null && measuredHeight > 0) {
               finalHeight = measuredHeight.clamp(100, _maxHeight);
-              // v6: redimensiona o headless (não existe mais
-              // controller.setSize) antes de capturar, evitando corte
-              // ou espaço sobrando.
-              await headless?.setSize(Size(width, finalHeight));
+              // v6: redimensão é no HeadlessInAppWebView (não existe
+              // mais controller.setSize).
+              await headless.setSize(Size(width, finalHeight));
               await Future.delayed(const Duration(milliseconds: 150));
             }
           }
@@ -147,7 +143,7 @@ class HtmlToImageTool {
         } catch (e) {
           if (!completer.isCompleted) completer.completeError(e);
         } finally {
-          await headless?.dispose();
+          await headless.dispose();
         }
       },
       onReceivedError: (controller, request, error) {
