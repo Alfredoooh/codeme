@@ -19,17 +19,17 @@ import '../apps/docs/docs_screen.dart';
 import '../apps/sheets/sheets_app.dart';
 import '../apps/slides/slides_app.dart';
 import '../apps/registry/app_registry.dart';
-import 'aitab_models.dart';
-import 'aitab_tools.dart';
-import 'aitab_widgets_shared.dart';
-import 'aitab_progress_cards.dart';
-import 'aitab_message_bubbles.dart';
-import 'aitab_input_bar.dart';
+import 'chat_models.dart';
+import 'chat_tools.dart';
+import 'widgets/chat_widgets_shared.dart';
+import 'chat_progress_cards.dart';
+import 'chat_message_bubbles.dart';
+import 'chat_input_bar.dart';
 import '../../core/navigation/app_page_route.dart';
 import '../../widgets/app_sheet.dart';
 
-export 'aitab_models.dart' show ConversationAction, AiModel, AttachedFile;
-export 'aitab_widgets_shared.dart'
+export 'chat_models.dart' show ConversationAction, AiModel, AttachedFile;
+export 'widgets/chat_widgets_shared.dart'
     show AiConversationMenuButton, NexaLoaderLogo, NexaLottieLoader, NexaSpinningRingLoader, ShimmerText;
 
 class AiTab extends StatefulWidget {
