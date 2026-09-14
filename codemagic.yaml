@@ -149,10 +149,10 @@ workflows:
             echo "✅ networkSecurityConfig já referenciado"
           fi
 
-      - name: Install Pillow
-        script: pip3 install Pillow --quiet
+      - name: Install Pillow and cairosvg
+        script: pip3 install Pillow cairosvg --quiet
 
-      - name: Process launcher icons + dual splash (light/dark) — SEM fallback
+      - name: Process launcher icons (ic_launcher) — SEM fallback
         script: |
           python3 << 'PYEOF'
           import os
@@ -160,17 +160,10 @@ workflows:
 
           CM   = os.environ["CM_BUILD_DIR"]
           RES  = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER     = os.path.join(CM, "ic_launcher.png")
-          SPLASH_LIGHT = os.path.join(CM, "splash_icon_light.png")
-          SPLASH_DARK  = os.path.join(CM, "splash_icon_dark.png")
+          LAUNCHER = os.path.join(CM, "ic_launcher.png")
 
-          # Falha o build explicitamente se os ícones reais não existirem —
-          # nunca deve cair em fallback para o ic_launcher.
-          missing = [p for p in (LAUNCHER, SPLASH_LIGHT, SPLASH_DARK) if not os.path.exists(p)]
-          if missing:
-              raise FileNotFoundError(
-                  "Ficheiro(s) obrigatório(s) em falta na raiz do repo: " + ", ".join(missing)
-              )
+          if not os.path.exists(LAUNCHER):
+              raise FileNotFoundError(f"Ficheiro obrigatório em falta na raiz do repo: {LAUNCHER}")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -179,15 +172,6 @@ workflows:
           FG_SIZES = {
               "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
               "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
-          }
-          # Densidades usadas para o splash "legacy" (Android < 12), em px,
-          # para que o ícone real apareça nítido em qualquer versão do SO.
-          SPLASH_DENSITIES = {
-              "drawable-mdpi": 192,
-              "drawable-hdpi": 288,
-              "drawable-xhdpi": 384,
-              "drawable-xxhdpi": 576,
-              "drawable-xxxhdpi": 768,
           }
 
           def fluent_rounded(img, size, ratio=0.22):
@@ -204,7 +188,6 @@ workflows:
               img.save(path, "PNG", optimize=True)
               print(f"  -> {path}")
 
-          # ── Ícones do launcher ──────────────────────────────────────────
           src = Image.open(LAUNCHER)
           for d, sz in DENSITIES.items():
               save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
@@ -217,63 +200,255 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          # ── Splash icon — SEMPRE usa o PNG real do repo, redimensionado
-          #    para cada densidade, sem qualquer fallback. Isto garante que
-          #    o Android 12+ (SplashScreen API) E versões anteriores (via
-          #    launch_background.xml) mostram o ícone verdadeiro.
-          def make_splash_variants(source_path, drawable_prefix):
-              src_img = Image.open(source_path).convert("RGBA")
-              for density_dir, target_px in SPLASH_DENSITIES.items():
-                  full_dir = f"{drawable_prefix}-{density_dir.split('-')[1]}" if False else None
-              # Gera um bitmap único por densidade, mantendo proporção do
-              # ícone original dentro de uma tela quadrada transparente.
-              for density_dir, target_px in SPLASH_DENSITIES.items():
-                  canvas_size = target_px
-                  icon_size = int(canvas_size * 0.55)
-                  canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
-                  icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
-                  off = (canvas_size - icon_size) // 2
-                  canvas.paste(icon, (off, off), icon)
-                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
-                  dest_path = os.path.join(dest_dir, "splash_icon.png")
-                  os.makedirs(dest_dir, exist_ok=True)
-                  canvas.save(dest_path, "PNG", optimize=True)
-                  print(f"  -> {dest_path}")
-              # Também grava uma cópia em drawable/ e drawable-night/ (sem
-              # sufixo de densidade) para telas que caem no default bucket.
-              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
-              os.makedirs(default_dir, exist_ok=True)
-              default_size = 480
-              icon_size = int(default_size * 0.55)
-              canvas = Image.new("RGBA", (default_size, default_size), (0, 0, 0, 0))
-              icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
-              off = (default_size - icon_size) // 2
-              canvas.paste(icon, (off, off), icon)
-              default_path = os.path.join(default_dir, "splash_icon.png")
-              canvas.save(default_path, "PNG", optimize=True)
-              print(f"  -> {default_path}")
-
-          make_splash_variants(SPLASH_LIGHT, "drawable")
-          make_splash_variants(SPLASH_DARK, "drawable-night")
-
-          print("✅ Ícones e splash (light/dark), sem fallback, processados com sucesso!")
+          print("✅ ic_launcher (todas densidades) processado com sucesso!")
           PYEOF
+
+      - name: Generate splash shimmer frames from splash_icon.svg — SEM fallback
+        script: |
+          python3 << 'PYEOF'
+          import os
+          import math
+          import cairosvg
+          from io import BytesIO
+          from PIL import Image
+
+          CM  = os.environ["CM_BUILD_DIR"]
+          RES = os.path.join(CM, "android/app/src/main/res")
+          SVG_PATH = os.path.join(CM, "splash_icon.svg")
+
+          if not os.path.exists(SVG_PATH):
+              raise FileNotFoundError(
+                  f"Ficheiro obrigatório em falta na raiz do repo: {SVG_PATH}"
+              )
+
+          # Cores do ícone de splash (não usar fallback de outro ícone).
+          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A — ícone em fundo claro
+          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8 — ícone em fundo escuro
+
+          RASTER_SIZE   = 512   # resolução de trabalho do SVG rasterizado
+          FRAME_COUNT   = 12    # frames por ciclo de shimmer
+          FRAME_MS      = 80    # duração de cada frame (~1s de loop)
+          BAND_WIDTH    = 0.35  # largura da faixa de brilho, em fração da diagonal
+          ANGLE_DEG     = 45    # direção do brilho (diagonal)
+
+          SPLASH_DENSITIES = {
+              "drawable-mdpi": 192,
+              "drawable-hdpi": 288,
+              "drawable-xhdpi": 384,
+              "drawable-xxhdpi": 576,
+              "drawable-xxxhdpi": 768,
+          }
+          DEFAULT_SIZE = 480
+
+          def rasterize_svg(path, size):
+              png_bytes = cairosvg.svg2png(url=path, output_width=size, output_height=size)
+              return Image.open(BytesIO(png_bytes)).convert("RGBA")
+
+          def recolor_by_alpha(img, rgb):
+              """Recolore preservando o canal alfa exato do SVG (sem moldura)."""
+              alpha = img.split()[3]
+              solid = Image.new("RGBA", img.size, rgb + (255,))
+              solid.putalpha(alpha)
+              return solid
+
+          def make_shimmer_frame(base_rgba, progress, band_width=BAND_WIDTH, angle_deg=ANGLE_DEG):
+              """
+              base_rgba: ícone já recolorido (RGBA), canal alfa = forma do SVG.
+              progress: 0..1, posição da faixa de brilho ao longo da diagonal.
+              Retorna um novo RGBA com uma faixa de brilho sobreposta, recortada
+              pelo alfa original (o brilho nunca "vaza" para fora do ícone).
+              """
+              w, h = base_rgba.size
+              diag = math.hypot(w, h)
+              angle = math.radians(angle_deg)
+              dx, dy = math.cos(angle), math.sin(angle)
+
+              band_center = -band_width * diag / 2 + progress * (diag + band_width * diag) - band_width * diag / 2
+              highlight = Image.new("L", (w, h), 0)
+              px = highlight.load()
+              half_band = (band_width * diag) / 2
+              for y in range(h):
+                  for x in range(w):
+                      d = x * dx + y * dy
+                      dist = abs(d - band_center)
+                      if dist < half_band:
+                          # falloff suave (triangular) dentro da faixa
+                          v = int(255 * (1 - dist / half_band))
+                          px[x, y] = v
+
+              glow = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+              glow.putalpha(highlight)
+
+              alpha_mask = base_rgba.split()[3]
+              glow.putalpha(Image.composite(highlight, Image.new("L", (w, h), 0), alpha_mask))
+
+              frame = Image.alpha_composite(base_rgba, glow)
+              return frame
+
+          def build_frame_sequence(base_rgba):
+              frames = []
+              for i in range(FRAME_COUNT):
+                  progress = i / FRAME_COUNT
+                  frames.append(make_shimmer_frame(base_rgba, progress))
+              return frames
+
+          def resize_rgba(img, size):
+              return img.resize((size, size), Image.LANCZOS)
+
+          def save(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          def process_variant(rgb, drawable_prefix):
+              base = rasterize_svg(SVG_PATH, RASTER_SIZE)
+              colored = recolor_by_alpha(base, rgb)
+              frames = build_frame_sequence(colored)
+
+              # Frame estático (frame 0) — usado como fallback do AVD e como
+              # ícone único quando algo além do previsto ocorrer no runtime.
+              for density_dir, target_px in SPLASH_DENSITIES.items():
+                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
+                  static_resized = resize_rgba(colored, target_px)
+                  save(static_resized, os.path.join(dest_dir, "splash_icon_static.png"))
+
+                  for idx, frame in enumerate(frames):
+                      frame_resized = resize_rgba(frame, target_px)
+                      save(frame_resized, os.path.join(dest_dir, f"splash_icon_frame_{idx:02d}.png"))
+
+              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
+              static_default = resize_rgba(colored, DEFAULT_SIZE)
+              save(static_default, os.path.join(default_dir, "splash_icon_static.png"))
+              for idx, frame in enumerate(frames):
+                  frame_default = resize_rgba(frame, DEFAULT_SIZE)
+                  save(frame_default, os.path.join(default_dir, f"splash_icon_frame_{idx:02d}.png"))
+
+          process_variant(COLOR_LIGHT_BG, "drawable")
+          process_variant(COLOR_DARK_BG, "drawable-night")
+
+          print(f"✅ {FRAME_COUNT} frames de shimmer (light+dark) gerados a partir de splash_icon.svg")
+          PYEOF
+
+      - name: Write AnimationDrawable XML (shimmer loop, pré-Android 12)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          python3 << 'PYEOF'
+          import os
+
+          RES = os.environ.get("RES") or f'{os.environ["CM_BUILD_DIR"]}/android/app/src/main/res'
+          FRAME_COUNT = 12
+          FRAME_MS = 80
+
+          def write_anim_drawable(path):
+              items = "\n".join(
+                  f'    <item android:drawable="@drawable/splash_icon_frame_{i:02d}" android:duration="{FRAME_MS}" />'
+                  for i in range(FRAME_COUNT)
+              )
+              xml = f'''<?xml version="1.0" encoding="utf-8"?>
+          <animation-list xmlns:android="http://schemas.android.com/apk/res/android"
+              android:oneshot="false">
+          {items}
+          </animation-list>
+          '''
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, "w") as f:
+                  f.write(xml)
+              print(f"  -> {path}")
+
+          write_anim_drawable(os.path.join(RES, "drawable", "splash_shimmer_anim.xml"))
+          write_anim_drawable(os.path.join(RES, "drawable-night", "splash_shimmer_anim.xml"))
+          print("✅ AnimationDrawable (shimmer pré-Android 12) escrito")
+          PYEOF
+
+      - name: Write AnimatedVectorDrawable XML (shimmer nativo, Android 12+)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+          mkdir -p "${RES}/drawable-v31"
+          mkdir -p "${RES}/drawable-night-v31"
+
+          # AVD com uma faixa de brilho (gradient) animando via translateX
+          # sobre uma máscara do próprio ícone. Isto corre nativamente
+          # dentro do SplashScreen API do Android 12+, sem depender do
+          # AnimationDrawable de frames (que é usado só no pré-12).
+          write_avd() {
+            local out_dir="$1"
+            local icon_static="$2"
+            cat > "${out_dir}/splash_icon_avd.xml" << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:aapt="http://schemas.android.com/aapt">
+              <aapt:attr name="android:drawable">
+                  <vector
+                      android:width="200dp"
+                      android:height="200dp"
+                      android:viewportWidth="200"
+                      android:viewportHeight="200">
+                      <group android:name="icon_group">
+                          <clip-path android:pathData="M0,0h200v200h-200z" />
+                          <path
+                              android:name="icon_base"
+                              android:pathData="M0,0h200v200h-200z"
+                              android:fillType="nonZero">
+                              <aapt:attr name="android:fillColor">
+                                  <bitmap
+                                      xmlns:android="http://schemas.android.com/apk/res/android"
+                                      android:src="@drawable/${icon_static}" />
+                              </aapt:attr>
+                          </path>
+                      </group>
+                      <group android:name="shimmer_group" android:translateX="-260">
+                          <clip-path android:pathData="M0,0h200v200h-200z" android:name="shimmer_clip" />
+                          <path
+                              android:name="shimmer_band"
+                              android:pathData="M-100,-40 L-20,-40 L120,240 L40,240 Z"
+                              android:fillAlpha="0.55">
+                              <aapt:attr name="android:fillColor">
+                                  <gradient
+                                      android:type="linear"
+                                      android:startX="0"
+                                      android:startY="0"
+                                      android:endX="60"
+                                      android:endY="200"
+                                      android:startColor="#00FFFFFF"
+                                      android:centerColor="#AAFFFFFF"
+                                      android:endColor="#00FFFFFF" />
+                              </aapt:attr>
+                          </path>
+                      </group>
+                  </vector>
+              </aapt:attr>
+              <target android:name="shimmer_group">
+                  <aapt:attr name="android:animation">
+                      <objectAnimator
+                          android:propertyName="translateX"
+                          android:valueFrom="-260"
+                          android:valueTo="260"
+                          android:duration="960"
+                          android:repeatCount="infinite"
+                          android:repeatMode="restart"
+                          android:interpolator="@android:interpolator/linear" />
+                  </aapt:attr>
+              </target>
+          </animated-vector>
+          EOF
+            echo "✅ ${out_dir}/splash_icon_avd.xml escrito"
+          }
+
+          write_avd "${RES}/drawable-v31" "splash_icon_static"
+          write_avd "${RES}/drawable-night-v31" "splash_icon_static"
 
       - name: Write Android 12+ splash screen (values/styles + themes)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
-          # Android 12+ usa a SplashScreen API nativa via tema, não mais
-          # apenas o launch_background.xml. Configuramos os dois caminhos
-          # para que o ícone real apareça em qualquer versão (incluindo
-          # Android 13, testado pelo utilizador).
           mkdir -p "${RES}/values-v31"
           cat > "${RES}/values-v31/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
                   <item name="android:windowSplashScreenBackground">@android:color/white</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
                   <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
                   <item name="android:windowBackground">@drawable/launch_background</item>
                   <item name="android:statusBarColor">@android:color/white</item>
@@ -300,7 +475,7 @@ workflows:
           <resources>
               <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
                   <item name="android:windowSplashScreenBackground">#0d0d0d</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
                   <item name="android:windowSplashScreenIconBackgroundColor">#0d0d0d</item>
                   <item name="android:windowBackground">@drawable/launch_background</item>
                   <item name="android:statusBarColor">#0d0d0d</item>
@@ -321,7 +496,7 @@ workflows:
           EOF
           echo "✅ values-night-v31/styles.xml (Android 12+ splash nativo, dark) criado"
 
-      - name: Write launch_background XMLs (light + dark) — pré Android 12
+      - name: Write launch_background XMLs (light + dark, com shimmer) — pré Android 12
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -333,11 +508,11 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_icon" />
+                      android:src="@drawable/splash_shimmer_anim" />
               </item>
           </layer-list>
           EOF
-          echo "✅ drawable/launch_background.xml (light) criado"
+          echo "✅ drawable/launch_background.xml (light, shimmer) criado"
 
           mkdir -p "${RES}/drawable-night"
           cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
@@ -349,11 +524,96 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_icon" />
+                      android:src="@drawable/splash_shimmer_anim" />
               </item>
           </layer-list>
           EOF
-          echo "✅ drawable-night/launch_background.xml (dark) criado"
+          echo "✅ drawable-night/launch_background.xml (dark, shimmer) criado"
+
+      - name: Start shimmer AnimationDrawable on window focus (pré-Android 12)
+        script: |
+          MAIN_ACTIVITY=$(find "${CM_BUILD_DIR}/android/app/src/main" -name "MainActivity.kt" -o -name "MainActivity.java" | head -1)
+          if [ -z "$MAIN_ACTIVITY" ]; then
+            echo "❌ MainActivity não encontrada — não é possível iniciar o AnimationDrawable do shimmer"
+            exit 1
+          fi
+          echo "MainActivity encontrada em: $MAIN_ACTIVITY"
+
+          python3 << PYEOF
+          import re
+
+          path = "$MAIN_ACTIVITY"
+          with open(path, "r") as f:
+              content = f.read()
+
+          is_kotlin = path.endswith(".kt")
+
+          # AnimationDrawable não inicia sozinho a partir de um <bitmap> em
+          # layer-list — precisa de start() explícito assim que a window
+          # ganha foco. Isto cobre o pré-Android 12 (o 12+ usa o AVD, que
+          # já anima sozinho via objectAnimator).
+          if is_kotlin:
+              if "onWindowFocusChanged" not in content:
+                  marker = "class MainActivity"
+                  idx = content.find(marker)
+                  if idx == -1:
+                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Kotlin")
+                  brace_idx = content.find("{", idx)
+                  injected = content[:brace_idx+1] + '''
+
+              override fun onWindowFocusChanged(hasFocus: Boolean) {
+                  super.onWindowFocusChanged(hasFocus)
+                  if (hasFocus) {
+                      val bg = window.decorView.background
+                      if (bg is android.graphics.drawable.LayerDrawable) {
+                          val anim = bg.findDrawableByLayerId(android.R.id.background)
+                          (anim as? android.graphics.drawable.AnimationDrawable)?.start()
+                          for (i in 0 until bg.numberOfLayers) {
+                              val d = bg.getDrawable(i)
+                              if (d is android.graphics.drawable.AnimationDrawable) {
+                                  d.start()
+                              }
+                          }
+                      }
+                  }
+              }
+          ''' + content[brace_idx+1:]
+                  with open(path, "w") as f:
+                      f.write(injected)
+                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.kt")
+              else:
+                  print("✅ onWindowFocusChanged já presente em MainActivity.kt — verificar manualmente se inicia o shimmer")
+          else:
+              if "onWindowFocusChanged" not in content:
+                  marker = re.search(r'public class MainActivity[^{]*\{', content)
+                  if not marker:
+                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Java")
+                  brace_idx = marker.end()
+                  injected = content[:brace_idx] + '''
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) {
+                      android.graphics.drawable.Drawable bg = getWindow().getDecorView().getBackground();
+                      if (bg instanceof android.graphics.drawable.LayerDrawable) {
+                          android.graphics.drawable.LayerDrawable layerBg = (android.graphics.drawable.LayerDrawable) bg;
+                          for (int i = 0; i < layerBg.getNumberOfLayers(); i++) {
+                              android.graphics.drawable.Drawable d = layerBg.getDrawable(i);
+                              if (d instanceof android.graphics.drawable.AnimationDrawable) {
+                                  ((android.graphics.drawable.AnimationDrawable) d).start();
+                              }
+                          }
+                      }
+                  }
+              }
+          ''' + content[brace_idx:]
+                  with open(path, "w") as f:
+                      f.write(injected)
+                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.java")
+              else:
+                  print("✅ onWindowFocusChanged já presente em MainActivity.java — verificar manualmente se inicia o shimmer")
+          PYEOF
 
       - name: Write styles XMLs (light + dark + v27) — pré Android 12
         script: |
@@ -753,10 +1013,10 @@ workflows:
           PYEOF
           fi
 
-      - name: Install Pillow
-        script: pip3 install Pillow --quiet
+      - name: Install Pillow and cairosvg
+        script: pip3 install Pillow cairosvg --quiet
 
-      - name: Process launcher icons + dual splash (light/dark) — SEM fallback
+      - name: Process launcher icons (ic_launcher) — SEM fallback
         script: |
           python3 << 'PYEOF'
           import os
@@ -764,15 +1024,10 @@ workflows:
 
           CM   = os.environ["CM_BUILD_DIR"]
           RES  = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER     = os.path.join(CM, "ic_launcher.png")
-          SPLASH_LIGHT = os.path.join(CM, "splash_icon_light.png")
-          SPLASH_DARK  = os.path.join(CM, "splash_icon_dark.png")
+          LAUNCHER = os.path.join(CM, "ic_launcher.png")
 
-          missing = [p for p in (LAUNCHER, SPLASH_LIGHT, SPLASH_DARK) if not os.path.exists(p)]
-          if missing:
-              raise FileNotFoundError(
-                  "Ficheiro(s) obrigatório(s) em falta na raiz do repo: " + ", ".join(missing)
-              )
+          if not os.path.exists(LAUNCHER):
+              raise FileNotFoundError(f"Ficheiro obrigatório em falta na raiz do repo: {LAUNCHER}")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -781,13 +1036,6 @@ workflows:
           FG_SIZES = {
               "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
               "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
-          }
-          SPLASH_DENSITIES = {
-              "drawable-mdpi": 192,
-              "drawable-hdpi": 288,
-              "drawable-xhdpi": 384,
-              "drawable-xxhdpi": 576,
-              "drawable-xxxhdpi": 768,
           }
 
           def fluent_rounded(img, size, ratio=0.22):
@@ -816,37 +1064,226 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          def make_splash_variants(source_path, drawable_prefix):
-              src_img = Image.open(source_path).convert("RGBA")
-              for density_dir, target_px in SPLASH_DENSITIES.items():
-                  canvas_size = target_px
-                  icon_size = int(canvas_size * 0.55)
-                  canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
-                  icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
-                  off = (canvas_size - icon_size) // 2
-                  canvas.paste(icon, (off, off), icon)
-                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
-                  dest_path = os.path.join(dest_dir, "splash_icon.png")
-                  os.makedirs(dest_dir, exist_ok=True)
-                  canvas.save(dest_path, "PNG", optimize=True)
-                  print(f"  -> {dest_path}")
-              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
-              os.makedirs(default_dir, exist_ok=True)
-              default_size = 480
-              icon_size = int(default_size * 0.55)
-              canvas = Image.new("RGBA", (default_size, default_size), (0, 0, 0, 0))
-              icon = src_img.resize((icon_size, icon_size), Image.LANCZOS)
-              off = (default_size - icon_size) // 2
-              canvas.paste(icon, (off, off), icon)
-              default_path = os.path.join(default_dir, "splash_icon.png")
-              canvas.save(default_path, "PNG", optimize=True)
-              print(f"  -> {default_path}")
-
-          make_splash_variants(SPLASH_LIGHT, "drawable")
-          make_splash_variants(SPLASH_DARK, "drawable-night")
-
-          print("✅ Ícones e splash (light/dark), sem fallback, processados com sucesso!")
+          print("✅ ic_launcher (todas densidades) processado com sucesso!")
           PYEOF
+
+      - name: Generate splash shimmer frames from splash_icon.svg — SEM fallback
+        script: |
+          python3 << 'PYEOF'
+          import os
+          import math
+          import cairosvg
+          from io import BytesIO
+          from PIL import Image
+
+          CM  = os.environ["CM_BUILD_DIR"]
+          RES = os.path.join(CM, "android/app/src/main/res")
+          SVG_PATH = os.path.join(CM, "splash_icon.svg")
+
+          if not os.path.exists(SVG_PATH):
+              raise FileNotFoundError(
+                  f"Ficheiro obrigatório em falta na raiz do repo: {SVG_PATH}"
+              )
+
+          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A
+          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8
+
+          RASTER_SIZE   = 512
+          FRAME_COUNT   = 12
+          FRAME_MS      = 80
+          BAND_WIDTH    = 0.35
+          ANGLE_DEG     = 45
+
+          SPLASH_DENSITIES = {
+              "drawable-mdpi": 192,
+              "drawable-hdpi": 288,
+              "drawable-xhdpi": 384,
+              "drawable-xxhdpi": 576,
+              "drawable-xxxhdpi": 768,
+          }
+          DEFAULT_SIZE = 480
+
+          def rasterize_svg(path, size):
+              png_bytes = cairosvg.svg2png(url=path, output_width=size, output_height=size)
+              return Image.open(BytesIO(png_bytes)).convert("RGBA")
+
+          def recolor_by_alpha(img, rgb):
+              alpha = img.split()[3]
+              solid = Image.new("RGBA", img.size, rgb + (255,))
+              solid.putalpha(alpha)
+              return solid
+
+          def make_shimmer_frame(base_rgba, progress, band_width=BAND_WIDTH, angle_deg=ANGLE_DEG):
+              w, h = base_rgba.size
+              diag = math.hypot(w, h)
+              angle = math.radians(angle_deg)
+              dx, dy = math.cos(angle), math.sin(angle)
+
+              band_center = -band_width * diag / 2 + progress * (diag + band_width * diag) - band_width * diag / 2
+              highlight = Image.new("L", (w, h), 0)
+              px = highlight.load()
+              half_band = (band_width * diag) / 2
+              for y in range(h):
+                  for x in range(w):
+                      d = x * dx + y * dy
+                      dist = abs(d - band_center)
+                      if dist < half_band:
+                          v = int(255 * (1 - dist / half_band))
+                          px[x, y] = v
+
+              alpha_mask = base_rgba.split()[3]
+              glow = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+              glow.putalpha(Image.composite(highlight, Image.new("L", (w, h), 0), alpha_mask))
+
+              frame = Image.alpha_composite(base_rgba, glow)
+              return frame
+
+          def build_frame_sequence(base_rgba):
+              frames = []
+              for i in range(FRAME_COUNT):
+                  progress = i / FRAME_COUNT
+                  frames.append(make_shimmer_frame(base_rgba, progress))
+              return frames
+
+          def resize_rgba(img, size):
+              return img.resize((size, size), Image.LANCZOS)
+
+          def save(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          def process_variant(rgb, drawable_prefix):
+              base = rasterize_svg(SVG_PATH, RASTER_SIZE)
+              colored = recolor_by_alpha(base, rgb)
+              frames = build_frame_sequence(colored)
+
+              for density_dir, target_px in SPLASH_DENSITIES.items():
+                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
+                  static_resized = resize_rgba(colored, target_px)
+                  save(static_resized, os.path.join(dest_dir, "splash_icon_static.png"))
+
+                  for idx, frame in enumerate(frames):
+                      frame_resized = resize_rgba(frame, target_px)
+                      save(frame_resized, os.path.join(dest_dir, f"splash_icon_frame_{idx:02d}.png"))
+
+              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
+              static_default = resize_rgba(colored, DEFAULT_SIZE)
+              save(static_default, os.path.join(default_dir, "splash_icon_static.png"))
+              for idx, frame in enumerate(frames):
+                  frame_default = resize_rgba(frame, DEFAULT_SIZE)
+                  save(frame_default, os.path.join(default_dir, f"splash_icon_frame_{idx:02d}.png"))
+
+          process_variant(COLOR_LIGHT_BG, "drawable")
+          process_variant(COLOR_DARK_BG, "drawable-night")
+
+          print(f"✅ {FRAME_COUNT} frames de shimmer (light+dark) gerados a partir de splash_icon.svg")
+          PYEOF
+
+      - name: Write AnimationDrawable XML (shimmer loop, pré-Android 12)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+
+          python3 << 'PYEOF'
+          import os
+
+          RES = os.environ.get("RES") or f'{os.environ["CM_BUILD_DIR"]}/android/app/src/main/res'
+          FRAME_COUNT = 12
+          FRAME_MS = 80
+
+          def write_anim_drawable(path):
+              items = "\n".join(
+                  f'    <item android:drawable="@drawable/splash_icon_frame_{i:02d}" android:duration="{FRAME_MS}" />'
+                  for i in range(FRAME_COUNT)
+              )
+              xml = f'''<?xml version="1.0" encoding="utf-8"?>
+          <animation-list xmlns:android="http://schemas.android.com/apk/res/android"
+              android:oneshot="false">
+          {items}
+          </animation-list>
+          '''
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, "w") as f:
+                  f.write(xml)
+              print(f"  -> {path}")
+
+          write_anim_drawable(os.path.join(RES, "drawable", "splash_shimmer_anim.xml"))
+          write_anim_drawable(os.path.join(RES, "drawable-night", "splash_shimmer_anim.xml"))
+          print("✅ AnimationDrawable (shimmer pré-Android 12) escrito")
+          PYEOF
+
+      - name: Write AnimatedVectorDrawable XML (shimmer nativo, Android 12+)
+        script: |
+          RES="${CM_BUILD_DIR}/android/app/src/main/res"
+          mkdir -p "${RES}/drawable-v31"
+          mkdir -p "${RES}/drawable-night-v31"
+
+          write_avd() {
+            local out_dir="$1"
+            local icon_static="$2"
+            cat > "${out_dir}/splash_icon_avd.xml" << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:aapt="http://schemas.android.com/aapt">
+              <aapt:attr name="android:drawable">
+                  <vector
+                      android:width="200dp"
+                      android:height="200dp"
+                      android:viewportWidth="200"
+                      android:viewportHeight="200">
+                      <group android:name="icon_group">
+                          <clip-path android:pathData="M0,0h200v200h-200z" />
+                          <path
+                              android:name="icon_base"
+                              android:pathData="M0,0h200v200h-200z"
+                              android:fillType="nonZero">
+                              <aapt:attr name="android:fillColor">
+                                  <bitmap
+                                      xmlns:android="http://schemas.android.com/apk/res/android"
+                                      android:src="@drawable/${icon_static}" />
+                              </aapt:attr>
+                          </path>
+                      </group>
+                      <group android:name="shimmer_group" android:translateX="-260">
+                          <clip-path android:pathData="M0,0h200v200h-200z" android:name="shimmer_clip" />
+                          <path
+                              android:name="shimmer_band"
+                              android:pathData="M-100,-40 L-20,-40 L120,240 L40,240 Z"
+                              android:fillAlpha="0.55">
+                              <aapt:attr name="android:fillColor">
+                                  <gradient
+                                      android:type="linear"
+                                      android:startX="0"
+                                      android:startY="0"
+                                      android:endX="60"
+                                      android:endY="200"
+                                      android:startColor="#00FFFFFF"
+                                      android:centerColor="#AAFFFFFF"
+                                      android:endColor="#00FFFFFF" />
+                              </aapt:attr>
+                          </path>
+                      </group>
+                  </vector>
+              </aapt:attr>
+              <target android:name="shimmer_group">
+                  <aapt:attr name="android:animation">
+                      <objectAnimator
+                          android:propertyName="translateX"
+                          android:valueFrom="-260"
+                          android:valueTo="260"
+                          android:duration="960"
+                          android:repeatCount="infinite"
+                          android:repeatMode="restart"
+                          android:interpolator="@android:interpolator/linear" />
+                  </aapt:attr>
+              </target>
+          </animated-vector>
+          EOF
+            echo "✅ ${out_dir}/splash_icon_avd.xml escrito"
+          }
+
+          write_avd "${RES}/drawable-v31" "splash_icon_static"
+          write_avd "${RES}/drawable-night-v31" "splash_icon_static"
 
       - name: Write Android 12+ splash screen (values/styles + themes)
         script: |
@@ -858,7 +1295,7 @@ workflows:
           <resources>
               <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
                   <item name="android:windowSplashScreenBackground">@android:color/white</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
                   <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
                   <item name="android:windowBackground">@drawable/launch_background</item>
                   <item name="android:statusBarColor">@android:color/white</item>
@@ -884,7 +1321,7 @@ workflows:
           <resources>
               <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
                   <item name="android:windowSplashScreenBackground">#0d0d0d</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
                   <item name="android:windowSplashScreenIconBackgroundColor">#0d0d0d</item>
                   <item name="android:windowBackground">@drawable/launch_background</item>
                   <item name="android:statusBarColor">#0d0d0d</item>
@@ -904,7 +1341,7 @@ workflows:
           </resources>
           EOF
 
-      - name: Write launch_background XMLs (light + dark) — pré Android 12
+      - name: Write launch_background XMLs (light + dark, com shimmer) — pré Android 12
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -916,7 +1353,7 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_icon" />
+                      android:src="@drawable/splash_shimmer_anim" />
               </item>
           </layer-list>
           EOF
@@ -931,11 +1368,90 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_icon" />
+                      android:src="@drawable/splash_shimmer_anim" />
               </item>
           </layer-list>
           EOF
-          echo "✅ launch_background XMLs (light/dark) criados"
+          echo "✅ launch_background XMLs (light/dark, shimmer) criados"
+
+      - name: Start shimmer AnimationDrawable on window focus (pré-Android 12)
+        script: |
+          MAIN_ACTIVITY=$(find "${CM_BUILD_DIR}/android/app/src/main" -name "MainActivity.kt" -o -name "MainActivity.java" | head -1)
+          if [ -z "$MAIN_ACTIVITY" ]; then
+            echo "❌ MainActivity não encontrada — não é possível iniciar o AnimationDrawable do shimmer"
+            exit 1
+          fi
+          echo "MainActivity encontrada em: $MAIN_ACTIVITY"
+
+          python3 << PYEOF
+          import re
+
+          path = "$MAIN_ACTIVITY"
+          with open(path, "r") as f:
+              content = f.read()
+
+          is_kotlin = path.endswith(".kt")
+
+          if is_kotlin:
+              if "onWindowFocusChanged" not in content:
+                  marker = "class MainActivity"
+                  idx = content.find(marker)
+                  if idx == -1:
+                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Kotlin")
+                  brace_idx = content.find("{", idx)
+                  injected = content[:brace_idx+1] + '''
+
+              override fun onWindowFocusChanged(hasFocus: Boolean) {
+                  super.onWindowFocusChanged(hasFocus)
+                  if (hasFocus) {
+                      val bg = window.decorView.background
+                      if (bg is android.graphics.drawable.LayerDrawable) {
+                          for (i in 0 until bg.numberOfLayers) {
+                              val d = bg.getDrawable(i)
+                              if (d is android.graphics.drawable.AnimationDrawable) {
+                                  d.start()
+                              }
+                          }
+                      }
+                  }
+              }
+          ''' + content[brace_idx+1:]
+                  with open(path, "w") as f:
+                      f.write(injected)
+                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.kt")
+              else:
+                  print("✅ onWindowFocusChanged já presente em MainActivity.kt — verificar manualmente se inicia o shimmer")
+          else:
+              if "onWindowFocusChanged" not in content:
+                  marker = re.search(r'public class MainActivity[^{]*\{', content)
+                  if not marker:
+                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Java")
+                  brace_idx = marker.end()
+                  injected = content[:brace_idx] + '''
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) {
+                      android.graphics.drawable.Drawable bg = getWindow().getDecorView().getBackground();
+                      if (bg instanceof android.graphics.drawable.LayerDrawable) {
+                          android.graphics.drawable.LayerDrawable layerBg = (android.graphics.drawable.LayerDrawable) bg;
+                          for (int i = 0; i < layerBg.getNumberOfLayers(); i++) {
+                              android.graphics.drawable.Drawable d = layerBg.getDrawable(i);
+                              if (d instanceof android.graphics.drawable.AnimationDrawable) {
+                                  ((android.graphics.drawable.AnimationDrawable) d).start();
+                              }
+                          }
+                      }
+                  }
+              }
+          ''' + content[brace_idx:]
+                  with open(path, "w") as f:
+                      f.write(injected)
+                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.java")
+              else:
+                  print("✅ onWindowFocusChanged já presente em MainActivity.java — verificar manualmente se inicia o shimmer")
+          PYEOF
 
       - name: Write styles XMLs (light + dark + v27) — pré Android 12
         script: |

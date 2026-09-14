@@ -1,8 +1,3 @@
-=====================================================================
-pubspec.yaml (COMPLETO)
-=====================================================================
-
-'''
 name: nexa
 description: AI.
 
@@ -18,7 +13,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # ── Já existentes no projeto ─────────────────────────────
   camera: any
   record: any
   animated_check: ^1.0.0
@@ -50,13 +44,12 @@ dependencies:
   flutter_image_compress: ^2.3.0
   lottie: ^3.1.2
 
-  # ── Adicionadas para lib/tools/ funcionar completamente ──
-  qr_flutter: ^4.1.0                      # generate_qrcode (base da matriz QR)
-  barcode: ^2.2.8                         # generate_barcode
-  excel: ^4.0.6                           # create_xlsx, csv_to_xlsx, xlsx_to_json
-  syncfusion_flutter_pdf: ^27.1.48        # merge_pdfs, split_pdf_pages, read_pdf_contents
-  fl_chart: ^0.69.0                       # generate_chart
-  google_mlkit_text_recognition: ^0.13.1  # ocr_extract_text (on-device)
+  qr_flutter: ^4.1.0
+  barcode: ^2.2.8
+  excel: ^4.0.6
+  syncfusion_flutter_pdf: ^27.1.48
+  fl_chart: ^0.69.0
+  google_mlkit_text_recognition: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -82,7 +75,6 @@ flutter:
     - assets/editor/docs.html
     - assets/editor/sheets.html
     - assets/editor/slides.html
-    #- assets/logo.png
 
   fonts:
     - family: IndispensableSerif
@@ -103,4 +95,3 @@ flutter:
         - asset: assets/fonts/Times New Roman/bold_italic.ttf
           weight: 700
           style: italic
-'''
