@@ -17,7 +17,7 @@ import '../ai_widgets/ai_widgets.dart';
 import '../apps/app_types.dart';
 import '../apps/sheets/sheets_screen.dart';
 import 'chat_models.dart';
-import 'chat_widgets_shared.dart';
+import 'widgets/chat_widgets_shared.dart';
 import 'chat_progress_cards.dart';
 import '../../core/navigation/app_page_route.dart';
 import 'chat_image_viewer_screen.dart';

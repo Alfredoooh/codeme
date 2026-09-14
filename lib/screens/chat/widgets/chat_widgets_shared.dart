@@ -318,28 +318,6 @@ class _RingGradientPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════
-// NEXA LOTTIE LOADER
-// ══════════════════════════════════════════════════════════════
-
-class NexaLottieLoader extends StatelessWidget {
-  final double size;
-  const NexaLottieLoader({super.key, this.size = 28});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Lottie.asset(
-        'assets/icons/lottie/loader.json',
-        fit: BoxFit.contain,
-        repeat: true,
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
 // NEXA LOADER LOGO
 // ══════════════════════════════════════════════════════════════
 

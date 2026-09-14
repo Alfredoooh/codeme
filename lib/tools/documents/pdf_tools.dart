@@ -117,9 +117,7 @@ class PdfTools {
           // Pequeno delay para garantir que fontes/imagens/CSS
           // terminaram de aplicar antes de exportar.
           await Future.delayed(const Duration(milliseconds: 300));
-          final pdfBytes = await controller.createPdf(
-            iosWKPdfConfiguration: IOSWKPdfConfiguration(),
-          );
+          final pdfBytes = await controller.exportAsPdf();
           if (!completer.isCompleted) completer.complete(pdfBytes);
         } catch (e) {
           if (!completer.isCompleted) completer.completeError(e);
