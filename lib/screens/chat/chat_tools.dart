@@ -1,3 +1,7 @@
+=====================================================================
+lib/screens/chat/chat_tools.dart  (COMPLETO)
+=====================================================================
+
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/aitab/aitab_tools.dart
 // Execução de tool calls e o widget de ícone por-tool com fallback.
@@ -36,6 +40,21 @@
 // split_pdf_pages), continua a ler content_base64 como já
 // funcionava. Sem isto, os 4 documentos do documents.py caíam
 // sempre no passthrough e nunca mostravam o ToolResultDownloadCard.
+//
+// NOVO NESTA VERSÃO — EXECUÇÃO LOCAL:
+// executeToolCall passa a consultar kLocallyExecutableTools (28 das
+// 36 tools) ANTES de tocar a rede. Se a tool tiver implementação
+// local (lib/tools/tool_registry.dart), corre inteiramente no
+// dispositivo via chat_tools_local_bridge.dart — sem round-trip à
+// API, sem gastar créditos. As 9 tools que dependem de serviço
+// externo (web_search, search_images, search_videos, search_books,
+// get_weather, read_website, send_email, search_market,
+// download_image_for_project) continuam a ir sempre via
+// ToolsApiService.executeTool, exatamente como antes. Todo o resto
+// do pipeline (kVisualTools, kDocumentTools, extractDocumentPayload,
+// processToolCalls) é agnóstico a essa divisão — recebe sempre o
+// mesmo shape achatado de Map<String, dynamic>, venha ele do
+// dispositivo ou da API.
 // ══════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -48,6 +67,7 @@ import '../../services/auth_service.dart';
 // TODO: depende de aiwidgets.dart (split futuro); manter este import para a etapa futura de split.
 import '../ai_widgets/ai_widgets.dart';
 import 'aitab_models.dart';
+import 'chat_tools_local_bridge.dart';
 
 
 // ══════════════════════════════════════════════════════════════
@@ -331,25 +351,31 @@ Map<String, dynamic> injectAttachmentIfNeeded(
   return updated;
 }
 
-/// Executa uma única tool call contra o backend.
+/// Executa uma única tool call — localmente ou contra o backend,
+/// consoante a tool esteja ou não em kLocallyExecutableTools.
 ///
 /// [history] é o histórico da conversa até este ponto — usado
 /// apenas para injeção automática de anexos (ver
 /// injectAttachmentIfNeeded acima). Pode ser vazio para tools que
 /// não usam ficheiros.
 ///
-/// search_market continua resolvida localmente (resolveMarketQuery),
-/// como já acontecia antes desta sincronização — as demais tools do
-/// catálogo vão todas via ToolsApiService.executeTool.
+/// search_market continua resolvida localmente por resolveMarketQuery
+/// (não confundir com "local" no sentido de kLocallyExecutableTools —
+/// resolveMarketQuery é uma chamada de rede a uma API de cotações,
+/// só que feita diretamente daqui em vez de passar por
+/// ToolsApiService.executeTool), como já acontecia antes desta
+/// sincronização.
+///
+/// Para as 28 tools em kLocallyExecutableTools, executeLocalTool()
+/// corre runTool() no dispositivo — nenhuma chamada de rede, nenhum
+/// token necessário. Para as restantes 9 (as que dependem de serviço
+/// externo: web_search, search_images, search_videos, search_books,
+/// get_weather, read_website, send_email, download_image_for_project),
+/// vai sempre via ToolsApiService.executeTool, exatamente como antes.
 Future<Map<String, dynamic>> executeToolCall(
   ToolCall call,
   List<ChatMessage> history,
 ) async {
-  final token = authController.token;
-  if (token == null) {
-    return {'found': false, 'reason': 'Sessão expirada'};
-  }
-
   if (call.name == 'search_market') {
     final query = call.arguments['query']?.toString() ?? '';
     final result = await resolveMarketQuery(query);
@@ -357,6 +383,28 @@ Future<Map<String, dynamic>> executeToolCall(
   }
 
   final effectiveArgs = injectAttachmentIfNeeded(call.name, call.arguments, history);
+
+  // ── Caminho local: nenhuma chamada de rede, nenhum token de
+  // sessão necessário — a tool corre inteiramente no dispositivo. ──
+  if (kLocallyExecutableTools.contains(call.name)) {
+    try {
+      return await executeLocalTool(call.name, effectiveArgs);
+    } catch (e) {
+      return {
+        'error': 'Erro ao executar "${call.name}" localmente: $e',
+        'error_code': 'LOCAL_EXEC_ERROR',
+      };
+    }
+  }
+
+  // ── Caminho API: só as 9 tools que dependem de serviço externo
+  // chegam aqui (web_search, search_images, get_weather, send_email,
+  // read_website, search_videos, search_books,
+  // download_image_for_project). ──
+  final token = authController.token;
+  if (token == null) {
+    return {'found': false, 'reason': 'Sessão expirada'};
+  }
 
   try {
     final result = await ToolsApiService.executeTool(

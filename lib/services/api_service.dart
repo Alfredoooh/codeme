@@ -1,3 +1,7 @@
+=====================================================================
+lib/services/api_service.dart  (COMPLETO)
+=====================================================================
+
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/api_service.dart
 // ══════════════════════════════════════════════════════════════
@@ -254,14 +258,6 @@ class CanvasItem {
     required this.content,
     required this.createdAt,
   });
-
-  CanvasItem copyWith({String? title, String? content}) => CanvasItem(
-        id: id,
-        kind: kind,
-        title: title ?? this.title,
-        content: content ?? this.content,
-        createdAt: createdAt,
-      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -940,6 +936,14 @@ Map<String, dynamic> _decode(String body) {
 
 // ══════════════════════════════════════════════════════════════
 // TOOLS API
+//
+// executeTool() continua a existir exatamente como antes — é o
+// caminho usado para as 9 tools que dependem de serviço externo
+// (web_search, search_images, search_videos, search_books,
+// get_weather, read_website, send_email, search_market,
+// download_image_for_project). chat_tools_local_bridge.dart decide,
+// tool a tool, se chama esta classe ou runTool() local — esta classe
+// em si não sabe nem precisa saber dessa divisão.
 // ══════════════════════════════════════════════════════════════
 class ToolsApiService {
   static Future<Map<String, dynamic>> executeTool({
@@ -965,6 +969,55 @@ class ToolsApiService {
     return data;
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// TOOLS EXECUTÁVEIS LOCALMENTE (NOVO)
+//
+// As 28 tools abaixo já têm implementação completa em
+// lib/tools/tool_registry.dart (runTool()) e correm inteiramente no
+// dispositivo — sem round-trip à rede, sem gastar créditos de API
+// para operações que não precisam de serviço externo nenhum.
+//
+// As restantes 9 tools de kAllTools (download_image_for_project,
+// get_weather, read_website, search_books, search_images,
+// search_market, search_videos, send_email, web_search) NÃO estão
+// nesta lista de propósito — dependem de credenciais/serviços que só
+// o backend tem (Serper, Google Books, SMTP, cotações de mercado,
+// etc) e continuam a ir sempre via ToolsApiService.executeTool.
+//
+// chat_tools_local_bridge.dart consulta este Set para decidir, tool
+// a tool, qual caminho tomar — nunca por conversa inteira.
+// ══════════════════════════════════════════════════════════════
+const Set<String> kLocallyExecutableTools = {
+  'convert_image_format',
+  'count_tokens_estimate',
+  'create_docx',
+  'create_file',
+  'create_pdf',
+  'create_pptx',
+  'create_xlsx',
+  'crop_image',
+  'csv_to_xlsx',
+  'diff_text',
+  'extract_urls_from_text',
+  'generate_barcode',
+  'generate_chart',
+  'generate_function_plot',
+  'generate_math_sheet',
+  'generate_mindmap',
+  'generate_qrcode',
+  'generate_table_image',
+  'merge_pdfs',
+  'ocr_extract_text',
+  'read_pdf_contents',
+  'read_zip_contents',
+  'resize_image',
+  'split_pdf_pages',
+  'str_replace_file',
+  'text_summary_stats',
+  'watermark_image',
+  'xlsx_to_json',
+};
 
 // ══════════════════════════════════════════════════════════════
 // DEFINIÇÕES DAS TOOLS (inalterado)
