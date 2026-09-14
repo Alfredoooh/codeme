@@ -1,7 +1,4 @@
-=====================================================================
-lib/tools/charts/chart_tool.dart  (IMPLEMENTADO — sem placeholders)
-=====================================================================
-
+// lib/tools/charts/chart_tool.dart
 // generate_chart
 //
 // Usa fl_chart para montar o gráfico como widget, depois captura via
@@ -23,8 +20,14 @@ class ChartTool {
   static const double _height = 500;
 
   static final List<Color> _palette = [
-    Colors.blue, Colors.orange, Colors.green, Colors.red,
-    Colors.purple, Colors.teal, Colors.brown, Colors.pink,
+    Colors.blue,
+    Colors.orange,
+    Colors.green,
+    Colors.red,
+    Colors.purple,
+    Colors.teal,
+    Colors.brown,
+    Colors.pink,
   ];
 
   /// generate_chart
@@ -49,10 +52,14 @@ class ChartTool {
     final String? title = input['title'] as String?;
 
     if (chartType == null || labels == null || rawDatasets == null) {
-      return ToolResult.error('Parâmetros "chart_type", "labels" e "datasets" são obrigatórios.', code: 'INVALID_INPUT');
+      return ToolResult.error(
+        'Parâmetros "chart_type", "labels" e "datasets" são obrigatórios.',
+        code: 'INVALID_INPUT',
+      );
     }
     if (labels.isEmpty || rawDatasets.isEmpty) {
-      return ToolResult.error('"labels" e "datasets" não podem estar vazios.', code: 'INVALID_INPUT');
+      return ToolResult.error('"labels" e "datasets" não podem estar vazios.',
+          code: 'INVALID_INPUT');
     }
 
     try {
@@ -60,11 +67,14 @@ class ChartTool {
         final map = d as Map<String, dynamic>;
         return (
           name: map['name']?.toString(),
-          values: (map['values'] as List<dynamic>).map((v) => (v as num).toDouble()).toList(),
+          values: (map['values'] as List<dynamic>)
+              .map((v) => (v as num).toDouble())
+              .toList(),
         );
       }).toList();
 
-      final chartWidget = _buildChart(chartType, labels.cast<String>(), datasets);
+      final chartWidget =
+          _buildChart(chartType, labels.cast<String>(), datasets);
 
       final content = Container(
         width: _width,
@@ -79,7 +89,8 @@ class ChartTool {
               const SizedBox(height: 16),
             ],
             Expanded(child: chartWidget),
-            if (datasets.length > 1 || datasets.any((d) => d.name != null)) ...[
+            if (datasets.length > 1 ||
+                datasets.any((d) => d.name != null)) ...[
               const SizedBox(height: 12),
               _buildLegend(datasets),
             ],
@@ -97,7 +108,8 @@ class ChartTool {
         'chart_type': chartType,
       });
     } catch (e) {
-      return ToolResult.error('Erro ao gerar gráfico: $e', code: 'GENERATION_ERROR');
+      return ToolResult.error('Erro ao gerar gráfico: $e',
+          code: 'GENERATION_ERROR');
     }
   }
 
@@ -143,18 +155,25 @@ class ChartTool {
         gridData: const FlGridData(show: true, drawVerticalLine: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+              sideTitles:
+                  SideTitles(showTitles: true, reservedSize: 40)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
               getTitlesWidget: (value, meta) {
                 final idx = value.toInt();
-                if (idx < 0 || idx >= labels.length) return const SizedBox.shrink();
+                if (idx < 0 || idx >= labels.length) {
+                  return const SizedBox.shrink();
+                }
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(labels[idx], style: ToolFonts.regular(size: 11)),
+                  child: Text(labels[idx],
+                      style: ToolFonts.regular(size: 11)),
                 );
               },
             ),
@@ -172,7 +191,8 @@ class ChartTool {
     for (int d = 0; d < datasets.length; d++) {
       final values = datasets[d].values;
       final spots = <FlSpot>[
-        for (int i = 0; i < values.length; i++) FlSpot(i.toDouble(), values[i]),
+        for (int i = 0; i < values.length; i++)
+          FlSpot(i.toDouble(), values[i]),
       ];
       lines.add(LineChartBarData(
         spots: spots,
@@ -182,7 +202,7 @@ class ChartTool {
         dotData: const FlDotData(show: true),
         belowBarData: BarAreaData(
           show: datasets.length == 1,
-          color: _palette[d % _palette.length].withOpacity(0.12),
+          color: _palette[d % _palette.length].withValues(alpha: 0.12),
         ),
       ));
     }
@@ -193,18 +213,25 @@ class ChartTool {
         gridData: const FlGridData(show: true, drawVerticalLine: false),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+              sideTitles:
+                  SideTitles(showTitles: true, reservedSize: 40)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
               getTitlesWidget: (value, meta) {
                 final idx = value.toInt();
-                if (idx < 0 || idx >= labels.length) return const SizedBox.shrink();
+                if (idx < 0 || idx >= labels.length) {
+                  return const SizedBox.shrink();
+                }
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(labels[idx], style: ToolFonts.regular(size: 11)),
+                  child: Text(labels[idx],
+                      style: ToolFonts.regular(size: 11)),
                 );
               },
             ),
@@ -233,7 +260,11 @@ class ChartTool {
       children: [
         Expanded(
           flex: 2,
-          child: PieChart(PieChartData(sections: sections, sectionsSpace: 2, centerSpaceRadius: 40)),
+          child: PieChart(PieChartData(
+            sections: sections,
+            sectionsSpace: 2,
+            centerSpaceRadius: 40,
+          )),
         ),
         Expanded(
           flex: 1,
@@ -246,9 +277,18 @@ class ChartTool {
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     children: [
-                      Container(width: 10, height: 10, color: _palette[i % _palette.length]),
+                      Container(
+                          width: 10,
+                          height: 10,
+                          color: _palette[i % _palette.length]),
                       const SizedBox(width: 6),
-                      Flexible(child: Text(labels[i], style: ToolFonts.regular(size: 11), overflow: TextOverflow.ellipsis)),
+                      Flexible(
+                        child: Text(
+                          labels[i],
+                          style: ToolFonts.regular(size: 11),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -259,7 +299,8 @@ class ChartTool {
     );
   }
 
-  static Widget _buildLegend(List<({String? name, List<double> values})> datasets) {
+  static Widget _buildLegend(
+      List<({String? name, List<double> values})> datasets) {
     return Wrap(
       spacing: 16,
       children: [
@@ -268,9 +309,13 @@ class ChartTool {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 10, height: 10, color: _palette[d % _palette.length]),
+                Container(
+                    width: 10,
+                    height: 10,
+                    color: _palette[d % _palette.length]),
                 const SizedBox(width: 6),
-                Text(datasets[d].name!, style: ToolFonts.regular(size: 12)),
+                Text(datasets[d].name!,
+                    style: ToolFonts.regular(size: 12)),
               ],
             ),
       ],

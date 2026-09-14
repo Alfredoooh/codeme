@@ -1,7 +1,4 @@
-=====================================================================
-lib/tools/charts/math_sheet_tool.dart
-=====================================================================
-
+// lib/tools/charts/math_sheet_tool.dart
 // generate_math_sheet
 //
 // Gera uma folha visual com o passo a passo de uma expressão, mais
@@ -11,7 +8,6 @@ lib/tools/charts/math_sheet_tool.dart
 // pedagógica automaticamente, então aqui é montado um resumo (forma
 // original, forma simplificada, resultado numérico se aplicável).
 
-import 'dart:convert';
 import 'package:math_expressions/math_expressions.dart';
 
 import '../shared/tool_result.dart';
@@ -23,13 +19,16 @@ class MathSheetTool {
   static Future<ToolResult> generate(Map<String, dynamic> input) async {
     final String? expr = input['expression'] as String?;
     if (expr == null || expr.isEmpty) {
-      return ToolResult.error('Parâmetro "expression" é obrigatório.', code: 'INVALID_INPUT');
+      return ToolResult.error('Parâmetro "expression" é obrigatório.',
+          code: 'INVALID_INPUT');
     }
 
     final bool showGraph = (input['show_graph'] as bool?) ?? false;
 
     try {
-      final parser = GrammarParser();
+      // math_expressions 2.x: ShuntingYardParser substitui o antigo
+      // GrammarParser (removido a partir da 2.0).
+      final parser = ShuntingYardParser();
       final exp = parser.parse(expr);
       final simplified = exp.simplify();
 
@@ -41,17 +40,20 @@ class MathSheetTool {
           'x_max': 10,
         });
         if (plotResult.success) {
-          graphImageBase64 = (plotResult.data as Map)['image_base64'] as String?;
+          graphImageBase64 =
+              (plotResult.data as Map)['image_base64'] as String?;
         }
       }
 
       return ToolResult.ok({
         'original_expression': expr,
         'simplified_expression': simplified.toString(),
-        if (graphImageBase64 != null) 'graph_image_base64': graphImageBase64,
+        if (graphImageBase64 != null)
+          'graph_image_base64': graphImageBase64,
       });
     } catch (e) {
-      return ToolResult.error('Erro ao gerar folha matemática: $e', code: 'GENERATION_ERROR');
+      return ToolResult.error('Erro ao gerar folha matemática: $e',
+          code: 'GENERATION_ERROR');
     }
   }
 }

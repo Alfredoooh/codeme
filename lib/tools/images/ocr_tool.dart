@@ -1,7 +1,4 @@
-=====================================================================
-lib/tools/images/ocr_tool.dart  (IMPLEMENTADO — sem placeholders)
-=====================================================================
-
+// lib/tools/images/ocr_tool.dart
 // ocr_extract_text
 //
 // Usa Google ML Kit Text Recognition — roda 100% on-device, sem
@@ -28,7 +25,8 @@ class OcrTool {
   static Future<ToolResult> _extractImpl(Map<String, dynamic> input) async {
     final String? imageBase64 = input['image_base64'] as String?;
     if (imageBase64 == null || imageBase64.isEmpty) {
-      return ToolResult.error('Parâmetro "image_base64" é obrigatório.', code: 'INVALID_INPUT');
+      return ToolResult.error('Parâmetro "image_base64" é obrigatório.',
+          code: 'INVALID_INPUT');
     }
 
     File? tempFile;
@@ -36,12 +34,14 @@ class OcrTool {
     try {
       final bytes = base64Decode(imageBase64);
       final tempDir = await getTemporaryDirectory();
-      tempFile = File('${tempDir.path}/ocr_${DateTime.now().microsecondsSinceEpoch}.png');
+      tempFile = File(
+          '${tempDir.path}/ocr_${DateTime.now().microsecondsSinceEpoch}.png');
       await tempFile.writeAsBytes(bytes);
 
       final inputImage = InputImage.fromFile(tempFile);
       recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final RecognizedText recognized = await recognizer.processImage(inputImage);
+      final RecognizedText recognized =
+          await recognizer.processImage(inputImage);
 
       // Além do texto corrido, devolve os blocos individuais — útil
       // para a IA saber a posição aproximada de cada trecho quando o

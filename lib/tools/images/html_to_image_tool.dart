@@ -1,7 +1,4 @@
-=====================================================================
-lib/tools/images/html_to_image_tool.dart
-=====================================================================
-
+// lib/tools/images/html_to_image_tool.dart
 // render_html_to_image
 //
 // Converte HTML formatado em imagem PNG. A IA decide a dimensão —
@@ -11,14 +8,15 @@ lib/tools/images/html_to_image_tool.dart
 // vez de forçar um tamanho fixo arbitrário. Isso evita imagens
 // cortadas ou com espaço em branco sobrando.
 //
-// Usa flutter_inappwebview (headless), reaproveitando a mesma lib
-// já usada em pdf_tools.dart. WebView headless é liberada logo após
-// cada captura — HTML->imagem tende a ser chamado com mais frequência
-// que HTML->PDF, então manter isso leve importa mais aqui.
+// Usa flutter_inappwebview (headless). API v6: a dimensão é definida
+// via `size:` no construtor do HeadlessInAppWebView e ajustada em
+// runtime via `headless.setSize(...)` (não existe mais
+// `controller.setSize`).
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show Size;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../shared/tool_result.dart';
@@ -46,17 +44,16 @@ class HtmlToImageTool {
   static Future<ToolResult> _renderImpl(Map<String, dynamic> input) async {
     final String? html = input['html'] as String?;
     if (html == null || html.trim().isEmpty) {
-      return ToolResult.error('Parâmetro "html" é obrigatório.', code: 'INVALID_INPUT');
+      return ToolResult.error('Parâmetro "html" é obrigatório.',
+          code: 'INVALID_INPUT');
     }
 
     double width = (input['width'] as num?)?.toDouble() ?? _defaultWidth;
     width = width.clamp(100, _maxWidth);
 
-    double? requestedHeight = (input['height'] as num?)?.toDouble();
-    final double scale =
-        ((input['scale'] as num?)?.toDouble() ?? 2.0).clamp(1.0, _maxPixelRatio);
-
-    HeadlessInAppWebView? headless;
+    final double? requestedHeight = (input['height'] as num?)?.toDouble();
+    final double scale = ((input['scale'] as num?)?.toDouble() ?? 2.0)
+        .clamp(1.0, _maxPixelRatio);
 
     try {
       final result = await _runHeadless(
@@ -73,9 +70,11 @@ class HtmlToImageTool {
         'auto_sized': requestedHeight == null,
       });
     } on TimeoutException {
-      return ToolResult.error('Timeout ao renderizar HTML em imagem.', code: 'TIMEOUT');
+      return ToolResult.error('Timeout ao renderizar HTML em imagem.',
+          code: 'TIMEOUT');
     } catch (e) {
-      return ToolResult.error('Erro ao renderizar HTML: $e', code: 'RENDER_ERROR');
+      return ToolResult.error('Erro ao renderizar HTML: $e',
+          code: 'RENDER_ERROR');
     }
   }
 
@@ -89,8 +88,19 @@ class HtmlToImageTool {
     HeadlessInAppWebView? headless;
 
     headless = HeadlessInAppWebView(
-      initialSize: Size(width, requestedHeight ?? 600),
+      // v6: usa `size:` (não existe mais `initialSize:`)
+      size: Size(width, requestedHeight ?? 600),
       initialData: InAppWebViewInitialData(data: html, mimeType: 'text/html'),
+      initialSettings: InAppWebViewSettings(
+        // garante que o viewport do WebView tenha o tamanho exato
+        // solicitado, sem escalonar por meta-viewport do HTML
+        useShouldOverrideUrlLoading: false,
+        transparentBackground: true,
+        disableHorizontalScroll: true,
+        disableVerticalScroll: true,
+        supportZoom: false,
+        javaScriptEnabled: true,
+      ),
       onLoadStop: (controller, url) async {
         try {
           await Future.delayed(const Duration(milliseconds: 250));
@@ -102,12 +112,14 @@ class HtmlToImageTool {
             final measured = await controller.evaluateJavascript(
               source: 'document.body.scrollHeight',
             );
-            final measuredHeight = (measured is num) ? measured.toDouble() : null;
+            final measuredHeight =
+                (measured is num) ? measured.toDouble() : null;
             if (measuredHeight != null && measuredHeight > 0) {
               finalHeight = measuredHeight.clamp(100, _maxHeight);
-              // Redimensiona a view headless para a altura real medida
-              // antes de capturar, evitando corte ou espaço sobrando.
-              await controller.setSize(Size(width, finalHeight));
+              // v6: redimensiona o headless (não existe mais
+              // controller.setSize) antes de capturar, evitando corte
+              // ou espaço sobrando.
+              await headless?.setSize(Size(width, finalHeight));
               await Future.delayed(const Duration(milliseconds: 150));
             }
           }
@@ -119,7 +131,9 @@ class HtmlToImageTool {
           );
 
           if (screenshot == null) {
-            completer.completeError('Captura retornou vazia.');
+            if (!completer.isCompleted) {
+              completer.completeError('Captura retornou vazia.');
+            }
             return;
           }
 
@@ -138,7 +152,8 @@ class HtmlToImageTool {
       },
       onReceivedError: (controller, request, error) {
         if (!completer.isCompleted) {
-          completer.completeError('Erro ao carregar HTML: ${error.description}');
+          completer.completeError(
+              'Erro ao carregar HTML: ${error.description}');
         }
       },
     );
@@ -153,5 +168,9 @@ class _RenderOutput {
   final double width;
   final double height;
 
-  _RenderOutput({required this.bytes, required this.width, required this.height});
+  _RenderOutput({
+    required this.bytes,
+    required this.width,
+    required this.height,
+  });
 }

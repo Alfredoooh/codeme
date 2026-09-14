@@ -1,7 +1,4 @@
-=====================================================================
-lib/tools/charts/function_plot_tool.dart
-=====================================================================
-
+// lib/tools/charts/function_plot_tool.dart
 // generate_function_plot
 //
 // Usa math_expressions (já presente no pubspec) para parsear e
@@ -30,7 +27,8 @@ class FunctionPlotTool {
   static Future<ToolResult> generate(Map<String, dynamic> input) async {
     final String? expr = input['expression'] as String?;
     if (expr == null || expr.isEmpty) {
-      return ToolResult.error('Parâmetro "expression" é obrigatório.', code: 'INVALID_INPUT');
+      return ToolResult.error('Parâmetro "expression" é obrigatório.',
+          code: 'INVALID_INPUT');
     }
 
     final double xMin = (input['x_min'] as num?)?.toDouble() ?? -10;
@@ -39,7 +37,9 @@ class FunctionPlotTool {
     final bool highlightRoots = (input['highlight_roots'] as bool?) ?? false;
 
     try {
-      final parser = GrammarParser();
+      // math_expressions 2.x: o parser é ShuntingYardParser
+      // (GrammarParser existia na 1.x e foi removido).
+      final parser = ShuntingYardParser();
       final exp = parser.parse(expr);
       final contextModel = ContextModel();
 
@@ -51,10 +51,16 @@ class FunctionPlotTool {
       for (int i = 0; i <= samples; i++) {
         final x = xMin + (xMax - xMin) * i / samples;
         contextModel.bindVariable(Variable('x'), Number(x));
-        final y = exp.evaluate(EvaluationType.REAL, contextModel) as double;
+        final y =
+            (exp.evaluate(EvaluationType.REAL, contextModel) as num)
+                .toDouble();
         points.add(Offset(x, y));
 
-        if (highlightRoots && prevY != null && prevY.sign != y.sign && y.isFinite && prevY.isFinite) {
+        if (highlightRoots &&
+            prevY != null &&
+            prevY.sign != y.sign &&
+            y.isFinite &&
+            prevY.isFinite) {
           roots.add(x);
         }
         prevY = y;
@@ -67,7 +73,8 @@ class FunctionPlotTool {
         'roots_found': roots,
       });
     } catch (e) {
-      return ToolResult.error('Erro ao gerar gráfico da função: $e', code: 'GENERATION_ERROR');
+      return ToolResult.error('Erro ao gerar gráfico da função: $e',
+          code: 'GENERATION_ERROR');
     }
   }
 
@@ -82,16 +89,24 @@ class FunctionPlotTool {
     const double height = 500;
     const double padding = 50;
 
-    final yValues = points.map((p) => p.dy).where((y) => y.isFinite).toList();
-    final yMin = yValues.isEmpty ? -10.0 : yValues.reduce((a, b) => a < b ? a : b);
-    final yMax = yValues.isEmpty ? 10.0 : yValues.reduce((a, b) => a > b ? a : b);
+    final yValues =
+        points.map((p) => p.dy).where((y) => y.isFinite).toList();
+    final yMin =
+        yValues.isEmpty ? -10.0 : yValues.reduce((a, b) => a < b ? a : b);
+    final yMax =
+        yValues.isEmpty ? 10.0 : yValues.reduce((a, b) => a > b ? a : b);
 
-    double toScreenX(double x) => padding + (x - xMin) / (xMax - xMin) * (width - padding * 2);
-    double toScreenY(double y) => height - padding - (y - yMin) / (yMax - yMin) * (height - padding * 2);
+    double toScreenX(double x) =>
+        padding + (x - xMin) / (xMax - xMin) * (width - padding * 2);
+    double toScreenY(double y) =>
+        height -
+        padding -
+        (y - yMin) / (yMax - yMin) * (height - padding * 2);
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, width, height));
-    canvas.drawRect(Rect.fromLTWH(0, 0, width, height), Paint()..color = Colors.white);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, width, height), Paint()..color = Colors.white);
 
     if (title != null) {
       final tp = TextPainter(
@@ -102,12 +117,16 @@ class FunctionPlotTool {
     }
 
     // Eixos
-    final axisPaint = Paint()..color = Colors.black54..strokeWidth = 1.5;
+    final axisPaint = Paint()
+      ..color = Colors.black54
+      ..strokeWidth = 1.5;
     if (yMin <= 0 && yMax >= 0) {
-      canvas.drawLine(Offset(padding, toScreenY(0)), Offset(width - padding, toScreenY(0)), axisPaint);
+      canvas.drawLine(Offset(padding, toScreenY(0)),
+          Offset(width - padding, toScreenY(0)), axisPaint);
     }
     if (xMin <= 0 && xMax >= 0) {
-      canvas.drawLine(Offset(toScreenX(0), padding), Offset(toScreenX(0), height - padding), axisPaint);
+      canvas.drawLine(Offset(toScreenX(0), padding),
+          Offset(toScreenX(0), height - padding), axisPaint);
     }
 
     // Curva
