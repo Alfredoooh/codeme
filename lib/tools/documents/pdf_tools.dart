@@ -12,6 +12,10 @@
 // fiel de converter HTML complexo em PDF sem reescrever um motor de
 // layout CSS em Dart puro.
 //
+// NOTA (flutter_inappwebview 6.1.5): o parâmetro iosWKPdfConfiguration
+// está deprecated em favor de pdfConfiguration (classe
+// PDFConfiguration), que é multiplataforma e não só iOS.
+//
 // Este arquivo depende de server/tools_queue.dart para garantir que
 // apenas uma renderização aconteça por vez (ver discussão de RAM/fila
 // serial já feita na conversa).
@@ -117,7 +121,9 @@ class PdfTools {
           // Pequeno delay para garantir que fontes/imagens/CSS
           // terminaram de aplicar antes de exportar.
           await Future.delayed(const Duration(milliseconds: 300));
-          final pdfBytes = await controller.exportAsPdf();
+          final pdfBytes = await controller.createPdf(
+            pdfConfiguration: PDFConfiguration(),
+          );
           if (!completer.isCompleted) completer.complete(pdfBytes);
         } catch (e) {
           if (!completer.isCompleted) completer.completeError(e);

@@ -1,6 +1,4 @@
-=====================================================================
-lib/tools/images/image_resize_crop_tools.dart
-=====================================================================
+// lib/tools/images/image_resize_crop_tools.dart
 
 // resize_image, crop_image
 //
@@ -10,6 +8,7 @@ lib/tools/images/image_resize_crop_tools.dart
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:ui' show Rect, Paint;
 
 import '../shared/tool_result.dart';
 
@@ -88,6 +87,3 @@ class ImageResizeCropTools {
     }
   }
 }
-
-// Import necessário para Rect/Paint usados acima
-import 'dart:ui' show Rect, Paint;
