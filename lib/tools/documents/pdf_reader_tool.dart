@@ -1,7 +1,5 @@
-=====================================================================
-lib/tools/documents/pdf_reader_tool.dart  (IMPLEMENTADO — sem placeholders)
-=====================================================================
-
+// lib/tools/documents/pdf_reader_tool.dart  (IMPLEMENTADO — sem placeholders)
+//
 // read_pdf_contents
 //
 // Extrai texto e contagem de páginas de um PDF existente via

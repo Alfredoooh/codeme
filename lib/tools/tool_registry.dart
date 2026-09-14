@@ -1,6 +1,4 @@
-=====================================================================
-lib/tools/tool_registry.dart  (ATUALIZADO — inclui datetime e shell)
-=====================================================================
+// lib/tools/tool_registry.dart  (ATUALIZADO — inclui datetime e shell)
 
 import 'shared/tool_result.dart';
 
