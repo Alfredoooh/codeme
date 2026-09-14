@@ -9,11 +9,12 @@
 // via Canvas customizado para os estilos avançados que o qr_flutter
 // puro não cobre nativamente.
 //
-// NOTA: qr_flutter precisa ser adicionado ao pubspec.yaml.
+// NOTA: qr_flutter precisa estar no pubspec.yaml (já está).
 //
-// NOTA (qr 3.x): a leitura dos módulos é feita via `isDark(row, col)`,
-// que continua existindo na classe QrCode desta versão — não há
-// campo `modules` público.
+// NOTA (qr 3.x): a partir da versão 3.0.0 do pacote `qr`,
+// QrCode.isDark() foi MOVIDO para QrImage. QrCode agora é só a
+// estrutura de dados; para ler os módulos é preciso envolver o
+// QrCode resultante num QrImage e chamar isDark nele.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -71,8 +72,11 @@ class QrcodeTool {
       }
 
       final qrCode = qrValidationResult.qrCode!;
+      // A partir do qr 3.x, isDark vive em QrImage, não em QrCode.
+      final qrImage = QrImage(qrCode);
+
       final bytes = await _paintCustomQr(
-        qrCode: qrCode,
+        qrImage: qrImage,
         size: size,
         fgColor: fgColor,
         bgColor: bgColor,
@@ -93,7 +97,7 @@ class QrcodeTool {
   }
 
   static Future<Uint8List> _paintCustomQr({
-    required QrCode qrCode,
+    required QrImage qrImage,
     required double size,
     required Color fgColor,
     required Color bgColor,
@@ -109,7 +113,7 @@ class QrcodeTool {
     canvas.drawRect(
         Rect.fromLTWH(0, 0, size, size), Paint()..color = bgColor);
 
-    final moduleCount = qrCode.moduleCount;
+    final moduleCount = qrImage.moduleCount;
     final cellSize = size / moduleCount;
 
     final paint = Paint()..style = PaintingStyle.fill;
@@ -144,11 +148,11 @@ class QrcodeTool {
       return false;
     }
 
-    // Módulos normais (fora dos olhos). isDark(row, col) é a API
-    // pública de QrCode no pacote qr 3.x — sem equivalente `modules`.
+    // Módulos normais (fora dos olhos). isDark(row, col) agora vive
+    // em QrImage (pacote qr >= 3.0.0), não mais em QrCode.
     for (int x = 0; x < moduleCount; x++) {
       for (int y = 0; y < moduleCount; y++) {
-        if (!qrCode.isDark(y, x)) continue;
+        if (!qrImage.isDark(y, x)) continue;
         if (_isInsideAnyEye(x, y)) continue;
 
         final rect =
