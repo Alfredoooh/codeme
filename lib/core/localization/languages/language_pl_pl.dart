@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/core/language/language_pl_pl.dart
 // ══════════════════════════════════════════════════════════════
-import 'language_model.dart';
+import '../language_model.dart';
 
 const AppLocale kLocalePlPl = AppLocale(
   language: AppLanguage(

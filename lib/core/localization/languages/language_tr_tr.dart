@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/core/language/language_tr_tr.dart
 // ══════════════════════════════════════════════════════════════
-import 'language_model.dart';
+import '../language_model.dart';
 
 const AppLocale kLocaleTrTr = AppLocale(
   language: AppLanguage(

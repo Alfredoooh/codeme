@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════
 // FILE: lib/core/language/language_en_gb.dart
 // ══════════════════════════════════════════════════════════════
-import 'language_model.dart';
+import '../language_model.dart';
 
 const AppLocale kLocaleEnGb = AppLocale(
   language: AppLanguage(
