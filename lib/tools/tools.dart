@@ -1,6 +1,4 @@
-=====================================================================
-lib/tools/tools.dart  (ATUALIZADO — inclui datetime e shell)
-=====================================================================
+// lib/tools/tools.dart  (ATUALIZADO — inclui datetime e shell)
 
 library nexa_tools;
 
