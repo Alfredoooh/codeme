@@ -534,7 +534,7 @@ workflows:
         script: |
           MAIN_ACTIVITY=$(find "${CM_BUILD_DIR}/android/app/src/main" -name "MainActivity.kt" -o -name "MainActivity.java" | head -1)
           if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "❌ MainActivity não encontrada — não é possível iniciar o AnimationDrawable do shimmer"
+            echo "❌ MainActivity não encontrada"
             exit 1
           fi
           echo "MainActivity encontrada em: $MAIN_ACTIVITY"
@@ -548,26 +548,23 @@ workflows:
 
           is_kotlin = path.endswith(".kt")
 
-          # AnimationDrawable não inicia sozinho a partir de um <bitmap> em
-          # layer-list — precisa de start() explícito assim que a window
-          # ganha foco. Isto cobre o pré-Android 12 (o 12+ usa o AVD, que
-          # já anima sozinho via objectAnimator).
-          if is_kotlin:
-              if "onWindowFocusChanged" not in content:
-                  marker = "class MainActivity"
-                  idx = content.find(marker)
-                  if idx == -1:
-                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Kotlin")
-                  brace_idx = content.find("{", idx)
-                  injected = content[:brace_idx+1] + '''
+          if is_kotlin and "onWindowFocusChanged" not in content:
+              # flutter create pode gerar classe sem corpo: "class MainActivity: FlutterActivity()"
+              # Normaliza para ter corpo antes de injetar
+              content = re.sub(
+                  r'(class MainActivity\s*:\s*FlutterActivity\(\))\s*$',
+                  r'\1 {}',
+                  content,
+                  flags=re.MULTILINE
+              )
+
+              shimmer_code = '''
 
               override fun onWindowFocusChanged(hasFocus: Boolean) {
                   super.onWindowFocusChanged(hasFocus)
                   if (hasFocus) {
                       val bg = window.decorView.background
                       if (bg is android.graphics.drawable.LayerDrawable) {
-                          val anim = bg.findDrawableByLayerId(android.R.id.background)
-                          (anim as? android.graphics.drawable.AnimationDrawable)?.start()
                           for (i in 0 until bg.numberOfLayers) {
                               val d = bg.getDrawable(i)
                               if (d is android.graphics.drawable.AnimationDrawable) {
@@ -577,42 +574,28 @@ workflows:
                       }
                   }
               }
-          ''' + content[brace_idx+1:]
-                  with open(path, "w") as f:
-                      f.write(injected)
-                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.kt")
-              else:
-                  print("✅ onWindowFocusChanged já presente em MainActivity.kt — verificar manualmente se inicia o shimmer")
-          else:
-              if "onWindowFocusChanged" not in content:
-                  marker = re.search(r'public class MainActivity[^{]*\{', content)
-                  if not marker:
-                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Java")
-                  brace_idx = marker.end()
-                  injected = content[:brace_idx] + '''
+          '''
 
-              @Override
-              public void onWindowFocusChanged(boolean hasFocus) {
-                  super.onWindowFocusChanged(hasFocus);
-                  if (hasFocus) {
-                      android.graphics.drawable.Drawable bg = getWindow().getDecorView().getBackground();
-                      if (bg instanceof android.graphics.drawable.LayerDrawable) {
-                          android.graphics.drawable.LayerDrawable layerBg = (android.graphics.drawable.LayerDrawable) bg;
-                          for (int i = 0; i < layerBg.getNumberOfLayers(); i++) {
-                              android.graphics.drawable.Drawable d = layerBg.getDrawable(i);
-                              if (d instanceof android.graphics.drawable.AnimationDrawable) {
-                                  ((android.graphics.drawable.AnimationDrawable) d).start();
-                              }
-                          }
-                      }
-                  }
-              }
-          ''' + content[brace_idx:]
-                  with open(path, "w") as f:
-                      f.write(injected)
-                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.java")
-              else:
-                  print("✅ onWindowFocusChanged já presente em MainActivity.java — verificar manualmente se inicia o shimmer")
+              # Encontra o { de abertura da classe e injeta antes do } de fecho
+              idx = content.find("class MainActivity")
+              if idx == -1:
+                  raise SystemExit("❌ class MainActivity não encontrada")
+
+              brace_open = content.find("{", idx)
+              if brace_open == -1:
+                  raise SystemExit("❌ { de abertura da classe não encontrado")
+
+              brace_close = content.rfind("}")
+              if brace_close == -1 or brace_close <= brace_open:
+                  raise SystemExit("❌ } de fecho da classe não encontrado")
+
+              injected = content[:brace_close] + shimmer_code + content[brace_close:]
+
+              with open(path, "w") as f:
+                  f.write(injected)
+              print("✅ onWindowFocusChanged injetado em MainActivity.kt")
+          elif is_kotlin:
+              print("✅ onWindowFocusChanged já presente — nada a fazer")
           PYEOF
 
       - name: Write styles XMLs (light + dark + v27) — pré Android 12
@@ -847,6 +830,82 @@ workflows:
               for i, line in enumerate(content.splitlines(), 1):
                   if "compileSdk" in line:
                       print(f"  linha {i}: {line.strip()}")
+          PYEOF
+
+      - name: Patch image_picker + image_cropper compileSdk to 36
+        script: |
+          python3 << 'PYEOF'
+          import os
+          import re
+          import glob
+
+          home = os.environ["HOME"]
+
+          targets = []
+          for pkg in ["image_picker_android", "image_cropper"]:
+              pattern = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle")
+              found = [f for f in glob.glob(pattern) if "example" not in f]
+              if not found:
+                  pattern_kts = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle.kts")
+                  found = [f for f in glob.glob(pattern_kts) if "example" not in f]
+              if found:
+                  targets.append(found[0])
+              else:
+                  print(f"⚠️ build.gradle de {pkg} não encontrado — pode não estar instalado")
+
+          for target in targets:
+              print(f"Patching: {target}")
+              with open(target, "r") as f:
+                  content = f.read()
+              original = content
+              content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
+              content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
+              content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
+              content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+              content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
+              content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
+              content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+              if content != original:
+                  with open(target, "w") as f:
+                      f.write(content)
+                  print(f"✅ compileSdk ajustado para 36 em {os.path.basename(os.path.dirname(os.path.dirname(target)))}")
+              else:
+                  print(f"⚠️ Nenhuma substituição aplicada em {target}")
+          PYEOF
+
+      - name: Ensure READ_MEDIA + WRITE permissions for image_picker
+        script: |
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+          python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          to_add = []
+          perms = [
+              'android.permission.READ_MEDIA_IMAGES',
+              'android.permission.READ_EXTERNAL_STORAGE',
+              'android.permission.WRITE_EXTERNAL_STORAGE',
+          ]
+          for p in perms:
+              if p not in content:
+                  to_add.append(f'<uses-permission android:name="{p}" />')
+
+          if to_add:
+              block = "\n    ".join(to_add)
+              content = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n    ' + block,
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+              print(f"✅ Permissões de storage adicionadas: {', '.join(p.split('.')[-1] for p in perms if p in open(path).read())}")
+          else:
+              print("✅ Permissões de storage já presentes")
           PYEOF
 
       - name: Enable R8 + resource shrinking
@@ -1378,7 +1437,7 @@ workflows:
         script: |
           MAIN_ACTIVITY=$(find "${CM_BUILD_DIR}/android/app/src/main" -name "MainActivity.kt" -o -name "MainActivity.java" | head -1)
           if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "❌ MainActivity não encontrada — não é possível iniciar o AnimationDrawable do shimmer"
+            echo "❌ MainActivity não encontrada"
             exit 1
           fi
           echo "MainActivity encontrada em: $MAIN_ACTIVITY"
@@ -1392,14 +1451,17 @@ workflows:
 
           is_kotlin = path.endswith(".kt")
 
-          if is_kotlin:
-              if "onWindowFocusChanged" not in content:
-                  marker = "class MainActivity"
-                  idx = content.find(marker)
-                  if idx == -1:
-                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Kotlin")
-                  brace_idx = content.find("{", idx)
-                  injected = content[:brace_idx+1] + '''
+          if is_kotlin and "onWindowFocusChanged" not in content:
+              # flutter create pode gerar classe sem corpo: "class MainActivity: FlutterActivity()"
+              # Normaliza para ter corpo antes de injetar
+              content = re.sub(
+                  r'(class MainActivity\s*:\s*FlutterActivity\(\))\s*$',
+                  r'\1 {}',
+                  content,
+                  flags=re.MULTILINE
+              )
+
+              shimmer_code = '''
 
               override fun onWindowFocusChanged(hasFocus: Boolean) {
                   super.onWindowFocusChanged(hasFocus)
@@ -1415,42 +1477,28 @@ workflows:
                       }
                   }
               }
-          ''' + content[brace_idx+1:]
-                  with open(path, "w") as f:
-                      f.write(injected)
-                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.kt")
-              else:
-                  print("✅ onWindowFocusChanged já presente em MainActivity.kt — verificar manualmente se inicia o shimmer")
-          else:
-              if "onWindowFocusChanged" not in content:
-                  marker = re.search(r'public class MainActivity[^{]*\{', content)
-                  if not marker:
-                      raise SystemExit("❌ Declaração de MainActivity não encontrada no Java")
-                  brace_idx = marker.end()
-                  injected = content[:brace_idx] + '''
+          '''
 
-              @Override
-              public void onWindowFocusChanged(boolean hasFocus) {
-                  super.onWindowFocusChanged(hasFocus);
-                  if (hasFocus) {
-                      android.graphics.drawable.Drawable bg = getWindow().getDecorView().getBackground();
-                      if (bg instanceof android.graphics.drawable.LayerDrawable) {
-                          android.graphics.drawable.LayerDrawable layerBg = (android.graphics.drawable.LayerDrawable) bg;
-                          for (int i = 0; i < layerBg.getNumberOfLayers(); i++) {
-                              android.graphics.drawable.Drawable d = layerBg.getDrawable(i);
-                              if (d instanceof android.graphics.drawable.AnimationDrawable) {
-                                  ((android.graphics.drawable.AnimationDrawable) d).start();
-                              }
-                          }
-                      }
-                  }
-              }
-          ''' + content[brace_idx:]
-                  with open(path, "w") as f:
-                      f.write(injected)
-                  print("✅ onWindowFocusChanged (start do shimmer) injetado em MainActivity.java")
-              else:
-                  print("✅ onWindowFocusChanged já presente em MainActivity.java — verificar manualmente se inicia o shimmer")
+              # Encontra o { de abertura da classe e injeta antes do } de fecho
+              idx = content.find("class MainActivity")
+              if idx == -1:
+                  raise SystemExit("❌ class MainActivity não encontrada")
+
+              brace_open = content.find("{", idx)
+              if brace_open == -1:
+                  raise SystemExit("❌ { de abertura da classe não encontrado")
+
+              brace_close = content.rfind("}")
+              if brace_close == -1 or brace_close <= brace_open:
+                  raise SystemExit("❌ } de fecho da classe não encontrado")
+
+              injected = content[:brace_close] + shimmer_code + content[brace_close:]
+
+              with open(path, "w") as f:
+                  f.write(injected)
+              print("✅ onWindowFocusChanged injetado em MainActivity.kt")
+          elif is_kotlin:
+              print("✅ onWindowFocusChanged já presente — nada a fazer")
           PYEOF
 
       - name: Write styles XMLs (light + dark + v27) — pré Android 12
@@ -1681,6 +1729,82 @@ workflows:
               for i, line in enumerate(content.splitlines(), 1):
                   if "compileSdk" in line:
                       print(f"  linha {i}: {line.strip()}")
+          PYEOF
+
+      - name: Patch image_picker + image_cropper compileSdk to 36
+        script: |
+          python3 << 'PYEOF'
+          import os
+          import re
+          import glob
+
+          home = os.environ["HOME"]
+
+          targets = []
+          for pkg in ["image_picker_android", "image_cropper"]:
+              pattern = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle")
+              found = [f for f in glob.glob(pattern) if "example" not in f]
+              if not found:
+                  pattern_kts = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle.kts")
+                  found = [f for f in glob.glob(pattern_kts) if "example" not in f]
+              if found:
+                  targets.append(found[0])
+              else:
+                  print(f"⚠️ build.gradle de {pkg} não encontrado — pode não estar instalado")
+
+          for target in targets:
+              print(f"Patching: {target}")
+              with open(target, "r") as f:
+                  content = f.read()
+              original = content
+              content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
+              content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
+              content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
+              content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
+              content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
+              content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
+              content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
+              if content != original:
+                  with open(target, "w") as f:
+                      f.write(content)
+                  print(f"✅ compileSdk ajustado para 36 em {os.path.basename(os.path.dirname(os.path.dirname(target)))}")
+              else:
+                  print(f"⚠️ Nenhuma substituição aplicada em {target}")
+          PYEOF
+
+      - name: Ensure READ_MEDIA + WRITE permissions for image_picker
+        script: |
+          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
+          python3 << PYEOF
+          import re
+
+          path = "$MANIFEST"
+          with open(path, "r") as f:
+              content = f.read()
+
+          to_add = []
+          perms = [
+              'android.permission.READ_MEDIA_IMAGES',
+              'android.permission.READ_EXTERNAL_STORAGE',
+              'android.permission.WRITE_EXTERNAL_STORAGE',
+          ]
+          for p in perms:
+              if p not in content:
+                  to_add.append(f'<uses-permission android:name="{p}" />')
+
+          if to_add:
+              block = "\n    ".join(to_add)
+              content = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n    ' + block,
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+              print(f"✅ Permissões de storage adicionadas: {', '.join(p.split('.')[-1] for p in perms if p in open(path).read())}")
+          else:
+              print("✅ Permissões de storage já presentes")
           PYEOF
 
       - name: Build debug APK
