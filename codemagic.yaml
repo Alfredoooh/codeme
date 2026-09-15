@@ -908,6 +908,37 @@ workflows:
               print("✅ Permissões de storage já presentes")
           PYEOF
 
+      - name: Add R8 keep rules for google_mlkit_text_recognition
+        script: |
+          PROGUARD="${CM_BUILD_DIR}/android/app/proguard-rules.pro"
+          touch "$PROGUARD"
+          if ! grep -q "mlkit.vision.text" "$PROGUARD"; then
+            cat >> "$PROGUARD" << 'EOF'
+
+          # google_mlkit_text_recognition — keep all script option classes
+          # (Chinese, Devanagari, Japanese, Korean) so R8 does not fail when
+          # the optional script model AARs are absent at compile time.
+          -dontwarn com.google.mlkit.vision.text.chinese.**
+          -dontwarn com.google.mlkit.vision.text.devanagari.**
+          -dontwarn com.google.mlkit.vision.text.japanese.**
+          -dontwarn com.google.mlkit.vision.text.korean.**
+          -keep class com.google.mlkit.vision.text.** { *; }
+          -keep class com.google_mlkit_text_recognition.** { *; }
+          EOF
+            echo "✅ Keep rules mlkit adicionadas ao proguard-rules.pro"
+          else
+            echo "✅ Keep rules mlkit já presentes"
+          fi
+
+          # Garante que o build.gradle referencia o proguard-rules.pro
+          GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
+          if grep -q "proguardFiles" "$GRADLE_FILE" && ! grep -q "proguard-rules.pro" "$GRADLE_FILE"; then
+            sed -i "s|getDefaultProguardFile('proguard-android-optimize.txt')|getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'|g" "$GRADLE_FILE"
+            echo "✅ proguard-rules.pro referenciado no build.gradle"
+          else
+            echo "✅ proguard-rules.pro já referenciado ou bloco proguardFiles ausente"
+          fi
+
       - name: Enable R8 + resource shrinking
         script: |
           GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
