@@ -1,12 +1,3 @@
-=====================================================================
-lib/tools/server/tools_queue.dart
-=====================================================================
-
-// Fila serial global — garante que apenas UMA tarefa pesada (WebView,
-// OCR, renderização de Canvas grande) execute por vez, protegendo
-// dispositivos com RAM baixa (piso de 2GB) de picos de memória
-// somados por concorrência.
-
 import 'dart:async';
 
 class ToolsQueue {

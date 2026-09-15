@@ -1,23 +1,3 @@
-=====================================================================
-lib/tools/server/widget_render_host.dart  (NOVO)
-=====================================================================
-
-// Host de renderização off-screen — permite montar QUALQUER widget
-// Flutter arbitrário (não só o que já está visível na tela do
-// utilizador) e capturá-lo como PNG via um pipeline de renderização
-// isolado (RenderView + PipelineOwner próprios), sem depender de
-// nenhum Overlay ou BuildContext de uma tela específica estar
-// montado no momento da chamada.
-//
-// Usado por chart_tool.dart (fl_chart) e por qualquer tool futura
-// que precise desenhar um widget Flutter nativo (Material/Cupertino)
-// em vez de Canvas puro ou WebView.
-//
-// Baseado na técnica padrão de "widget to image" fora da árvore de
-// widgets do app (a mesma usada internamente por pacotes como
-// `screenshot`), sem trazer dependência externa — só APIs do
-// próprio framework Flutter (dart:ui + flutter/rendering.dart).
-
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;

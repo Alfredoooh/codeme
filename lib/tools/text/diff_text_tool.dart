@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/text/diff_text_tool.dart
-=====================================================================
-
-// diff_text
-//
-// Implementação simples de diff linha-a-linha (não usa lib externa
-// de diff — cobre o caso comum de comparação de texto sem trazer
-// dependência extra ao pubspec).
-
 import '../shared/tool_result.dart';
 
 class DiffTextTool {

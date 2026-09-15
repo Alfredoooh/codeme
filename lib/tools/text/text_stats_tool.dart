@@ -1,9 +1,3 @@
-=====================================================================
-lib/tools/text/text_stats_tool.dart
-=====================================================================
-
-// text_summary_stats
-
 import '../shared/tool_result.dart';
 
 class TextStatsTool {

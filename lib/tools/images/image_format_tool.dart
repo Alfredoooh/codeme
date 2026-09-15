@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/images/image_format_tool.dart
-=====================================================================
-
-// convert_image_format
-//
-// Usa flutter_image_compress (já presente no pubspec) para conversão
-// entre formatos comuns (PNG, JPEG, WebP, HEIC quando suportado pela
-// plataforma).
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_image_compress/flutter_image_compress.dart';

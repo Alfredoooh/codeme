@@ -1,15 +1,3 @@
-=====================================================================
-lib/tools/documents/pptx_tools.dart
-=====================================================================
-
-// create_pptx
-//
-// Mesma lógica do docx: .pptx também é um ZIP de XMLs OOXML, mas com
-// estrutura de slides em vez de document.xml. Sem lib Dart madura
-// equivalente ao `pptxgenjs` (Node), a implementação monta o
-// esqueleto mínimo de um .pptx válido com 1+ slides de texto.
-// Layouts avançados (imagens, gráficos embutidos) exigem extensão.
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';

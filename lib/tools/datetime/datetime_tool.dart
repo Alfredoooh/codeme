@@ -1,14 +1,3 @@
-=====================================================================
-lib/tools/datetime/datetime_tool.dart
-=====================================================================
-
-// get_current_datetime
-//
-// Tool nova (não existia no zip Node original) — dá à IA acesso
-// confiável à data/hora ATUAL do dispositivo a qualquer momento da
-// conversa, em vez de depender do conhecimento estático de treino.
-// Operação síncrona, custo de RAM/CPU irrelevante.
-
 import '../shared/tool_result.dart';
 
 class DateTimeTool {

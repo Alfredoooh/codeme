@@ -1,18 +1,3 @@
-// lib/tools/images/html_to_image_tool.dart
-//
-// render_html_to_image
-//
-// Converte HTML formatado em imagem PNG. A IA decide a dimensão —
-// `width`/`height` são OPCIONAIS: se não vierem no input, a tool
-// mede a altura real do conteúdo renderizado e usa isso como
-// dimensão final.
-//
-// API flutter_inappwebview 6.x:
-//   - HeadlessInAppWebView usa `initialSize:` (NÃO `size:`).
-//   - Não existe mais `controller.setSize` — redimensão é feita em
-//     `headless.setSize(...)`.
-//   - `headless` é anulável: use `?.run()` / `?.dispose()`.
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';

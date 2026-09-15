@@ -1,10 +1,3 @@
-// lib/tools/images/image_resize_crop_tools.dart
-
-// resize_image, crop_image
-//
-// Usa dart:ui diretamente (decode + draw) — não precisa de lib
-// externa de imagem, o Flutter já resolve nativamente via Skia.
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;

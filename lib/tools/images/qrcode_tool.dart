@@ -1,21 +1,3 @@
-// lib/tools/images/qrcode_tool.dart
-//
-// generate_qrcode
-//
-// Suporta estilos customizáveis: cor de frente/fundo, formato dos
-// "olhos" (quadrado, arredondado, pontilhado), formato dos módulos
-// (quadrado, ponto, arredondado), logo central embutido, e gradiente
-// opcional. Usa qr_flutter como base para a matriz QR + renderização
-// via Canvas customizado para os estilos avançados que o qr_flutter
-// puro não cobre nativamente.
-//
-// NOTA: qr_flutter precisa estar no pubspec.yaml (já está).
-//
-// NOTA (qr 3.x): a partir da versão 3.0.0 do pacote `qr`,
-// QrCode.isDark() foi MOVIDO para QrImage. QrCode agora é só a
-// estrutura de dados; para ler os módulos é preciso envolver o
-// QrCode resultante num QrImage e chamar isDark nele.
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;

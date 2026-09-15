@@ -1,21 +1,3 @@
-// lib/tools/images/barcode_tool.dart
-//
-// generate_barcode
-//
-// Usa o pacote `barcode` (precisa ser adicionado ao pubspec.yaml).
-// Gera o código de barras via `Barcode.make(...)`, que retorna uma
-// lista de `BarcodeElement` (barras e textos), e desenha tudo em um
-// Canvas — depois exporta como PNG.
-//
-// API barcode 2.x:
-//   - NÃO existe `bc.paint()`.
-//   - `bc.make(content, width:, height:, drawText:, fontHeight:)`
-//     devolve `Iterable<BarcodeElement>`.
-//   - Subclasses relevantes: `BarcodeBar` (barra preta ou branca) e
-//     `BarcodeText` (texto do rótulo — expõe left/top/width/height/
-//     text, sem campo `fontHeight` próprio; o tamanho do rótulo vem
-//     de `height`).
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -25,15 +7,7 @@ import 'package:barcode/barcode.dart';
 import '../shared/tool_result.dart';
 
 class BarcodeTool {
-  /// generate_barcode
-  /// input: {
-  ///   content: String,
-  ///   format?: String — "code128" | "ean13" | "ean8" | "code39"
-  ///                     | "itf14" | "upca" (default "code128"),
-  ///   width?: number (default 600),
-  ///   height?: number (default 200),
-  ///   show_text?: bool (default true),
-  /// }
+
   static Future<ToolResult> generate(Map<String, dynamic> input) async {
     final String? content = input['content'] as String?;
     if (content == null || content.isEmpty) {

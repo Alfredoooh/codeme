@@ -1,18 +1,3 @@
-=====================================================================
-lib/tools/shell/shell_tool.dart
-=====================================================================
-
-// run_shell_command
-//
-// Tool nova — permite à IA rodar comandos básicos de sistema que não
-// têm tool dedicada, restrita a uma allowlist fixa de comandos leves
-// e seguros. NÃO é um shell irrestrito: comandos fora da allowlist
-// são recusados antes mesmo de tentar executar, e há timeout curto
-// para nunca travar a fila por um processo pendurado.
-//
-// Comandos permitidos são propositalmente básicos e de baixo custo
-// de RAM/CPU (consulta de informação, não processamento pesado).
-
 import 'dart:async';
 import 'dart:io';
 

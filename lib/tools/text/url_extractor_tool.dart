@@ -1,9 +1,3 @@
-=====================================================================
-lib/tools/text/url_extractor_tool.dart
-=====================================================================
-
-// extract_urls_from_text
-
 import '../shared/tool_result.dart';
 
 class UrlExtractorTool {

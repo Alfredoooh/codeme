@@ -1,25 +1,3 @@
-=====================================================================
-lib/tools/documents/docx_tools.dart
-=====================================================================
-
-// create_docx
-//
-// ESTRATÉGIA: assim como o PDF, gerar a partir de HTML formatado —
-// não montar parágrafo a parágrafo manualmente. O formato .docx é,
-// internamente, um pacote ZIP com arquivos XML (OOXML). Sem lib Dart
-// madura equivalente a `@turbodocx/html-to-docx` (Node), a abordagem
-// viável é: parsear o HTML (pacote `html`, já presente no pubspec) e
-// traduzir a árvore de elementos (h1, p, table, strong, em, etc.)
-// para os elementos XML equivalentes do OOXML, empacotando tudo com
-// `archive` (já presente no pubspec) no container .docx final.
-//
-// Esta é a tool de maior esforço de implementação de toda a pasta —
-// o esqueleto abaixo cobre a estrutura mínima de um .docx válido
-// (document.xml + relationships + content types) e um tradutor
-// simplificado de HTML → parágrafos/runs, cobrindo tags comuns.
-// Tabelas e estilos avançados exigem extensão incremental deste
-// tradutor.
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';

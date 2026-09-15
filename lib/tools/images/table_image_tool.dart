@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/images/table_image_tool.dart
-=====================================================================
-
-// generate_table_image
-//
-// Desenha uma tabela diretamente via Canvas (dart:ui) — mais leve
-// que delegar para WebView, já que é um layout simples e previsível
-// (grade de células).
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;

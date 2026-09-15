@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/server/local_tools_server.dart
-=====================================================================
-
-// Servidor HTTP local — expõe todas as tools via POST /tools/:name,
-// para ser chamado tanto pelo próprio app (ex: chat_tools.dart) quanto
-// por processos externos na mesma rede, se necessário. Toda a lógica
-// pesada já passa pela fila serial dentro de cada tool individual —
-// este servidor só faz roteamento HTTP + serialização JSON.
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

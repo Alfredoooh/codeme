@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/text/token_estimate_tool.dart
-=====================================================================
-
-// count_tokens_estimate
-//
-// Estimativa por regra simples (sem tokenizador oficial): aproxima
-// 1 token ≈ 4 caracteres em inglês, ajustado levemente para PT-BR
-// (que tende a ter tokens um pouco maiores devido a acentuação).
-
 import '../shared/tool_result.dart';
 
 class TokenEstimateTool {

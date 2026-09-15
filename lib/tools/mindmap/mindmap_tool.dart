@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/mindmap/mindmap_tool.dart
-=====================================================================
-
-// generate_mindmap
-//
-// Layout radial simples desenhado via Canvas — nó raiz no centro,
-// filhos distribuídos em círculo ao redor, sem dependência de lib de
-// grafo (evita adicionar peso extra ao pubspec só para isto).
-
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';

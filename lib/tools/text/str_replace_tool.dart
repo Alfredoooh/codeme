@@ -1,13 +1,3 @@
-=====================================================================
-lib/tools/text/str_replace_tool.dart
-=====================================================================
-
-// str_replace_file
-//
-// Operação síncrona simples — não precisa de fila nem async real,
-// mas mantém a assinatura Future para consistência com o resto do
-// registry.
-
 import '../shared/tool_result.dart';
 
 class StrReplaceTool {

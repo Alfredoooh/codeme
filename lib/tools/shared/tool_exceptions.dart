@@ -1,11 +1,3 @@
-=====================================================================
-lib/tools/shared/tool_exceptions.dart
-=====================================================================
-
-// Exceptions específicas do motor de tools. Usadas internamente;
-// tool_registry.dart captura qualquer exception e converte em
-// ToolResult.error antes de devolver ao chamador — nada escapa cru.
-
 class ToolException implements Exception {
   final String message;
   final String code;

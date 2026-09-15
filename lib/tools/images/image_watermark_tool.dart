@@ -1,12 +1,3 @@
-=====================================================================
-lib/tools/images/image_watermark_tool.dart
-=====================================================================
-
-// watermark_image
-//
-// Desenha texto sobre a imagem via Canvas nativo (dart:ui), sem
-// dependência externa.
-
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;

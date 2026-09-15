@@ -1,14 +1,3 @@
-=====================================================================
-lib/tools/tool_definitions.dart
-=====================================================================
-
-// Schemas das tools locais — equivalente ao definitions.js do Node.
-// Usado para: (1) documentação/introspecção, (2) validação de input
-// antes de despachar, (3) expor via endpoint GET /tools caso um
-// agente de IA precise descobrir dinamicamente o que está disponível.
-//
-// NÃO inclui as tools de rede externa (web_search, get_weather, etc.)
-// — essas continuam definidas e servidas apenas pelo backend Node.
 
 class ToolParamSchema {
   final String type; // "string", "number", "boolean", "object", "array"

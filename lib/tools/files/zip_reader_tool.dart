@@ -1,12 +1,3 @@
-=====================================================================
-lib/tools/files/zip_reader_tool.dart
-=====================================================================
-
-// read_zip_contents
-//
-// Usa archive (já presente no pubspec) para listar/extrair conteúdo
-// de um .zip sem escrever nada em disco (tudo em memória).
-
 import 'dart:convert';
 import 'package:archive/archive.dart';
 

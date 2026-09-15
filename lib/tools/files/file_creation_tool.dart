@@ -1,12 +1,3 @@
-=====================================================================
-lib/tools/files/file_creation_tool.dart
-=====================================================================
-
-// create_file
-//
-// Cria um arquivo genérico no diretório de documentos do app
-// (path_provider, já presente no pubspec).
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -14,8 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../shared/tool_result.dart';
 
 class FileCreationTool {
-  /// create_file
-  /// input: { filename: String, content: String, is_base64?: bool }
+
   static Future<ToolResult> create(Map<String, dynamic> input) async {
     final String? filename = input['filename'] as String?;
     final String? content = input['content'] as String?;

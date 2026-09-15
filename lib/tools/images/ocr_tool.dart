@@ -1,9 +1,3 @@
-// lib/tools/images/ocr_tool.dart
-// ocr_extract_text
-//
-// Usa Google ML Kit Text Recognition — roda 100% on-device, sem
-// enviar imagem para nenhum servidor.
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';

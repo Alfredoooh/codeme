@@ -1,11 +1,3 @@
-=====================================================================
-lib/tools/shared/tool_result.dart
-=====================================================================
-
-// Contrato de retorno padrão de TODAS as tools. Toda tool devolve
-// este objeto — nunca lança exceção "solta" para quem chamou,
-// exceto erros de programação genuínos (bugs).
-
 class ToolResult {
   final bool success;
   final dynamic data; // Map, List, String, etc.
