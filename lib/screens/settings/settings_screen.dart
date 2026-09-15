@@ -17,9 +17,9 @@ import 'appearance_screen.dart';
 import 'personalization_screen.dart';
 import 'memory_screen.dart';
 import 'workspace_screen.dart';
-import 'avatar_viewer_overlay.dart';
+import 'avatar/avatar_viewer_overlay.dart';
 import 'webview_screen.dart';
-import 'avatar_upload_utils.dart';
+import 'avatar/avatar_upload_utils.dart';
 import 'language_picker_sheet.dart';
 
 // ══════════════════════════════════════════════════════════════
