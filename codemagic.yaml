@@ -5,6 +5,8 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       flutter: stable
+      android_signing:
+        - nexa_keystore
       vars:
         PACKAGE_NAME: "com.codeme.app"
         GRADLE_OPTS: "-Xmx8G -XX:MaxMetaspaceSize=4G"
@@ -13,9 +15,9 @@ workflows:
         script: |
           flutter pub get
 
-      - name: Build APKs divididos por arquitetura (reduz tamanho)
+      - name: Build APKs divididos por arquitetura (release, com shrink)
         script: |
-          flutter build apk --debug --split-per-abi
+          flutter build apk --release --split-per-abi
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
