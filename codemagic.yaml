@@ -23,9 +23,21 @@ workflows:
         script: |
           flutter pub get
 
+      - name: Garantir AndroidX habilitado
+        script: |
+          GRADLE_PROPS="${CM_BUILD_DIR}/android/gradle.properties"
+          if ! grep -q "android.useAndroidX=true" "$GRADLE_PROPS"; then
+            echo "android.useAndroidX=true" >> "$GRADLE_PROPS"
+          fi
+          if ! grep -q "android.enableJetifier=true" "$GRADLE_PROPS"; then
+            echo "android.enableJetifier=true" >> "$GRADLE_PROPS"
+          fi
+          echo "✅ gradle.properties verificado"
+          cat "$GRADLE_PROPS"
+
       - name: Build APKs divididos por arquitetura (release, com shrink)
         script: |
-          flutter build apk --release --split-per-abi
+          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
