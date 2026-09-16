@@ -8,16 +8,6 @@ workflows:
       groups:
         - codeme_keystore
     scripts:
-      - name: Generate Android project from scratch
-        script: |
-          cd "${CM_BUILD_DIR}"
-          if [ ! -d "android" ]; then
-            echo "Pasta android/ não existe, gerando projeto Flutter completo..."
-            flutter create --platforms=android --org com.jj_group --project-name nexa .
-          else
-            echo "Pasta android/ já existe, pulando geração."
-          fi
-
       - name: Generate key.properties
         script: |
           cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
@@ -28,164 +18,26 @@ workflows:
           EOF
           echo "✅ key.properties gerado"
 
-      - name: Ensure INTERNET permission in AndroidManifest
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          if [ ! -f "$MANIFEST" ]; then
-            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
-            exit 1
-          fi
-          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            echo "⚠️  Permissão INTERNET ausente — adicionando..."
-            python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          permission_line = '    <uses-permission android:name="android.permission.INTERNET" />\n'
-
-          if "<manifest" in content:
-              content = re.sub(
-                  r'(<manifest[^>]*>)',
-                  r'\1\n' + permission_line.rstrip('\n'),
-                  content,
-                  count=1,
-              )
-              with open(path, "w") as f:
-                  f.write(content)
-              print("✅ Permissão INTERNET adicionada ao AndroidManifest.xml")
-          else:
-              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
-          PYEOF
-          else
-            echo "✅ Permissão INTERNET já presente no AndroidManifest.xml"
-          fi
-          echo "--- Permissões atuais ---"
-          grep "uses-permission" "$MANIFEST" || echo "(nenhuma encontrada)"
-
-      - name: Ensure CAMERA permission in AndroidManifest
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          if [ ! -f "$MANIFEST" ]; then
-            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
-            exit 1
-          fi
-
-          if ! grep -q 'android.permission.CAMERA' "$MANIFEST"; then
-            echo "⚠️  Permissão CAMERA ausente — adicionando..."
-            python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          permissions = [
-              '<uses-permission android:name="android.permission.CAMERA" />',
-              '<uses-feature android:name="android.hardware.camera" android:required="false" />',
-              '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
-          ]
-
-          if "<manifest" not in content:
-              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
-
-          block = "\n    ".join(permissions) + "\n"
-          content = re.sub(
-              r'(<manifest[^>]*>)',
-              r'\1\n    ' + block.rstrip('\n'),
-              content,
-              count=1,
-          )
-          with open(path, "w") as f:
-              f.write(content)
-          print("✅ Permissões CAMERA + features adicionadas ao AndroidManifest.xml")
-          PYEOF
-          else
-            echo "✅ Permissão CAMERA já presente no AndroidManifest.xml"
-          fi
-          echo "--- Permissões atuais ---"
-          grep -E "uses-permission|uses-feature" "$MANIFEST" || echo "(nenhuma encontrada)"
-
-      - name: Ensure image_cropper Activity in AndroidManifest
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          activity = '        <activity\n            android:name="com.yalantis.ucrop.UCropActivity"\n            android:screenOrientation="portrait"\n            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />'
-
-          if "UCropActivity" not in content:
-              # injeta antes do fecho de </application>
-              content = content.replace("</application>", activity + "\n    </application>")
-              with open(path, "w") as f:
-                  f.write(content)
-              print("✅ UCropActivity adicionada ao AndroidManifest.xml")
-          else:
-              print("✅ UCropActivity já presente")
-          PYEOF
-
-      - name: Ensure network access XML (cleartext + config)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-
-          mkdir -p "${RES}/xml"
-          cat > "${RES}/xml/network_security_config.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="false">
-                  <trust-anchors>
-                      <certificates src="system" />
-                  </trust-anchors>
-              </base-config>
-          </network-security-config>
-          EOF
-          echo "✅ res/xml/network_security_config.xml criado"
-
-          if ! grep -q 'networkSecurityConfig' "$MANIFEST"; then
-            python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          if "<application" in content and "networkSecurityConfig" not in content:
-              content = re.sub(
-                  r'(<application)',
-                  r'\1\n        android:networkSecurityConfig="@xml/network_security_config"',
-                  content,
-                  count=1,
-              )
-              with open(path, "w") as f:
-                  f.write(content)
-              print("✅ networkSecurityConfig referenciado no AndroidManifest.xml")
-          PYEOF
-          else
-            echo "✅ networkSecurityConfig já referenciado"
-          fi
-
       - name: Install Pillow and cairosvg
         script: pip3 install Pillow cairosvg --quiet
 
-      - name: Process launcher icons (ic_launcher) — SEM fallback
+      - name: Process launcher icons + dual splash (light/dark) from SVG
         script: |
           python3 << 'PYEOF'
           import os
+          import cairosvg
+          from io import BytesIO
           from PIL import Image, ImageDraw
 
-          CM   = os.environ["CM_BUILD_DIR"]
-          RES  = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER = os.path.join(CM, "ic_launcher.png")
+          CM      = os.environ["CM_BUILD_DIR"]
+          RES     = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER    = os.path.join(CM, "ic_launcher.png")
+          SPLASH_SVG  = os.path.join(CM, "splash_icon.svg")
 
           if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError(f"Ficheiro obrigatório em falta na raiz do repo: {LAUNCHER}")
+              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
+          if not os.path.exists(SPLASH_SVG):
+              raise FileNotFoundError("splash_icon.svg não encontrado na raiz do repo!")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -210,6 +62,7 @@ workflows:
               img.save(path, "PNG", optimize=True)
               print(f"  -> {path}")
 
+          # ── Ícones do launcher ──────────────────────────────────────────
           src = Image.open(LAUNCHER)
           for d, sz in DENSITIES.items():
               save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
@@ -222,341 +75,43 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          print("✅ ic_launcher (todas densidades) processado com sucesso!")
-          PYEOF
+          # ── Splash icon a partir do SVG, recolorido por tema ────────────
+          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A -- ícone escuro sobre fundo branco
+          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8 -- ícone claro sobre fundo #0d0d0d
 
-      - name: Generate splash shimmer frames from assets/images/logo.svg — SEM fallback
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import math
-          import cairosvg
-          from io import BytesIO
-          from PIL import Image
+          CANVAS_PX = 288
+          ICON_PX   = 160
 
-          CM  = os.environ["CM_BUILD_DIR"]
-          RES = os.path.join(CM, "android/app/src/main/res")
-
-          # Usa sempre o logo.svg real do projeto (assets/images/logo.svg).
-          # Isto evita depender de um ficheiro splash_icon.svg externo/duplicado
-          # e garante que o shimmer é recortado exatamente pela silhueta do
-          # logo verdadeiro da app, não por um placeholder à parte.
-          PROJECT_SVG = os.path.join(CM, "assets/images/logo.svg")
-
-          # Path real extraído de assets/images/logo.svg (viewBox 0 0 512 512).
-          # Mantido embutido aqui para que este step nunca dependa de um
-          # ficheiro splash_icon.svg em falta na raiz do repo.
-          LOGO_PATH_DATA = (
-              "M 218.5 121 L 233.5 121 L 244.5 123 L 255.5 127 Q 272.8 134.7 284 148.5 "
-              "L 292.5 161 Q 294.8 161.8 294 159.5 Q 300.2 148.2 309.5 140 Q 320.9 129.4 337.5 124 "
-              "L 354.5 121 L 367.5 121 L 368.5 122 L 379.5 123 L 394.5 129 Q 406.9 135.6 416 145.5 "
-              "Q 424.6 154.4 430 166.5 L 436 189.5 L 436 203.5 L 433 218.5 L 426 234.5 L 345 359.5 "
-              "L 331.5 374 L 323.5 380 L 302.5 389 L 291.5 391 L 275.5 391 L 255.5 386 "
-              "Q 239.4 379.1 228 367.5 L 218 354.5 L 217 351 L 214 352.5 Q 208.9 364.4 199.5 372 "
-              "L 188.5 380 L 168.5 389 L 157.5 390 L 156.5 391 L 140.5 391 L 129.5 389 L 112.5 382 "
-              "Q 98.6 374.4 89 362.5 Q 79.5 350.9 75 334.5 L 73 325.5 L 73 305.5 L 77 289.5 L 84 275.5 "
-              "L 166 149.5 L 178.5 137 Q 187.8 129.3 200.5 125 L 218.5 121 Z "
-              "M 219 160 Q 209 162 203 167 L 194 177 L 123 286 L 115 299 L 112 308 "
-              "Q 110 331 121 341 Q 128 349 141 352 L 156 352 L 169 347 L 174 343 L 192 318 "
-              "L 257 218 L 262 206 Q 261 201 263 200 Q 263 182 254 173 Q 248 166 240 162 "
-              "Q 232 158 219 160 Z "
-              "M 353 160 L 339 166 L 330 175 L 261 281 L 248 303 L 246 311 L 247 325 L 254 339 "
-              "Q 262 348 276 352 L 291 352 Q 302 350 309 343 L 315 336 L 391 219 L 397 205 "
-              "L 397 190 L 391 176 L 377 163 Q 368 158 353 160 Z"
-          )
-
-          FALLBACK_SVG_XML = f'''<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-          <path fill="#000000" d="{LOGO_PATH_DATA}" />
-          </svg>'''
-
-          # Cores do ícone de splash (não usar fallback de outro ícone).
-          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A — ícone em fundo claro
-          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8 — ícone em fundo escuro
-
-          RASTER_SIZE   = 512   # resolução de trabalho do SVG rasterizado
-          FRAME_COUNT   = 12    # frames por ciclo de shimmer
-          FRAME_MS      = 80    # duração de cada frame (~1s de loop)
-          BAND_WIDTH    = 0.35  # largura da faixa de brilho, em fração da diagonal
-          ANGLE_DEG     = 45    # direção do brilho (diagonal)
-
-          SPLASH_DENSITIES = {
-              "drawable-mdpi": 192,
-              "drawable-hdpi": 288,
-              "drawable-xhdpi": 384,
-              "drawable-xxhdpi": 576,
-              "drawable-xxxhdpi": 768,
-          }
-          DEFAULT_SIZE = 480
-
-          def rasterize_svg(path_or_none, size):
-              # Usa o logo.svg real do projeto se existir; caso contrário usa
-              # o mesmo path embutido acima como SVG autónomo — nunca falha
-              # o build por falta de um ficheiro externo separado.
-              if path_or_none and os.path.exists(path_or_none):
-                  png_bytes = cairosvg.svg2png(url=path_or_none, output_width=size, output_height=size)
-              else:
-                  png_bytes = cairosvg.svg2png(bytestring=FALLBACK_SVG_XML.encode("utf-8"), output_width=size, output_height=size)
+          def rasterize_svg(path, size):
+              png_bytes = cairosvg.svg2png(url=path, output_width=size, output_height=size)
               return Image.open(BytesIO(png_bytes)).convert("RGBA")
 
           def recolor_by_alpha(img, rgb):
-              """Recolore preservando o canal alfa exato do SVG (sem moldura)."""
               alpha = img.split()[3]
               solid = Image.new("RGBA", img.size, rgb + (255,))
               solid.putalpha(alpha)
               return solid
 
-          def make_shimmer_frame(base_rgba, progress, band_width=BAND_WIDTH, angle_deg=ANGLE_DEG):
-              """
-              base_rgba: ícone já recolorido (RGBA), canal alfa = forma do SVG.
-              progress: 0..1, posição da faixa de brilho ao longo da diagonal.
-              Retorna um novo RGBA com uma faixa de brilho sobreposta, recortada
-              pelo alfa original (o brilho nunca "vaza" para fora do ícone).
-              """
-              w, h = base_rgba.size
-              diag = math.hypot(w, h)
-              angle = math.radians(angle_deg)
-              dx, dy = math.cos(angle), math.sin(angle)
+          def make_splash(rgb, dest_path):
+              icon = rasterize_svg(SPLASH_SVG, ICON_PX)
+              colored = recolor_by_alpha(icon, rgb)
+              canvas = Image.new("RGBA", (CANVAS_PX, CANVAS_PX), (0, 0, 0, 0))
+              off = (CANVAS_PX - ICON_PX) // 2
+              canvas.paste(colored, (off, off), colored)
+              save(canvas, dest_path)
 
-              band_center = -band_width * diag / 2 + progress * (diag + band_width * diag) - band_width * diag / 2
-              highlight = Image.new("L", (w, h), 0)
-              px = highlight.load()
-              half_band = (band_width * diag) / 2
-              for y in range(h):
-                  for x in range(w):
-                      d = x * dx + y * dy
-                      dist = abs(d - band_center)
-                      if dist < half_band:
-                          # falloff suave (triangular) dentro da faixa
-                          v = int(255 * (1 - dist / half_band))
-                          px[x, y] = v
+          drawable_light = os.path.join(RES, "drawable")
+          drawable_dark  = os.path.join(RES, "drawable-night")
+          os.makedirs(drawable_light, exist_ok=True)
+          os.makedirs(drawable_dark,  exist_ok=True)
 
-              glow = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-              glow.putalpha(highlight)
+          make_splash(COLOR_LIGHT_BG, os.path.join(drawable_light, "splash_icon.png"))
+          make_splash(COLOR_DARK_BG, os.path.join(drawable_dark, "splash_icon.png"))
 
-              alpha_mask = base_rgba.split()[3]
-              glow.putalpha(Image.composite(highlight, Image.new("L", (w, h), 0), alpha_mask))
-
-              frame = Image.alpha_composite(base_rgba, glow)
-              return frame
-
-          def build_frame_sequence(base_rgba):
-              frames = []
-              for i in range(FRAME_COUNT):
-                  progress = i / FRAME_COUNT
-                  frames.append(make_shimmer_frame(base_rgba, progress))
-              return frames
-
-          def resize_rgba(img, size):
-              return img.resize((size, size), Image.LANCZOS)
-
-          def save(img, path):
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              img.save(path, "PNG", optimize=True)
-              print(f"  -> {path}")
-
-          def process_variant(rgb, drawable_prefix):
-              base = rasterize_svg(PROJECT_SVG, RASTER_SIZE)
-              colored = recolor_by_alpha(base, rgb)
-              frames = build_frame_sequence(colored)
-
-              # Frame estático (frame 0) — usado como fallback do AVD e como
-              # ícone único quando algo além do previsto ocorrer no runtime.
-              for density_dir, target_px in SPLASH_DENSITIES.items():
-                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
-                  static_resized = resize_rgba(colored, target_px)
-                  save(static_resized, os.path.join(dest_dir, "splash_icon_static.png"))
-
-                  for idx, frame in enumerate(frames):
-                      frame_resized = resize_rgba(frame, target_px)
-                      save(frame_resized, os.path.join(dest_dir, f"splash_icon_frame_{idx:02d}.png"))
-
-              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
-              static_default = resize_rgba(colored, DEFAULT_SIZE)
-              save(static_default, os.path.join(default_dir, "splash_icon_static.png"))
-              for idx, frame in enumerate(frames):
-                  frame_default = resize_rgba(frame, DEFAULT_SIZE)
-                  save(frame_default, os.path.join(default_dir, f"splash_icon_frame_{idx:02d}.png"))
-
-          process_variant(COLOR_LIGHT_BG, "drawable")
-          process_variant(COLOR_DARK_BG, "drawable-night")
-
-          print(f"✅ {FRAME_COUNT} frames de shimmer (light+dark) gerados a partir de splash_icon.svg")
+          print("✅ Ícones e splash (light/dark, a partir do SVG) processados com sucesso!")
           PYEOF
 
-      - name: Write AnimationDrawable XML (shimmer loop, pré-Android 12)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          python3 << 'PYEOF'
-          import os
-
-          RES = os.environ.get("RES") or f'{os.environ["CM_BUILD_DIR"]}/android/app/src/main/res'
-          FRAME_COUNT = 12
-          FRAME_MS = 80
-
-          def write_anim_drawable(path):
-              items = "\n".join(
-                  f'    <item android:drawable="@drawable/splash_icon_frame_{i:02d}" android:duration="{FRAME_MS}" />'
-                  for i in range(FRAME_COUNT)
-              )
-              xml = f'''<?xml version="1.0" encoding="utf-8"?>
-          <animation-list xmlns:android="http://schemas.android.com/apk/res/android"
-              android:oneshot="false">
-          {items}
-          </animation-list>
-          '''
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              with open(path, "w") as f:
-                  f.write(xml)
-              print(f"  -> {path}")
-
-          write_anim_drawable(os.path.join(RES, "drawable", "splash_shimmer_anim.xml"))
-          write_anim_drawable(os.path.join(RES, "drawable-night", "splash_shimmer_anim.xml"))
-          print("✅ AnimationDrawable (shimmer pré-Android 12) escrito")
-          PYEOF
-
-      - name: Write AnimatedVectorDrawable XML (shimmer nativo, Android 12+)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-          mkdir -p "${RES}/drawable-v31"
-          mkdir -p "${RES}/drawable-night-v31"
-
-          # AVD com uma faixa de brilho (gradient) animando via translateX,
-          # recortada pela silhueta REAL do logo (não por um retângulo
-          # cheio) — tanto o ícone como o brilho usam o mesmo pathData do
-          # assets/images/logo.svg, escalado para o viewport 200x200. Isto
-          # corre nativamente dentro do SplashScreen API do Android 12+,
-          # sem depender do AnimationDrawable de frames (usado só no pré-12).
-          LOGO_PATH_200="M 85.352 47.266 L 91.211 47.266 L 95.508 48.047 L 99.805 49.609 Q 106.562 52.617 110.938 58.008 L 114.258 62.891 Q 115.156 63.203 114.844 62.305 Q 117.266 57.891 120.898 54.688 Q 125.352 50.547 131.836 48.438 L 138.477 47.266 L 143.555 47.266 L 143.945 47.656 L 148.242 48.047 L 154.102 50.391 Q 158.945 52.969 162.5 56.836 Q 165.859 60.312 167.969 65.039 L 170.312 74.023 L 170.312 79.492 L 169.141 85.352 L 166.406 91.602 L 134.766 140.43 L 129.492 146.094 L 126.367 148.438 L 118.164 151.953 L 113.867 152.734 L 107.617 152.734 L 99.805 150.781 Q 93.516 148.086 89.062 143.555 L 85.156 138.477 L 84.766 137.109 L 83.594 137.695 Q 81.602 142.344 77.93 145.312 L 73.633 148.438 L 65.82 151.953 L 61.523 152.344 L 61.133 152.734 L 54.883 152.734 L 50.586 151.953 L 43.945 149.219 Q 38.516 146.25 34.766 141.602 Q 31.055 137.07 29.297 130.664 L 28.516 127.148 L 28.516 119.336 L 30.078 113.086 L 32.812 107.617 L 64.844 58.398 L 69.727 53.516 Q 73.359 50.508 78.32 48.828 L 85.352 47.266 Z M 85.547 62.5 Q 81.641 63.281 79.297 65.234 L 75.781 69.141 L 48.047 111.719 L 44.922 116.797 L 43.75 120.312 Q 42.969 129.297 47.266 133.203 Q 50 136.328 55.078 137.5 L 60.938 137.5 L 66.016 135.547 L 67.969 133.984 L 75 124.219 L 100.391 85.156 L 102.344 80.469 Q 101.953 78.516 102.734 78.125 Q 102.734 71.094 99.219 67.578 Q 96.875 64.844 93.75 63.281 Q 90.625 61.719 85.547 62.5 Z M 137.891 62.5 L 132.422 64.844 L 128.906 68.359 L 101.953 109.766 L 96.875 118.359 L 96.094 121.484 L 96.484 126.953 L 99.219 132.422 Q 102.344 135.938 107.812 137.5 L 113.672 137.5 Q 117.969 136.719 120.703 133.984 L 123.047 131.25 L 152.734 85.547 L 155.078 80.078 L 155.078 74.219 L 152.734 68.75 L 147.266 63.672 Q 143.75 61.719 137.891 62.5 Z"
-
-          write_avd() {
-            local out_dir="$1"
-            local icon_static="$2"
-            cat > "${out_dir}/splash_icon_avd.xml" << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:aapt="http://schemas.android.com/aapt">
-              <aapt:attr name="android:drawable">
-                  <vector
-                      android:width="200dp"
-                      android:height="200dp"
-                      android:viewportWidth="200"
-                      android:viewportHeight="200">
-                      <group android:name="icon_group">
-                          <clip-path android:pathData="${LOGO_PATH_200}" />
-                          <path
-                              android:name="icon_base"
-                              android:pathData="${LOGO_PATH_200}"
-                              android:fillType="nonZero">
-                              <aapt:attr name="android:fillColor">
-                                  <bitmap
-                                      xmlns:android="http://schemas.android.com/apk/res/android"
-                                      android:src="@drawable/${icon_static}" />
-                              </aapt:attr>
-                          </path>
-                      </group>
-                      <group android:name="shimmer_group" android:translateX="-260">
-                          <clip-path android:pathData="${LOGO_PATH_200}" android:name="shimmer_clip" />
-                          <path
-                              android:name="shimmer_band"
-                              android:pathData="M-100,-40 L-20,-40 L120,240 L40,240 Z"
-                              android:fillAlpha="0.55">
-                              <aapt:attr name="android:fillColor">
-                                  <gradient
-                                      android:type="linear"
-                                      android:startX="0"
-                                      android:startY="0"
-                                      android:endX="60"
-                                      android:endY="200"
-                                      android:startColor="#00FFFFFF"
-                                      android:centerColor="#AAFFFFFF"
-                                      android:endColor="#00FFFFFF" />
-                              </aapt:attr>
-                          </path>
-                      </group>
-                  </vector>
-              </aapt:attr>
-              <target android:name="shimmer_group">
-                  <aapt:attr name="android:animation">
-                      <objectAnimator
-                          android:propertyName="translateX"
-                          android:valueFrom="-260"
-                          android:valueTo="260"
-                          android:duration="960"
-                          android:repeatCount="infinite"
-                          android:repeatMode="restart"
-                          android:interpolator="@android:interpolator/linear" />
-                  </aapt:attr>
-              </target>
-          </animated-vector>
-          EOF
-            echo "✅ ${out_dir}/splash_icon_avd.xml escrito (shimmer recortado pela silhueta real do logo)"
-          }
-
-          write_avd "${RES}/drawable-v31" "splash_icon_static"
-          write_avd "${RES}/drawable-night-v31" "splash_icon_static"
-
-      - name: Write Android 12+ splash screen (values/styles + themes)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          mkdir -p "${RES}/values-v31"
-          cat > "${RES}/values-v31/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowSplashScreenBackground">@android:color/white</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
-                  <item name="android:windowSplashScreenAnimationDuration">1000</item>
-                  <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ values-v31/styles.xml (Android 12+ splash nativo, light) criado"
-
-          mkdir -p "${RES}/values-night-v31"
-          cat > "${RES}/values-night-v31/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowSplashScreenBackground">#0d0d0d</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
-                  <item name="android:windowSplashScreenAnimationDuration">1000</item>
-                  <item name="android:windowSplashScreenIconBackgroundColor">#0d0d0d</item>
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">#0d0d0d</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ values-night-v31/styles.xml (Android 12+ splash nativo, dark) criado"
-
-      - name: Write launch_background XMLs (light + dark, com shimmer) — pré Android 12
+      - name: Write launch_background XMLs (light + dark)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -568,11 +123,11 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_shimmer_anim" />
+                      android:src="@drawable/splash_icon" />
               </item>
           </layer-list>
           EOF
-          echo "✅ drawable/launch_background.xml (light, shimmer) criado"
+          echo "✅ drawable/launch_background.xml (light) criado"
 
           mkdir -p "${RES}/drawable-night"
           cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
@@ -584,81 +139,13 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_shimmer_anim" />
+                      android:src="@drawable/splash_icon" />
               </item>
           </layer-list>
           EOF
-          echo "✅ drawable-night/launch_background.xml (dark, shimmer) criado"
+          echo "✅ drawable-night/launch_background.xml (dark) criado"
 
-      - name: Start shimmer AnimationDrawable on window focus (pré-Android 12)
-        script: |
-          MAIN_ACTIVITY=$(find "${CM_BUILD_DIR}/android/app/src/main" -name "MainActivity.kt" -o -name "MainActivity.java" | head -1)
-          if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "❌ MainActivity não encontrada"
-            exit 1
-          fi
-          echo "MainActivity encontrada em: $MAIN_ACTIVITY"
-
-          python3 << PYEOF
-          import re
-
-          path = "$MAIN_ACTIVITY"
-          with open(path, "r") as f:
-              content = f.read()
-
-          is_kotlin = path.endswith(".kt")
-
-          if is_kotlin and "onWindowFocusChanged" not in content:
-              # flutter create pode gerar classe sem corpo: "class MainActivity: FlutterActivity()"
-              # Normaliza para ter corpo antes de injetar
-              content = re.sub(
-                  r'(class MainActivity\s*:\s*FlutterActivity\(\))\s*$',
-                  r'\1 {}',
-                  content,
-                  flags=re.MULTILINE
-              )
-
-              shimmer_code = '''
-
-              override fun onWindowFocusChanged(hasFocus: Boolean) {
-                  super.onWindowFocusChanged(hasFocus)
-                  if (hasFocus) {
-                      val bg = window.decorView.background
-                      if (bg is android.graphics.drawable.LayerDrawable) {
-                          for (i in 0 until bg.numberOfLayers) {
-                              val d = bg.getDrawable(i)
-                              if (d is android.graphics.drawable.AnimationDrawable) {
-                                  d.start()
-                              }
-                          }
-                      }
-                  }
-              }
-          '''
-
-              # Encontra o { de abertura da classe e injeta antes do } de fecho
-              idx = content.find("class MainActivity")
-              if idx == -1:
-                  raise SystemExit("❌ class MainActivity não encontrada")
-
-              brace_open = content.find("{", idx)
-              if brace_open == -1:
-                  raise SystemExit("❌ { de abertura da classe não encontrado")
-
-              brace_close = content.rfind("}")
-              if brace_close == -1 or brace_close <= brace_open:
-                  raise SystemExit("❌ } de fecho da classe não encontrado")
-
-              injected = content[:brace_close] + shimmer_code + content[brace_close:]
-
-              with open(path, "w") as f:
-                  f.write(injected)
-              print("✅ onWindowFocusChanged injetado em MainActivity.kt")
-          elif is_kotlin:
-              print("✅ onWindowFocusChanged já presente — nada a fazer")
-          PYEOF
-
-      - name: Write styles XMLs (light + dark + v27) — pré Android 12
+      - name: Write styles XMLs (light + dark)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -760,244 +247,17 @@ workflows:
               </style>
           </resources>
           EOF
-          echo "✅ Todos os styles.xml (light/dark/v27/v31) escritos"
+          echo "✅ values-night-v27/styles.xml (dark v27) escrito"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |
           rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
           echo "✅ mipmap-anydpi-v26 removido (se existia)"
 
-      - name: Remove any leftover Google Services config
-        script: |
-          find "${CM_BUILD_DIR}/android" -iname "google-services.json" -type f -print -delete || true
-          BUILD_GRADLE_APP="${CM_BUILD_DIR}/android/app/build.gradle"
-          BUILD_GRADLE_ROOT="${CM_BUILD_DIR}/android/build.gradle"
-          for f in "$BUILD_GRADLE_APP" "$BUILD_GRADLE_ROOT"; do
-            if [ -f "$f" ] && grep -q "google-services" "$f"; then
-              sed -i "/apply plugin: 'com.google.gms.google-services'/d" "$f"
-              sed -i "/id 'com.google.gms.google-services'/d" "$f"
-              sed -i "/classpath 'com.google.gms:google-services/d" "$f"
-              echo "✅ Referências ao plugin google-services removidas de $f"
-            fi
-          done
-          echo "✅ Verificação de resíduos do Firebase/Google Services concluída"
-
-      - name: Set applicationId and app label
-        script: |
-          BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle"
-          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
-            BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
-          fi
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-
-          sed -i 's/applicationId = "com.example.nexa"/applicationId = "com.jj_group.nexa"/' "$BUILD_GRADLE"
-          sed -i 's/applicationId "com.example.nexa"/applicationId "com.jj_group.nexa"/' "$BUILD_GRADLE"
-          sed -i 's/android:label="nexa"/android:label="Nexa"/' "$MANIFEST"
-
-          echo "✅ applicationId ajustado para com.jj_group.nexa"
-          echo "✅ Nome do app ajustado para Nexa"
-
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
-
-      - name: Patch flutter_inappwebview proguard method call
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import glob
-
-          home = os.environ["HOME"]
-          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/flutter_inappwebview_android-*/android/build.gradle")
-          candidates = [f for f in glob.glob(pattern) if "example" not in f]
-
-          if not candidates:
-              print("❌ build.gradle do flutter_inappwebview_android não encontrado")
-              raise SystemExit(1)
-
-          target = candidates[0]
-          print(f"Arquivo encontrado: {target}")
-
-          with open(target, "r") as f:
-              content = f.read()
-
-          new_content = content.replace(
-              "getDefaultProguardFile('proguard-android.txt')",
-              "getDefaultProguardFile('proguard-android-optimize.txt')"
-          ).replace(
-              'getDefaultProguardFile("proguard-android.txt")',
-              'getDefaultProguardFile("proguard-android-optimize.txt")'
-          )
-
-          if new_content == content:
-              print("⚠️ Nenhuma ocorrência de proguard-android.txt encontrada — verificar manualmente")
-          else:
-              with open(target, "w") as f:
-                  f.write(new_content)
-              print("✅ proguard-android.txt substituído por proguard-android-optimize.txt")
-
-          for i, line in enumerate(new_content.splitlines(), 1):
-              if "getDefaultProguardFile" in line:
-                  print(f"  linha {i}: {line.strip()}")
-          PYEOF
-
-      - name: Patch file_picker compileSdk to 36
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import re
-          import glob
-
-          home = os.environ["HOME"]
-          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle")
-          candidates = [f for f in glob.glob(pattern) if "example" not in f]
-
-          if not candidates:
-              pattern_kts = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle.kts")
-              candidates = [f for f in glob.glob(pattern_kts) if "example" not in f]
-
-          if not candidates:
-              print("❌ build.gradle do file_picker não encontrado — verificar manualmente")
-              raise SystemExit(1)
-
-          target = candidates[0]
-          print(f"Arquivo encontrado: {target}")
-
-          with open(target, "r") as f:
-              content = f.read()
-
-          original = content
-
-          content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
-          content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
-          content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
-          content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
-          content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
-          content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
-          content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
-
-          if content == original:
-              print("⚠️ Nenhuma substituição aplicada — padrão de compileSdk não reconhecido, verificar manualmente")
-              print("--- Trecho relevante do arquivo original ---")
-              for i, line in enumerate(original.splitlines(), 1):
-                  if "compileSdk" in line:
-                      print(f"  linha {i}: {line.strip()}")
-          else:
-              with open(target, "w") as f:
-                  f.write(content)
-              print("✅ compileSdk do file_picker ajustado para 36")
-              for i, line in enumerate(content.splitlines(), 1):
-                  if "compileSdk" in line:
-                      print(f"  linha {i}: {line.strip()}")
-          PYEOF
-
-      - name: Patch image_picker + image_cropper compileSdk to 36
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import re
-          import glob
-
-          home = os.environ["HOME"]
-
-          targets = []
-          for pkg in ["image_picker_android", "image_cropper"]:
-              pattern = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle")
-              found = [f for f in glob.glob(pattern) if "example" not in f]
-              if not found:
-                  pattern_kts = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle.kts")
-                  found = [f for f in glob.glob(pattern_kts) if "example" not in f]
-              if found:
-                  targets.append(found[0])
-              else:
-                  print(f"⚠️ build.gradle de {pkg} não encontrado — pode não estar instalado")
-
-          for target in targets:
-              print(f"Patching: {target}")
-              with open(target, "r") as f:
-                  content = f.read()
-              original = content
-              content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
-              content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
-              content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
-              content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
-              content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
-              content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
-              content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
-              if content != original:
-                  with open(target, "w") as f:
-                      f.write(content)
-                  print(f"✅ compileSdk ajustado para 36 em {os.path.basename(os.path.dirname(os.path.dirname(target)))}")
-              else:
-                  print(f"⚠️ Nenhuma substituição aplicada em {target}")
-          PYEOF
-
-      - name: Ensure READ_MEDIA + WRITE permissions for image_picker
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          to_add = []
-          perms = [
-              'android.permission.READ_MEDIA_IMAGES',
-              'android.permission.READ_EXTERNAL_STORAGE',
-              'android.permission.WRITE_EXTERNAL_STORAGE',
-          ]
-          for p in perms:
-              if p not in content:
-                  to_add.append(f'<uses-permission android:name="{p}" />')
-
-          if to_add:
-              block = "\n    ".join(to_add)
-              content = re.sub(
-                  r'(<manifest[^>]*>)',
-                  r'\1\n    ' + block,
-                  content,
-                  count=1,
-              )
-              with open(path, "w") as f:
-                  f.write(content)
-              print(f"✅ Permissões de storage adicionadas: {', '.join(p.split('.')[-1] for p in perms if p in open(path).read())}")
-          else:
-              print("✅ Permissões de storage já presentes")
-          PYEOF
-
-      - name: Add R8 keep rules for google_mlkit_text_recognition
-        script: |
-          PROGUARD="${CM_BUILD_DIR}/android/app/proguard-rules.pro"
-          touch "$PROGUARD"
-          if ! grep -q "mlkit.vision.text" "$PROGUARD"; then
-            cat >> "$PROGUARD" << 'EOF'
-
-          # google_mlkit_text_recognition — keep all script option classes
-          # (Chinese, Devanagari, Japanese, Korean) so R8 does not fail when
-          # the optional script model AARs are absent at compile time.
-          -dontwarn com.google.mlkit.vision.text.chinese.**
-          -dontwarn com.google.mlkit.vision.text.devanagari.**
-          -dontwarn com.google.mlkit.vision.text.japanese.**
-          -dontwarn com.google.mlkit.vision.text.korean.**
-          -keep class com.google.mlkit.vision.text.** { *; }
-          -keep class com.google_mlkit_text_recognition.** { *; }
-          EOF
-            echo "✅ Keep rules mlkit adicionadas ao proguard-rules.pro"
-          else
-            echo "✅ Keep rules mlkit já presentes"
-          fi
-
-          # Garante que o build.gradle referencia o proguard-rules.pro
-          GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
-          if grep -q "proguardFiles" "$GRADLE_FILE" && ! grep -q "proguard-rules.pro" "$GRADLE_FILE"; then
-            sed -i "s|getDefaultProguardFile('proguard-android-optimize.txt')|getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'|g" "$GRADLE_FILE"
-            echo "✅ proguard-rules.pro referenciado no build.gradle"
-          else
-            echo "✅ proguard-rules.pro já referenciado ou bloco proguardFiles ausente"
-          fi
 
       - name: Enable R8 + resource shrinking
         script: |
@@ -1010,141 +270,15 @@ workflows:
             echo "✅ shrinkResources já configurado"
           fi
 
-      - name: Restrict packaged resource languages (resConfigs) — reduz traduções não usadas das dependências
-        script: |
-          GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
-          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
-            GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
-          fi
-          python3 << PYEOF
-          import re
-
-          path = "$GRADLE_FILE"
-          with open(path, "r") as f:
-              content = f.read()
-
-          # Não altera nenhum recurso teu — apenas restringe as traduções que
-          # bibliotecas Android (Google Play Services, MLKit, AndroidX, etc.)
-          # empacotam por omissão para TODOS os idiomas que suportam. Isto não
-          # remove nada do teu código nem dos teus assets em assets/.
-          is_kts = path.endswith(".kts")
-          marker = "resConfigs"
-          if marker not in content:
-              if is_kts:
-                  injection = '        resConfigs("en", "pt")\n'
-              else:
-                  injection = '        resConfigs "en", "pt"\n'
-
-              # injeta dentro do bloco defaultConfig { ... }
-              new_content, count = re.subn(
-                  r'(defaultConfig\s*\{)',
-                  r'\1\n' + injection.rstrip('\n'),
-                  content,
-                  count=1,
-              )
-              if count == 0:
-                  print("⚠️ Bloco defaultConfig não encontrado — resConfigs não aplicado, verificar manualmente")
-              else:
-                  with open(path, "w") as f:
-                      f.write(new_content)
-                  print("✅ resConfigs(\"en\", \"pt\") adicionado a defaultConfig")
-          else:
-              print("✅ resConfigs já configurado")
-          PYEOF
-
-      - name: Exclude duplicate/unused packaging metadata (packagingOptions) — reduz tamanho sem tocar em código
-        script: |
-          GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
-          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
-            GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
-          fi
-          python3 << PYEOF
-          import re
-
-          path = "$GRADLE_FILE"
-          with open(path, "r") as f:
-              content = f.read()
-
-          is_kts = path.endswith(".kts")
-
-          if "packagingOptions" not in content and "packaging {" not in content:
-              if is_kts:
-                  block = '''
-              packaging {
-                  resources {
-                      excludes += setOf(
-                          "META-INF/*.kotlin_module",
-                          "META-INF/LICENSE*",
-                          "META-INF/NOTICE*",
-                          "META-INF/DEPENDENCIES",
-                          "META-INF/*.version"
-                      )
-                  }
-              }
-          '''
-              else:
-                  block = '''
-              packagingOptions {
-                  resources {
-                      excludes += [
-                          "META-INF/*.kotlin_module",
-                          "META-INF/LICENSE*",
-                          "META-INF/NOTICE*",
-                          "META-INF/DEPENDENCIES",
-                          "META-INF/*.version"
-                      ]
-                  }
-              }
-          '''
-              # injeta dentro do bloco android { ... }, logo após a abertura
-              new_content, count = re.subn(
-                  r'(android\s*\{)',
-                  r'\1' + block,
-                  content,
-                  count=1,
-              )
-              if count == 0:
-                  print("⚠️ Bloco android {} não encontrado — packagingOptions não aplicado, verificar manualmente")
-              else:
-                  with open(path, "w") as f:
-                      f.write(new_content)
-                  print("✅ packagingOptions/excludes de metadados duplicados adicionado")
-          else:
-              print("✅ packagingOptions já configurado")
-          PYEOF
-
-      - name: Strip unnecessary assets to reduce APK size
-        script: |
-          cd "${CM_BUILD_DIR}"
-          # Remove fontes Cupertino não usadas (o warning do build confirma que só MaterialIcons é usado)
-          find . -path "*/cupertino_icons*" -name "*.ttf" -delete 2>/dev/null || true
-          find . -path "*/packages/cupertino_icons*" -type f \( -name "*.ttf" -o -name "*.otf" \) -delete 2>/dev/null || true
-          echo "✅ Fontes Cupertino removidas (não usadas)"
-
-          # Remove ficheiros de teste e documentação dos packages (não afeta o build)
-          find "${HOME}/.pub-cache" -type f \( -name "*.md" -o -name "CHANGELOG*" -o -name "LICENSE*" \) -delete 2>/dev/null || true
-          echo "✅ Ficheiros de documentação do pub-cache removidos"
-
       - name: Build release APK (split per ABI)
         script: |
           cd "${CM_BUILD_DIR}"
-          flutter build apk \
-            --release \
-            --split-per-abi \
-            --obfuscate \
-            --split-debug-info=build/symbols \
-            --tree-shake-icons \
-            --no-pub
+          flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
 
       - name: Build release AAB
         script: |
           cd "${CM_BUILD_DIR}"
-          flutter build appbundle \
-            --release \
-            --obfuscate \
-            --split-debug-info=build/symbols \
-            --tree-shake-icons \
-            --no-pub
+          flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
 
     artifacts:
       - build/app/outputs/apk/release/*.apk
@@ -1165,166 +299,26 @@ workflows:
       flutter: stable
       java: 17
     scripts:
-      - name: Generate Android project from scratch
-        script: |
-          cd "${CM_BUILD_DIR}"
-          if [ ! -d "android" ]; then
-            echo "Pasta android/ não existe, gerando projeto Flutter completo..."
-            flutter create --platforms=android --org com.jj_group --project-name nexa .
-          else
-            echo "Pasta android/ já existe, pulando geração."
-          fi
-
-      - name: Ensure INTERNET permission in AndroidManifest
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          if [ ! -f "$MANIFEST" ]; then
-            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
-            exit 1
-          fi
-          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            echo "⚠️  Permissão INTERNET ausente — adicionando..."
-            python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          permission_line = '    <uses-permission android:name="android.permission.INTERNET" />\n'
-
-          if "<manifest" in content:
-              content = re.sub(
-                  r'(<manifest[^>]*>)',
-                  r'\1\n' + permission_line.rstrip('\n'),
-                  content,
-                  count=1,
-              )
-              with open(path, "w") as f:
-                  f.write(content)
-              print("✅ Permissão INTERNET adicionada ao AndroidManifest.xml")
-          else:
-              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
-          PYEOF
-          else
-            echo "✅ Permissão INTERNET já presente no AndroidManifest.xml"
-          fi
-
-      - name: Ensure CAMERA permission in AndroidManifest
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          if [ ! -f "$MANIFEST" ]; then
-            echo "❌ AndroidManifest.xml não encontrado em $MANIFEST"
-            exit 1
-          fi
-
-          if ! grep -q 'android.permission.CAMERA' "$MANIFEST"; then
-            echo "⚠️  Permissão CAMERA ausente — adicionando..."
-            python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          permissions = [
-              '<uses-permission android:name="android.permission.CAMERA" />',
-              '<uses-feature android:name="android.hardware.camera" android:required="false" />',
-              '<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
-          ]
-
-          if "<manifest" not in content:
-              raise SystemExit("❌ Tag <manifest> não encontrada — manifest inválido")
-
-          block = "\n    ".join(permissions) + "\n"
-          content = re.sub(
-              r'(<manifest[^>]*>)',
-              r'\1\n    ' + block.rstrip('\n'),
-              content,
-              count=1,
-          )
-          with open(path, "w") as f:
-              f.write(content)
-          print("✅ Permissões CAMERA + features adicionadas ao AndroidManifest.xml")
-          PYEOF
-          else
-            echo "✅ Permissão CAMERA já presente no AndroidManifest.xml"
-          fi
-
-      - name: Ensure image_cropper Activity in AndroidManifest
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          activity = '        <activity\n            android:name="com.yalantis.ucrop.UCropActivity"\n            android:screenOrientation="portrait"\n            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />'
-
-          if "UCropActivity" not in content:
-              content = content.replace("</application>", activity + "\n    </application>")
-              with open(path, "w") as f:
-                  f.write(content)
-              print("✅ UCropActivity adicionada ao AndroidManifest.xml")
-          else:
-              print("✅ UCropActivity já presente")
-          PYEOF
-
-      - name: Ensure network access XML (cleartext + config)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-
-          mkdir -p "${RES}/xml"
-          cat > "${RES}/xml/network_security_config.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="false">
-                  <trust-anchors>
-                      <certificates src="system" />
-                  </trust-anchors>
-              </base-config>
-          </network-security-config>
-          EOF
-
-          if ! grep -q 'networkSecurityConfig' "$MANIFEST"; then
-            python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          if "<application" in content and "networkSecurityConfig" not in content:
-              content = re.sub(
-                  r'(<application)',
-                  r'\1\n        android:networkSecurityConfig="@xml/network_security_config"',
-                  content,
-                  count=1,
-              )
-              with open(path, "w") as f:
-                  f.write(content)
-              print("✅ networkSecurityConfig referenciado no AndroidManifest.xml")
-          PYEOF
-          fi
-
       - name: Install Pillow and cairosvg
         script: pip3 install Pillow cairosvg --quiet
 
-      - name: Process launcher icons (ic_launcher) — SEM fallback
+      - name: Process launcher icons + dual splash (light/dark) from SVG
         script: |
           python3 << 'PYEOF'
           import os
+          import cairosvg
+          from io import BytesIO
           from PIL import Image, ImageDraw
 
-          CM   = os.environ["CM_BUILD_DIR"]
-          RES  = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER = os.path.join(CM, "ic_launcher.png")
+          CM      = os.environ["CM_BUILD_DIR"]
+          RES     = os.path.join(CM, "android/app/src/main/res")
+          LAUNCHER    = os.path.join(CM, "ic_launcher.png")
+          SPLASH_SVG  = os.path.join(CM, "splash_icon.svg")
 
           if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError(f"Ficheiro obrigatório em falta na raiz do repo: {LAUNCHER}")
+              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
+          if not os.path.exists(SPLASH_SVG):
+              raise FileNotFoundError("splash_icon.svg não encontrado na raiz do repo!")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -1361,71 +355,14 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          print("✅ ic_launcher (todas densidades) processado com sucesso!")
-          PYEOF
+          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A -- ícone escuro sobre fundo branco
+          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8 -- ícone claro sobre fundo #0d0d0d
 
-      - name: Generate splash shimmer frames from assets/images/logo.svg — SEM fallback
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import math
-          import cairosvg
-          from io import BytesIO
-          from PIL import Image
+          CANVAS_PX = 288
+          ICON_PX   = 160
 
-          CM  = os.environ["CM_BUILD_DIR"]
-          RES = os.path.join(CM, "android/app/src/main/res")
-
-          # Usa sempre o logo.svg real do projeto (assets/images/logo.svg).
-          PROJECT_SVG = os.path.join(CM, "assets/images/logo.svg")
-
-          # Path real extraído de assets/images/logo.svg (viewBox 0 0 512 512).
-          LOGO_PATH_DATA = (
-              "M 218.5 121 L 233.5 121 L 244.5 123 L 255.5 127 Q 272.8 134.7 284 148.5 "
-              "L 292.5 161 Q 294.8 161.8 294 159.5 Q 300.2 148.2 309.5 140 Q 320.9 129.4 337.5 124 "
-              "L 354.5 121 L 367.5 121 L 368.5 122 L 379.5 123 L 394.5 129 Q 406.9 135.6 416 145.5 "
-              "Q 424.6 154.4 430 166.5 L 436 189.5 L 436 203.5 L 433 218.5 L 426 234.5 L 345 359.5 "
-              "L 331.5 374 L 323.5 380 L 302.5 389 L 291.5 391 L 275.5 391 L 255.5 386 "
-              "Q 239.4 379.1 228 367.5 L 218 354.5 L 217 351 L 214 352.5 Q 208.9 364.4 199.5 372 "
-              "L 188.5 380 L 168.5 389 L 157.5 390 L 156.5 391 L 140.5 391 L 129.5 389 L 112.5 382 "
-              "Q 98.6 374.4 89 362.5 Q 79.5 350.9 75 334.5 L 73 325.5 L 73 305.5 L 77 289.5 L 84 275.5 "
-              "L 166 149.5 L 178.5 137 Q 187.8 129.3 200.5 125 L 218.5 121 Z "
-              "M 219 160 Q 209 162 203 167 L 194 177 L 123 286 L 115 299 L 112 308 "
-              "Q 110 331 121 341 Q 128 349 141 352 L 156 352 L 169 347 L 174 343 L 192 318 "
-              "L 257 218 L 262 206 Q 261 201 263 200 Q 263 182 254 173 Q 248 166 240 162 "
-              "Q 232 158 219 160 Z "
-              "M 353 160 L 339 166 L 330 175 L 261 281 L 248 303 L 246 311 L 247 325 L 254 339 "
-              "Q 262 348 276 352 L 291 352 Q 302 350 309 343 L 315 336 L 391 219 L 397 205 "
-              "L 397 190 L 391 176 L 377 163 Q 368 158 353 160 Z"
-          )
-
-          FALLBACK_SVG_XML = f'''<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-          <path fill="#000000" d="{LOGO_PATH_DATA}" />
-          </svg>'''
-
-          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A
-          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8
-
-          RASTER_SIZE   = 512
-          FRAME_COUNT   = 12
-          FRAME_MS      = 80
-          BAND_WIDTH    = 0.35
-          ANGLE_DEG     = 45
-
-          SPLASH_DENSITIES = {
-              "drawable-mdpi": 192,
-              "drawable-hdpi": 288,
-              "drawable-xhdpi": 384,
-              "drawable-xxhdpi": 576,
-              "drawable-xxxhdpi": 768,
-          }
-          DEFAULT_SIZE = 480
-
-          def rasterize_svg(path_or_none, size):
-              if path_or_none and os.path.exists(path_or_none):
-                  png_bytes = cairosvg.svg2png(url=path_or_none, output_width=size, output_height=size)
-              else:
-                  png_bytes = cairosvg.svg2png(bytestring=FALLBACK_SVG_XML.encode("utf-8"), output_width=size, output_height=size)
+          def rasterize_svg(path, size):
+              png_bytes = cairosvg.svg2png(url=path, output_width=size, output_height=size)
               return Image.open(BytesIO(png_bytes)).convert("RGBA")
 
           def recolor_by_alpha(img, rgb):
@@ -1434,239 +371,26 @@ workflows:
               solid.putalpha(alpha)
               return solid
 
-          def make_shimmer_frame(base_rgba, progress, band_width=BAND_WIDTH, angle_deg=ANGLE_DEG):
-              w, h = base_rgba.size
-              diag = math.hypot(w, h)
-              angle = math.radians(angle_deg)
-              dx, dy = math.cos(angle), math.sin(angle)
+          def make_splash(rgb, dest_path):
+              icon = rasterize_svg(SPLASH_SVG, ICON_PX)
+              colored = recolor_by_alpha(icon, rgb)
+              canvas = Image.new("RGBA", (CANVAS_PX, CANVAS_PX), (0, 0, 0, 0))
+              off = (CANVAS_PX - ICON_PX) // 2
+              canvas.paste(colored, (off, off), colored)
+              save(canvas, dest_path)
 
-              band_center = -band_width * diag / 2 + progress * (diag + band_width * diag) - band_width * diag / 2
-              highlight = Image.new("L", (w, h), 0)
-              px = highlight.load()
-              half_band = (band_width * diag) / 2
-              for y in range(h):
-                  for x in range(w):
-                      d = x * dx + y * dy
-                      dist = abs(d - band_center)
-                      if dist < half_band:
-                          v = int(255 * (1 - dist / half_band))
-                          px[x, y] = v
+          drawable_light = os.path.join(RES, "drawable")
+          drawable_dark  = os.path.join(RES, "drawable-night")
+          os.makedirs(drawable_light, exist_ok=True)
+          os.makedirs(drawable_dark,  exist_ok=True)
 
-              alpha_mask = base_rgba.split()[3]
-              glow = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-              glow.putalpha(Image.composite(highlight, Image.new("L", (w, h), 0), alpha_mask))
+          make_splash(COLOR_LIGHT_BG, os.path.join(drawable_light, "splash_icon.png"))
+          make_splash(COLOR_DARK_BG, os.path.join(drawable_dark, "splash_icon.png"))
 
-              frame = Image.alpha_composite(base_rgba, glow)
-              return frame
-
-          def build_frame_sequence(base_rgba):
-              frames = []
-              for i in range(FRAME_COUNT):
-                  progress = i / FRAME_COUNT
-                  frames.append(make_shimmer_frame(base_rgba, progress))
-              return frames
-
-          def resize_rgba(img, size):
-              return img.resize((size, size), Image.LANCZOS)
-
-          def save(img, path):
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              img.save(path, "PNG", optimize=True)
-              print(f"  -> {path}")
-
-          def process_variant(rgb, drawable_prefix):
-              base = rasterize_svg(PROJECT_SVG, RASTER_SIZE)
-              colored = recolor_by_alpha(base, rgb)
-              frames = build_frame_sequence(colored)
-
-              for density_dir, target_px in SPLASH_DENSITIES.items():
-                  dest_dir = os.path.join(RES, density_dir if drawable_prefix == "drawable" else density_dir.replace("drawable", "drawable-night"))
-                  static_resized = resize_rgba(colored, target_px)
-                  save(static_resized, os.path.join(dest_dir, "splash_icon_static.png"))
-
-                  for idx, frame in enumerate(frames):
-                      frame_resized = resize_rgba(frame, target_px)
-                      save(frame_resized, os.path.join(dest_dir, f"splash_icon_frame_{idx:02d}.png"))
-
-              default_dir = os.path.join(RES, "drawable" if drawable_prefix == "drawable" else "drawable-night")
-              static_default = resize_rgba(colored, DEFAULT_SIZE)
-              save(static_default, os.path.join(default_dir, "splash_icon_static.png"))
-              for idx, frame in enumerate(frames):
-                  frame_default = resize_rgba(frame, DEFAULT_SIZE)
-                  save(frame_default, os.path.join(default_dir, f"splash_icon_frame_{idx:02d}.png"))
-
-          process_variant(COLOR_LIGHT_BG, "drawable")
-          process_variant(COLOR_DARK_BG, "drawable-night")
-
-          print(f"✅ {FRAME_COUNT} frames de shimmer (light+dark) gerados a partir de splash_icon.svg")
+          print("✅ Ícones e splash (light/dark, a partir do SVG) processados com sucesso!")
           PYEOF
 
-      - name: Write AnimationDrawable XML (shimmer loop, pré-Android 12)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          python3 << 'PYEOF'
-          import os
-
-          RES = os.environ.get("RES") or f'{os.environ["CM_BUILD_DIR"]}/android/app/src/main/res'
-          FRAME_COUNT = 12
-          FRAME_MS = 80
-
-          def write_anim_drawable(path):
-              items = "\n".join(
-                  f'    <item android:drawable="@drawable/splash_icon_frame_{i:02d}" android:duration="{FRAME_MS}" />'
-                  for i in range(FRAME_COUNT)
-              )
-              xml = f'''<?xml version="1.0" encoding="utf-8"?>
-          <animation-list xmlns:android="http://schemas.android.com/apk/res/android"
-              android:oneshot="false">
-          {items}
-          </animation-list>
-          '''
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              with open(path, "w") as f:
-                  f.write(xml)
-              print(f"  -> {path}")
-
-          write_anim_drawable(os.path.join(RES, "drawable", "splash_shimmer_anim.xml"))
-          write_anim_drawable(os.path.join(RES, "drawable-night", "splash_shimmer_anim.xml"))
-          print("✅ AnimationDrawable (shimmer pré-Android 12) escrito")
-          PYEOF
-
-      - name: Write AnimatedVectorDrawable XML (shimmer nativo, Android 12+)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-          mkdir -p "${RES}/drawable-v31"
-          mkdir -p "${RES}/drawable-night-v31"
-
-          LOGO_PATH_200="M 85.352 47.266 L 91.211 47.266 L 95.508 48.047 L 99.805 49.609 Q 106.562 52.617 110.938 58.008 L 114.258 62.891 Q 115.156 63.203 114.844 62.305 Q 117.266 57.891 120.898 54.688 Q 125.352 50.547 131.836 48.438 L 138.477 47.266 L 143.555 47.266 L 143.945 47.656 L 148.242 48.047 L 154.102 50.391 Q 158.945 52.969 162.5 56.836 Q 165.859 60.312 167.969 65.039 L 170.312 74.023 L 170.312 79.492 L 169.141 85.352 L 166.406 91.602 L 134.766 140.43 L 129.492 146.094 L 126.367 148.438 L 118.164 151.953 L 113.867 152.734 L 107.617 152.734 L 99.805 150.781 Q 93.516 148.086 89.062 143.555 L 85.156 138.477 L 84.766 137.109 L 83.594 137.695 Q 81.602 142.344 77.93 145.312 L 73.633 148.438 L 65.82 151.953 L 61.523 152.344 L 61.133 152.734 L 54.883 152.734 L 50.586 151.953 L 43.945 149.219 Q 38.516 146.25 34.766 141.602 Q 31.055 137.07 29.297 130.664 L 28.516 127.148 L 28.516 119.336 L 30.078 113.086 L 32.812 107.617 L 64.844 58.398 L 69.727 53.516 Q 73.359 50.508 78.32 48.828 L 85.352 47.266 Z M 85.547 62.5 Q 81.641 63.281 79.297 65.234 L 75.781 69.141 L 48.047 111.719 L 44.922 116.797 L 43.75 120.312 Q 42.969 129.297 47.266 133.203 Q 50 136.328 55.078 137.5 L 60.938 137.5 L 66.016 135.547 L 67.969 133.984 L 75 124.219 L 100.391 85.156 L 102.344 80.469 Q 101.953 78.516 102.734 78.125 Q 102.734 71.094 99.219 67.578 Q 96.875 64.844 93.75 63.281 Q 90.625 61.719 85.547 62.5 Z M 137.891 62.5 L 132.422 64.844 L 128.906 68.359 L 101.953 109.766 L 96.875 118.359 L 96.094 121.484 L 96.484 126.953 L 99.219 132.422 Q 102.344 135.938 107.812 137.5 L 113.672 137.5 Q 117.969 136.719 120.703 133.984 L 123.047 131.25 L 152.734 85.547 L 155.078 80.078 L 155.078 74.219 L 152.734 68.75 L 147.266 63.672 Q 143.75 61.719 137.891 62.5 Z"
-
-          write_avd() {
-            local out_dir="$1"
-            local icon_static="$2"
-            cat > "${out_dir}/splash_icon_avd.xml" << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:aapt="http://schemas.android.com/aapt">
-              <aapt:attr name="android:drawable">
-                  <vector
-                      android:width="200dp"
-                      android:height="200dp"
-                      android:viewportWidth="200"
-                      android:viewportHeight="200">
-                      <group android:name="icon_group">
-                          <clip-path android:pathData="${LOGO_PATH_200}" />
-                          <path
-                              android:name="icon_base"
-                              android:pathData="${LOGO_PATH_200}"
-                              android:fillType="nonZero">
-                              <aapt:attr name="android:fillColor">
-                                  <bitmap
-                                      xmlns:android="http://schemas.android.com/apk/res/android"
-                                      android:src="@drawable/${icon_static}" />
-                              </aapt:attr>
-                          </path>
-                      </group>
-                      <group android:name="shimmer_group" android:translateX="-260">
-                          <clip-path android:pathData="${LOGO_PATH_200}" android:name="shimmer_clip" />
-                          <path
-                              android:name="shimmer_band"
-                              android:pathData="M-100,-40 L-20,-40 L120,240 L40,240 Z"
-                              android:fillAlpha="0.55">
-                              <aapt:attr name="android:fillColor">
-                                  <gradient
-                                      android:type="linear"
-                                      android:startX="0"
-                                      android:startY="0"
-                                      android:endX="60"
-                                      android:endY="200"
-                                      android:startColor="#00FFFFFF"
-                                      android:centerColor="#AAFFFFFF"
-                                      android:endColor="#00FFFFFF" />
-                              </aapt:attr>
-                          </path>
-                      </group>
-                  </vector>
-              </aapt:attr>
-              <target android:name="shimmer_group">
-                  <aapt:attr name="android:animation">
-                      <objectAnimator
-                          android:propertyName="translateX"
-                          android:valueFrom="-260"
-                          android:valueTo="260"
-                          android:duration="960"
-                          android:repeatCount="infinite"
-                          android:repeatMode="restart"
-                          android:interpolator="@android:interpolator/linear" />
-                  </aapt:attr>
-              </target>
-          </animated-vector>
-          EOF
-            echo "✅ ${out_dir}/splash_icon_avd.xml escrito (shimmer recortado pela silhueta real do logo)"
-          }
-
-          write_avd "${RES}/drawable-v31" "splash_icon_static"
-          write_avd "${RES}/drawable-night-v31" "splash_icon_static"
-
-      - name: Write Android 12+ splash screen (values/styles + themes)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          mkdir -p "${RES}/values-v31"
-          cat > "${RES}/values-v31/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowSplashScreenBackground">@android:color/white</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
-                  <item name="android:windowSplashScreenAnimationDuration">1000</item>
-                  <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-
-          mkdir -p "${RES}/values-night-v31"
-          cat > "${RES}/values-night-v31/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowSplashScreenBackground">#0d0d0d</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_avd</item>
-                  <item name="android:windowSplashScreenAnimationDuration">1000</item>
-                  <item name="android:windowSplashScreenIconBackgroundColor">#0d0d0d</item>
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">#0d0d0d</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-
-      - name: Write launch_background XMLs (light + dark, com shimmer) — pré Android 12
+      - name: Write launch_background XMLs (light + dark)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -1678,7 +402,7 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_shimmer_anim" />
+                      android:src="@drawable/splash_icon" />
               </item>
           </layer-list>
           EOF
@@ -1693,81 +417,13 @@ workflows:
               <item>
                   <bitmap
                       android:gravity="center"
-                      android:src="@drawable/splash_shimmer_anim" />
+                      android:src="@drawable/splash_icon" />
               </item>
           </layer-list>
           EOF
-          echo "✅ launch_background XMLs (light/dark, shimmer) criados"
+          echo "✅ launch_background XMLs (light/dark) criados"
 
-      - name: Start shimmer AnimationDrawable on window focus (pré-Android 12)
-        script: |
-          MAIN_ACTIVITY=$(find "${CM_BUILD_DIR}/android/app/src/main" -name "MainActivity.kt" -o -name "MainActivity.java" | head -1)
-          if [ -z "$MAIN_ACTIVITY" ]; then
-            echo "❌ MainActivity não encontrada"
-            exit 1
-          fi
-          echo "MainActivity encontrada em: $MAIN_ACTIVITY"
-
-          python3 << PYEOF
-          import re
-
-          path = "$MAIN_ACTIVITY"
-          with open(path, "r") as f:
-              content = f.read()
-
-          is_kotlin = path.endswith(".kt")
-
-          if is_kotlin and "onWindowFocusChanged" not in content:
-              # flutter create pode gerar classe sem corpo: "class MainActivity: FlutterActivity()"
-              # Normaliza para ter corpo antes de injetar
-              content = re.sub(
-                  r'(class MainActivity\s*:\s*FlutterActivity\(\))\s*$',
-                  r'\1 {}',
-                  content,
-                  flags=re.MULTILINE
-              )
-
-              shimmer_code = '''
-
-              override fun onWindowFocusChanged(hasFocus: Boolean) {
-                  super.onWindowFocusChanged(hasFocus)
-                  if (hasFocus) {
-                      val bg = window.decorView.background
-                      if (bg is android.graphics.drawable.LayerDrawable) {
-                          for (i in 0 until bg.numberOfLayers) {
-                              val d = bg.getDrawable(i)
-                              if (d is android.graphics.drawable.AnimationDrawable) {
-                                  d.start()
-                              }
-                          }
-                      }
-                  }
-              }
-          '''
-
-              # Encontra o { de abertura da classe e injeta antes do } de fecho
-              idx = content.find("class MainActivity")
-              if idx == -1:
-                  raise SystemExit("❌ class MainActivity não encontrada")
-
-              brace_open = content.find("{", idx)
-              if brace_open == -1:
-                  raise SystemExit("❌ { de abertura da classe não encontrado")
-
-              brace_close = content.rfind("}")
-              if brace_close == -1 or brace_close <= brace_open:
-                  raise SystemExit("❌ } de fecho da classe não encontrado")
-
-              injected = content[:brace_close] + shimmer_code + content[brace_close:]
-
-              with open(path, "w") as f:
-                  f.write(injected)
-              print("✅ onWindowFocusChanged injetado em MainActivity.kt")
-          elif is_kotlin:
-              print("✅ onWindowFocusChanged já presente — nada a fazer")
-          PYEOF
-
-      - name: Write styles XMLs (light + dark + v27) — pré Android 12
+      - name: Write styles XMLs (light + dark)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
@@ -1866,212 +522,17 @@ workflows:
               </style>
           </resources>
           EOF
-          echo "✅ Todos os styles.xml (light/dark/v27/v31) escritos"
+          echo "✅ Todos os styles.xml (light/dark/v27) escritos"
 
       - name: Remove stale adaptive icon (anydpi-v26)
         script: |
           rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
           echo "✅ mipmap-anydpi-v26 removido (se existia)"
 
-      - name: Remove any leftover Google Services config
-        script: |
-          find "${CM_BUILD_DIR}/android" -iname "google-services.json" -type f -print -delete || true
-          BUILD_GRADLE_APP="${CM_BUILD_DIR}/android/app/build.gradle"
-          BUILD_GRADLE_ROOT="${CM_BUILD_DIR}/android/build.gradle"
-          for f in "$BUILD_GRADLE_APP" "$BUILD_GRADLE_ROOT"; do
-            if [ -f "$f" ] && grep -q "google-services" "$f"; then
-              sed -i "/apply plugin: 'com.google.gms.google-services'/d" "$f"
-              sed -i "/id 'com.google.gms.google-services'/d" "$f"
-              sed -i "/classpath 'com.google.gms:google-services/d" "$f"
-              echo "✅ Referências ao plugin google-services removidas de $f"
-            fi
-          done
-
-      - name: Set applicationId and app label
-        script: |
-          BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle"
-          if [ -f "${CM_BUILD_DIR}/android/app/build.gradle.kts" ]; then
-            BUILD_GRADLE="${CM_BUILD_DIR}/android/app/build.gradle.kts"
-          fi
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-
-          sed -i 's/applicationId = "com.example.nexa"/applicationId = "com.jj_group.nexa"/' "$BUILD_GRADLE"
-          sed -i 's/applicationId "com.example.nexa"/applicationId "com.jj_group.nexa"/' "$BUILD_GRADLE"
-          sed -i 's/android:label="nexa"/android:label="Nexa"/' "$MANIFEST"
-
-          echo "✅ applicationId ajustado para com.jj_group.nexa"
-          echo "✅ Nome do app ajustado para Nexa"
-
       - name: Get Flutter packages
         script: |
           cd "${CM_BUILD_DIR}"
           flutter packages pub get
-
-      - name: Patch flutter_inappwebview proguard method call
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import glob
-
-          home = os.environ["HOME"]
-          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/flutter_inappwebview_android-*/android/build.gradle")
-          candidates = [f for f in glob.glob(pattern) if "example" not in f]
-
-          if not candidates:
-              print("❌ build.gradle do flutter_inappwebview_android não encontrado")
-              raise SystemExit(1)
-
-          target = candidates[0]
-          print(f"Arquivo encontrado: {target}")
-
-          with open(target, "r") as f:
-              content = f.read()
-
-          new_content = content.replace(
-              "getDefaultProguardFile('proguard-android.txt')",
-              "getDefaultProguardFile('proguard-android-optimize.txt')"
-          ).replace(
-              'getDefaultProguardFile("proguard-android.txt")',
-              'getDefaultProguardFile("proguard-android-optimize.txt")'
-          )
-
-          if new_content == content:
-              print("⚠️ Nenhuma ocorrência de proguard-android.txt encontrada — verificar manualmente")
-          else:
-              with open(target, "w") as f:
-                  f.write(new_content)
-              print("✅ proguard-android.txt substituído por proguard-android-optimize.txt")
-
-          for i, line in enumerate(new_content.splitlines(), 1):
-              if "getDefaultProguardFile" in line:
-                  print(f"  linha {i}: {line.strip()}")
-          PYEOF
-
-      - name: Patch file_picker compileSdk to 36
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import re
-          import glob
-
-          home = os.environ["HOME"]
-          pattern = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle")
-          candidates = [f for f in glob.glob(pattern) if "example" not in f]
-
-          if not candidates:
-              pattern_kts = os.path.join(home, ".pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle.kts")
-              candidates = [f for f in glob.glob(pattern_kts) if "example" not in f]
-
-          if not candidates:
-              print("❌ build.gradle do file_picker não encontrado — verificar manualmente")
-              raise SystemExit(1)
-
-          target = candidates[0]
-          print(f"Arquivo encontrado: {target}")
-
-          with open(target, "r") as f:
-              content = f.read()
-
-          original = content
-
-          content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
-          content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
-          content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
-          content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
-          content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
-          content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
-          content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
-
-          if content == original:
-              print("⚠️ Nenhuma substituição aplicada — padrão de compileSdk não reconhecido, verificar manualmente")
-              print("--- Trecho relevante do arquivo original ---")
-              for i, line in enumerate(original.splitlines(), 1):
-                  if "compileSdk" in line:
-                      print(f"  linha {i}: {line.strip()}")
-          else:
-              with open(target, "w") as f:
-                  f.write(content)
-              print("✅ compileSdk do file_picker ajustado para 36")
-              for i, line in enumerate(content.splitlines(), 1):
-                  if "compileSdk" in line:
-                      print(f"  linha {i}: {line.strip()}")
-          PYEOF
-
-      - name: Patch image_picker + image_cropper compileSdk to 36
-        script: |
-          python3 << 'PYEOF'
-          import os
-          import re
-          import glob
-
-          home = os.environ["HOME"]
-
-          targets = []
-          for pkg in ["image_picker_android", "image_cropper"]:
-              pattern = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle")
-              found = [f for f in glob.glob(pattern) if "example" not in f]
-              if not found:
-                  pattern_kts = os.path.join(home, f".pub-cache/hosted/pub.dev/{pkg}-*/android/build.gradle.kts")
-                  found = [f for f in glob.glob(pattern_kts) if "example" not in f]
-              if found:
-                  targets.append(found[0])
-              else:
-                  print(f"⚠️ build.gradle de {pkg} não encontrado — pode não estar instalado")
-
-          for target in targets:
-              print(f"Patching: {target}")
-              with open(target, "r") as f:
-                  content = f.read()
-              original = content
-              content = re.sub(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', content)
-              content = re.sub(r'compileSdk\s+flutter\.compileSdkVersion', 'compileSdk 36', content)
-              content = re.sub(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', content)
-              content = re.sub(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', content)
-              content = re.sub(r'compileSdk\s+\d+', 'compileSdk 36', content)
-              content = re.sub(r'compileSdkVersion\s*\(\s*\d+\s*\)', 'compileSdkVersion(36)', content)
-              content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 36', content)
-              if content != original:
-                  with open(target, "w") as f:
-                      f.write(content)
-                  print(f"✅ compileSdk ajustado para 36 em {os.path.basename(os.path.dirname(os.path.dirname(target)))}")
-              else:
-                  print(f"⚠️ Nenhuma substituição aplicada em {target}")
-          PYEOF
-
-      - name: Ensure READ_MEDIA + WRITE permissions for image_picker
-        script: |
-          MANIFEST="${CM_BUILD_DIR}/android/app/src/main/AndroidManifest.xml"
-          python3 << PYEOF
-          import re
-
-          path = "$MANIFEST"
-          with open(path, "r") as f:
-              content = f.read()
-
-          to_add = []
-          perms = [
-              'android.permission.READ_MEDIA_IMAGES',
-              'android.permission.READ_EXTERNAL_STORAGE',
-              'android.permission.WRITE_EXTERNAL_STORAGE',
-          ]
-          for p in perms:
-              if p not in content:
-                  to_add.append(f'<uses-permission android:name="{p}" />')
-
-          if to_add:
-              block = "\n    ".join(to_add)
-              content = re.sub(
-                  r'(<manifest[^>]*>)',
-                  r'\1\n    ' + block,
-                  content,
-                  count=1,
-              )
-              with open(path, "w") as f:
-                  f.write(content)
-              print(f"✅ Permissões de storage adicionadas: {', '.join(p.split('.')[-1] for p in perms if p in open(path).read())}")
-          else:
-              print("✅ Permissões de storage já presentes")
-          PYEOF
 
       - name: Build debug APK
         script: |
