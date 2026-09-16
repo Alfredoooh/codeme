@@ -18,26 +18,25 @@ workflows:
           EOF
           echo "✅ key.properties gerado"
 
-      - name: Install Pillow and cairosvg
-        script: pip3 install Pillow cairosvg --quiet
+      - name: Install Pillow
+        script: pip3 install Pillow --quiet
 
-      - name: Process launcher icons + dual splash (light/dark) from SVG
+      - name: Process launcher icons + dual splash (light/dark)
         script: |
           python3 << 'PYEOF'
           import os
-          import cairosvg
-          from io import BytesIO
           from PIL import Image, ImageDraw
 
           CM      = os.environ["CM_BUILD_DIR"]
           RES     = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER    = os.path.join(CM, "ic_launcher.png")
-          SPLASH_SVG  = os.path.join(CM, "splash_icon.svg")
+          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
+          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
+          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
+          # Fallback: se não existir splash dedicado, usa o launcher centralizado
+          SPLASH_FALLBACK = LAUNCHER
 
           if not os.path.exists(LAUNCHER):
               raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
-          if not os.path.exists(SPLASH_SVG):
-              raise FileNotFoundError("splash_icon.svg não encontrado na raiz do repo!")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -75,46 +74,47 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          # ── Splash icon a partir do SVG, recolorido por tema ────────────
-          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A -- ícone escuro sobre fundo branco
-          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8 -- ícone claro sobre fundo #0d0d0d
-
-          CANVAS_PX = 288
-          ICON_PX   = 160
-
-          def rasterize_svg(path, size):
-              png_bytes = cairosvg.svg2png(url=path, output_width=size, output_height=size)
-              return Image.open(BytesIO(png_bytes)).convert("RGBA")
-
-          def recolor_by_alpha(img, rgb):
-              alpha = img.split()[3]
-              solid = Image.new("RGBA", img.size, rgb + (255,))
-              solid.putalpha(alpha)
-              return solid
-
-          def make_splash(rgb, dest_path):
-              icon = rasterize_svg(SPLASH_SVG, ICON_PX)
-              colored = recolor_by_alpha(icon, rgb)
-              canvas = Image.new("RGBA", (CANVAS_PX, CANVAS_PX), (0, 0, 0, 0))
-              off = (CANVAS_PX - ICON_PX) // 2
-              canvas.paste(colored, (off, off), colored)
-              save(canvas, dest_path)
+          # ── Splash icon LIGHT ───────────────────────────────────────────
+          def make_splash(source_path, dest_path):
+              CANVAS, ICON = 288, 288
+              src_img = Image.open(source_path).convert("RGBA")
+              # Se a imagem for menor que o canvas, centraliza num fundo transparente
+              if src_img.size != (CANVAS, CANVAS):
+                  ICON = 160
+                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
+                  off    = (CANVAS - ICON) // 2
+                  canvas.paste(icon, (off, off), icon)
+                  canvas.save(dest_path, "PNG", optimize=True)
+              else:
+                  src_img.save(dest_path, "PNG", optimize=True)
+              print(f"  -> {dest_path}")
 
           drawable_light = os.path.join(RES, "drawable")
           drawable_dark  = os.path.join(RES, "drawable-night")
           os.makedirs(drawable_light, exist_ok=True)
           os.makedirs(drawable_dark,  exist_ok=True)
 
-          make_splash(COLOR_LIGHT_BG, os.path.join(drawable_light, "splash_icon.png"))
-          make_splash(COLOR_DARK_BG, os.path.join(drawable_dark, "splash_icon.png"))
+          # Light splash
+          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
+          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
+          if light_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
 
-          print("✅ Ícones e splash (light/dark, a partir do SVG) processados com sucesso!")
+          # Dark splash
+          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
+          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
+          if dark_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
+
+          print("✅ Ícones e splash (light/dark) processados com sucesso!")
           PYEOF
 
       - name: Write launch_background XMLs (light + dark)
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
+          # Light: fundo branco + splash_icon centrado
           mkdir -p "${RES}/drawable"
           cat > "${RES}/drawable/launch_background.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -129,6 +129,7 @@ workflows:
           EOF
           echo "✅ drawable/launch_background.xml (light) criado"
 
+          # Dark: fundo #0d0d0d + splash_icon centrado (vem de drawable-night)
           mkdir -p "${RES}/drawable-night"
           cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -149,6 +150,7 @@ workflows:
         script: |
           RES="${CM_BUILD_DIR}/android/app/src/main/res"
 
+          # values/styles.xml — tema claro (padrão)
           mkdir -p "${RES}/values"
           cat > "${RES}/values/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -177,6 +179,7 @@ workflows:
           EOF
           echo "✅ values/styles.xml (light) escrito"
 
+          # values-night/styles.xml — tema escuro
           mkdir -p "${RES}/values-night"
           cat > "${RES}/values-night/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -205,6 +208,7 @@ workflows:
           EOF
           echo "✅ values-night/styles.xml (dark) escrito"
 
+          # values-v27/styles.xml — claro, API 27+ (windowLightNavigationBar)
           mkdir -p "${RES}/values-v27"
           cat > "${RES}/values-v27/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -227,6 +231,7 @@ workflows:
           EOF
           echo "✅ values-v27/styles.xml (light v27) escrito"
 
+          # values-night-v27/styles.xml — escuro, API 27+
           mkdir -p "${RES}/values-night-v27"
           cat > "${RES}/values-night-v27/styles.xml" << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -299,26 +304,24 @@ workflows:
       flutter: stable
       java: 17
     scripts:
-      - name: Install Pillow and cairosvg
-        script: pip3 install Pillow cairosvg --quiet
+      - name: Install Pillow
+        script: pip3 install Pillow --quiet
 
-      - name: Process launcher icons + dual splash (light/dark) from SVG
+      - name: Process launcher icons + dual splash (light/dark)
         script: |
           python3 << 'PYEOF'
           import os
-          import cairosvg
-          from io import BytesIO
           from PIL import Image, ImageDraw
 
           CM      = os.environ["CM_BUILD_DIR"]
           RES     = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER    = os.path.join(CM, "ic_launcher.png")
-          SPLASH_SVG  = os.path.join(CM, "splash_icon.svg")
+          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
+          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
+          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
+          SPLASH_FALLBACK = LAUNCHER
 
           if not os.path.exists(LAUNCHER):
               raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
-          if not os.path.exists(SPLASH_SVG):
-              raise FileNotFoundError("splash_icon.svg não encontrado na raiz do repo!")
 
           DENSITIES = {
               "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
@@ -355,39 +358,36 @@ workflows:
               canvas.paste(fg_img, (off, off), fg_img)
               save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
 
-          COLOR_LIGHT_BG = (58, 58, 58)     # #3A3A3A -- ícone escuro sobre fundo branco
-          COLOR_DARK_BG  = (216, 216, 216)  # #D8D8D8 -- ícone claro sobre fundo #0d0d0d
-
-          CANVAS_PX = 288
-          ICON_PX   = 160
-
-          def rasterize_svg(path, size):
-              png_bytes = cairosvg.svg2png(url=path, output_width=size, output_height=size)
-              return Image.open(BytesIO(png_bytes)).convert("RGBA")
-
-          def recolor_by_alpha(img, rgb):
-              alpha = img.split()[3]
-              solid = Image.new("RGBA", img.size, rgb + (255,))
-              solid.putalpha(alpha)
-              return solid
-
-          def make_splash(rgb, dest_path):
-              icon = rasterize_svg(SPLASH_SVG, ICON_PX)
-              colored = recolor_by_alpha(icon, rgb)
-              canvas = Image.new("RGBA", (CANVAS_PX, CANVAS_PX), (0, 0, 0, 0))
-              off = (CANVAS_PX - ICON_PX) // 2
-              canvas.paste(colored, (off, off), colored)
-              save(canvas, dest_path)
+          def make_splash(source_path, dest_path):
+              CANVAS, ICON = 288, 288
+              src_img = Image.open(source_path).convert("RGBA")
+              if src_img.size != (CANVAS, CANVAS):
+                  ICON = 160
+                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
+                  off    = (CANVAS - ICON) // 2
+                  canvas.paste(icon, (off, off), icon)
+                  canvas.save(dest_path, "PNG", optimize=True)
+              else:
+                  src_img.save(dest_path, "PNG", optimize=True)
+              print(f"  -> {dest_path}")
 
           drawable_light = os.path.join(RES, "drawable")
           drawable_dark  = os.path.join(RES, "drawable-night")
           os.makedirs(drawable_light, exist_ok=True)
           os.makedirs(drawable_dark,  exist_ok=True)
 
-          make_splash(COLOR_LIGHT_BG, os.path.join(drawable_light, "splash_icon.png"))
-          make_splash(COLOR_DARK_BG, os.path.join(drawable_dark, "splash_icon.png"))
+          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
+          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
+          if light_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
 
-          print("✅ Ícones e splash (light/dark, a partir do SVG) processados com sucesso!")
+          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
+          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
+          if dark_src == SPLASH_FALLBACK:
+              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
+
+          print("✅ Ícones e splash (light/dark) processados com sucesso!")
           PYEOF
 
       - name: Write launch_background XMLs (light + dark)
