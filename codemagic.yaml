@@ -7,6 +7,7 @@ workflows:
       flutter: stable
       vars:
         PACKAGE_NAME: "com.codeme.app"
+        GRADLE_OPTS: "-Xmx8G -XX:MaxMetaspaceSize=4G"
     scripts:
       - name: Instalar dependências
         script: |
