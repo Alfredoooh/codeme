@@ -1,0 +1,36 @@
+workflows:
+  android-release:
+    name: Nexa Android Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      android_signing:
+        - nexa_keystore
+      vars:
+        PACKAGE_NAME: "com.codeme.app"
+    scripts:
+      - name: Instalar dependências
+        script: |
+          flutter pub get
+
+      - name: Build App Bundle (release)
+        script: |
+          flutter build appbundle --release
+
+      - name: Build APKs divididos por arquitetura
+        script: |
+          flutter build apk --release --split-per-abi
+
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/mapping/release/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - seu_email@exemplo.com
+        notify:
+          success: true
+          failure: true

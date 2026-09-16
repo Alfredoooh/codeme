@@ -23,7 +23,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 android {
 namespace "com.codeme.app"
-compileSdkVersion 36 // ← ALTERADO DE 35 PARA 36
+compileSdkVersion 36
 ndkVersion flutter.ndkVersion
 
 compileOptions {
@@ -64,8 +64,8 @@ release {
 signingConfig keystorePropertiesFile.exists()
 ? signingConfigs.release
 : signingConfigs.debug
-minifyEnabled false
-shrinkResources false
+minifyEnabled true
+shrinkResources true
 proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
 }
 debug {
