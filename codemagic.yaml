@@ -5,12 +5,20 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       flutter: stable
-      android_signing:
-        - nexa_keystore
       vars:
         PACKAGE_NAME: "com.codeme.app"
         GRADLE_OPTS: "-Xmx8G -XX:MaxMetaspaceSize=4G"
     scripts:
+      - name: Generate key.properties
+        script: |
+          cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
+          storePassword=Test@Codeme2026
+          keyPassword=Test@Codeme2026
+          keyAlias=codeme-test
+          storeFile=codeme-release.jks
+          EOF
+          echo "✅ key.properties gerado"
+
       - name: Instalar dependências
         script: |
           flutter pub get
@@ -21,3 +29,11 @@ workflows:
 
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - seu_email@exemplo.com
+        notify:
+          success: true
+          failure: true
