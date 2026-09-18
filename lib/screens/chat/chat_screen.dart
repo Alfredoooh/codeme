@@ -784,9 +784,11 @@ class AiTabState extends State<AiTab> with ThemeReactive<AiTab> {
       anchorKey: _attachButtonKey,
       webSearchEnabled: _webSearchEnabled,
       widgetsEnabled: _widgetsEnabled,
+      thinkingEnabled: thinkingMode.enabled,
       onOpenCanvas: _openCanvasPopup,
       onWebSearchChanged: setWebSearchEnabled,
       onWidgetsChanged: setWidgetsEnabled,
+      onThinkingChanged: thinkingMode.setEnabled,
     );
   }
 

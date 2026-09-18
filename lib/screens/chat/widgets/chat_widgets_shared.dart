@@ -1004,10 +1004,15 @@ Widget _buildIncognitoMenuItem(
 
 // ══════════════════════════════════════════════════════════════
 // POPUP DE OPÇÕES DO INPUT BAR
-// (Canvas / Pesquisar web / Competências).
+// (Canvas / Pesquisar web / Competências / Raciocínio).
+//
+// Alteração: adicionado item "Raciocínio" (ícone de lâmpada,
+// light_bulb) como último item da lista, com o mesmo padrão de
+// toggle que "Pesquisar web" e "Competências" — fica com a cor
+// primária (azul) quando ativo. Sem opção de plugins.
 // ══════════════════════════════════════════════════════════════
 
-enum InputBarOption { canvas, webSearch, widgets }
+enum InputBarOption { canvas, webSearch, widgets, thinking }
 
 Future<void> showAttachOptionsPopup(
   BuildContext context,
@@ -1015,9 +1020,11 @@ Future<void> showAttachOptionsPopup(
   required GlobalKey anchorKey,
   required bool webSearchEnabled,
   required bool widgetsEnabled,
+  required bool thinkingEnabled,
   required VoidCallback onOpenCanvas,
   required ValueChanged<bool> onWebSearchChanged,
   required ValueChanged<bool> onWidgetsChanged,
+  required ValueChanged<bool> onThinkingChanged,
 }) async {
   final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
   if (box == null) return;
@@ -1093,6 +1100,10 @@ Future<void> showAttachOptionsPopup(
                       _buildToggleMenuItem(
                         dialogCtx, s, 'skills', 'Competências', widgetsEnabled, onWidgetsChanged,
                       ),
+                      _buildToggleMenuItem(
+                        dialogCtx, s, 'light_bulb', 'Raciocínio', thinkingEnabled, onThinkingChanged,
+                        activeIconColor: s.primary,
+                      ),
                     ],
                   ),
                 ),
@@ -1126,8 +1137,10 @@ Widget _buildToggleMenuItem(
   String assetName,
   String label,
   bool value,
-  ValueChanged<bool> onChanged,
-) {
+  ValueChanged<bool> onChanged, {
+  Color? activeIconColor,
+}) {
+  final iconColor = (value && activeIconColor != null) ? activeIconColor : s.onSurface;
   return InkWell(
     onTap: () {
       HapticFeedback.lightImpact();
@@ -1139,7 +1152,7 @@ Widget _buildToggleMenuItem(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          AppIcon(assetName, size: 18, color: s.onSurface),
+          AppIcon(assetName, size: 18, color: iconColor),
           const SizedBox(width: 10),
           Expanded(
             child: Text(label,
@@ -1150,38 +1163,6 @@ Widget _buildToggleMenuItem(
       ),
     ),
   );
-}
-
-class _CustomSwitchSmall extends StatelessWidget {
-  final AppColorScheme s;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _CustomSwitchSmall({required this.s, required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-      width: 40,
-      height: 24,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: value ? s.primary : s.outline,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: AnimatedAlign(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
-        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          width: 18,
-          height: 18,
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-        ),
-      ),
-    );
-  }
 }
 
 // ══════════════════════════════════════════════════════════════
