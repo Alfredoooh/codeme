@@ -39,36 +39,24 @@
 
   #app { display:flex; flex-direction:column; height:100vh; background:var(--bg); }
 
-  /* TOPO — mesma cor do body, estende-se atrás da StatusBar */
+  /* TOPO — compacto, mesma cor do body, atrás da StatusBar mas baixo */
   #topbar {
-    padding-top: calc(var(--safe-top) + 10px);
-    padding-bottom:10px;
+    padding-top: calc(var(--safe-top) + 2px);
+    padding-bottom:8px;
     padding-left:20px; padding-right:20px;
     display:flex; align-items:center; justify-content:space-between;
     background:var(--bg);
     position:sticky; top:0; z-index:20;
   }
-  #topbar h1 { font-size:28px; font-weight:800; letter-spacing:-0.6px; color:var(--text); }
+  #topbar h1 { font-size:24px; font-weight:800; letter-spacing:-0.6px; color:var(--text); }
   #theme-btn {
-    width:40px; height:40px; border-radius:20px; border:none;
+    width:36px; height:36px; border-radius:18px; border:none;
     background:var(--bg2); color:var(--text);
     display:flex; align-items:center; justify-content:center;
   }
-  #theme-btn ion-icon { font-size:20px; }
+  #theme-btn ion-icon { font-size:18px; }
 
   #main-content { flex:1; overflow-y:auto; overflow-x:hidden; padding-bottom:150px; -webkit-overflow-scrolling:touch; }
-
-  /* TABS */
-  #tabs {
-    display:flex; gap:8px; padding:4px 20px 14px;
-    position:sticky; top:0; z-index:19; background:var(--bg);
-  }
-  .tab-btn {
-    flex:1; padding:11px 0; text-align:center; font-size:14px; font-weight:700;
-    color:var(--text2); border:none; background:var(--bg2); cursor:pointer;
-    border-radius:14px; transition:all .2s;
-  }
-  .tab-btn.active { color:#fff; background:var(--accent); }
 
   /* SEARCH */
   #search-bar { padding:0 20px 16px; }
@@ -91,9 +79,7 @@
   .scroll-row { display:flex; gap:16px; overflow-x:auto; padding-bottom:6px; scrollbar-width:none; }
   .scroll-row::-webkit-scrollbar { display:none; }
 
-  .card-lg {
-    flex:0 0 168px; cursor:pointer;
-  }
+  .card-lg { flex:0 0 168px; cursor:pointer; }
   .card-lg .thumb-wrap {
     width:168px; height:168px; border-radius:24px; overflow:hidden;
     background:var(--bg3); position:relative; box-shadow:0 6px 16px rgba(0,0,0,0.12);
@@ -110,7 +96,7 @@
   .card-lg .card-title { font-size:15px; font-weight:700; margin-top:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .card-lg .card-sub { font-size:13px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-  /* LISTA DE RESULTADOS — cards grandes também */
+  /* LISTA DE RESULTADOS */
   #results-list, #related-list, #recent-list { padding:0 20px; display:flex; flex-direction:column; gap:12px; }
 
   .result-item {
@@ -137,52 +123,59 @@
   .empty { text-align:center; color:var(--text2); padding:40px 20px; font-size:15px; }
   .empty ion-icon { font-size:34px; display:block; margin:0 auto 10px; opacity:.5; }
 
-  /* RELOAD BUTTON — centro, sempre visível */
-  #reload-btn {
-    position:fixed; bottom:calc(var(--safe-bottom) + 16px); left:50%; transform:translateX(-50%);
-    z-index:50;
-    display:flex; align-items:center; gap:8px;
-    background:var(--accent); color:#fff; border:none;
-    padding:13px 26px; border-radius:26px;
-    font-size:15px; font-weight:700;
-    box-shadow:0 6px 18px rgba(124,77,255,0.4);
-  }
-  #reload-btn.with-player { bottom:calc(var(--safe-bottom) + 130px); }
-  #reload-btn ion-icon { font-size:18px; }
-
   /* MINI PLAYER */
   #mini-player {
-    position:fixed; bottom:0; left:0; right:0;
+    position:fixed; bottom:82px; left:0; right:0;
     background:var(--player-bg);
-    padding:16px 20px calc(var(--safe-bottom) + 16px);
+    padding:14px 20px;
     z-index:40; display:none;
-    border-top-left-radius:28px; border-top-right-radius:28px;
-    box-shadow:0 -8px 24px rgba(0,0,0,0.14);
+    border-radius:24px;
+    margin:0 12px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.14);
   }
   #mini-player.active { display:block; }
 
-  #player-top { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
-  #player-thumb { width:56px; height:56px; border-radius:18px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
+  #player-top { display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+  #player-thumb { width:52px; height:52px; border-radius:16px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
   #player-info { flex:1; min-width:0; }
-  #player-title { font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #player-artist { font-size:13px; color:var(--text2); margin-top:2px; }
+  #player-title { font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #player-artist { font-size:12px; color:var(--text2); margin-top:2px; }
 
-  #player-controls { display:flex; align-items:center; gap:18px; }
+  #player-controls { display:flex; align-items:center; gap:16px; }
   #btn-play-pause {
-    width:50px; height:50px; border-radius:25px; background:var(--accent);
+    width:46px; height:46px; border-radius:23px; background:var(--accent);
     border:none; color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  #btn-play-pause ion-icon { font-size:24px; }
+  #btn-play-pause ion-icon { font-size:22px; }
   #btn-next, #btn-prev {
-    width:40px; height:40px; border-radius:20px; background:var(--bg2);
+    width:38px; height:38px; border-radius:19px; background:var(--bg2);
     border:none; color:var(--text); display:flex; align-items:center; justify-content:center;
   }
-  #btn-next ion-icon, #btn-prev ion-icon { font-size:19px; }
+  #btn-next ion-icon, #btn-prev ion-icon { font-size:18px; }
 
   #progress-wrap { display:flex; align-items:center; gap:10px; }
   #progress-bar { flex:1; height:5px; background:var(--bg3); border-radius:5px; cursor:pointer; }
   #progress-fill { height:100%; background:var(--accent); border-radius:5px; width:0%; transition:width .3s; }
-  .time-label { font-size:12px; color:var(--text2); min-width:36px; text-align:center; font-weight:600; }
+  .time-label { font-size:11px; color:var(--text2); min-width:34px; text-align:center; font-weight:600; }
+
+  /* BOTTOM BAR — nativa, ícones + label, estilo iOS/Material */
+  #bottom-bar {
+    position:fixed; bottom:0; left:0; right:0;
+    display:flex;
+    background:var(--card);
+    padding-top:8px;
+    padding-bottom:calc(var(--safe-bottom) + 6px);
+    border-top:1px solid var(--border);
+    z-index:30;
+  }
+  .bb-item {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:transparent; border:none; color:var(--text2);
+    padding:4px 0;
+  }
+  .bb-item ion-icon { font-size:24px; }
+  .bb-item span { font-size:10px; font-weight:600; }
+  .bb-item.active { color:var(--accent); }
 
   .view { display:none; }
   .view.active { display:block; }
@@ -193,12 +186,6 @@
   <div id="topbar">
     <h1>Vibely</h1>
     <button id="theme-btn"><ion-icon name="moon"></ion-icon></button>
-  </div>
-
-  <div id="tabs">
-    <button class="tab-btn active" data-tab="home">Início</button>
-    <button class="tab-btn" data-tab="search">Pesquisar</button>
-    <button class="tab-btn" data-tab="related">A seguir</button>
   </div>
 
   <div id="main-content">
@@ -233,8 +220,6 @@
 
   </div>
 
-  <button id="reload-btn"><ion-icon name="reload"></ion-icon>Recarregar</button>
-
   <div id="mini-player">
     <div id="player-top">
       <img id="player-thumb" src="" alt=""/>
@@ -254,13 +239,28 @@
       <span class="time-label" id="time-total">0:00</span>
     </div>
   </div>
+
+  <div id="bottom-bar">
+    <button class="bb-item active" data-tab="home">
+      <ion-icon name="home"></ion-icon>
+      <span>Início</span>
+    </button>
+    <button class="bb-item" data-tab="search">
+      <ion-icon name="search"></ion-icon>
+      <span>Pesquisar</span>
+    </button>
+    <button class="bb-item" data-tab="related">
+      <ion-icon name="list"></ion-icon>
+      <span>A seguir</span>
+    </button>
+  </div>
 </div>
 
 <script>
 const BASE = 'http://localhost:8080';
 const isApp = typeof Android !== 'undefined' && Android.isInsideApp();
 
-// ─── TEMA (com comunicação para o Android) ─────────────────────
+// ─── TEMA ────────────────────────────────────────────────
 let dark = false;
 const themeBtn = document.getElementById('theme-btn');
 
@@ -269,27 +269,23 @@ function applyTheme(d, notifyNative = true) {
   document.documentElement.setAttribute('data-theme', d ? 'dark' : '');
   themeBtn.innerHTML = `<ion-icon name="${d ? 'sunny' : 'moon'}"></ion-icon>`;
   localStorage.setItem('theme', d ? 'dark' : 'light');
-
-  // Informa o Android se o fundo do topo é claro ou escuro,
-  // para a StatusBar mostrar ícones da cor certa
   if (notifyNative && isApp && typeof Android.setStatusBarTheme === 'function') {
-    Android.setStatusBarTheme(!d); // true = fundo claro -> ícones escuros
+    Android.setStatusBarTheme(!d);
   }
 }
 applyTheme(localStorage.getItem('theme') === 'dark');
 themeBtn.addEventListener('click', () => applyTheme(!dark));
 
-// Reenvia o tema sempre que a página volta a ficar visível (ex: depois de reload)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') applyTheme(dark);
 });
 
-// ─── TABS ────────────────────────────────────────────────
-const tabs = document.querySelectorAll('.tab-btn');
+// ─── BOTTOM BAR (substitui as tabs) ──────────────────────
+const bbItems = document.querySelectorAll('.bb-item');
 const views = document.querySelectorAll('.view');
-tabs.forEach(btn => {
+bbItems.forEach(btn => {
   btn.addEventListener('click', () => {
-    tabs.forEach(t => t.classList.remove('active'));
+    bbItems.forEach(t => t.classList.remove('active'));
     views.forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('view-' + btn.dataset.tab).classList.add('active');
@@ -297,11 +293,6 @@ tabs.forEach(btn => {
       setTimeout(() => document.getElementById('search-input').focus(), 100);
     }
   });
-});
-
-// ─── RELOAD BUTTON ───────────────────────────────────────
-document.getElementById('reload-btn').addEventListener('click', () => {
-  location.reload();
 });
 
 // ─── RECENTES ────────────────────────────────────────────
@@ -426,7 +417,6 @@ let audio = new Audio();
 let isPlaying = false;
 
 const miniPlayer = document.getElementById('mini-player');
-const reloadBtn = document.getElementById('reload-btn');
 const playerThumb = document.getElementById('player-thumb');
 const playerTitle = document.getElementById('player-title');
 const playerArtist = document.getElementById('player-artist');
@@ -447,7 +437,6 @@ async function play(track, queueIndex) {
   playerArtist.textContent = track.artist || '—';
   playerThumb.src = track.thumbnail || '';
   miniPlayer.classList.add('active');
-  reloadBtn.classList.add('with-player');
   btnPlayPause.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon>';
   progressFill.style.width = '0%';
   timeCurrent.textContent = '0:00';
