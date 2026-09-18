@@ -102,6 +102,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
             runOnUiThread {
                 val targetClass: Class<out AppCompatActivity>? = when (screen) {
                     "home" -> MainActivity::class.java
+                    "search" -> SearchActivity::class.java
                     "library" -> LibraryActivity::class.java
                     "settings" -> SettingsActivity::class.java
                     else -> null
