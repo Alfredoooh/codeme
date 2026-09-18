@@ -1,8 +1,10 @@
 package com.vibely.music.app
 
 import android.content.Context
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import org.schabi.newpipe.extractor.NewPipe
@@ -99,30 +101,32 @@ private class OkHttpDownloader : Downloader() {
 
     override fun execute(request: NPRequest): NPResponse {
         val rb = Request.Builder().url(request.url())
+
         request.headers().forEach { (name, values) ->
             values.forEach { rb.addHeader(name, it) }
         }
-        rb.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        rb.header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        )
 
-        val body = request.dataToSend()
         when (request.httpMethod()) {
             "GET" -> rb.get()
-            "POST" -> rb.post(
-                okhttp3.RequestBody.create(
-                    okhttp3.MediaType.parse("application/octet-stream"),
-                    body ?: ByteArray(0)
-                )
-            )
+            "POST" -> {
+                val body = (request.dataToSend() ?: ByteArray(0))
+                    .toRequestBody("application/octet-stream".toMediaTypeOrNull())
+                rb.post(body)
+            }
             else -> rb.method(request.httpMethod(), null)
         }
 
         val response = client.newCall(rb.build()).execute()
         return NPResponse(
-            response.code(),
-            response.message(),
-            response.headers().toMultimap(),
-            response.body()?.string() ?: "",
-            response.request().url().toString()
+            response.code,
+            response.message,
+            response.headers.toMultimap(),
+            response.body?.string() ?: "",
+            response.request.url.toString()
         )
     }
 }

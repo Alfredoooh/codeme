@@ -8,5 +8,6 @@ class AndroidBridge(private val activity: MainActivity) {
     fun isInsideApp(): Boolean = true
 
     @JavascriptInterface
-    fun getAppVersion(): String = BuildConfig.VERSION_NAME
+    fun getAppVersion(): String = activity.packageManager
+        .getPackageInfo(activity.packageName, 0).versionName ?: "1.0"
 }
