@@ -4,9 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
 <title>Vibely Music</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.2.2/collection/components/icon/icon.min.css"/>
-<script type="module" src="https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.2.2/ionicons.esm.js"></script>
-<script nomodule src="https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.2.2/ionicons.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.2.2/ionicons.js"></script>
 <style>
   :root {
     --bg: #ffffff;
@@ -39,24 +37,26 @@
 
   #app { display:flex; flex-direction:column; height:100vh; background:var(--bg); }
 
-  /* TOPO — compacto, mesma cor do body, atrás da StatusBar mas baixo */
+  /* TOPO — mesmo tamanho de texto/ícone, mas menos espaço vazio à volta */
   #topbar {
-    padding-top: calc(var(--safe-top) + 2px);
-    padding-bottom:8px;
+    padding-top: var(--safe-top);
+    padding-bottom:2px;
     padding-left:20px; padding-right:20px;
     display:flex; align-items:center; justify-content:space-between;
     background:var(--bg);
     position:sticky; top:0; z-index:20;
+    min-height:38px;
   }
-  #topbar h1 { font-size:24px; font-weight:800; letter-spacing:-0.6px; color:var(--text); }
+  #topbar h1 { font-size:24px; font-weight:800; letter-spacing:-0.6px; color:var(--text); line-height:1; }
   #theme-btn {
     width:36px; height:36px; border-radius:18px; border:none;
     background:var(--bg2); color:var(--text);
     display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
   }
   #theme-btn ion-icon { font-size:18px; }
 
-  #main-content { flex:1; overflow-y:auto; overflow-x:hidden; padding-bottom:150px; -webkit-overflow-scrolling:touch; }
+  #main-content { flex:1; overflow-y:auto; overflow-x:hidden; padding-bottom:150px; padding-top:8px; -webkit-overflow-scrolling:touch; }
 
   /* SEARCH */
   #search-bar { padding:0 20px 16px; }
@@ -158,24 +158,30 @@
   #progress-fill { height:100%; background:var(--accent); border-radius:5px; width:0%; transition:width .3s; }
   .time-label { font-size:11px; color:var(--text2); min-width:34px; text-align:center; font-weight:600; }
 
-  /* BOTTOM BAR — nativa, ícones + label, estilo iOS/Material */
+  /* BOTTOM BAR */
   #bottom-bar {
     position:fixed; bottom:0; left:0; right:0;
     display:flex;
     background:var(--card);
-    padding-top:8px;
-    padding-bottom:calc(var(--safe-bottom) + 6px);
-    border-top:1px solid var(--border);
+    padding-top:10px;
+    padding-bottom:calc(var(--safe-bottom) + 8px);
+    box-shadow:0 -2px 16px rgba(0,0,0,0.08);
     z-index:30;
   }
   .bb-item {
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
     background:transparent; border:none; color:var(--text2);
-    padding:4px 0;
+    padding:2px 0;
   }
-  .bb-item ion-icon { font-size:24px; }
-  .bb-item span { font-size:10px; font-weight:600; }
+  .bb-item ion-icon { font-size:23px; }
+  .bb-item span { font-size:10.5px; font-weight:600; }
   .bb-item.active { color:var(--accent); }
+  .bb-item .bb-icon-wrap {
+    width:44px; height:26px; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .2s;
+  }
+  .bb-item.active .bb-icon-wrap { background:var(--bg2); }
 
   .view { display:none; }
   .view.active { display:block; }
@@ -242,15 +248,15 @@
 
   <div id="bottom-bar">
     <button class="bb-item active" data-tab="home">
-      <ion-icon name="home"></ion-icon>
+      <div class="bb-icon-wrap"><ion-icon name="home"></ion-icon></div>
       <span>Início</span>
     </button>
     <button class="bb-item" data-tab="search">
-      <ion-icon name="search"></ion-icon>
+      <div class="bb-icon-wrap"><ion-icon name="search"></ion-icon></div>
       <span>Pesquisar</span>
     </button>
     <button class="bb-item" data-tab="related">
-      <ion-icon name="list"></ion-icon>
+      <div class="bb-icon-wrap"><ion-icon name="list"></ion-icon></div>
       <span>A seguir</span>
     </button>
   </div>
@@ -280,7 +286,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') applyTheme(dark);
 });
 
-// ─── BOTTOM BAR (substitui as tabs) ──────────────────────
+// ─── BOTTOM BAR ──────────────────────────────────────────
 const bbItems = document.querySelectorAll('.bb-item');
 const views = document.querySelectorAll('.view');
 bbItems.forEach(btn => {
