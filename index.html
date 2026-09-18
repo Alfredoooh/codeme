@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Vibely Music</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f5;
+    --bg3: #ebebeb;
+    --text: #111111;
+    --text2: #666666;
+    --accent: #7c4dff;
+    --accent2: #6200ea;
+    --card: #ffffff;
+    --border: #e0e0e0;
+    --player-bg: #ffffff;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  [data-theme="dark"] {
+    --bg: #0f0f0f;
+    --bg2: #1a1a1a;
+    --bg3: #252525;
+    --text: #f1f1f1;
+    --text2: #aaaaaa;
+    --accent: #bb86fc;
+    --accent2: #7c4dff;
+    --card: #1e1e1e;
+    --border: #2a2a2a;
+    --player-bg: #1a1a1a;
+    --shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+
+  /* LAYOUT */
+  #app { display:flex; flex-direction:column; height:100vh; }
+  #main-content { flex:1; overflow-y:auto; overflow-x:hidden; padding-bottom:140px; }
+
+  /* TOP BAR */
+  #topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px 10px;
+    background:var(--bg);
+    position:sticky; top:0; z-index:10;
+    border-bottom:1px solid var(--border);
+  }
+  #topbar h1 { font-size:22px; font-weight:700; color:var(--accent); letter-spacing:-0.5px; }
+  #theme-btn {
+    width:36px; height:36px; border-radius:50%; border:none;
+    background:var(--bg3); color:var(--text); font-size:18px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+
+  /* SEARCH */
+  #search-bar {
+    padding:12px 16px;
+    position:sticky; top:57px; z-index:9;
+    background:var(--bg);
+  }
+  #search-wrap {
+    display:flex; gap:8px; align-items:center;
+    background:var(--bg2); border-radius:12px; padding:10px 14px;
+    border:1px solid var(--border);
+  }
+  #search-wrap input {
+    flex:1; border:none; background:transparent; color:var(--text);
+    font-size:15px; outline:none;
+  }
+  #search-wrap input::placeholder { color:var(--text2); }
+  #search-btn {
+    border:none; background:var(--accent); color:#fff;
+    border-radius:8px; padding:6px 14px; font-size:14px; font-weight:600; cursor:pointer;
+  }
+
+  /* SECTIONS */
+  .section { padding:16px 16px 0; }
+  .section-title { font-size:17px; font-weight:700; margin-bottom:12px; color:var(--text); }
+
+  /* CARDS HORIZONTAL */
+  .scroll-row { display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none; }
+  .scroll-row::-webkit-scrollbar { display:none; }
+
+  .card-sm {
+    flex:0 0 140px; background:var(--card); border-radius:12px;
+    overflow:hidden; cursor:pointer; box-shadow:var(--shadow);
+    transition:transform .15s;
+  }
+  .card-sm:active { transform:scale(.97); }
+  .card-sm img { width:100%; height:100px; object-fit:cover; background:var(--bg3); }
+  .card-sm .card-info { padding:8px 8px 10px; }
+  .card-sm .card-title { font-size:12px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card-sm .card-sub { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+
+  /* RESULTS LIST */
+  #results-list { padding:0 16px; }
+  .result-item {
+    display:flex; gap:12px; align-items:center;
+    padding:10px 0; border-bottom:1px solid var(--border);
+    cursor:pointer;
+  }
+  .result-item:active { opacity:.7; }
+  .result-thumb {
+    width:64px; height:64px; border-radius:8px;
+    object-fit:cover; background:var(--bg3); flex-shrink:0;
+  }
+  .result-info { flex:1; min-width:0; }
+  .result-title { font-size:14px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .result-sub { font-size:12px; color:var(--text2); margin-top:3px; }
+  .result-dur { font-size:11px; color:var(--text2); margin-top:3px; }
+  .result-play-btn {
+    width:36px; height:36px; border-radius:50%; background:var(--accent);
+    border:none; color:#fff; font-size:14px; cursor:pointer; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* LOADING */
+  .spinner {
+    display:flex; justify-content:center; padding:32px;
+  }
+  .spinner::after {
+    content:''; width:28px; height:28px; border-radius:50%;
+    border:3px solid var(--border); border-top-color:var(--accent);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .empty { text-align:center; color:var(--text2); padding:32px 16px; font-size:14px; }
+
+  /* MINI PLAYER */
+  #mini-player {
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--player-bg); border-top:1px solid var(--border);
+    padding:12px 16px 24px; z-index:100;
+    display:none;
+    box-shadow:0 -4px 20px rgba(0,0,0,0.12);
+  }
+  #mini-player.active { display:block; }
+
+  #player-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  #player-thumb { width:48px; height:48px; border-radius:8px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
+  #player-info { flex:1; min-width:0; }
+  #player-title { font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #player-artist { font-size:12px; color:var(--text2); margin-top:2px; }
+
+  #player-controls { display:flex; align-items:center; gap:16px; }
+  #btn-play-pause {
+    width:44px; height:44px; border-radius:50%; background:var(--accent);
+    border:none; color:#fff; font-size:20px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  #btn-next, #btn-prev {
+    width:36px; height:36px; border-radius:50%; background:var(--bg3);
+    border:none; color:var(--text); font-size:16px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  #progress-wrap { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  #progress-bar { flex:1; height:4px; background:var(--bg3); border-radius:4px; cursor:pointer; position:relative; }
+  #progress-fill { height:100%; background:var(--accent); border-radius:4px; width:0%; transition:width .3s; }
+  .time-label { font-size:11px; color:var(--text2); min-width:34px; text-align:center; }
+
+  /* TABS */
+  #tabs {
+    display:flex; background:var(--bg); border-bottom:1px solid var(--border);
+    position:sticky; top:57px; z-index:8;
+  }
+  .tab-btn {
+    flex:1; padding:12px 0; text-align:center; font-size:13px; font-weight:600;
+    color:var(--text2); border:none; background:transparent; cursor:pointer;
+    border-bottom:2px solid transparent; transition:all .2s;
+  }
+  .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* VIEWS */
+  .view { display:none; }
+  .view.active { display:block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>🎵 Vibely</h1>
+    <button id="theme-btn">🌙</button>
+  </div>
+
+  <div id="tabs">
+    <button class="tab-btn active" data-tab="home">Início</button>
+    <button class="tab-btn" data-tab="search">Pesquisar</button>
+    <button class="tab-btn" data-tab="related">Relacionados</button>
+  </div>
+
+  <div id="main-content">
+
+    <!-- HOME -->
+    <div id="view-home" class="view active">
+      <div class="section">
+        <div class="section-title">🔥 Em alta</div>
+        <div class="scroll-row" id="trending-row">
+          <div class="spinner"></div>
+        </div>
+      </div>
+      <div class="section" style="margin-top:8px;">
+        <div class="section-title">🎧 Recentes</div>
+        <div id="recent-list"></div>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div id="view-search" class="view">
+      <div id="search-bar">
+        <div id="search-wrap">
+          <input type="text" id="search-input" placeholder="Pesquisar músicas, artistas..." autocomplete="off"/>
+          <button id="search-btn">Ir</button>
+        </div>
+      </div>
+      <div id="results-list"></div>
+    </div>
+
+    <!-- RELATED -->
+    <div id="view-related" class="view">
+      <div class="section">
+        <div class="section-title">▶ A seguir</div>
+        <div id="related-list" class="empty">Reproduz uma música para ver sugestões</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MINI PLAYER -->
+  <div id="mini-player">
+    <div id="player-top">
+      <img id="player-thumb" src="" alt=""/>
+      <div id="player-info">
+        <div id="player-title">—</div>
+        <div id="player-artist">—</div>
+      </div>
+      <div id="player-controls">
+        <button id="btn-prev">⏮</button>
+        <button id="btn-play-pause">▶</button>
+        <button id="btn-next">⏭</button>
+      </div>
+    </div>
+    <div id="progress-wrap">
+      <span class="time-label" id="time-current">0:00</span>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+      <span class="time-label" id="time-total">0:00</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = 'http://localhost:8080';
+const isApp = typeof Android !== 'undefined' && Android.isInsideApp();
+
+// ─── TEMA ───────────────────────────────────────────────
+let dark = false;
+const themeBtn = document.getElementById('theme-btn');
+function applyTheme(d) {
+  dark = d;
+  document.documentElement.setAttribute('data-theme', d ? 'dark' : '');
+  themeBtn.textContent = d ? '☀️' : '🌙';
+  localStorage.setItem('theme', d ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('theme') === 'dark');
+themeBtn.addEventListener('click', () => applyTheme(!dark));
+
+// ─── TABS ────────────────────────────────────────────────
+const tabs = document.querySelectorAll('.tab-btn');
+const views = document.querySelectorAll('.view');
+tabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    views.forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'search') {
+      setTimeout(() => document.getElementById('search-input').focus(), 100);
+    }
+  });
+});
+
+// ─── RECENTES ────────────────────────────────────────────
+function getRecents() {
+  try { return JSON.parse(localStorage.getItem('recents') || '[]'); } catch { return []; }
+}
+function addRecent(track) {
+  let r = getRecents().filter(t => t.id !== track.id);
+  r.unshift(track);
+  r = r.slice(0, 20);
+  localStorage.setItem('recents', JSON.stringify(r));
+}
+function renderRecents() {
+  const list = document.getElementById('recent-list');
+  const recents = getRecents();
+  if (!recents.length) { list.innerHTML = '<div class="empty">Ainda sem músicas recentes</div>'; return; }
+  list.innerHTML = recents.map(t => trackItemHTML(t)).join('');
+  list.querySelectorAll('.result-item').forEach((el, i) => {
+    el.addEventListener('click', () => play(recents[i]));
+    el.querySelector('.result-play-btn').addEventListener('click', e => { e.stopPropagation(); play(recents[i]); });
+  });
+}
+
+// ─── TRENDING ────────────────────────────────────────────
+async function loadTrending() {
+  const row = document.getElementById('trending-row');
+  if (!isApp) {
+    row.innerHTML = '<div class="empty" style="padding:12px 0">Só disponível no app</div>';
+    return;
+  }
+  try {
+    const res = await fetch(BASE + '/search?q=top+music+2025');
+    const data = await res.json();
+    if (!data.length) { row.innerHTML = '<div class="empty">Sem resultados</div>'; return; }
+    row.innerHTML = data.slice(0,12).map(t => `
+      <div class="card-sm" data-id="${t.id}">
+        <img src="${t.thumbnail}" loading="lazy" onerror="this.src=''"/>
+        <div class="card-info">
+          <div class="card-title">${esc(t.title)}</div>
+          <div class="card-sub">${esc(t.artist)}</div>
+        </div>
+      </div>
+    `).join('');
+    row.querySelectorAll('.card-sm').forEach((el, i) => {
+      el.addEventListener('click', () => play(data[i]));
+    });
+    currentQueue = data;
+  } catch(e) {
+    row.innerHTML = '<div class="empty">Erro ao carregar</div>';
+  }
+}
+
+// ─── PESQUISA ────────────────────────────────────────────
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
+const resultsList = document.getElementById('results-list');
+let searchQueue = [];
+
+async function doSearch(q) {
+  if (!q.trim()) return;
+  resultsList.innerHTML = '<div class="spinner"></div>';
+  if (!isApp) {
+    resultsList.innerHTML = '<div class="empty">Servidor só disponível no app</div>';
+    return;
+  }
+  try {
+    const res = await fetch(BASE + '/search?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    searchQueue = data;
+    if (!data.length) { resultsList.innerHTML = '<div class="empty">Sem resultados</div>'; return; }
+    resultsList.innerHTML = data.map(t => trackItemHTML(t)).join('');
+    resultsList.querySelectorAll('.result-item').forEach((el, i) => {
+      el.addEventListener('click', () => { currentQueue = searchQueue; play(data[i], i); });
+      el.querySelector('.result-play-btn').addEventListener('click', e => {
+        e.stopPropagation(); currentQueue = searchQueue; play(data[i], i);
+      });
+    });
+  } catch(e) {
+    resultsList.innerHTML = '<div class="empty">Erro na pesquisa</div>';
+  }
+}
+
+searchBtn.addEventListener('click', () => doSearch(searchInput.value));
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(searchInput.value); });
+
+// ─── RELACIONADOS ────────────────────────────────────────
+async function loadRelated(id) {
+  const list = document.getElementById('related-list');
+  list.innerHTML = '<div class="spinner"></div>';
+  if (!isApp) { list.innerHTML = '<div class="empty">Só no app</div>'; return; }
+  try {
+    const res = await fetch(BASE + '/related?id=' + id);
+    const data = await res.json();
+    relatedQueue = data;
+    if (!data.length) { list.innerHTML = '<div class="empty">Sem sugestões</div>'; return; }
+    list.innerHTML = data.map(t => trackItemHTML(t)).join('');
+    list.querySelectorAll('.result-item').forEach((el, i) => {
+      el.addEventListener('click', () => { currentQueue = relatedQueue; play(data[i], i); });
+      el.querySelector('.result-play-btn').addEventListener('click', e => {
+        e.stopPropagation(); currentQueue = relatedQueue; play(data[i], i);
+      });
+    });
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Erro ao carregar</div>';
+  }
+}
+
+// ─── PLAYER ──────────────────────────────────────────────
+let currentTrack = null;
+let currentQueueIndex = 0;
+let currentQueue = [];
+let relatedQueue = [];
+let audio = new Audio();
+let isPlaying = false;
+
+const miniPlayer = document.getElementById('mini-player');
+const playerThumb = document.getElementById('player-thumb');
+const playerTitle = document.getElementById('player-title');
+const playerArtist = document.getElementById('player-artist');
+const btnPlayPause = document.getElementById('btn-play-pause');
+const btnNext = document.getElementById('btn-next');
+const btnPrev = document.getElementById('btn-prev');
+const progressFill = document.getElementById('progress-fill');
+const progressBar = document.getElementById('progress-bar');
+const timeCurrent = document.getElementById('time-current');
+const timeTotal = document.getElementById('time-total');
+
+async function play(track, queueIndex) {
+  if (!isApp) { alert('Player só disponível no app Vibely'); return; }
+  currentTrack = track;
+  if (queueIndex !== undefined) currentQueueIndex = queueIndex;
+
+  playerTitle.textContent = track.title || '—';
+  playerArtist.textContent = track.artist || '—';
+  playerThumb.src = track.thumbnail || '';
+  miniPlayer.classList.add('active');
+  btnPlayPause.textContent = '⏳';
+  progressFill.style.width = '0%';
+  timeCurrent.textContent = '0:00';
+  timeTotal.textContent = fmtTime(track.duration || 0);
+
+  addRecent(track);
+  renderRecents();
+  loadRelated(track.id);
+
+  try {
+    const res = await fetch(BASE + '/stream?id=' + track.id);
+    const { streamUrl } = await res.json();
+    if (!streamUrl) throw new Error('sem stream');
+    audio.pause();
+    audio.src = streamUrl;
+    audio.load();
+    await audio.play();
+    isPlaying = true;
+    btnPlayPause.textContent = '⏸';
+  } catch(e) {
+    btnPlayPause.textContent = '▶';
+    console.error('Erro stream:', e);
+  }
+}
+
+btnPlayPause.addEventListener('click', () => {
+  if (!currentTrack) return;
+  if (isPlaying) { audio.pause(); isPlaying = false; btnPlayPause.textContent = '▶'; }
+  else { audio.play(); isPlaying = true; btnPlayPause.textContent = '⏸'; }
+});
+
+btnNext.addEventListener('click', () => {
+  if (!currentQueue.length) return;
+  currentQueueIndex = (currentQueueIndex + 1) % currentQueue.length;
+  play(currentQueue[currentQueueIndex], currentQueueIndex);
+});
+
+btnPrev.addEventListener('click', () => {
+  if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+  if (!currentQueue.length) return;
+  currentQueueIndex = (currentQueueIndex - 1 + currentQueue.length) % currentQueue.length;
+  play(currentQueue[currentQueueIndex], currentQueueIndex);
+});
+
+audio.addEventListener('ended', () => {
+  if (!currentQueue.length) return;
+  currentQueueIndex = (currentQueueIndex + 1) % currentQueue.length;
+  play(currentQueue[currentQueueIndex], currentQueueIndex);
+});
+
+audio.addEventListener('timeupdate', () => {
+  if (!audio.duration) return;
+  const pct = (audio.currentTime / audio.duration) * 100;
+  progressFill.style.width = pct + '%';
+  timeCurrent.textContent = fmtTime(Math.floor(audio.currentTime));
+  timeTotal.textContent = fmtTime(Math.floor(audio.duration));
+});
+
+progressBar.addEventListener('click', e => {
+  if (!audio.duration) return;
+  const rect = progressBar.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+});
+
+// ─── UTILS ───────────────────────────────────────────────
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = s % 60;
+  return m + ':' + String(sec).padStart(2, '0');
+}
+function esc(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function trackItemHTML(t) {
+  return `
+    <div class="result-item">
+      <img class="result-thumb" src="${t.thumbnail}" loading="lazy" onerror="this.src=''"/>
+      <div class="result-info">
+        <div class="result-title">${esc(t.title)}</div>
+        <div class="result-sub">${esc(t.artist)}</div>
+        <div class="result-dur">${fmtTime(t.duration)}${t.views ? ' · ' + t.views : ''}</div>
+      </div>
+      <button class="result-play-btn">▶</button>
+    </div>
+  `;
+}
+
+// ─── INIT ────────────────────────────────────────────────
+renderRecents();
+loadTrending();
+</script>
+</body>
+</html>
