@@ -1610,3 +1610,59 @@ class SimpleCanvasCard extends StatelessWidget {
     );
   }
 }
+
+class _CustomSwitchSmall extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final AppColorScheme s;
+
+  const _CustomSwitchSmall({
+    required this.value,
+    required this.onChanged,
+    required this.s,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onChanged(!value);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        width: 40,
+        height: 24,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: value
+              ? (s.isDark ? Colors.white : s.primary)
+              : s.onSurfaceVariant.withOpacity(0.25),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: value && s.isDark ? Colors.black : Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
