@@ -19,6 +19,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var reloadBtn: Button
 
+    private val appUrl = "https://vibelywebapp.onrender.com"
+
+    // Marca se a página principal falhou ao carregar
+    private var loadFailed = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -51,26 +56,51 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(AndroidBridge(this), "Android")
 
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView,
+                request: WebResourceRequest
+            ): Boolean {
                 return false
             }
 
-            // Impede a página de erro nativa feia do Android (o texto
-            // "Não é possível aceder..."). Em vez disso não faz nada —
-            // o WebView fica só em branco/no último estado renderizado.
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                loadFailed = false
+                reloadBtn.visibility = View.GONE
+            }
+
+            // Falhou ao carregar a página principal:
+            // esconde o WebView (some a tela de erro nativa) e mostra o botão "Recarregar"
             override fun onReceivedError(
                 view: WebView,
                 request: WebResourceRequest,
                 error: WebResourceError
             ) {
                 if (request.isForMainFrame) {
+                    loadFailed = true
                     view.stopLoading()
+                    view.visibility = View.INVISIBLE
+                    reloadBtn.visibility = View.VISIBLE
+                }
+            }
+
+            // Carregou sem erro: mostra o WebView e esconde o botão
+            override fun onPageFinished(view: WebView, url: String?) {
+                super.onPageFinished(view, url)
+                if (!loadFailed) {
+                    view.visibility = View.VISIBLE
+                    reloadBtn.visibility = View.GONE
                 }
             }
         }
 
         reloadBtn.setOnClickListener {
-            webView.reload()
+            reloadBtn.visibility = View.GONE
+            webView.visibility = View.VISIBLE
+            loadFailed = false
+            // Após um erro, reload() pode recarregar a página de erro; loadUrl é o certo
+            webView.loadUrl(appUrl)
         }
 
         Thread {
@@ -80,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
-            webView.loadUrl("https://vibelywebapp.onrender.com")
+            webView.loadUrl(appUrl)
         }
     }
 

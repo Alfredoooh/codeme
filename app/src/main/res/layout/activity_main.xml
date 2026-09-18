@@ -10,15 +10,11 @@
 
     <Button
         android:id="@+id/reloadBtn"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="20dp"
-        android:background="@drawable/reload_btn_bg"
-        android:elevation="6dp"
-        android:text="↻"
-        android:textColor="#FFFFFF"
-        android:textSize="24sp"
-        android:textStyle="bold"/>
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="Recarregar"
+        android:textAllCaps="false"
+        android:visibility="gone"/>
 
 </FrameLayout>
