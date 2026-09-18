@@ -1,0 +1,181 @@
+workflows:
+  vibely-android:
+    name: Vibely Android
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      groups:
+        - keystore_credentials
+      vars:
+        PACKAGE_NAME: "com.vibely.music.app"
+      java: 17
+    scripts:
+      - name: Gerar Gradle Wrapper
+        script: |
+          set -e
+          cd $CM_BUILD_DIR
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x gradlew
+
+      - name: Restaurar keystore
+        script: |
+          set -e
+          if [ -f "$CM_BUILD_DIR/app/vibely.jks" ]; then
+            echo "Keystore encontrado em app/vibely.jks."
+          else
+            echo "ERRO: vibely.jks não encontrado em app/."
+            exit 1
+          fi
+
+      - name: Gerar ícones do app a partir de ic_launcher.png
+        script: |
+          set -e
+          if [ ! -f ic_launcher.png ]; then
+            echo "ERRO: ic_launcher.png não encontrado na raiz do projeto."
+            exit 1
+          fi
+
+          mkdir -p /tmp/icon_tool
+          cd /tmp/icon_tool
+          npm init -y > /dev/null 2>&1
+          npm install sharp > /dev/null 2>&1
+
+          cat > gen_icons.js << 'SCRIPT'
+          const sharp = require('sharp');
+          const fs = require('fs');
+          const path = require('path');
+
+          const src = process.argv[2];
+          const outRoot = process.argv[3];
+
+          const densities = {
+            'mipmap-mdpi': 48,
+            'mipmap-hdpi': 72,
+            'mipmap-xhdpi': 96,
+            'mipmap-xxhdpi': 144,
+            'mipmap-xxxhdpi': 192,
+          };
+
+          const foregroundDensities = {
+            'mipmap-mdpi': 108,
+            'mipmap-hdpi': 162,
+            'mipmap-xhdpi': 216,
+            'mipmap-xxhdpi': 324,
+            'mipmap-xxxhdpi': 432,
+          };
+
+          (async () => {
+            for (const [dir, size] of Object.entries(densities)) {
+              const outDir = path.join(outRoot, dir);
+              fs.mkdirSync(outDir, { recursive: true });
+              await sharp(src).resize(size, size).png()
+                .toFile(path.join(outDir, 'ic_launcher.png'));
+              await sharp(src).resize(size, size).png()
+                .toFile(path.join(outDir, 'ic_launcher_round.png'));
+            }
+
+            for (const [dir, size] of Object.entries(foregroundDensities)) {
+              const outDir = path.join(outRoot, dir);
+              fs.mkdirSync(outDir, { recursive: true });
+              const padded = Math.round(size * 0.66);
+              await sharp(src).resize(padded, padded)
+                .extend({
+                  top: Math.round((size - padded) / 2),
+                  bottom: Math.round((size - padded) / 2),
+                  left: Math.round((size - padded) / 2),
+                  right: Math.round((size - padded) / 2),
+                  background: { r: 0, g: 0, b: 0, alpha: 0 }
+                })
+                .png()
+                .toFile(path.join(outDir, 'ic_launcher_foreground.png'));
+            }
+
+            console.log('Ícones gerados com sucesso.');
+          })();
+          SCRIPT
+
+          node gen_icons.js "$CM_BUILD_DIR/ic_launcher.png" "$CM_BUILD_DIR/app/src/main/res"
+
+      - name: Gerar splash screen a partir de splash_icon.png
+        script: |
+          set -e
+          if [ ! -f splash_icon.png ]; then
+            echo "ERRO: splash_icon.png não encontrado na raiz do projeto."
+            exit 1
+          fi
+
+          cd /tmp/icon_tool
+
+          cat > gen_splash.js << 'SCRIPT'
+          const sharp = require('sharp');
+          const fs = require('fs');
+          const path = require('path');
+
+          const src = process.argv[2];
+          const outRoot = process.argv[3];
+
+          const densities = {
+            'drawable-mdpi': 200,
+            'drawable-hdpi': 300,
+            'drawable-xhdpi': 400,
+            'drawable-xxhdpi': 600,
+            'drawable-xxxhdpi': 800,
+          };
+
+          (async () => {
+            for (const [dir, size] of Object.entries(densities)) {
+              const outDir = path.join(outRoot, dir);
+              fs.mkdirSync(outDir, { recursive: true });
+              await sharp(src).resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png()
+                .toFile(path.join(outDir, 'splash_icon.png'));
+            }
+            console.log('Splash icon gerado com sucesso.');
+          })();
+          SCRIPT
+
+          node gen_splash.js "$CM_BUILD_DIR/splash_icon.png" "$CM_BUILD_DIR/app/src/main/res"
+
+      - name: Configurar assinatura no build.gradle.kts
+        script: |
+          set -e
+          cd $CM_BUILD_DIR
+
+          cat >> app/build.gradle.kts << 'EOF'
+
+          android {
+              signingConfigs {
+                  create("release") {
+                      storeFile = file("${'$'}{System.getenv("CM_BUILD_DIR")}/app/vibely.jks")
+                      storePassword = "@jonas440243"
+                      keyAlias = "vibely"
+                      keyPassword = "@jonas440243"
+                  }
+              }
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+          EOF
+
+      - name: Build APK/AAB assinados
+        script: |
+          set -e
+          cd $CM_BUILD_DIR
+          ./gradlew assembleRelease bundleRelease
+
+    artifacts:
+      - app/build/outputs/**/*.apk
+      - app/build/outputs/**/*.aab
+      - app/build/outputs/mapping/**/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - seu-email@exemplo.com
+        notify:
+          success: true
+          failure: true
