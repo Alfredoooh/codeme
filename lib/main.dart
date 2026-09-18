@@ -254,7 +254,7 @@ class _RootShellState extends State<RootShell>
       ),
     ]);
 
-    return return RootShellNavigation(
+    return RootShellNavigation(
       switchToEditTab: (type) {
         final screen = switch (type) {
           EditorType.docs   => DocsScreen(),
