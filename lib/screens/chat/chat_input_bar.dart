@@ -265,9 +265,9 @@ class ChatInput extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// BANNER "A editar mensagem" — agora vive DENTRO do shell do
-// input, no topo, com bordas super curvas (24) e sem margem
-// própria (o espaçamento é feito pelo pai).
+// BANNER "A editar mensagem" — vive DENTRO do shell do input, no
+// topo, com bordas super curvas (24) e sem margem própria (o
+// espaçamento é feito pelo pai).
 // ══════════════════════════════════════════════════════════════
 
 class _EditingBanner extends StatelessWidget {
@@ -316,9 +316,16 @@ class _EditingBanner extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // SHELL DO INPUT
+//
+// Alterações desta versão:
+// - Curto e totalmente arredondado (pílula) quando sem foco e sem
+//   texto; ao focar estica suavemente para a altura de escrita;
+//   ao escrever cresce em altura até um máximo fixo (nunca some).
+// - Botão de "Raciocínio/Rápido" removido daqui — passou a viver
+//   dentro do popup do "+" (ver showAttachMenuSheet mais abaixo).
 // ══════════════════════════════════════════════════════════════
 
-class _ChatInputShell extends StatelessWidget {
+class _ChatInputShell extends StatefulWidget {
   final AppColorScheme s;
   final bool hasText;
   final bool incognito;
@@ -336,9 +343,6 @@ class _ChatInputShell extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onAttach;
   final ValueChanged<String> onRecordingComplete;
-
-  static const double _maxInputHeight = 220.0;
-  static const double _minInputHeight = 52.0;
 
   const _ChatInputShell({
     required this.s,
@@ -360,89 +364,120 @@ class _ChatInputShell extends StatelessWidget {
     required this.onRecordingComplete,
   });
 
+  @override
+  State<_ChatInputShell> createState() => _ChatInputShellState();
+}
+
+class _ChatInputShellState extends State<_ChatInputShell> {
+  // Altura quando fechado: sem foco e sem texto — curto, bordas
+  // totalmente curvas (raio = metade da altura, forma de pílula).
+  static const double _collapsedHeight = 52.0;
+  // Altura quando focado mas ainda sem texto — já esticado para o
+  // tamanho real de escrita, antes de crescer com o conteúdo.
+  static const double _expandedBaseHeight = 116.0;
+  // Altura máxima com texto — cresce até aqui e depois faz scroll
+  // interno; nunca fica mais baixo do que isto enquanto há texto.
+  static const double _maxInputHeight = 220.0;
+
+  double get _targetMinHeight {
+    if (widget.hasText) return _expandedBaseHeight;
+    if (widget.focusNode.hasFocus) return _expandedBaseHeight;
+    return _collapsedHeight;
+  }
+
+  double get _targetRadius {
+    if (!widget.hasText && !widget.focusNode.hasFocus) {
+      return _collapsedHeight / 2;
+    }
+    return 26.0;
+  }
+
   Widget _attachButton() {
     return GestureDetector(
-      key: attachButtonKey,
-      onTap: onAttach,
+      key: widget.attachButtonKey,
+      onTap: widget.onAttach,
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: AppIcon('add', color: s.onSurface, size: 22),
+        child: AppIcon('add', color: widget.s.onSurface, size: 22),
       ),
     );
   }
 
   Widget _textField() {
     return TextField(
-      controller: ctrl,
-      focusNode: focusNode,
+      controller: widget.ctrl,
+      focusNode: widget.focusNode,
       minLines: 1,
       maxLines: null,
       keyboardType: TextInputType.multiline,
       textCapitalization: TextCapitalization.sentences,
       style: const TextStyle(fontSize: 16.5, letterSpacing: 0.15)
-          .copyWith(color: s.onSurface),
-      cursorColor: s.primary,
+          .copyWith(color: widget.s.onSurface),
+      cursorColor: widget.s.primary,
       decoration: InputDecoration(
         isDense: true,
         border: InputBorder.none,
-        hintText: incognito
+        hintText: widget.incognito
             ? 'Mensagem incógnita...'
             : 'Pergunte qualquer coisa aqui...',
         hintStyle: TextStyle(
             fontSize: 16.5,
             letterSpacing: 0.15,
-            color: s.onSurfaceVariant),
+            color: widget.s.onSurfaceVariant),
         contentPadding: EdgeInsets.zero,
       ),
-      onSubmitted: (_) => hasText ? onSend() : null,
+      onSubmitted: (_) => widget.hasText ? widget.onSend() : null,
     );
   }
 
   Widget _toolPillRow() {
-    if (attachedTool == null) return const SizedBox.shrink();
+    if (widget.attachedTool == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: _AttachedToolPill(s: s, type: attachedTool!, onClear: () {}),
+        child: _AttachedToolPill(
+            s: widget.s, type: widget.attachedTool!, onClear: () {}),
       ),
     );
   }
 
   Future<void> _openRecordingModal(BuildContext context) async {
-    final transcript = await showRecordingModal(context, s);
+    final transcript = await showRecordingModal(context, widget.s);
     if (transcript != null && transcript.trim().isNotEmpty) {
-      onRecordingComplete(transcript);
+      widget.onRecordingComplete(transcript);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final Widget bar = Container(
-      constraints: const BoxConstraints(
-        minHeight: _minInputHeight,
+    final s = widget.s;
+
+    final Widget bar = AnimatedContainer(
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+      constraints: BoxConstraints(
+        minHeight: _targetMinHeight,
         maxHeight: _maxInputHeight,
       ),
       decoration: BoxDecoration(
         color: s.isDark ? s.cardBackground : s.floatingSurface,
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: floatingShadow,
+        borderRadius: BorderRadius.circular(_targetRadius),
+        boxShadow: widget.floatingShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Card "A editar mensagem" — agora DENTRO do shell,
-          // acima do texto, com AnimatedSize para entrada/saída
-          // suave (sem "pulo" quando isEditing muda).
           AnimatedSize(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
-            child: isEditing
+            child: widget.isEditing
                 ? Padding(
                     padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-                    child: _EditingBanner(s: s, onCancel: onCancelEdit),
+                    child:
+                        _EditingBanner(s: s, onCancel: widget.onCancelEdit),
                   )
                 : const SizedBox(width: double.infinity, height: 0),
           ),
@@ -459,19 +494,13 @@ class _ChatInputShell extends StatelessWidget {
             child: Row(
               children: [
                 _attachButton(),
-                const SizedBox(width: 2),
-                ThinkingModeText(
-                  s: s,
-                  enabled: thinkingEnabled,
-                  onChanged: onThinkingChanged,
-                ),
                 const Spacer(),
                 _SendRecordCluster(
                   s: s,
-                  hasText: hasText,
-                  sending: sending,
-                  onSend: onSend,
-                  onPause: onPause,
+                  hasText: widget.hasText,
+                  sending: widget.sending,
+                  onSend: widget.onSend,
+                  onPause: widget.onPause,
                   onRecord: () => _openRecordingModal(context),
                 ),
               ],
@@ -481,181 +510,11 @@ class _ChatInputShell extends StatelessWidget {
       ),
     );
 
-    if (incognito) {
+    if (widget.incognito) {
       return DashedRRectBorder(color: s.outline, radius: 26, child: bar);
     }
     return bar;
   }
-}
-
-// ══════════════════════════════════════════════════════════════
-// CONTROLO DE PENSAMENTO
-// ══════════════════════════════════════════════════════════════
-
-class ThinkingModeText extends StatelessWidget {
-  final AppColorScheme s;
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-  const ThinkingModeText({
-    super.key,
-    required this.s,
-    required this.enabled,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final GlobalKey anchorKey = GlobalKey();
-    return GestureDetector(
-      key: anchorKey,
-      behavior: HitTestBehavior.opaque,
-      onTap: () async {
-        final box = anchorKey.currentContext?.findRenderObject() as RenderBox?;
-        if (box == null) return;
-        final overlayState = Overlay.of(context);
-        final overlayBox = overlayState.context.findRenderObject() as RenderBox;
-        final anchorTopLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-        final anchorSize = box.size;
-
-        final result = await _showThinkingPopupMenu(
-          context,
-          s,
-          anchorTopLeft: anchorTopLeft,
-          anchorSize: anchorSize,
-          overlaySize: overlayBox.size,
-          enabled: enabled,
-        );
-
-        if (result != null) onChanged(result);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              enabled ? 'Raciocínio' : 'Rápido',
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: s.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(Icons.expand_more, size: 16, color: s.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Future<bool?> _showThinkingPopupMenu(
-  BuildContext context,
-  AppColorScheme s, {
-  required Offset anchorTopLeft,
-  required Size anchorSize,
-  required Size overlaySize,
-  required bool enabled,
-}) {
-  const double popupWidth = 160.0;
-  const double gap = 6.0;
-
-  final rawLeft = anchorTopLeft.dx;
-  final clampedLeft = rawLeft.clamp(8.0, overlaySize.width - popupWidth - 8.0);
-  final popupBottom = overlaySize.height - anchorTopLeft.dy + gap;
-
-  return showGeneralDialog<bool>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Fechar menu',
-    barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 220),
-    pageBuilder: (dialogCtx, anim, secAnim) {
-      return Stack(
-        children: [
-          Positioned(
-            left: clampedLeft,
-            bottom: popupBottom,
-            width: popupWidth,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: s.floatingSurface,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: s.outline.withOpacity(0.25)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(s.isDark ? 0.45 : 0.15),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildThinkingMenuItem(dialogCtx, s, 'Rápido', !enabled, false),
-                      _buildThinkingMenuItem(dialogCtx, s, 'Raciocínio', enabled, true),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-    transitionBuilder: (dialogCtx, anim, secAnim, child) {
-      final curved = CurvedAnimation(
-        parent: anim,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
-          alignment: Alignment.bottomLeft,
-          child: child,
-        ),
-      );
-    },
-  );
-}
-
-Widget _buildThinkingMenuItem(
-  BuildContext context,
-  AppColorScheme s,
-  String label,
-  bool selected,
-  bool value,
-) {
-  return InkWell(
-    onTap: () {
-      HapticFeedback.lightImpact();
-      Navigator.of(context).pop(value);
-    },
-    borderRadius: BorderRadius.circular(14),
-    child: Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      alignment: Alignment.centerLeft,
-      child: Text(
-        label,
-        textAlign: TextAlign.left,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          color: selected ? s.primary : s.onSurface,
-        ),
-      ),
-    ),
-  );
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1436,6 +1295,12 @@ class _CanvasCard extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════
 // SHEET: MENU "+"
+//
+// Alterações desta versão: acrescenta "Raciocínio" como linha
+// com switch (ícone de lâmpada, fica azul/primary quando ativo)
+// logo a seguir a "Competências". Default continua false (modo
+// rápido); ativar aqui liga o mesmo thinkingEnabled/onThinking-
+// Changed que antes vivia no input bar.
 // ══════════════════════════════════════════════════════════════
 
 Future<void> showAttachMenuSheet(
@@ -1444,8 +1309,10 @@ Future<void> showAttachMenuSheet(
   required GlobalKey anchorKey,
   required bool webSearchEnabled,
   required bool widgetsEnabled,
+  required bool thinkingEnabled,
   required ValueChanged<bool> onWebSearchChanged,
   required ValueChanged<bool> onWidgetsChanged,
+  required ValueChanged<bool> onThinkingChanged,
   required VoidCallback onOpenCanvas,
   required VoidCallback onCamera,
   required VoidCallback onPhotos,
@@ -1458,8 +1325,10 @@ Future<void> showAttachMenuSheet(
       s: s,
       webSearchEnabled: webSearchEnabled,
       widgetsEnabled: widgetsEnabled,
+      thinkingEnabled: thinkingEnabled,
       onWebSearchChanged: onWebSearchChanged,
       onWidgetsChanged: onWidgetsChanged,
+      onThinkingChanged: onThinkingChanged,
       onOpenCanvas: onOpenCanvas,
       onCamera: onCamera,
       onPhotos: onPhotos,
@@ -1472,8 +1341,10 @@ class _AttachMenuSheetContent extends StatefulWidget {
   final AppColorScheme s;
   final bool webSearchEnabled;
   final bool widgetsEnabled;
+  final bool thinkingEnabled;
   final ValueChanged<bool> onWebSearchChanged;
   final ValueChanged<bool> onWidgetsChanged;
+  final ValueChanged<bool> onThinkingChanged;
   final VoidCallback onOpenCanvas;
   final VoidCallback onCamera;
   final VoidCallback onPhotos;
@@ -1483,8 +1354,10 @@ class _AttachMenuSheetContent extends StatefulWidget {
     required this.s,
     required this.webSearchEnabled,
     required this.widgetsEnabled,
+    required this.thinkingEnabled,
     required this.onWebSearchChanged,
     required this.onWidgetsChanged,
+    required this.onThinkingChanged,
     required this.onOpenCanvas,
     required this.onCamera,
     required this.onPhotos,
@@ -1499,6 +1372,7 @@ class _AttachMenuSheetContent extends StatefulWidget {
 class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
   late bool _localWeb = widget.webSearchEnabled;
   late bool _localWidgets = widget.widgetsEnabled;
+  late bool _localThinking = widget.thinkingEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1507,6 +1381,7 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
       s: s,
       webSearchEnabled: _localWeb,
       widgetsEnabled: _localWidgets,
+      thinkingEnabled: _localThinking,
       onCanvasTap: () {
         Navigator.pop(context);
         widget.onOpenCanvas();
@@ -1518,6 +1393,10 @@ class _AttachMenuSheetContentState extends State<_AttachMenuSheetContent> {
       onWidgetsChanged: (v) {
         setState(() => _localWidgets = v);
         widget.onWidgetsChanged(v);
+      },
+      onThinkingChanged: (v) {
+        setState(() => _localThinking = v);
+        widget.onThinkingChanged(v);
       },
       onCamera: () {
         Navigator.pop(context);
@@ -1539,9 +1418,11 @@ class _RootPage extends StatelessWidget {
   final AppColorScheme s;
   final bool webSearchEnabled;
   final bool widgetsEnabled;
+  final bool thinkingEnabled;
   final VoidCallback onCanvasTap;
   final ValueChanged<bool> onWebSearchChanged;
   final ValueChanged<bool> onWidgetsChanged;
+  final ValueChanged<bool> onThinkingChanged;
   final VoidCallback onCamera;
   final VoidCallback onPhotos;
   final VoidCallback onLocalFile;
@@ -1550,9 +1431,11 @@ class _RootPage extends StatelessWidget {
     required this.s,
     required this.webSearchEnabled,
     required this.widgetsEnabled,
+    required this.thinkingEnabled,
     required this.onCanvasTap,
     required this.onWebSearchChanged,
     required this.onWidgetsChanged,
+    required this.onThinkingChanged,
     required this.onCamera,
     required this.onPhotos,
     required this.onLocalFile,
@@ -1616,6 +1499,14 @@ class _RootPage extends StatelessWidget {
             title: 'Competências',
             value: widgetsEnabled,
             onChanged: onWidgetsChanged,
+          ),
+          _PlainSwitchRow(
+            s: s,
+            assetName: 'light_bulb',
+            title: 'Raciocínio',
+            value: thinkingEnabled,
+            onChanged: onThinkingChanged,
+            activeIconColor: s.primary,
           ),
         ],
       ),
@@ -1724,21 +1615,25 @@ class _PlainSwitchRow extends StatelessWidget {
   final String title;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final Color? activeIconColor;
   const _PlainSwitchRow({
     required this.s,
     required this.assetName,
     required this.title,
     required this.value,
     required this.onChanged,
+    this.activeIconColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconColor =
+        (value && activeIconColor != null) ? activeIconColor! : s.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          AppIcon(assetName, size: 20, color: s.onSurface),
+          AppIcon(assetName, size: 20, color: iconColor),
           const SizedBox(width: 14),
           Expanded(
             child: Text(title,
