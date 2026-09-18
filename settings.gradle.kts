@@ -14,4 +14,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Vibely"
-include(":app")
+include(":app") 
