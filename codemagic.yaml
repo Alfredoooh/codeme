@@ -144,9 +144,12 @@ workflows:
 
           KEYSTORE_ABS_PATH="$CM_BUILD_DIR/app/vibely.jks"
 
-          cat >> app/build.gradle.kts << EOF
+          python3 << PYEOF
+          path = "app/build.gradle.kts"
+          with open(path, "r") as f:
+              content = f.read()
 
-          android {
+          signing_block = '''
               signingConfigs {
                   create("release") {
                       storeFile = file("$KEYSTORE_ABS_PATH")
@@ -155,13 +158,25 @@ workflows:
                       keyPassword = "@jonas440243"
                   }
               }
-              buildTypes {
-                  getByName("release") {
-                      signingConfig = signingConfigs.getByName("release")
-                  }
-              }
-          }
-          EOF
+          '''
+
+          content = content.replace(
+              "android {",
+              "android {" + signing_block,
+              1
+          )
+
+          content = content.replace(
+              'release {\n            isMinifyEnabled = false',
+              'release {\n            signingConfig = signingConfigs.getByName("release")\n            isMinifyEnabled = false'
+          )
+
+          with open(path, "w") as f:
+              f.write(content)
+          PYEOF
+
+          echo "=== build.gradle.kts final ==="
+          cat app/build.gradle.kts
 
       - name: Build APK/AAB assinados
         script: |
