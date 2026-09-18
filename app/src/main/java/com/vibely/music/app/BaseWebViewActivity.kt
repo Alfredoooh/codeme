@@ -100,9 +100,8 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         @JavascriptInterface
         fun navigateTo(screen: String) {
             runOnUiThread {
-                val targetClass = when (screen) {
+                val targetClass: Class<out AppCompatActivity>? = when (screen) {
                     "home" -> MainActivity::class.java
-                    "search" -> SearchActivity::class.java
                     "library" -> LibraryActivity::class.java
                     "settings" -> SettingsActivity::class.java
                     else -> null
