@@ -254,7 +254,7 @@ class _RootShellState extends State<RootShell>
       ),
     ]);
 
-    return RootShellNavigation(
+    return return RootShellNavigation(
       switchToEditTab: (type) {
         final screen = switch (type) {
           EditorType.docs   => DocsScreen(),
@@ -264,10 +264,14 @@ class _RootShellState extends State<RootShell>
         Navigator.of(context).push(AppPageRoute(builder: (_) => screen));
       },
       child: PopScope(
-        canPop: !_drawerOpen,
+        canPop: false,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) return;
-          if (_drawerOpen) _closeDrawer();
+          if (_drawerOpen) {
+            _closeDrawer();
+          } else {
+            SystemNavigator.pop();
+          }
         },
         child: Scaffold(
           backgroundColor: s.surface,
