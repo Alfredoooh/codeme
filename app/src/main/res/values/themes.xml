@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.Vibely" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorAccent">@color/primary</item>
-        <item name="android:colorBackground">@color/background_light</item>
-        <item name="android:statusBarColor">@color/background_light</item>
-        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+<resources>
+    <style name="Theme.Vibely" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">#FFFFFF</item>
     </style>
 </resources>

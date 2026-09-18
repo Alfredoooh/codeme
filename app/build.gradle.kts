@@ -36,10 +36,9 @@ android {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.4")
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
-    implementation("androidx.media3:media3-common:1.5.0")
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.3")
 }
