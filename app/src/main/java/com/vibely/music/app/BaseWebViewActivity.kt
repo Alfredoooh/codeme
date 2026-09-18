@@ -65,6 +65,11 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
         progressRunnable?.let { progressHandler.removeCallbacks(it) }
     }
 
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+    }
+
     protected open fun getLayoutResId(): Int = R.layout.activity_webview_base
 
     private fun setupWebView() {
@@ -110,6 +115,7 @@ abstract class BaseWebViewActivity : AppCompatActivity() {
                 targetClass?.let {
                     if (it != this@BaseWebViewActivity::class.java) {
                         startActivity(Intent(this@BaseWebViewActivity, it))
+                        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
                     }
                 }
             }
