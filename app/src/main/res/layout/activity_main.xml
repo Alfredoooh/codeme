@@ -1,7 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<WebView
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/webView"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fitsSystemWindows="false"/>
+    android:layout_height="match_parent">
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <Button
+        android:id="@+id/reloadBtn"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:background="@drawable/reload_btn_bg"
+        android:elevation="6dp"
+        android:text="↻"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"/>
+
+</FrameLayout>

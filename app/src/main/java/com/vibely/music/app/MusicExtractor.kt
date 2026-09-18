@@ -26,7 +26,7 @@ class MusicExtractor(context: Context) {
     private val youtube = ServiceList.YouTube
 
     fun search(query: String): String {
-        val handler = youtube.searchQHFactory.fromQuery(query, listOf("music_songs"), null)
+        val handler = youtube.searchQHFactory.fromQuery(query)
         val info = SearchInfo.getInfo(youtube, handler)
         val arr = JSONArray()
         for (item in info.relatedItems) {

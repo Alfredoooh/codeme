@@ -5,22 +5,23 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowInsetsController
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var reloadBtn: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // StatusBar transparente real, conteúdo edge-to-edge
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -28,11 +29,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
+        reloadBtn = findViewById(R.id.reloadBtn)
 
-        // Deixa o WebView desenhar por baixo da StatusBar
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
-            insets
-        }
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { _, insets -> insets }
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -52,10 +51,26 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(AndroidBridge(this), "Android")
 
         webView.webViewClient = object : WebViewClient() {
-            // Aceita qualquer redirecionamento do site, sempre dentro do WebView
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 return false
             }
+
+            // Impede a página de erro nativa feia do Android (o texto
+            // "Não é possível aceder..."). Em vez disso não faz nada —
+            // o WebView fica só em branco/no último estado renderizado.
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: WebResourceError
+            ) {
+                if (request.isForMainFrame) {
+                    view.stopLoading()
+                }
+            }
+        }
+
+        reloadBtn.setOnClickListener {
+            webView.reload()
         }
 
         Thread {
@@ -69,19 +84,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Chamado pelo AndroidBridge quando o site manda o tema da StatusBar
     fun setStatusBarIcons(dark: Boolean) {
         runOnUiThread {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val controller = window.insetsController
                 if (dark) {
-                    // ícones escuros -> fundo do site é claro
                     controller?.setSystemBarsAppearance(
                         WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
                         WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                     )
                 } else {
-                    // ícones claros -> fundo do site é escuro
                     controller?.setSystemBarsAppearance(
                         0,
                         WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
@@ -96,10 +108,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    fun reloadPage() {
-        runOnUiThread { webView.reload() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
