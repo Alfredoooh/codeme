@@ -142,12 +142,14 @@ workflows:
           set -e
           cd $CM_BUILD_DIR
 
-          cat >> app/build.gradle.kts << 'EOF'
+          KEYSTORE_ABS_PATH="$CM_BUILD_DIR/app/vibely.jks"
+
+          cat >> app/build.gradle.kts << EOF
 
           android {
               signingConfigs {
                   create("release") {
-                      storeFile = file("${'$'}{System.getenv("CM_BUILD_DIR")}/app/vibely.jks")
+                      storeFile = file("$KEYSTORE_ABS_PATH")
                       storePassword = "@jonas440243"
                       keyAlias = "vibely"
                       keyPassword = "@jonas440243"
