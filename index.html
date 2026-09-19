@@ -3,303 +3,614 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
+<meta name="theme-color" content="#f2f2f7"/>
 <title>Vibely Music</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.2.2/ionicons.js"></script>
 <style>
   :root {
-    --bg: #ffffff;
-    --bg2: #f2f2f7;
+    --bg: #f2f2f7;
+    --bg2: #ffffff;
     --bg3: #e5e5ea;
-    --text: #000000;
-    --text2: #8e8e93;
+    --text: #0b0b0f;
+    --text2: #6e6e73;
     --accent: #7c4dff;
-    --card: #ffffff;
-    --border: rgba(60,60,67,0.12);
-    --player-bg: #ffffff;
+    --accent-rgb: 124,77,255;
+    --card: rgba(255,255,255,0.72);
+    --glass: rgba(255,255,255,0.62);
+    --glass-strong: rgba(255,255,255,0.82);
+    --glass-border: rgba(255,255,255,0.55);
+    --hairline: rgba(60,60,67,0.12);
+    --shadow: 0 8px 30px rgba(0,0,0,0.10);
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --spring: cubic-bezier(0.32, 0.72, 0, 1);
+    --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --np-c1: #7c4dff;
+    --np-c2: #4d2fb3;
   }
   [data-theme="dark"] {
-    --bg: #000000;
-    --bg2: #1c1c1e;
-    --bg3: #2c2c2e;
-    --text: #ffffff;
-    --text2: #98989f;
-    --accent: #bb86fc;
-    --card: #1c1c1e;
-    --border: rgba(84,84,88,0.36);
-    --player-bg: #1c1c1e;
+    --bg: #16171d;
+    --bg2: #22242c;
+    --bg3: #2e313b;
+    --text: #f4f4f8;
+    --text2: #a1a4b0;
+    --accent: #b28cff;
+    --accent-rgb: 178,140,255;
+    --card: rgba(46,49,59,0.66);
+    --glass: rgba(38,40,50,0.60);
+    --glass-strong: rgba(38,40,50,0.82);
+    --glass-border: rgba(255,255,255,0.10);
+    --hairline: rgba(255,255,255,0.10);
+    --shadow: 0 8px 30px rgba(0,0,0,0.35);
   }
-  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; }
-  html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif; }
 
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; }
+  html, body {
+    height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Segoe UI',Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    transition:background .35s ease, color .35s ease;
+  }
+  button { font-family:inherit; cursor:pointer; }
   ion-icon { pointer-events:none; }
 
-  #app { display:flex; flex-direction:column; height:100vh; background:var(--bg); }
+  /* Feedback de toque nativo: tudo que é tocável encolhe levemente */
+  .tap { transition:transform .22s var(--spring), opacity .22s ease; }
+  .tap:active { transform:scale(.94); opacity:.85; }
 
-  /* TOPO — mesmo tamanho de texto/ícone, mas menos espaço vazio à volta */
+  #app { position:relative; display:flex; flex-direction:column; height:100vh; background:var(--bg); }
+
+  /* fundo com brilho suave da cor da música */
+  #ambient {
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(60% 40% at 15% 0%, rgba(var(--accent-rgb),.16), transparent 70%),
+      radial-gradient(50% 35% at 100% 30%, rgba(var(--accent-rgb),.10), transparent 70%);
+    transition:background 1s ease;
+  }
+
+  /* ─── TOPO ─────────────────────────────── */
   #topbar {
-    padding-top: var(--safe-top);
-    padding-bottom:2px;
-    padding-left:20px; padding-right:20px;
+    position:relative; z-index:20;
+    padding:calc(var(--safe-top) + 6px) 20px 6px;
     display:flex; align-items:center; justify-content:space-between;
-    background:var(--bg);
-    position:sticky; top:0; z-index:20;
-    min-height:38px;
+    min-height:48px;
   }
-  #topbar h1 { font-size:24px; font-weight:800; letter-spacing:-0.6px; color:var(--text); line-height:1; }
-  #theme-btn {
-    width:36px; height:36px; border-radius:18px; border:none;
-    background:var(--bg2); color:var(--text);
-    display:flex; align-items:center; justify-content:center;
-    flex-shrink:0;
+  #topbar h1 {
+    font-size:30px; font-weight:800; letter-spacing:-0.9px; line-height:1;
+    transition:opacity .25s ease, transform .35s var(--spring);
   }
-  #theme-btn ion-icon { font-size:18px; }
-
-  #main-content { flex:1; overflow-y:auto; overflow-x:hidden; padding-bottom:150px; padding-top:8px; -webkit-overflow-scrolling:touch; }
-
-  /* SEARCH */
-  #search-bar { padding:0 20px 16px; }
-  #search-wrap {
-    display:flex; gap:10px; align-items:center;
-    background:var(--bg2); border-radius:18px; padding:13px 18px;
-  }
-  #search-wrap ion-icon { font-size:19px; color:var(--text2); }
-  #search-wrap input {
-    flex:1; border:none; background:transparent; color:var(--text);
-    font-size:16px; outline:none; font-weight:500;
-  }
-  #search-wrap input::placeholder { color:var(--text2); }
-
-  /* SECTIONS */
-  .section { padding:6px 20px 0; margin-bottom:26px; }
-  .section-title { font-size:22px; font-weight:800; margin-bottom:14px; letter-spacing:-0.4px; }
-
-  /* CARDS GRANDES */
-  .scroll-row { display:flex; gap:16px; overflow-x:auto; padding-bottom:6px; scrollbar-width:none; }
-  .scroll-row::-webkit-scrollbar { display:none; }
-
-  .card-lg { flex:0 0 168px; cursor:pointer; }
-  .card-lg .thumb-wrap {
-    width:168px; height:168px; border-radius:24px; overflow:hidden;
-    background:var(--bg3); position:relative; box-shadow:0 6px 16px rgba(0,0,0,0.12);
-  }
-  .card-lg img { width:100%; height:100%; object-fit:cover; }
-  .card-lg .play-overlay {
-    position:absolute; bottom:10px; right:10px;
-    width:38px; height:38px; border-radius:19px;
-    background:rgba(255,255,255,0.9); backdrop-filter:blur(10px);
+  #menu-btn {
+    width:38px; height:38px; border-radius:50%; border:0;
+    background:var(--glass); color:var(--text);
+    -webkit-backdrop-filter:blur(22px) saturate(180%); backdrop-filter:blur(22px) saturate(180%);
+    border:1px solid var(--glass-border);
     display:flex; align-items:center; justify-content:center;
   }
-  [data-theme="dark"] .card-lg .play-overlay { background:rgba(30,30,30,0.85); }
-  .card-lg .play-overlay ion-icon { font-size:18px; color:var(--accent); }
-  .card-lg .card-title { font-size:15px; font-weight:700; margin-top:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .card-lg .card-sub { font-size:13px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #menu-btn ion-icon { font-size:20px; }
 
-  /* LISTA DE RESULTADOS */
-  #results-list, #related-list, #recent-list { padding:0 20px; display:flex; flex-direction:column; gap:12px; }
-
-  .result-item {
-    display:flex; gap:14px; align-items:center;
-    background:var(--card); border-radius:20px; padding:10px;
-    cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  /* ─── CONTEÚDO ─────────────────────────── */
+  #main-content {
+    position:relative; z-index:1; flex:1; overflow-y:auto; overflow-x:hidden;
+    padding-top:4px; padding-bottom:200px; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
   }
-  .result-thumb { width:64px; height:64px; border-radius:16px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
-  .result-info { flex:1; min-width:0; }
-  .result-title { font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .result-sub { font-size:13px; color:var(--text2); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .result-dur { font-size:12px; color:var(--text2); margin-top:2px; }
-  .result-play-btn {
-    width:44px; height:44px; border-radius:22px; background:var(--accent);
-    border:none; color:#fff; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-  }
-  .result-play-btn ion-icon { font-size:19px; }
-
-  /* LOADING / EMPTY */
-  .spinner { display:flex; justify-content:center; padding:40px; }
-  .spinner ion-icon { font-size:32px; color:var(--accent); animation:spin 1s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .empty { text-align:center; color:var(--text2); padding:40px 20px; font-size:15px; }
-  .empty ion-icon { font-size:34px; display:block; margin:0 auto 10px; opacity:.5; }
-
-  /* MINI PLAYER */
-  #mini-player {
-    position:fixed; bottom:82px; left:0; right:0;
-    background:var(--player-bg);
-    padding:14px 20px;
-    z-index:40; display:none;
-    border-radius:24px;
-    margin:0 12px;
-    box-shadow:0 8px 24px rgba(0,0,0,0.14);
-  }
-  #mini-player.active { display:block; }
-
-  #player-top { display:flex; align-items:center; gap:14px; margin-bottom:12px; }
-  #player-thumb { width:52px; height:52px; border-radius:16px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
-  #player-info { flex:1; min-width:0; }
-  #player-title { font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #player-artist { font-size:12px; color:var(--text2); margin-top:2px; }
-
-  #player-controls { display:flex; align-items:center; gap:16px; }
-  #btn-play-pause {
-    width:46px; height:46px; border-radius:23px; background:var(--accent);
-    border:none; color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0;
-  }
-  #btn-play-pause ion-icon { font-size:22px; }
-  #btn-next, #btn-prev {
-    width:38px; height:38px; border-radius:19px; background:var(--bg2);
-    border:none; color:var(--text); display:flex; align-items:center; justify-content:center;
-  }
-  #btn-next ion-icon, #btn-prev ion-icon { font-size:18px; }
-
-  #progress-wrap { display:flex; align-items:center; gap:10px; }
-  #progress-bar { flex:1; height:5px; background:var(--bg3); border-radius:5px; cursor:pointer; }
-  #progress-fill { height:100%; background:var(--accent); border-radius:5px; width:0%; transition:width .3s; }
-  .time-label { font-size:11px; color:var(--text2); min-width:34px; text-align:center; font-weight:600; }
-
-  /* BOTTOM BAR */
-  #bottom-bar {
-    position:fixed; bottom:0; left:0; right:0;
-    display:flex;
-    background:var(--card);
-    padding-top:10px;
-    padding-bottom:calc(var(--safe-bottom) + 8px);
-    box-shadow:0 -2px 16px rgba(0,0,0,0.08);
-    z-index:30;
-  }
-  .bb-item {
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
-    background:transparent; border:none; color:var(--text2);
-    padding:2px 0;
-  }
-  .bb-item ion-icon { font-size:23px; }
-  .bb-item span { font-size:10.5px; font-weight:600; }
-  .bb-item.active { color:var(--accent); }
-  .bb-item .bb-icon-wrap {
-    width:44px; height:26px; border-radius:14px;
-    display:flex; align-items:center; justify-content:center;
-    transition:background .2s;
-  }
-  .bb-item.active .bb-icon-wrap { background:var(--bg2); }
+  #main-content::-webkit-scrollbar { display:none; }
 
   .view { display:none; }
-  .view.active { display:block; }
+  .view.active { display:block; animation:viewIn .42s var(--spring) both; }
+  @keyframes viewIn { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
+
+  .section { padding:6px 20px 0; margin-bottom:26px; }
+  .section-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
+  .section-title { font-size:22px; font-weight:800; letter-spacing:-0.5px; }
+  .section-action { font-size:14px; font-weight:600; color:var(--accent); background:none; border:0; }
+
+  /* ─── CARDS EM ALTA ────────────────────── */
+  .scroll-row {
+    display:flex; gap:16px; overflow-x:auto; padding:2px 20px 10px; margin:0 -20px;
+    scrollbar-width:none; scroll-snap-type:x mandatory; scroll-padding-left:20px;
+  }
+  .scroll-row::-webkit-scrollbar { display:none; }
+
+  .card-lg { flex:0 0 170px; scroll-snap-align:start; animation:popIn .5s var(--spring) both; }
+  .card-lg .thumb-wrap {
+    width:170px; height:170px; border-radius:30px; overflow:hidden; position:relative;
+    background:var(--bg3); box-shadow:var(--shadow);
+  }
+  .card-lg img { width:100%; height:100%; object-fit:cover; display:block; }
+  .card-lg .play-overlay {
+    position:absolute; right:10px; bottom:10px; width:40px; height:40px; border-radius:50%;
+    background:var(--glass-strong); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .card-lg .play-overlay ion-icon { font-size:19px; color:var(--accent); margin-left:2px; }
+  .card-lg .card-title { font-size:15px; font-weight:700; margin-top:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.2px; }
+  .card-lg .card-sub { font-size:13px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  @keyframes popIn { from { opacity:0; transform:translateY(18px) scale(.94); } to { opacity:1; transform:none; } }
+
+  /* ─── LISTAS ───────────────────────────── */
+  #results-list, #related-list, #recent-list { padding:0 20px; display:flex; flex-direction:column; gap:10px; }
+
+  .result-item {
+    display:flex; gap:14px; align-items:center; padding:10px 14px 10px 10px;
+    background:var(--card); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(20px) saturate(160%); backdrop-filter:blur(20px) saturate(160%);
+    border-radius:999px; box-shadow:0 2px 12px rgba(0,0,0,0.05);
+    animation:rowIn .45s var(--spring) both;
+  }
+  .result-item.playing { border-color:rgba(var(--accent-rgb),.55); }
+  @keyframes rowIn { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:none; } }
+
+  .result-thumb { width:56px; height:56px; border-radius:50%; object-fit:cover; background:var(--bg3); flex-shrink:0; }
+  .result-info { flex:1; min-width:0; }
+  .result-title { font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.2px; }
+  .result-sub { font-size:13px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .result-dur { font-size:12px; color:var(--text2); margin-top:2px; opacity:.85; }
+  .result-play-btn {
+    width:42px; height:42px; border-radius:50%; border:0; flex-shrink:0;
+    background:var(--accent); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(var(--accent-rgb),.35);
+  }
+  .result-play-btn ion-icon { font-size:19px; margin-left:2px; }
+
+  .spinner { display:flex; justify-content:center; padding:40px; }
+  .spinner ion-icon { font-size:30px; color:var(--accent); animation:spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .empty { text-align:center; color:var(--text2); padding:40px 24px; font-size:15px; line-height:1.4; }
+  .empty ion-icon { font-size:36px; display:block; margin:0 auto 10px; opacity:.45; }
+
+  /* ─── PESQUISA ─────────────────────────── */
+  #search-head { padding:4px 20px 14px; }
+  #search-title { font-size:34px; font-weight:800; letter-spacing:-1px; margin-bottom:14px; }
+  #search-wrap {
+    position:relative; display:flex; align-items:center; gap:10px;
+    height:54px; padding:0 8px 0 20px; border-radius:999px;
+    background:var(--glass); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+    box-shadow:var(--shadow);
+    transition:box-shadow .35s var(--spring), border-color .3s ease, transform .35s var(--spring);
+  }
+  #search-wrap:focus-within {
+    border-color:rgba(var(--accent-rgb),.6);
+    box-shadow:0 0 0 4px rgba(var(--accent-rgb),.16), var(--shadow);
+    transform:scale(1.012);
+  }
+  #search-wrap > ion-icon { font-size:21px; color:var(--text2); flex-shrink:0; transition:color .25s ease; }
+  #search-wrap:focus-within > ion-icon { color:var(--accent); }
+  #search-input {
+    flex:1; min-width:0; height:100%; border:0; outline:0; background:transparent;
+    color:var(--text); font-size:17px; font-weight:500; font-family:inherit;
+  }
+  #search-input::placeholder { color:var(--text2); font-weight:500; }
+  #search-clear {
+    width:38px; height:38px; border-radius:50%; border:0; flex-shrink:0;
+    background:var(--bg3); color:var(--text2);
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; transform:scale(.4); pointer-events:none;
+    transition:opacity .25s ease, transform .35s var(--bounce);
+  }
+  #search-clear.show { opacity:1; transform:scale(1); pointer-events:auto; }
+  #search-clear ion-icon { font-size:18px; }
+
+  #search-suggest { display:flex; gap:8px; flex-wrap:wrap; padding:14px 20px 4px; }
+  .chip {
+    padding:9px 16px; border-radius:999px; border:1px solid var(--glass-border);
+    background:var(--glass); color:var(--text); font-size:14px; font-weight:600;
+    -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
+    animation:popIn .5s var(--spring) both;
+  }
+  #search-hint { padding:8px 20px 0; font-size:13px; font-weight:600; color:var(--text2); }
+
+  /* ─── MINI PLAYER FLUTUANTE ────────────── */
+  #mini-player {
+    position:fixed; left:12px; right:12px; z-index:40;
+    bottom:calc(var(--safe-bottom) + 84px);
+    height:74px; border-radius:999px; padding:0 10px 0 9px;
+    display:flex; align-items:center; gap:12px; overflow:hidden;
+    background:var(--glass); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(30px) saturate(190%); backdrop-filter:blur(30px) saturate(190%);
+    box-shadow:0 14px 40px rgba(0,0,0,0.22);
+    transform:translateY(130px) scale(.92); opacity:0; pointer-events:none;
+    transition:transform .6s var(--spring), opacity .4s ease, background .8s ease;
+  }
+  #mini-player.active { transform:none; opacity:1; pointer-events:auto; }
+  #mini-tint {
+    position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.34;
+    background:linear-gradient(115deg, var(--np-c1), var(--np-c2));
+    transition:background .9s ease;
+  }
+  #mini-progress {
+    position:absolute; left:0; bottom:0; height:3px; width:0%; z-index:1;
+    background:rgba(255,255,255,.85); border-radius:0 3px 3px 0;
+  }
+  #mini-player > *:not(#mini-tint):not(#mini-progress) { position:relative; z-index:2; }
+
+  /* disco de vinil */
+  .disc {
+    position:relative; border-radius:50%; flex-shrink:0; overflow:hidden;
+    background:#111; box-shadow:0 4px 14px rgba(0,0,0,.35);
+  }
+  .disc img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  .disc::before { /* sulcos */
+    content:''; position:absolute; inset:0; border-radius:50%; z-index:2; pointer-events:none;
+    background:repeating-radial-gradient(circle at center, rgba(0,0,0,0) 0 3px, rgba(0,0,0,.10) 3px 4px);
+  }
+  .disc::after { /* furo central */
+    content:''; position:absolute; z-index:3; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:22%; height:22%; border-radius:50%;
+    background:var(--bg); border:2px solid rgba(255,255,255,.55);
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.25);
+  }
+  .spin { animation:discSpin 9s linear infinite; animation-play-state:paused; }
+  .spin.running { animation-play-state:running; }
+  @keyframes discSpin { to { transform:rotate(360deg); } }
+
+  #mini-disc { width:56px; height:56px; }
+  #mini-info { flex:1; min-width:0; }
+  #mini-title { font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.2px; }
+  #mini-artist { font-size:12.5px; color:var(--text2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mini-ctrl { display:flex; align-items:center; gap:4px; }
+  .mini-btn {
+    width:44px; height:44px; border-radius:50%; border:0; background:transparent; color:var(--text);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .mini-btn ion-icon { font-size:24px; }
+  #mini-play { background:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(var(--accent-rgb),.4); }
+  #mini-play ion-icon { font-size:22px; }
+
+  /* ─── BOTTOM BAR FLUTUANTE (pills iOS) ─── */
+  #bottom-bar {
+    position:fixed; left:50%; z-index:50;
+    bottom:calc(var(--safe-bottom) + 14px);
+    transform:translateX(-50%);
+    width:calc(100% - 40px); max-width:420px; height:62px;
+    border-radius:999px; padding:6px;
+    display:flex; align-items:center;
+    background:var(--glass); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(34px) saturate(200%); backdrop-filter:blur(34px) saturate(200%);
+    box-shadow:0 12px 36px rgba(0,0,0,0.20);
+    transition:transform .5s var(--spring), opacity .35s ease;
+  }
+  #bb-pill {
+    position:absolute; top:6px; bottom:6px; left:6px; border-radius:999px; z-index:0;
+    background:rgba(var(--accent-rgb),.16);
+    border:1px solid rgba(var(--accent-rgb),.28);
+    box-shadow:0 2px 10px rgba(var(--accent-rgb),.18);
+    transition:transform .55s var(--spring), width .55s var(--spring);
+    will-change:transform;
+  }
+  .bb-item {
+    position:relative; z-index:1; flex:1; height:100%; border:0; background:transparent;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    color:var(--text2); transition:color .3s ease;
+  }
+  .bb-item ion-icon { font-size:23px; transition:transform .45s var(--bounce); }
+  .bb-item span { font-size:10.5px; font-weight:700; letter-spacing:.1px; }
+  .bb-item.active { color:var(--accent); }
+  .bb-item.active ion-icon { transform:translateY(-1px) scale(1.12); }
+  .bb-item:active ion-icon { transform:scale(.86); }
+
+  /* ─── POPUP DE OPÇÕES (menu iOS) ───────── */
+  #menu-overlay { position:fixed; inset:0; z-index:90; display:none; }
+  #menu-overlay.open { display:block; }
+  #menu-pop {
+    position:absolute; top:calc(var(--safe-top) + 54px); right:14px; width:250px;
+    padding:6px; border-radius:24px; transform-origin:top right;
+    background:var(--glass-strong); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(40px) saturate(200%); backdrop-filter:blur(40px) saturate(200%);
+    box-shadow:0 20px 60px rgba(0,0,0,.30);
+    transform:scale(.4); opacity:0;
+    transition:transform .5s var(--bounce), opacity .25s ease;
+  }
+  #menu-overlay.open #menu-pop { transform:scale(1); opacity:1; }
+  .menu-item {
+    width:100%; display:flex; align-items:center; gap:12px; padding:13px 14px;
+    background:transparent; border:0; border-radius:18px; color:var(--text);
+    font-size:16px; font-weight:600; text-align:left;
+    transition:background .2s ease, transform .2s var(--spring);
+  }
+  .menu-item:active { background:rgba(var(--accent-rgb),.14); transform:scale(.97); }
+  .menu-item ion-icon { font-size:21px; color:var(--accent); }
+  .menu-item.danger, .menu-item.danger ion-icon { color:#ff453a; }
+  .menu-sep { height:1px; background:var(--hairline); margin:4px 12px; }
+
+  /* ─── MODAL DO PLAYER (tela cheia) ─────── */
+  #now-playing {
+    position:fixed; inset:0; z-index:80; overflow:hidden;
+    background:var(--bg);
+    transform:translateY(102%); border-radius:36px 36px 0 0;
+    transition:transform .65s var(--spring), border-radius .65s var(--spring);
+    display:flex; flex-direction:column;
+    padding:calc(var(--safe-top) + 10px) 26px calc(var(--safe-bottom) + 24px);
+    touch-action:none;
+  }
+  #now-playing.open { transform:none; border-radius:0; }
+  #now-playing.dragging { transition:none; }
+  #np-bg {
+    position:absolute; inset:0; z-index:0; pointer-events:none;
+    background:linear-gradient(180deg, var(--np-c1) 0%, var(--np-c2) 60%, var(--bg) 130%);
+    opacity:.92; transition:background 1s ease;
+  }
+  #np-bg::after {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.28) 100%);
+  }
+  #now-playing > *:not(#np-bg) { position:relative; z-index:1; }
+  #np-grab { width:44px; height:5px; border-radius:99px; background:rgba(255,255,255,.55); margin:2px auto 12px; }
+  #np-top { display:flex; align-items:center; justify-content:space-between; color:#fff; }
+  #np-top .np-label { font-size:13px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; opacity:.85; }
+  .np-round {
+    width:42px; height:42px; border-radius:50%; border:0; color:#fff;
+    background:rgba(255,255,255,.18);
+    -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .np-round ion-icon { font-size:22px; }
+
+  #np-stage { flex:1; display:flex; align-items:center; justify-content:center; min-height:0; }
+  #np-disc {
+    width:min(76vw, 44vh); height:min(76vw, 44vh);
+    box-shadow:0 30px 70px rgba(0,0,0,.45);
+    transition:transform .8s var(--spring);
+  }
+  #now-playing:not(.playing) #np-disc { transform:scale(.9); }
+
+  #np-meta { color:#fff; margin-top:6px; }
+  #np-title { font-size:24px; font-weight:800; letter-spacing:-0.5px; line-height:1.15;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #np-artist { font-size:17px; font-weight:600; opacity:.75; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  #np-seek { margin-top:22px; color:#fff; }
+  #np-bar {
+    position:relative; height:26px; display:flex; align-items:center; touch-action:none; cursor:pointer;
+  }
+  #np-bar-track { position:relative; width:100%; height:6px; border-radius:99px; background:rgba(255,255,255,.28);
+    transition:height .25s var(--spring); }
+  #np-bar.active #np-bar-track { height:12px; }
+  #np-bar-fill { position:absolute; left:0; top:0; bottom:0; width:0%; border-radius:99px; background:#fff; }
+  #np-times { display:flex; justify-content:space-between; font-size:12px; font-weight:700; opacity:.75; margin-top:2px; }
+
+  #np-controls { display:flex; align-items:center; justify-content:space-between; margin:14px 6px 0; color:#fff; }
+  .np-ctrl { width:64px; height:64px; border:0; border-radius:50%; background:transparent; color:#fff;
+    display:flex; align-items:center; justify-content:center; }
+  .np-ctrl ion-icon { font-size:38px; }
+  #np-play {
+    width:82px; height:82px; background:#fff; color:#111;
+    box-shadow:0 12px 34px rgba(0,0,0,.30);
+  }
+  #np-play ion-icon { font-size:40px; }
+  .np-aux { width:48px; height:48px; }
+  .np-aux ion-icon { font-size:24px; }
+  .np-aux.on { color:#fff; background:rgba(255,255,255,.22); }
+  .np-aux { opacity:.75; }
+  .np-aux.on { opacity:1; }
+
+  #np-extra { display:flex; align-items:center; justify-content:space-between; margin:12px 8px 0; color:#fff; }
+  #np-vol { display:flex; align-items:center; gap:10px; flex:1; }
+  #np-vol ion-icon { font-size:20px; opacity:.8; flex-shrink:0; }
+  #np-vol-bar { position:relative; flex:1; height:24px; display:flex; align-items:center; touch-action:none; }
+  #np-vol-track { position:relative; width:100%; height:6px; border-radius:99px; background:rgba(255,255,255,.28); }
+  #np-vol-fill { position:absolute; left:0; top:0; bottom:0; width:100%; border-radius:99px; background:#fff; }
+
+  /* ─── TOAST ────────────────────────────── */
+  #toast {
+    position:fixed; left:50%; z-index:120; top:calc(var(--safe-top) + 14px);
+    transform:translate(-50%,-90px); opacity:0;
+    padding:12px 20px; border-radius:999px; font-size:14px; font-weight:700; color:var(--text);
+    background:var(--glass-strong); border:1px solid var(--glass-border);
+    -webkit-backdrop-filter:blur(30px) saturate(200%); backdrop-filter:blur(30px) saturate(200%);
+    box-shadow:0 12px 34px rgba(0,0,0,.25);
+    transition:transform .55s var(--bounce), opacity .3s ease; pointer-events:none; white-space:nowrap;
+  }
+  #toast.show { transform:translate(-50%,0); opacity:1; }
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="ambient"></div>
+
   <div id="topbar">
-    <h1>Vibely</h1>
-    <button id="theme-btn"><ion-icon name="moon"></ion-icon></button>
+    <h1 id="page-title">Vibely</h1>
+    <button id="menu-btn" class="tap" aria-label="Opções"><ion-icon name="ellipsis-horizontal"></ion-icon></button>
   </div>
 
   <div id="main-content">
 
     <div id="view-home" class="view active">
       <div class="section">
-        <div class="section-title">Em alta</div>
+        <div class="section-head"><div class="section-title">Em alta</div></div>
         <div class="scroll-row" id="trending-row"><div class="spinner"><ion-icon name="reload"></ion-icon></div></div>
       </div>
       <div class="section">
-        <div class="section-title">Recentes</div>
+        <div class="section-head">
+          <div class="section-title">Recentes</div>
+        </div>
         <div id="recent-list"></div>
       </div>
     </div>
 
     <div id="view-search" class="view">
-      <div id="search-bar">
+      <div id="search-head">
+        <div id="search-title">Pesquisar</div>
         <div id="search-wrap">
           <ion-icon name="search"></ion-icon>
-          <input type="text" id="search-input" placeholder="Pesquisar músicas, artistas..." autocomplete="off"/>
+          <input type="search" id="search-input" placeholder="Músicas, artistas, álbuns" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"/>
+          <button id="search-clear" class="tap" aria-label="Limpar"><ion-icon name="close"></ion-icon></button>
         </div>
       </div>
+      <div id="search-suggest"></div>
       <div id="results-list"></div>
     </div>
 
     <div id="view-related" class="view">
       <div class="section">
-        <div class="section-title">A seguir</div>
+        <div class="section-head"><div class="section-title">A seguir</div></div>
         <div id="related-list" class="empty"><ion-icon name="musical-notes"></ion-icon>Reproduz uma música para ver sugestões</div>
       </div>
     </div>
 
   </div>
 
+  <!-- mini player -->
   <div id="mini-player">
-    <div id="player-top">
-      <img id="player-thumb" src="" alt=""/>
-      <div id="player-info">
-        <div id="player-title">—</div>
-        <div id="player-artist">—</div>
-      </div>
-      <div id="player-controls">
-        <button id="btn-prev"><ion-icon name="play-skip-back"></ion-icon></button>
-        <button id="btn-play-pause"><ion-icon name="play"></ion-icon></button>
-        <button id="btn-next"><ion-icon name="play-skip-forward"></ion-icon></button>
-      </div>
+    <div id="mini-tint"></div>
+    <div id="mini-progress"></div>
+    <div class="disc spin" id="mini-disc"><img id="mini-img" src="" alt=""/></div>
+    <div id="mini-info">
+      <div id="mini-title">—</div>
+      <div id="mini-artist">—</div>
     </div>
-    <div id="progress-wrap">
-      <span class="time-label" id="time-current">0:00</span>
-      <div id="progress-bar"><div id="progress-fill"></div></div>
-      <span class="time-label" id="time-total">0:00</span>
+    <div class="mini-ctrl">
+      <button class="mini-btn tap" id="mini-play" aria-label="Tocar/Pausar"><ion-icon name="play"></ion-icon></button>
+      <button class="mini-btn tap" id="mini-next" aria-label="Próxima"><ion-icon name="play-forward"></ion-icon></button>
     </div>
   </div>
 
+  <!-- bottom bar -->
   <div id="bottom-bar">
-    <button class="bb-item active" data-tab="home">
-      <div class="bb-icon-wrap"><ion-icon name="home"></ion-icon></div>
-      <span>Início</span>
-    </button>
-    <button class="bb-item" data-tab="search">
-      <div class="bb-icon-wrap"><ion-icon name="search"></ion-icon></div>
-      <span>Pesquisar</span>
-    </button>
-    <button class="bb-item" data-tab="related">
-      <div class="bb-icon-wrap"><ion-icon name="list"></ion-icon></div>
-      <span>A seguir</span>
-    </button>
+    <div id="bb-pill"></div>
+    <button class="bb-item active" data-tab="home"><ion-icon name="home"></ion-icon><span>Início</span></button>
+    <button class="bb-item" data-tab="search"><ion-icon name="search"></ion-icon><span>Pesquisar</span></button>
+    <button class="bb-item" data-tab="related"><ion-icon name="list"></ion-icon><span>A seguir</span></button>
   </div>
+
+  <!-- modal do player -->
+  <div id="now-playing">
+    <div id="np-bg"></div>
+    <div id="np-grab"></div>
+    <div id="np-top">
+      <button class="np-round tap" id="np-close" aria-label="Fechar"><ion-icon name="chevron-down"></ion-icon></button>
+      <div class="np-label">A tocar agora</div>
+      <button class="np-round tap" id="np-more" aria-label="Mais"><ion-icon name="ellipsis-horizontal"></ion-icon></button>
+    </div>
+    <div id="np-stage">
+      <div class="disc spin" id="np-disc"><img id="np-img" src="" alt=""/></div>
+    </div>
+    <div id="np-meta">
+      <div id="np-title">—</div>
+      <div id="np-artist">—</div>
+    </div>
+    <div id="np-seek">
+      <div id="np-bar"><div id="np-bar-track"><div id="np-bar-fill"></div></div></div>
+      <div id="np-times"><span id="np-cur">0:00</span><span id="np-tot">0:00</span></div>
+    </div>
+    <div id="np-controls">
+      <button class="np-ctrl np-aux tap" id="np-shuffle" aria-label="Aleatório"><ion-icon name="shuffle"></ion-icon></button>
+      <button class="np-ctrl tap" id="np-prev" aria-label="Anterior"><ion-icon name="play-back"></ion-icon></button>
+      <button class="np-ctrl tap" id="np-play" aria-label="Tocar/Pausar"><ion-icon name="play"></ion-icon></button>
+      <button class="np-ctrl tap" id="np-next" aria-label="Próxima"><ion-icon name="play-forward"></ion-icon></button>
+      <button class="np-ctrl np-aux tap" id="np-repeat" aria-label="Repetir"><ion-icon name="repeat"></ion-icon></button>
+    </div>
+    <div id="np-extra">
+      <div id="np-vol">
+        <ion-icon name="volume-low"></ion-icon>
+        <div id="np-vol-bar"><div id="np-vol-track"><div id="np-vol-fill"></div></div></div>
+        <ion-icon name="volume-high"></ion-icon>
+      </div>
+    </div>
+  </div>
+
+  <!-- popup de opções -->
+  <div id="menu-overlay">
+    <div id="menu-pop">
+      <button class="menu-item" id="mi-theme"><ion-icon name="moon"></ion-icon><span id="mi-theme-label">Tema escuro</span></button>
+      <button class="menu-item" id="mi-player"><ion-icon name="expand"></ion-icon><span>Abrir player</span></button>
+      <div class="menu-sep"></div>
+      <button class="menu-item danger" id="mi-clear"><ion-icon name="trash"></ion-icon><span>Limpar recentes</span></button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
 </div>
 
 <script>
 const BASE = 'http://localhost:8080';
 const isApp = typeof Android !== 'undefined' && Android.isInsideApp();
+const $ = id => document.getElementById(id);
 
 // ─── TEMA ────────────────────────────────────────────────
 let dark = false;
-const themeBtn = document.getElementById('theme-btn');
 
 function applyTheme(d, notifyNative = true) {
   dark = d;
   document.documentElement.setAttribute('data-theme', d ? 'dark' : '');
-  themeBtn.innerHTML = `<ion-icon name="${d ? 'sunny' : 'moon'}"></ion-icon>`;
+  $('mi-theme').querySelector('ion-icon').setAttribute('name', d ? 'sunny' : 'moon');
+  $('mi-theme-label').textContent = d ? 'Tema claro' : 'Tema escuro';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', d ? '#16171d' : '#f2f2f7');
   localStorage.setItem('theme', d ? 'dark' : 'light');
   if (notifyNative && isApp && typeof Android.setStatusBarTheme === 'function') {
     Android.setStatusBarTheme(!d);
   }
 }
 applyTheme(localStorage.getItem('theme') === 'dark');
-themeBtn.addEventListener('click', () => applyTheme(!dark));
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') applyTheme(dark);
 });
 
-// ─── BOTTOM BAR ──────────────────────────────────────────
-const bbItems = document.querySelectorAll('.bb-item');
-const views = document.querySelectorAll('.view');
-bbItems.forEach(btn => {
-  btn.addEventListener('click', () => {
-    bbItems.forEach(t => t.classList.remove('active'));
-    views.forEach(v => v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'search') {
-      setTimeout(() => document.getElementById('search-input').focus(), 100);
-    }
-  });
+// ─── TOAST ───────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ─── POPUP DE OPÇÕES ─────────────────────────────────────
+const menuOverlay = $('menu-overlay');
+function openMenu() { menuOverlay.classList.add('open'); }
+function closeMenu() { menuOverlay.classList.remove('open'); }
+$('menu-btn').addEventListener('click', openMenu);
+menuOverlay.addEventListener('click', e => { if (e.target === menuOverlay) closeMenu(); });
+
+$('mi-theme').addEventListener('click', () => { applyTheme(!dark); closeMenu(); });
+$('mi-player').addEventListener('click', () => {
+  closeMenu();
+  if (currentTrack) openNowPlaying(); else toast('Nenhuma música a tocar');
 });
+$('mi-clear').addEventListener('click', () => {
+  localStorage.removeItem('recents');
+  renderRecents();
+  closeMenu();
+  toast('Recentes limpos');
+});
+
+// ─── BOTTOM BAR (pill que desliza) ───────────────────────
+const bbItems = [...document.querySelectorAll('.bb-item')];
+const views = document.querySelectorAll('.view');
+const bbPill = $('bb-pill');
+const titles = { home: 'Vibely', search: 'Pesquisar', related: 'A seguir' };
+
+function movePill(index) {
+  const item = bbItems[index];
+  bbPill.style.width = item.offsetWidth + 'px';
+  bbPill.style.transform = `translateX(${item.offsetLeft - 6}px)`;
+}
+
+function switchTab(tab) {
+  const index = bbItems.findIndex(b => b.dataset.tab === tab);
+  bbItems.forEach(t => t.classList.remove('active'));
+  views.forEach(v => v.classList.remove('active'));
+  bbItems[index].classList.add('active');
+  $('view-' + tab).classList.add('active');
+  $('main-content').scrollTop = 0;
+  movePill(index);
+  // o título grande só aparece no Início; nas outras abas a própria tela tem o seu
+  $('page-title').style.opacity = tab === 'home' ? '1' : '0';
+  $('page-title').style.transform = tab === 'home' ? 'none' : 'translateY(-8px)';
+  if (tab === 'search') setTimeout(() => $('search-input').focus(), 350);
+}
+bbItems.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+window.addEventListener('resize', () => movePill(bbItems.findIndex(b => b.classList.contains('active'))));
+window.addEventListener('load', () => movePill(0));
+setTimeout(() => movePill(0), 60);
 
 // ─── RECENTES ────────────────────────────────────────────
 function getRecents() {
@@ -312,24 +623,29 @@ function addRecent(track) {
   localStorage.setItem('recents', JSON.stringify(r));
 }
 function renderRecents() {
-  const list = document.getElementById('recent-list');
+  const list = $('recent-list');
   const recents = getRecents();
   if (!recents.length) {
     list.innerHTML = '<div class="empty"><ion-icon name="time-outline"></ion-icon>Ainda sem músicas recentes</div>';
     return;
   }
-  list.innerHTML = recents.map(t => trackItemHTML(t)).join('');
-  list.querySelectorAll('.result-item').forEach((el, i) => {
-    el.addEventListener('click', () => { currentQueue = recents; play(recents[i], i); });
-    el.querySelector('.result-play-btn').addEventListener('click', e => {
-      e.stopPropagation(); currentQueue = recents; play(recents[i], i);
-    });
+  bindList(list, recents, () => recents);
+}
+
+// Liga cada item da lista ao player, com escalonamento de animação
+function bindList(container, data, getQueue) {
+  container.innerHTML = data.map((t, i) => trackItemHTML(t, i)).join('');
+  container.querySelectorAll('.result-item').forEach((el, i) => {
+    const go = () => { currentQueue = getQueue(); play(data[i], i); };
+    el.addEventListener('click', go);
+    el.querySelector('.result-play-btn').addEventListener('click', e => { e.stopPropagation(); go(); });
   });
+  markPlaying();
 }
 
 // ─── TRENDING ────────────────────────────────────────────
 async function loadTrending() {
-  const row = document.getElementById('trending-row');
+  const row = $('trending-row');
   if (!isApp) {
     row.innerHTML = '<div class="empty" style="padding:20px 0"><ion-icon name="alert-circle-outline"></ion-icon>Só disponível no app</div>';
     return;
@@ -338,8 +654,8 @@ async function loadTrending() {
     const res = await fetch(BASE + '/search?q=top+music+2025');
     const data = await res.json();
     if (!data.length) { row.innerHTML = '<div class="empty">Sem resultados</div>'; return; }
-    row.innerHTML = data.slice(0,12).map(t => `
-      <div class="card-lg" data-id="${t.id}">
+    row.innerHTML = data.slice(0, 12).map((t, i) => `
+      <div class="card-lg tap" style="animation-delay:${i * 45}ms">
         <div class="thumb-wrap">
           <img src="${t.thumbnail}" loading="lazy" onerror="this.src=''"/>
           <div class="play-overlay"><ion-icon name="play"></ion-icon></div>
@@ -351,43 +667,69 @@ async function loadTrending() {
     row.querySelectorAll('.card-lg').forEach((el, i) => {
       el.addEventListener('click', () => { currentQueue = data; play(data[i], i); });
     });
-  } catch(e) {
+  } catch (e) {
     row.innerHTML = '<div class="empty">Erro ao carregar</div>';
   }
 }
 
 // ─── PESQUISA ────────────────────────────────────────────
-const searchInput = document.getElementById('search-input');
-const resultsList = document.getElementById('results-list');
+const searchInput = $('search-input');
+const searchClear = $('search-clear');
+const resultsList = $('results-list');
+const suggestBox = $('search-suggest');
 let searchQueue = [];
 let searchTimeout;
+let searchSeq = 0;
+
+const SUGGESTIONS = ['Top hits', 'Pop', 'Funk', 'Sertanejo', 'Lo-fi', 'Rock', 'Rap', 'Eletrônica'];
+
+function renderSuggestions() {
+  suggestBox.innerHTML = SUGGESTIONS.map((s, i) =>
+    `<button class="chip tap" style="animation-delay:${i * 40}ms">${s}</button>`).join('');
+  suggestBox.querySelectorAll('.chip').forEach((c, i) => {
+    c.addEventListener('click', () => { searchInput.value = SUGGESTIONS[i]; syncClear(); doSearch(SUGGESTIONS[i]); });
+  });
+}
+function syncClear() {
+  searchClear.classList.toggle('show', searchInput.value.length > 0);
+}
+renderSuggestions();
 
 searchInput.addEventListener('input', () => {
+  syncClear();
   clearTimeout(searchTimeout);
+  if (!searchInput.value.trim()) { resultsList.innerHTML = ''; suggestBox.style.display = 'flex'; return; }
   searchTimeout = setTimeout(() => doSearch(searchInput.value), 500);
 });
-searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(searchInput.value); });
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { clearTimeout(searchTimeout); doSearch(searchInput.value); searchInput.blur(); }
+});
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  syncClear();
+  resultsList.innerHTML = '';
+  suggestBox.style.display = 'flex';
+  searchInput.focus();
+});
 
 async function doSearch(q) {
   if (!q.trim()) { resultsList.innerHTML = ''; return; }
+  suggestBox.style.display = 'none';
   resultsList.innerHTML = '<div class="spinner"><ion-icon name="reload"></ion-icon></div>';
   if (!isApp) {
     resultsList.innerHTML = '<div class="empty"><ion-icon name="alert-circle-outline"></ion-icon>Servidor só disponível no app</div>';
     return;
   }
+  const seq = ++searchSeq;
   try {
     const res = await fetch(BASE + '/search?q=' + encodeURIComponent(q));
     const data = await res.json();
+    if (seq !== searchSeq) return; // resposta antiga, ignora
     searchQueue = data;
-    if (!data.length) { resultsList.innerHTML = '<div class="empty">Sem resultados</div>'; return; }
-    resultsList.innerHTML = data.map(t => trackItemHTML(t)).join('');
-    resultsList.querySelectorAll('.result-item').forEach((el, i) => {
-      el.addEventListener('click', () => { currentQueue = searchQueue; play(data[i], i); });
-      el.querySelector('.result-play-btn').addEventListener('click', e => {
-        e.stopPropagation(); currentQueue = searchQueue; play(data[i], i);
-      });
-    });
-  } catch(e) {
+    if (!data.length) { resultsList.innerHTML = '<div class="empty"><ion-icon name="search"></ion-icon>Sem resultados</div>'; return; }
+    bindList(resultsList, data, () => searchQueue);
+  } catch (e) {
+    if (seq !== searchSeq) return;
     resultsList.innerHTML = '<div class="empty">Erro na pesquisa</div>';
   }
 }
@@ -395,24 +737,88 @@ async function doSearch(q) {
 // ─── RELACIONADOS ────────────────────────────────────────
 let relatedQueue = [];
 async function loadRelated(id) {
-  const list = document.getElementById('related-list');
+  const list = $('related-list');
+  list.classList.remove('empty');
   list.innerHTML = '<div class="spinner"><ion-icon name="reload"></ion-icon></div>';
-  if (!isApp) { list.innerHTML = '<div class="empty">Só no app</div>'; return; }
+  if (!isApp) { list.classList.add('empty'); list.innerHTML = 'Só no app'; return; }
   try {
     const res = await fetch(BASE + '/related?id=' + id);
     const data = await res.json();
     relatedQueue = data;
-    if (!data.length) { list.innerHTML = '<div class="empty">Sem sugestões</div>'; return; }
-    list.innerHTML = data.map(t => trackItemHTML(t)).join('');
-    list.querySelectorAll('.result-item').forEach((el, i) => {
-      el.addEventListener('click', () => { currentQueue = relatedQueue; play(data[i], i); });
-      el.querySelector('.result-play-btn').addEventListener('click', e => {
-        e.stopPropagation(); currentQueue = relatedQueue; play(data[i], i);
-      });
-    });
-  } catch(e) {
-    list.innerHTML = '<div class="empty">Erro ao carregar</div>';
+    if (!data.length) { list.classList.add('empty'); list.innerHTML = 'Sem sugestões'; return; }
+    bindList(list, data, () => relatedQueue);
+  } catch (e) {
+    list.classList.add('empty');
+    list.innerHTML = 'Erro ao carregar';
   }
+}
+
+// ─── COR DOMINANTE DO ÁLBUM ──────────────────────────────
+function hashColor(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
+}
+
+// Lê a imagem num canvas 24x24, ignora pixels quase pretos/brancos/cinzentos
+// e escolhe a cor mais frequente com boa saturação
+function extractDominant(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = c.height = 24;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, 24, 24);
+        const px = ctx.getImageData(0, 0, 24, 24).data;
+        const buckets = {};
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i], g = px[i + 1], b = px[i + 2];
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          const sat = max === 0 ? 0 : (max - min) / max;
+          if (max < 40 || min > 225 || sat < 0.22) continue;
+          const key = (r >> 5) + ',' + (g >> 5) + ',' + (b >> 5);
+          const w = 1 + sat * 2;
+          if (!buckets[key]) buckets[key] = { n: 0, r: 0, g: 0, b: 0 };
+          buckets[key].n += w; buckets[key].r += r * w; buckets[key].g += g * w; buckets[key].b += b * w;
+        }
+        let best = null;
+        for (const k in buckets) if (!best || buckets[k].n > best.n) best = buckets[k];
+        if (!best) return resolve(null);
+        resolve([Math.round(best.r / best.n), Math.round(best.g / best.n), Math.round(best.b / best.n)]);
+      } catch (e) { resolve(null); } // canvas contaminado (sem CORS)
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function shade([r, g, b], f) {
+  return [Math.round(r * f), Math.round(g * f), Math.round(b * f)];
+}
+const rgb = a => `rgb(${a[0]},${a[1]},${a[2]})`;
+
+async function applyAlbumColor(track) {
+  let base = track.thumbnail ? await extractDominant(track.thumbnail) : null;
+  if (!base) base = hslToRgb(hashColor(track.id || track.title || 'x'), 62, 52); // plano B
+  // garante que não fica escuro demais
+  const lum = 0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2];
+  if (lum < 70) base = base.map(v => Math.min(255, Math.round(v + (70 - lum) * 1.4)));
+  const c1 = base, c2 = shade(base, 0.62);
+  const root = document.documentElement.style;
+  root.setProperty('--np-c1', rgb(c1));
+  root.setProperty('--np-c2', rgb(c2));
+  root.setProperty('--accent', rgb(dark ? base.map(v => Math.min(255, v + 40)) : base));
+  root.setProperty('--accent-rgb', (dark ? base.map(v => Math.min(255, v + 40)) : base).join(','));
 }
 
 // ─── PLAYER ──────────────────────────────────────────────
@@ -421,50 +827,56 @@ let currentQueueIndex = 0;
 let currentQueue = [];
 let audio = new Audio();
 audio.preload = 'auto';
+let shuffleOn = false;
+let repeatMode = 0; // 0 = off, 1 = fila, 2 = uma
 
-// Token de cada tentativa de tocar: se o usuário trocar de faixa no meio,
-// a tentativa antiga é ignorada em vez de pausar/atropelar a nova
+// Token de cada tentativa de tocar: trocar de faixa descarta a tentativa antiga
 let playToken = 0;
 let retryCount = 0;
 const MAX_RETRIES = 3;
 
-const miniPlayer = document.getElementById('mini-player');
-const playerThumb = document.getElementById('player-thumb');
-const playerTitle = document.getElementById('player-title');
-const playerArtist = document.getElementById('player-artist');
-const btnPlayPause = document.getElementById('btn-play-pause');
-const btnNext = document.getElementById('btn-next');
-const btnPrev = document.getElementById('btn-prev');
-const progressFill = document.getElementById('progress-fill');
-const progressBar = document.getElementById('progress-bar');
-const timeCurrent = document.getElementById('time-current');
-const timeTotal = document.getElementById('time-total');
+const miniPlayer = $('mini-player');
+const nowPlaying = $('now-playing');
 
-function setButton(iconName) {
-  btnPlayPause.innerHTML = `<ion-icon name="${iconName}"></ion-icon>`;
+function setPlayIcon(name) {
+  $('mini-play').innerHTML = `<ion-icon name="${name}"></ion-icon>`;
+  $('np-play').innerHTML = `<ion-icon name="${name}"></ion-icon>`;
+}
+function setSpinning(on) {
+  document.querySelectorAll('.spin').forEach(el => el.classList.toggle('running', on));
+  nowPlaying.classList.toggle('playing', on);
+}
+
+function markPlaying() {
+  document.querySelectorAll('.result-item').forEach(el => el.classList.remove('playing'));
 }
 
 async function play(track, queueIndex) {
-  if (!isApp) { alert('Player só disponível no app Vibely'); return; }
+  if (!isApp) { toast('Player só disponível no app Vibely'); return; }
 
   const token = ++playToken;
   retryCount = 0;
   currentTrack = track;
   if (queueIndex !== undefined) currentQueueIndex = queueIndex;
 
-  playerTitle.textContent = track.title || '—';
-  playerArtist.textContent = track.artist || '—';
-  playerThumb.src = track.thumbnail || '';
+  $('mini-title').textContent = track.title || '—';
+  $('mini-artist').textContent = track.artist || '—';
+  $('np-title').textContent = track.title || '—';
+  $('np-artist').textContent = track.artist || '—';
+  $('mini-img').src = track.thumbnail || '';
+  $('np-img').src = track.thumbnail || '';
   miniPlayer.classList.add('active');
-  setButton('hourglass-outline');
-  progressFill.style.width = '0%';
-  timeCurrent.textContent = '0:00';
-  timeTotal.textContent = fmtTime(track.duration || 0);
+  setPlayIcon('hourglass-outline');
+  $('mini-progress').style.width = '0%';
+  $('np-bar-fill').style.width = '0%';
+  $('np-cur').textContent = '0:00';
+  $('np-tot').textContent = fmtTime(track.duration || 0);
 
   addRecent(track);
   renderRecents();
   loadRelated(track.id);
   updateMediaSession(track);
+  applyAlbumColor(track);
 
   await startStream(track, token);
 }
@@ -481,23 +893,23 @@ async function startStream(track, token) {
     audio.load();
     await audio.play();
   } catch (e) {
-    // play() rejeitado por troca de faixa não é erro de verdade
     if (token !== playToken) return;
     console.error('Erro stream:', e);
     retryOrFail(token);
   }
 }
 
-// Se o stream cair, tenta de novo (mantendo a posição) em vez de ficar mudo
 function retryOrFail(token) {
   if (token !== playToken || !currentTrack) return;
   if (retryCount >= MAX_RETRIES) {
-    setButton('play');
+    setPlayIcon('play');
+    setSpinning(false);
+    toast('Não foi possível tocar esta faixa');
     return;
   }
   retryCount++;
   const resumeAt = audio.currentTime || 0;
-  setButton('hourglass-outline');
+  setPlayIcon('hourglass-outline');
   setTimeout(async () => {
     if (token !== playToken) return;
     try {
@@ -519,9 +931,19 @@ function retryOrFail(token) {
   }, 800 * retryCount);
 }
 
-function nextTrack() {
+function nextTrack(auto) {
   if (!currentQueue.length) return;
-  currentQueueIndex = (currentQueueIndex + 1) % currentQueue.length;
+  if (auto && repeatMode === 2) { audio.currentTime = 0; audio.play(); return; }
+  if (shuffleOn && currentQueue.length > 1) {
+    let n;
+    do { n = Math.floor(Math.random() * currentQueue.length); } while (n === currentQueueIndex);
+    currentQueueIndex = n;
+  } else {
+    if (auto && repeatMode === 0 && currentQueueIndex === currentQueue.length - 1) {
+      setPlayIcon('play'); setSpinning(false); return;
+    }
+    currentQueueIndex = (currentQueueIndex + 1) % currentQueue.length;
+  }
   play(currentQueue[currentQueueIndex], currentQueueIndex);
 }
 
@@ -534,53 +956,136 @@ function prevTrack() {
 
 function togglePlay() {
   if (!currentTrack) return;
-  if (audio.paused) {
-    audio.play().catch(() => retryOrFail(playToken));
-  } else {
-    audio.pause();
-  }
+  if (audio.paused) audio.play().catch(() => retryOrFail(playToken));
+  else audio.pause();
 }
 
-btnPlayPause.addEventListener('click', togglePlay);
-btnNext.addEventListener('click', nextTrack);
-btnPrev.addEventListener('click', prevTrack);
+$('mini-play').addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
+$('mini-next').addEventListener('click', e => { e.stopPropagation(); nextTrack(false); });
+$('np-play').addEventListener('click', togglePlay);
+$('np-next').addEventListener('click', () => nextTrack(false));
+$('np-prev').addEventListener('click', prevTrack);
 
-// O botão agora reflete o estado REAL do <audio>, não só os cliques.
-// Se o áudio pausar sozinho, o botão mostra play em vez de ficar mentindo.
-audio.addEventListener('play', () => setButton('pause'));
-audio.addEventListener('playing', () => { retryCount = 0; setButton('pause'); });
-audio.addEventListener('pause', () => {
-  // Fim de faixa dispara 'pause' antes de 'ended'; não mostra play nesse caso
-  if (!audio.ended) setButton('play');
+$('np-shuffle').addEventListener('click', () => {
+  shuffleOn = !shuffleOn;
+  $('np-shuffle').classList.toggle('on', shuffleOn);
+  toast(shuffleOn ? 'Aleatório ligado' : 'Aleatório desligado');
 });
-audio.addEventListener('waiting', () => setButton('hourglass-outline'));
+$('np-repeat').addEventListener('click', () => {
+  repeatMode = (repeatMode + 1) % 3;
+  const btn = $('np-repeat');
+  btn.classList.toggle('on', repeatMode > 0);
+  btn.innerHTML = `<ion-icon name="${repeatMode === 2 ? 'repeat' : 'repeat'}"></ion-icon>`;
+  toast(['Repetir desligado', 'Repetir fila', 'Repetir esta faixa'][repeatMode]);
+});
+
+// Estado do botão segue o <audio> real, não só os cliques
+audio.addEventListener('play', () => { setPlayIcon('pause'); setSpinning(true); });
+audio.addEventListener('playing', () => { retryCount = 0; setPlayIcon('pause'); setSpinning(true); });
+audio.addEventListener('pause', () => {
+  if (!audio.ended) { setPlayIcon('play'); setSpinning(false); }
+});
+audio.addEventListener('waiting', () => setPlayIcon('hourglass-outline'));
 audio.addEventListener('stalled', () => {
-  // Buffer travado: dá um tempo e, se continuar parado, força nova tentativa
   const token = playToken;
   setTimeout(() => {
     if (token === playToken && audio.readyState < 3 && !audio.paused) retryOrFail(token);
   }, 6000);
 });
 audio.addEventListener('error', () => retryOrFail(playToken));
+audio.addEventListener('ended', () => nextTrack(true));
 
-audio.addEventListener('ended', nextTrack);
-
+let scrubbing = false;
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration || !isFinite(audio.duration)) return;
   const pct = (audio.currentTime / audio.duration) * 100;
-  progressFill.style.width = pct + '%';
-  timeCurrent.textContent = fmtTime(Math.floor(audio.currentTime));
-  timeTotal.textContent = fmtTime(Math.floor(audio.duration));
+  $('mini-progress').style.width = pct + '%';
+  if (!scrubbing) $('np-bar-fill').style.width = pct + '%';
+  $('np-cur').textContent = fmtTime(Math.floor(audio.currentTime));
+  $('np-tot').textContent = fmtTime(Math.floor(audio.duration));
 });
 
-progressBar.addEventListener('click', e => {
-  if (!audio.duration || !isFinite(audio.duration)) return;
-  const rect = progressBar.getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
-  audio.currentTime = pct * audio.duration;
+// Barra de progresso arrastável
+function bindSlider(bar, onChange, onStart, onEnd) {
+  const getPct = e => {
+    const r = bar.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX);
+    return Math.min(1, Math.max(0, (x - r.left) / r.width));
+  };
+  let down = false;
+  const start = e => { down = true; bar.classList.add('active'); onStart && onStart(); onChange(getPct(e)); e.preventDefault(); e.stopPropagation(); };
+  const move = e => { if (!down) return; onChange(getPct(e)); e.preventDefault(); e.stopPropagation(); };
+  const end = e => { if (!down) return; down = false; bar.classList.remove('active'); onEnd && onEnd(); };
+  bar.addEventListener('touchstart', start, { passive: false });
+  bar.addEventListener('touchmove', move, { passive: false });
+  bar.addEventListener('touchend', end);
+  bar.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+}
+
+let seekPct = 0;
+bindSlider($('np-bar'),
+  pct => { seekPct = pct; $('np-bar-fill').style.width = (pct * 100) + '%'; },
+  () => { scrubbing = true; },
+  () => {
+    scrubbing = false;
+    if (audio.duration && isFinite(audio.duration)) audio.currentTime = seekPct * audio.duration;
+  }
+);
+
+bindSlider($('np-vol-bar'), pct => {
+  audio.volume = pct;
+  $('np-vol-fill').style.width = (pct * 100) + '%';
 });
 
-// ─── NOTIFICAÇÃO DE MÍDIA (controles na tela de bloqueio) ─
+// ─── MODAL DO PLAYER ─────────────────────────────────────
+function openNowPlaying() {
+  if (!currentTrack) return;
+  nowPlaying.classList.add('open');
+  $('bottom-bar').style.transform = 'translate(-50%, 140px)';
+  $('bottom-bar').style.opacity = '0';
+  miniPlayer.style.transform = 'translateY(140px)';
+  miniPlayer.style.opacity = '0';
+}
+function closeNowPlaying() {
+  nowPlaying.style.transform = '';
+  nowPlaying.classList.remove('open');
+  $('bottom-bar').style.transform = '';
+  $('bottom-bar').style.opacity = '';
+  miniPlayer.style.transform = '';
+  miniPlayer.style.opacity = '';
+}
+miniPlayer.addEventListener('click', openNowPlaying);
+$('np-close').addEventListener('click', closeNowPlaying);
+$('np-more').addEventListener('click', () => toast(currentTrack ? currentTrack.title : ''));
+
+// Arrastar para baixo fecha o modal (gesto nativo de iOS)
+(function () {
+  let startY = 0, dy = 0, dragging = false;
+  const isInteractive = t => t.closest('#np-bar, #np-vol-bar, button');
+  nowPlaying.addEventListener('touchstart', e => {
+    if (isInteractive(e.target)) return;
+    startY = e.touches[0].clientY; dy = 0; dragging = true;
+    nowPlaying.classList.add('dragging');
+  }, { passive: true });
+  nowPlaying.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    dy = Math.max(0, e.touches[0].clientY - startY);
+    nowPlaying.style.transform = `translateY(${dy}px)`;
+    nowPlaying.style.borderRadius = Math.min(36, dy / 4) + 'px ' + Math.min(36, dy / 4) + 'px 0 0';
+  }, { passive: true });
+  nowPlaying.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    nowPlaying.classList.remove('dragging');
+    nowPlaying.style.borderRadius = '';
+    if (dy > 140) closeNowPlaying();
+    else nowPlaying.style.transform = '';
+  });
+})();
+
+// ─── NOTIFICAÇÃO DE MÍDIA ────────────────────────────────
 function updateMediaSession(track) {
   if (!('mediaSession' in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
@@ -589,12 +1094,11 @@ function updateMediaSession(track) {
     artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : []
   });
 }
-
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', () => audio.play());
   navigator.mediaSession.setActionHandler('pause', () => audio.pause());
   navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
-  navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
+  navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(false));
   navigator.mediaSession.setActionHandler('seekto', d => {
     if (d.seekTime != null) audio.currentTime = d.seekTime;
   });
@@ -607,23 +1111,24 @@ function fmtTime(s) {
   return m + ':' + String(sec).padStart(2, '0');
 }
 function esc(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-function trackItemHTML(t) {
+function trackItemHTML(t, i) {
   return `
-    <div class="result-item">
+    <div class="result-item tap" style="animation-delay:${Math.min(i, 10) * 35}ms">
       <img class="result-thumb" src="${t.thumbnail}" loading="lazy" onerror="this.src=''"/>
       <div class="result-info">
         <div class="result-title">${esc(t.title)}</div>
         <div class="result-sub">${esc(t.artist)}</div>
         <div class="result-dur">${fmtTime(t.duration)}${t.views ? ' · ' + t.views : ''}</div>
       </div>
-      <button class="result-play-btn"><ion-icon name="play"></ion-icon></button>
+      <button class="result-play-btn tap"><ion-icon name="play"></ion-icon></button>
     </div>
   `;
 }
 
 // ─── INIT ────────────────────────────────────────────────
+audio.volume = 1;
 renderRecents();
 loadTrending();
 </script>
