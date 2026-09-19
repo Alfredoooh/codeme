@@ -19,6 +19,14 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         .retryOnConnectionFailure(true)
         .build()
 
+    init {
+        // Prepara o yt-dlp em segundo plano para a primeira música não esperar a extração dos binários
+        Thread {
+            extractor.initYtDlp()
+            extractor.updateYtDlp()
+        }.start()
+    }
+
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
         val params = session.parameters
@@ -35,7 +43,6 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
                     jsonResponse(extractor.search(query))
                 }
                 "/stream" -> {
-                    // Aponta para o proxy local em vez da URL crua do YouTube
                     val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
                     jsonResponse("""{"streamUrl":"http://localhost:8080/audio?id=$id"}""")
                 }
@@ -46,6 +53,16 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
                 "/related" -> {
                     val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
                     jsonResponse(extractor.getRelated(id))
+                }
+                // Diagnóstico: abre http://localhost:8080/debug?id=VIDEO_ID e mostra em texto
+                // qual método de extração funcionou ou falhou, sem precisar de Logcat
+                "/debug" -> {
+                    val id = params["id"]?.firstOrNull()
+                    if (id != null) {
+                        extractor.invalidate(id)
+                        extractor.getStreamSource(id)
+                    }
+                    withCors(newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", extractor.debugReport()))
                 }
                 else -> withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found"))
             }
@@ -119,7 +136,6 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
 
         val rb = Request.Builder().url(source.url)
         source.headers.forEach { (k, v) -> rb.header(k, v) }
-        // Sem Range o YouTube pode limitar/cortar o stream; força "bytes=0-" quando o player não manda
         rb.header("Range", rangeHeader ?: "bytes=0-")
 
         return try {

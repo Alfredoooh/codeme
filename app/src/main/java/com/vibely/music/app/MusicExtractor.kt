@@ -2,6 +2,8 @@ package com.vibely.music.app
 
 import android.content.Context
 import android.util.Log
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,7 +20,7 @@ import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.util.concurrent.TimeUnit
 
-class MusicExtractor(context: Context) {
+class MusicExtractor(private val context: Context) {
 
     private val tag = "VibelyExtract"
 
@@ -31,7 +33,6 @@ class MusicExtractor(context: Context) {
     private val userAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-    // Cliente usado para validar e para chamar APIs JSON
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -42,7 +43,13 @@ class MusicExtractor(context: Context) {
     private val urlCache = HashMap<String, Pair<StreamSource, Long>>()
     private val cacheTtl = 90L * 60 * 1000 // 90 min
 
-    // Instâncias públicas (podem cair; por isso há várias)
+    // Diário de tudo que aconteceu na última extração (lido pelo /debug)
+    private val debugLog = ArrayList<String>()
+
+    // Estado do yt-dlp embutido
+    @Volatile private var ytdlpReady = false
+    @Volatile private var ytdlpInitError: String? = null
+
     private val pipedInstances = listOf(
         "https://pipedapi.kavin.rocks",
         "https://pipedapi.adminforge.de",
@@ -63,6 +70,51 @@ class MusicExtractor(context: Context) {
         val headers: Map<String, String>,
         val origin: String
     )
+
+    // Inicializa o Python/yt-dlp embutido. A primeira vez extrai arquivos (demora uns segundos)
+    @Synchronized
+    fun initYtDlp() {
+        if (ytdlpReady) return
+        try {
+            YoutubeDL.getInstance().init(context.applicationContext)
+            ytdlpReady = true
+            ytdlpInitError = null
+            note("yt-dlp inicializado")
+        } catch (e: Throwable) {
+            ytdlpInitError = "${e.javaClass.simpleName}: ${e.message}"
+            note("yt-dlp NÃO inicializou: $ytdlpInitError")
+        }
+    }
+
+    // Atualiza o yt-dlp interno (o YouTube muda sempre; sem isso ele quebra com o tempo)
+    fun updateYtDlp() {
+        try {
+            val status = YoutubeDL.getInstance().updateYoutubeDL(
+                context.applicationContext,
+                YoutubeDL.UpdateChannel.STABLE
+            )
+            note("yt-dlp update: $status")
+        } catch (e: Throwable) {
+            note("yt-dlp update falhou: ${e.message}")
+        }
+    }
+
+    private fun note(msg: String) {
+        Log.d(tag, msg)
+        synchronized(debugLog) {
+            debugLog.add(msg)
+            if (debugLog.size > 80) debugLog.removeAt(0)
+        }
+    }
+
+    fun debugReport(): String {
+        val sb = StringBuilder()
+        sb.append("yt-dlp pronto: $ytdlpReady\n")
+        if (ytdlpInitError != null) sb.append("yt-dlp erro de init: $ytdlpInitError\n")
+        sb.append("--- últimos eventos ---\n")
+        synchronized(debugLog) { debugLog.forEach { sb.append(it).append('\n') } }
+        return sb.toString()
+    }
 
     // ─── BUSCA ───────────────────────────────────────────────
     fun search(query: String): String {
@@ -117,7 +169,10 @@ class MusicExtractor(context: Context) {
             if (now - time < cacheTtl) return src
         }
 
+        note("=== extraindo $videoId ===")
+
         val methods: List<Pair<String, () -> List<StreamSource>>> = listOf(
+            "yt-dlp" to { fromYtDlp(videoId) },
             "NewPipe" to { fromNewPipe(videoId) },
             "InnerTube-ANDROID_VR" to { fromInnerTube(videoId, InnerClient.ANDROID_VR) },
             "InnerTube-ANDROID" to { fromInnerTube(videoId, InnerClient.ANDROID) },
@@ -129,24 +184,24 @@ class MusicExtractor(context: Context) {
         for ((name, method) in methods) {
             val candidates = try {
                 method()
-            } catch (e: Exception) {
-                Log.w(tag, "[$videoId] $name falhou: ${e.message}")
+            } catch (e: Throwable) {
+                note("$name FALHOU: ${e.javaClass.simpleName}: ${e.message}")
                 emptyList()
             }
-            Log.d(tag, "[$videoId] $name devolveu ${candidates.size} candidato(s)")
+            note("$name devolveu ${candidates.size} candidato(s)")
 
             for (c in candidates) {
                 if (validate(c)) {
-                    Log.i(tag, "[$videoId] OK via ${c.origin} (${c.mime})")
+                    note("OK via ${c.origin} (${c.mime})")
                     urlCache[videoId] = Pair(c, now)
                     return c
                 } else {
-                    Log.w(tag, "[$videoId] candidato de ${c.origin} recusado na validação")
+                    note("candidato de ${c.origin} recusado na validação")
                 }
             }
         }
 
-        Log.e(tag, "[$videoId] NENHUM método funcionou")
+        note("NENHUM método funcionou para $videoId")
         return null
     }
 
@@ -162,16 +217,67 @@ class MusicExtractor(context: Context) {
             src.headers.forEach { (k, v) -> rb.header(k, v) }
             http.newCall(rb.build()).execute().use { r ->
                 val ok = r.code == 200 || r.code == 206
-                if (!ok) Log.w(tag, "validate ${src.origin}: HTTP ${r.code}")
+                if (!ok) note("validate ${src.origin}: HTTP ${r.code}")
                 ok
             }
         } catch (e: Exception) {
-            Log.w(tag, "validate ${src.origin}: ${e.message}")
+            note("validate ${src.origin}: ${e.message}")
             false
         }
     }
 
-    // Método 1: NewPipeExtractor
+    // Método 1: yt-dlp embutido. Pede só o melhor áudio e imprime a URL direta (-g)
+    private fun fromYtDlp(videoId: String): List<StreamSource> {
+        if (!ytdlpReady) initYtDlp()
+        if (!ytdlpReady) {
+            note("yt-dlp indisponível: $ytdlpInitError")
+            return emptyList()
+        }
+
+        val result = ArrayList<StreamSource>()
+
+        // Duas tentativas com clientes diferentes: o YouTube bloqueia uns e libera outros
+        val attempts = listOf(
+            "android_vr" to "youtube:player_client=android_vr",
+            "padrão" to null
+        )
+
+        for ((label, extractorArgs) in attempts) {
+            try {
+                val request = YoutubeDLRequest("https://www.youtube.com/watch?v=$videoId")
+                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
+                request.addOption("--no-playlist")
+                request.addOption("--no-warnings")
+                request.addOption("--socket-timeout", "15")
+                if (extractorArgs != null) request.addOption("--extractor-args", extractorArgs)
+                // -g imprime só a URL direta do stream, sem baixar nada
+                request.addOption("-g")
+
+                val response = YoutubeDL.getInstance().execute(request)
+                val url = response.out.trim().lines().firstOrNull { it.startsWith("http") }
+
+                if (url != null) {
+                    note("yt-dlp ($label) devolveu URL")
+                    result.add(
+                        StreamSource(
+                            url = url,
+                            mime = if (url.contains("mime=audio%2Fwebm")) "audio/webm" else "audio/mp4",
+                            headers = mapOf("User-Agent" to userAgent),
+                            origin = "yt-dlp($label)"
+                        )
+                    )
+                    return result
+                } else {
+                    note("yt-dlp ($label) sem URL. stderr: ${response.err.take(300)}")
+                }
+            } catch (e: Throwable) {
+                note("yt-dlp ($label) erro: ${e.javaClass.simpleName}: ${e.message?.take(300)}")
+            }
+        }
+        return result
+    }
+
+    // Método 2: NewPipeExtractor
     private fun fromNewPipe(videoId: String): List<StreamSource> {
         val info = StreamInfo.getInfo(youtube, "https://www.youtube.com/watch?v=$videoId")
         return info.audioStreams
@@ -191,7 +297,7 @@ class MusicExtractor(context: Context) {
             }
     }
 
-    // Métodos 2-4: InnerTube direto com clientes que devolvem URL sem cifra
+    // Métodos 3-5: InnerTube direto com clientes que devolvem URL sem cifra
     private enum class InnerClient(
         val clientName: String,
         val clientVersion: String,
@@ -249,20 +355,20 @@ class MusicExtractor(context: Context) {
         val json = JSONObject(text)
         val status = json.optJSONObject("playabilityStatus")?.optString("status")
         if (status != null && status != "OK") {
-            Log.w(tag, "InnerTube ${client.clientName}: playabilityStatus=$status")
+            note("InnerTube ${client.clientName}: playabilityStatus=$status")
             return emptyList()
         }
 
         val formats = json.optJSONObject("streamingData")?.optJSONArray("adaptiveFormats")
             ?: return emptyList()
 
-        val list = ArrayList<Triple<String, String, Int>>() // url, mime, bitrate
+        val list = ArrayList<Triple<String, String, Int>>()
         for (i in 0 until formats.length()) {
             val f = formats.getJSONObject(i)
             val mime = f.optString("mimeType")
             if (!mime.startsWith("audio/")) continue
             val url = f.optString("url")
-            if (url.isEmpty()) continue // ignora formatos cifrados (signatureCipher)
+            if (url.isEmpty()) continue
             list.add(Triple(url, mime, f.optInt("bitrate")))
         }
 
@@ -281,7 +387,7 @@ class MusicExtractor(context: Context) {
             }
     }
 
-    // Método 5: Piped
+    // Método 6: Piped
     private fun fromPiped(videoId: String): List<StreamSource> {
         for (base in pipedInstances) {
             try {
@@ -309,13 +415,13 @@ class MusicExtractor(context: Context) {
                     )
                     .map { StreamSource(it.first, it.second, mapOf("User-Agent" to userAgent), "Piped($base)") }
             } catch (e: Exception) {
-                Log.w(tag, "Piped $base: ${e.message}")
+                note("Piped $base: ${e.message}")
             }
         }
         return emptyList()
     }
 
-    // Método 6: Invidious
+    // Método 7: Invidious
     private fun fromInvidious(videoId: String): List<StreamSource> {
         for (base in invidiousInstances) {
             try {
@@ -345,7 +451,7 @@ class MusicExtractor(context: Context) {
                     )
                     .map { StreamSource(it.first, it.second, mapOf("User-Agent" to userAgent), "Invidious($base)") }
             } catch (e: Exception) {
-                Log.w(tag, "Invidious $base: ${e.message}")
+                note("Invidious $base: ${e.message}")
             }
         }
         return emptyList()
