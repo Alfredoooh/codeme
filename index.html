@@ -3,46 +3,51 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
-<meta name="theme-color" content="#f4f4f6"/>
+<meta name="theme-color" content="#FFFFFF"/>
 <title>Vibely Music</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ionicons/7.2.2/ionicons.js"></script>
 <style>
   :root {
-    --bg: #f4f4f6;
-    --bg2: #ffffff;
-    --bg3: #e9e9ed;
-    --surface: #ffffff;
-    --surface2: #eeeef1;
-    --text: #17171a;
-    --text2: #6b6b73;
-    --accent: #7c4dff;
-    --accent-rgb: 124,77,255;
-    --border: rgba(20,20,30,0.08);
-    --hairline: rgba(20,20,30,0.10);
-    --shadow: 0 4px 16px rgba(20,20,30,0.08);
-    --shadow-strong: 0 12px 32px rgba(20,20,30,0.18);
+    --bg: #FFFFFF;
+    --surface: #F5F5F5;
+    --surface2: #ECECEE;
+    --floating: #FFFFFF;
+    --text: #1C1C1E;
+    --text2: #6E6E73;
+    --accent: #2596be;
+    --accent-rgb: 37,150,190;
+    --on-accent: #FFFFFF;
+    --accent-container: rgba(37,150,190,0.16);
+    --border: #ECECEE;
+    --outline: #DCDCE0;
+    --danger: #FF3B30;
+    --shadow: 0 1px 4px rgba(0,0,0,0.04);
+    --shadow-strong: 0 2px 10px rgba(0,0,0,0.06);
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --top-extra: 26px;
     --spring: cubic-bezier(0.32, 0.72, 0, 1);
     --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
     --big-bounce: cubic-bezier(0.22, 1.9, 0.36, 1);
-    --np-c1: #7c4dff;
-    --np-c2: #4d2fb3;
+    --np-c1: #2596be;
+    --np-c2: #16607a;
   }
   [data-theme="dark"] {
-    --bg: #1c1c1f;
-    --bg2: #26262a;
-    --bg3: #323237;
-    --surface: #26262a;
-    --surface2: #303035;
-    --text: #f2f2f5;
-    --text2: #9d9da6;
-    --accent: #b28cff;
-    --accent-rgb: 178,140,255;
-    --border: rgba(255,255,255,0.07);
-    --hairline: rgba(255,255,255,0.09);
-    --shadow: 0 4px 16px rgba(0,0,0,0.28);
-    --shadow-strong: 0 12px 32px rgba(0,0,0,0.45);
+    --bg: #0D0D0D;
+    --surface: #1F1F1F;
+    --surface2: #2A2A2C;
+    --floating: #1F1F1F;
+    --text: #F2F2F2;
+    --text2: #9B9B9F;
+    --accent: #2596be;
+    --accent-rgb: 37,150,190;
+    --on-accent: #FFFFFF;
+    --accent-container: rgba(37,150,190,0.22);
+    --border: #3A3A3C;
+    --outline: #48484A;
+    --danger: #FF453A;
+    --shadow: 0 1px 6px rgba(0,0,0,0.20);
+    --shadow-strong: 0 4px 16px rgba(0,0,0,0.30);
   }
 
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; }
@@ -61,12 +66,33 @@
 
   #app { position:relative; display:flex; flex-direction:column; height:100vh; background:var(--bg); }
 
-  /* ─── TOPO ─────────────────────────────── */
+  /* ─── LOADER NATIVO (estilo Material, arco circular) ─── */
+  .loader {
+    display:flex; align-items:center; justify-content:center; padding:44px 0;
+  }
+  .loader svg {
+    width:36px; height:36px;
+    animation:loaderRotate 1.4s linear infinite;
+    transform-origin:center;
+  }
+  .loader circle {
+    fill:none; stroke:var(--accent); stroke-width:3.4; stroke-linecap:round;
+    stroke-dasharray:1, 200; stroke-dashoffset:0;
+    animation:loaderDash 1.4s ease-in-out infinite;
+  }
+  @keyframes loaderRotate { 100% { transform:rotate(360deg); } }
+  @keyframes loaderDash {
+    0%   { stroke-dasharray:1, 200; stroke-dashoffset:0; }
+    50%  { stroke-dasharray:90, 200; stroke-dashoffset:-35px; }
+    100% { stroke-dasharray:90, 200; stroke-dashoffset:-124px; }
+  }
+
+  /* ─── TOPO (desce mais, fica abaixo da status bar) ─── */
   #topbar {
     position:relative; z-index:20;
-    padding:calc(var(--safe-top) + 6px) 20px 6px;
+    padding:calc(var(--safe-top) + var(--top-extra)) 20px 10px;
     display:flex; align-items:center; justify-content:space-between;
-    min-height:52px;
+    min-height:calc(var(--safe-top) + var(--top-extra) + 52px);
   }
   #topbar h1 {
     font-size:30px; font-weight:800; letter-spacing:-0.9px; line-height:1;
@@ -76,7 +102,6 @@
     width:40px; height:40px; border-radius:50%;
     background:var(--surface); color:var(--text);
     border:1px solid var(--border);
-    box-shadow:var(--shadow);
     display:flex; align-items:center; justify-content:center;
   }
   #menu-btn ion-icon { font-size:20px; }
@@ -96,9 +121,8 @@
   .section { padding:6px 20px 0; margin-bottom:26px; }
   .section-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
   .section-title { font-size:22px; font-weight:800; letter-spacing:-0.5px; }
-  .section-action { font-size:14px; font-weight:600; color:var(--accent); background:none; border:0; }
 
-  /* ─── CARDS EM ALTA (mais altos e retangulares) ─── */
+  /* ─── CARDS EM ALTA ─── */
   .scroll-row {
     display:flex; gap:14px; overflow-x:auto; padding:2px 20px 10px; margin:0 -20px;
     scrollbar-width:none; scroll-snap-type:x mandatory; scroll-padding-left:20px;
@@ -114,15 +138,15 @@
   }
   .card-lg .thumb-wrap {
     width:100%; height:190px; border-radius:16px; overflow:hidden; position:relative;
-    background:var(--bg3);
+    background:var(--surface2);
   }
   .card-lg img { width:100%; height:100%; object-fit:cover; display:block; }
   .card-lg .play-overlay {
     position:absolute; right:10px; bottom:10px; width:42px; height:42px; border-radius:50%;
-    background:var(--accent); box-shadow:0 4px 12px rgba(var(--accent-rgb),.45);
+    background:var(--accent);
     display:flex; align-items:center; justify-content:center;
   }
-  .card-lg .play-overlay ion-icon { font-size:20px; color:#fff; margin-left:2px; }
+  .card-lg .play-overlay ion-icon { font-size:20px; color:var(--on-accent); margin-left:2px; }
   .card-lg .card-title {
     font-size:15px; font-weight:700; margin-top:12px; padding:0 4px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.2px;
@@ -138,7 +162,7 @@
     100% { opacity:1; transform:none; }
   }
 
-  /* ─── LISTAS (cards retangulares, não pílulas) ─── */
+  /* ─── LISTAS (cards retangulares) ─── */
   #results-list, #related-list, #recent-list { padding:0 20px; display:flex; flex-direction:column; gap:10px; }
 
   .result-item {
@@ -147,45 +171,40 @@
     border-radius:20px; box-shadow:var(--shadow);
     animation:rowIn .55s var(--big-bounce) both;
   }
-  .result-item.playing { border-color:rgba(var(--accent-rgb),.6); }
+  .result-item.playing { border-color:var(--accent); }
   @keyframes rowIn {
     0%   { opacity:0; transform:translateY(20px) scale(.92); }
     60%  { opacity:1; }
     100% { opacity:1; transform:none; }
   }
 
-  .result-thumb { width:64px; height:64px; border-radius:14px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
+  .result-thumb { width:64px; height:64px; border-radius:14px; object-fit:cover; background:var(--surface2); flex-shrink:0; }
   .result-info { flex:1; min-width:0; }
   .result-title { font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.2px; }
   .result-sub { font-size:13px; color:var(--text2); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .result-dur { font-size:12px; color:var(--text2); margin-top:3px; opacity:.85; }
   .result-play-btn {
     width:44px; height:44px; border-radius:50%; border:0; flex-shrink:0;
-    background:var(--accent); color:#fff;
+    background:var(--accent); color:var(--on-accent);
     display:flex; align-items:center; justify-content:center;
-    box-shadow:0 4px 12px rgba(var(--accent-rgb),.35);
   }
   .result-play-btn ion-icon { font-size:20px; margin-left:2px; }
 
-  .spinner { display:flex; justify-content:center; padding:40px; }
-  .spinner ion-icon { font-size:30px; color:var(--accent); animation:spin .9s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .empty { text-align:center; color:var(--text2); padding:40px 24px; font-size:15px; line-height:1.4; }
-  .empty ion-icon { font-size:36px; display:block; margin:0 auto 10px; opacity:.45; }
+  /* estados vazios: totalmente em branco */
+  .empty { display:none; }
 
-  /* ─── PESQUISA ─────────────────────────── */
+  /* ─── PESQUISA ─── */
   #search-head { padding:4px 20px 14px; }
   #search-title { font-size:34px; font-weight:800; letter-spacing:-1px; margin-bottom:14px; }
   #search-wrap {
     position:relative; display:flex; align-items:center; gap:10px;
     height:54px; padding:0 8px 0 20px; border-radius:999px;
     background:var(--surface); border:1px solid var(--border);
-    box-shadow:var(--shadow);
     transition:box-shadow .4s var(--spring), border-color .3s ease, transform .45s var(--bounce);
   }
   #search-wrap:focus-within {
-    border-color:rgba(var(--accent-rgb),.65);
-    box-shadow:0 0 0 4px rgba(var(--accent-rgb),.16), var(--shadow);
+    border-color:var(--accent);
+    box-shadow:0 0 0 4px rgba(var(--accent-rgb),.18);
     transform:scale(1.02);
   }
   #search-wrap > ion-icon { font-size:21px; color:var(--text2); flex-shrink:0; transition:color .25s ease; }
@@ -197,7 +216,7 @@
   #search-input::placeholder { color:var(--text2); font-weight:500; }
   #search-clear {
     width:38px; height:38px; border-radius:50%; border:0; flex-shrink:0;
-    background:var(--bg3); color:var(--text2);
+    background:var(--surface2); color:var(--text2);
     display:flex; align-items:center; justify-content:center;
     opacity:0; transform:scale(.3); pointer-events:none;
     transition:opacity .25s ease, transform .45s var(--big-bounce);
@@ -209,24 +228,23 @@
   .chip {
     padding:10px 18px; border-radius:999px; border:1px solid var(--border);
     background:var(--surface); color:var(--text); font-size:14px; font-weight:600;
-    box-shadow:var(--shadow);
     animation:popIn .6s var(--big-bounce) both;
   }
 
-  /* ─── MINI PLAYER FLUTUANTE ────────────── */
+  /* ─── MINI PLAYER FLUTUANTE ─── */
   #mini-player {
     position:fixed; left:12px; right:12px; z-index:40;
     bottom:calc(var(--safe-bottom) + 84px);
     height:74px; border-radius:999px; padding:0 10px 0 9px;
     display:flex; align-items:center; gap:12px; overflow:hidden;
-    background:var(--surface); border:1px solid var(--border);
+    background:var(--floating); border:1px solid var(--border);
     box-shadow:var(--shadow-strong);
     transform:translateY(140px) scale(.85); opacity:0; pointer-events:none;
     transition:transform .75s var(--big-bounce), opacity .35s ease;
   }
   #mini-player.active { transform:none; opacity:1; pointer-events:auto; }
   #mini-tint {
-    position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.30;
+    position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.22;
     background:linear-gradient(115deg, var(--np-c1), var(--np-c2));
     transition:background .9s ease;
   }
@@ -266,10 +284,18 @@
     display:flex; align-items:center; justify-content:center;
   }
   .mini-btn ion-icon { font-size:24px; }
-  #mini-play { background:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(var(--accent-rgb),.4); }
+  #mini-play { background:var(--accent); color:var(--on-accent); }
   #mini-play ion-icon { font-size:22px; }
 
-  /* ─── BOTTOM BAR FLUTUANTE ─────────────── */
+  /* mini loader dentro do botão de play */
+  .btn-loader { width:22px; height:22px; animation:loaderRotate 1.4s linear infinite; }
+  .btn-loader circle {
+    fill:none; stroke:currentColor; stroke-width:4; stroke-linecap:round;
+    stroke-dasharray:1, 200; stroke-dashoffset:0;
+    animation:loaderDash 1.4s ease-in-out infinite;
+  }
+
+  /* ─── BOTTOM BAR FLUTUANTE ─── */
   #bottom-bar {
     position:fixed; left:50%; z-index:50;
     bottom:calc(var(--safe-bottom) + 14px);
@@ -277,14 +303,13 @@
     width:calc(100% - 40px); max-width:420px; height:62px;
     border-radius:999px; padding:6px;
     display:flex; align-items:center;
-    background:var(--surface); border:1px solid var(--border);
+    background:var(--floating); border:1px solid var(--border);
     box-shadow:var(--shadow-strong);
     transition:transform .6s var(--spring), opacity .35s ease;
   }
   #bb-pill {
     position:absolute; top:6px; bottom:6px; left:6px; border-radius:999px; z-index:0;
-    background:rgba(var(--accent-rgb),.16);
-    border:1px solid rgba(var(--accent-rgb),.28);
+    background:var(--accent-container);
     transition:transform .6s var(--big-bounce), width .6s var(--big-bounce);
     will-change:transform;
   }
@@ -299,14 +324,14 @@
   .bb-item.active ion-icon { transform:translateY(-1px) scale(1.15); }
   .bb-item:active ion-icon { transform:scale(.82); }
 
-  /* ─── POPUP DE OPÇÕES ──────────────────── */
+  /* ─── POPUP DE OPÇÕES ─── */
   #menu-overlay { position:fixed; inset:0; z-index:90; display:none; background:rgba(0,0,0,0); transition:background .3s ease; }
-  #menu-overlay.open { display:block; background:rgba(0,0,0,.28); }
+  #menu-overlay.open { display:block; background:rgba(0,0,0,.40); }
   #menu-pop {
-    position:absolute; top:calc(var(--safe-top) + 54px); right:14px; width:260px;
+    position:absolute; top:calc(var(--safe-top) + var(--top-extra) + 40px); right:14px; width:260px;
     padding:6px; border-radius:24px; transform-origin:top right;
-    background:var(--surface); border:1px solid var(--border);
-    box-shadow:0 20px 50px rgba(0,0,0,.30);
+    background:var(--floating); border:1px solid var(--border);
+    box-shadow:0 12px 32px rgba(0,0,0,.25);
     transform:scale(.2) translateY(-14px); opacity:0;
     transition:transform .65s var(--big-bounce), opacity .25s ease;
   }
@@ -317,19 +342,19 @@
     font-size:16px; font-weight:600; text-align:left;
     transition:background .2s ease, transform .25s var(--bounce);
   }
-  .menu-item:active { background:rgba(var(--accent-rgb),.14); transform:scale(.96); }
+  .menu-item:active { background:var(--accent-container); transform:scale(.96); }
   .menu-item ion-icon { font-size:21px; color:var(--accent); }
-  .menu-item.danger, .menu-item.danger ion-icon { color:#ff453a; }
-  .menu-sep { height:1px; background:var(--hairline); margin:4px 12px; }
+  .menu-item.danger, .menu-item.danger ion-icon { color:var(--danger); }
+  .menu-sep { height:1px; background:var(--border); margin:4px 12px; }
 
-  /* ─── MODAL DO PLAYER (tela cheia) ─────── */
+  /* ─── MODAL DO PLAYER (tela cheia) ─── */
   #now-playing {
     position:fixed; inset:0; z-index:80; overflow:hidden;
     background:var(--bg);
     transform:translateY(102%) scale(.94); border-radius:36px 36px 0 0;
     transition:transform .8s var(--spring), border-radius .8s var(--spring);
     display:flex; flex-direction:column;
-    padding:calc(var(--safe-top) + 10px) 26px calc(var(--safe-bottom) + 24px);
+    padding:calc(var(--safe-top) + var(--top-extra)) 26px calc(var(--safe-bottom) + 24px);
     touch-action:none;
   }
   #now-playing.open { transform:none; border-radius:0; }
@@ -383,9 +408,10 @@
   .np-ctrl ion-icon { font-size:38px; }
   #np-play {
     width:82px; height:82px; background:#fff; color:#111;
-    box-shadow:0 12px 34px rgba(0,0,0,.30);
+    box-shadow:0 8px 22px rgba(0,0,0,.28);
   }
   #np-play ion-icon { font-size:40px; }
+  #np-play .btn-loader { width:34px; height:34px; }
   .np-aux { width:48px; height:48px; }
   .np-aux ion-icon { font-size:24px; }
   .np-aux.on { color:#fff; background:rgba(255,255,255,.24); }
@@ -399,13 +425,13 @@
   #np-vol-track { position:relative; width:100%; height:6px; border-radius:99px; background:rgba(255,255,255,.28); }
   #np-vol-fill { position:absolute; left:0; top:0; bottom:0; width:100%; border-radius:99px; background:#fff; }
 
-  /* ─── TOAST ────────────────────────────── */
+  /* ─── TOAST ─── */
   #toast {
-    position:fixed; left:50%; z-index:120; top:calc(var(--safe-top) + 14px);
+    position:fixed; left:50%; z-index:120; top:calc(var(--safe-top) + var(--top-extra));
     transform:translate(-50%,-100px) scale(.8); opacity:0;
     padding:12px 22px; border-radius:999px; font-size:14px; font-weight:700; color:var(--text);
-    background:var(--surface); border:1px solid var(--border);
-    box-shadow:0 12px 34px rgba(0,0,0,.28);
+    background:var(--floating); border:1px solid var(--border);
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
     transition:transform .65s var(--big-bounce), opacity .3s ease; pointer-events:none; white-space:nowrap;
   }
   #toast.show { transform:translate(-50%,0) scale(1); opacity:1; }
@@ -424,7 +450,7 @@
     <div id="view-home" class="view active">
       <div class="section">
         <div class="section-head"><div class="section-title">Em alta</div></div>
-        <div class="scroll-row" id="trending-row"><div class="spinner"><ion-icon name="reload"></ion-icon></div></div>
+        <div class="scroll-row" id="trending-row"></div>
       </div>
       <div class="section">
         <div class="section-head">
@@ -450,7 +476,7 @@
     <div id="view-related" class="view">
       <div class="section">
         <div class="section-head"><div class="section-title">A seguir</div></div>
-        <div id="related-list" class="empty"><ion-icon name="musical-notes"></ion-icon>Reproduz uma música para ver sugestões</div>
+        <div id="related-list"></div>
       </div>
     </div>
 
@@ -533,6 +559,10 @@ const BASE = 'http://localhost:8080';
 const isApp = typeof Android !== 'undefined' && Android.isInsideApp();
 const $ = id => document.getElementById(id);
 
+// ─── LOADER NATIVO (arco Material em SVG) ────────────────
+const LOADER_HTML = '<div class="loader"><svg viewBox="25 25 50 50"><circle cx="50" cy="50" r="20"/></svg></div>';
+const BTN_LOADER_HTML = '<svg class="btn-loader" viewBox="25 25 50 50"><circle cx="50" cy="50" r="20"/></svg>';
+
 // ─── TEMA ────────────────────────────────────────────────
 let dark = false;
 
@@ -542,7 +572,7 @@ function applyTheme(d, notifyNative = true) {
   $('mi-theme').querySelector('ion-icon').setAttribute('name', d ? 'sunny' : 'moon');
   $('mi-theme-label').textContent = d ? 'Tema claro' : 'Tema escuro';
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', d ? '#1c1c1f' : '#f4f4f6');
+  if (meta) meta.setAttribute('content', d ? '#0D0D0D' : '#FFFFFF');
   localStorage.setItem('theme', d ? 'dark' : 'light');
   if (notifyNative && isApp && typeof Android.setStatusBarTheme === 'function') {
     Android.setStatusBarTheme(!d);
@@ -624,10 +654,7 @@ function addRecent(track) {
 function renderRecents() {
   const list = $('recent-list');
   const recents = getRecents();
-  if (!recents.length) {
-    list.innerHTML = '<div class="empty"><ion-icon name="time-outline"></ion-icon>Ainda sem músicas recentes</div>';
-    return;
-  }
+  if (!recents.length) { list.innerHTML = ''; return; }
   bindList(list, recents, () => recents);
 }
 
@@ -645,14 +672,12 @@ function bindList(container, data, getQueue) {
 // ─── TRENDING ────────────────────────────────────────────
 async function loadTrending() {
   const row = $('trending-row');
-  if (!isApp) {
-    row.innerHTML = '<div class="empty" style="padding:20px 0"><ion-icon name="alert-circle-outline"></ion-icon>Só disponível no app</div>';
-    return;
-  }
+  if (!isApp) { row.innerHTML = ''; return; }
+  row.innerHTML = LOADER_HTML;
   try {
     const res = await fetch(BASE + '/search?q=top+music+2025');
     const data = await res.json();
-    if (!data.length) { row.innerHTML = '<div class="empty">Sem resultados</div>'; return; }
+    if (!data.length) { row.innerHTML = ''; return; }
     row.innerHTML = data.slice(0, 12).map((t, i) => `
       <div class="card-lg tap" style="animation-delay:${i * 60}ms">
         <div class="thumb-wrap">
@@ -667,7 +692,7 @@ async function loadTrending() {
       el.addEventListener('click', () => { currentQueue = data; play(data[i], i); });
     });
   } catch (e) {
-    row.innerHTML = '<div class="empty">Erro ao carregar</div>';
+    row.innerHTML = '';
   }
 }
 
@@ -714,22 +739,19 @@ searchClear.addEventListener('click', () => {
 async function doSearch(q) {
   if (!q.trim()) { resultsList.innerHTML = ''; return; }
   suggestBox.style.display = 'none';
-  resultsList.innerHTML = '<div class="spinner"><ion-icon name="reload"></ion-icon></div>';
-  if (!isApp) {
-    resultsList.innerHTML = '<div class="empty"><ion-icon name="alert-circle-outline"></ion-icon>Servidor só disponível no app</div>';
-    return;
-  }
+  if (!isApp) { resultsList.innerHTML = ''; return; }
+  resultsList.innerHTML = LOADER_HTML;
   const seq = ++searchSeq;
   try {
     const res = await fetch(BASE + '/search?q=' + encodeURIComponent(q));
     const data = await res.json();
     if (seq !== searchSeq) return;
     searchQueue = data;
-    if (!data.length) { resultsList.innerHTML = '<div class="empty"><ion-icon name="search"></ion-icon>Sem resultados</div>'; return; }
+    if (!data.length) { resultsList.innerHTML = ''; return; }
     bindList(resultsList, data, () => searchQueue);
   } catch (e) {
     if (seq !== searchSeq) return;
-    resultsList.innerHTML = '<div class="empty">Erro na pesquisa</div>';
+    resultsList.innerHTML = '';
   }
 }
 
@@ -737,22 +759,20 @@ async function doSearch(q) {
 let relatedQueue = [];
 async function loadRelated(id) {
   const list = $('related-list');
-  list.classList.remove('empty');
-  list.innerHTML = '<div class="spinner"><ion-icon name="reload"></ion-icon></div>';
-  if (!isApp) { list.classList.add('empty'); list.innerHTML = 'Só no app'; return; }
+  if (!isApp) { list.innerHTML = ''; return; }
+  list.innerHTML = LOADER_HTML;
   try {
     const res = await fetch(BASE + '/related?id=' + id);
     const data = await res.json();
     relatedQueue = data;
-    if (!data.length) { list.classList.add('empty'); list.innerHTML = 'Sem sugestões'; return; }
+    if (!data.length) { list.innerHTML = ''; return; }
     bindList(list, data, () => relatedQueue);
   } catch (e) {
-    list.classList.add('empty');
-    list.innerHTML = 'Erro ao carregar';
+    list.innerHTML = '';
   }
 }
 
-// ─── COR DOMINANTE DO ÁLBUM ──────────────────────────────
+// ─── COR DOMINANTE DO ÁLBUM (só gradiente do player) ─────
 function hashColor(str) {
   let h = 0;
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
@@ -804,17 +824,15 @@ function shade([r, g, b], f) {
 }
 const rgb = a => `rgb(${a[0]},${a[1]},${a[2]})`;
 
+// A cor do álbum só afeta o gradiente do player; a cor primária do app fica sempre #2596be
 async function applyAlbumColor(track) {
   let base = track.thumbnail ? await extractDominant(track.thumbnail) : null;
   if (!base) base = hslToRgb(hashColor(track.id || track.title || 'x'), 62, 52);
   const lum = 0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2];
   if (lum < 70) base = base.map(v => Math.min(255, Math.round(v + (70 - lum) * 1.4)));
-  const c1 = base, c2 = shade(base, 0.62);
   const root = document.documentElement.style;
-  root.setProperty('--np-c1', rgb(c1));
-  root.setProperty('--np-c2', rgb(c2));
-  root.setProperty('--accent', rgb(dark ? base.map(v => Math.min(255, v + 40)) : base));
-  root.setProperty('--accent-rgb', (dark ? base.map(v => Math.min(255, v + 40)) : base).join(','));
+  root.setProperty('--np-c1', rgb(base));
+  root.setProperty('--np-c2', rgb(shade(base, 0.62)));
 }
 
 // ─── PLAYER ──────────────────────────────────────────────
@@ -834,8 +852,9 @@ const miniPlayer = $('mini-player');
 const nowPlaying = $('now-playing');
 
 function setPlayIcon(name) {
-  $('mini-play').innerHTML = `<ion-icon name="${name}"></ion-icon>`;
-  $('np-play').innerHTML = `<ion-icon name="${name}"></ion-icon>`;
+  const html = name === 'loading' ? BTN_LOADER_HTML : `<ion-icon name="${name}"></ion-icon>`;
+  $('mini-play').innerHTML = html;
+  $('np-play').innerHTML = html;
 }
 function setSpinning(on) {
   document.querySelectorAll('.spin').forEach(el => el.classList.toggle('running', on));
@@ -861,7 +880,7 @@ async function play(track, queueIndex) {
   $('mini-img').src = track.thumbnail || '';
   $('np-img').src = track.thumbnail || '';
   miniPlayer.classList.add('active');
-  setPlayIcon('hourglass-outline');
+  setPlayIcon('loading');
   $('mini-progress').style.width = '0%';
   $('np-bar-fill').style.width = '0%';
   $('np-cur').textContent = '0:00';
@@ -904,7 +923,7 @@ function retryOrFail(token) {
   }
   retryCount++;
   const resumeAt = audio.currentTime || 0;
-  setPlayIcon('hourglass-outline');
+  setPlayIcon('loading');
   setTimeout(async () => {
     if (token !== playToken) return;
     try {
@@ -979,7 +998,7 @@ audio.addEventListener('playing', () => { retryCount = 0; setPlayIcon('pause'); 
 audio.addEventListener('pause', () => {
   if (!audio.ended) { setPlayIcon('play'); setSpinning(false); }
 });
-audio.addEventListener('waiting', () => setPlayIcon('hourglass-outline'));
+audio.addEventListener('waiting', () => setPlayIcon('loading'));
 audio.addEventListener('stalled', () => {
   const token = playToken;
   setTimeout(() => {
