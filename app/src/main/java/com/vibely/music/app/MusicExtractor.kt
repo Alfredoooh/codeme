@@ -25,6 +25,11 @@ class MusicExtractor(context: Context) {
 
     private val youtube = ServiceList.YouTube
 
+    // Cache das URLs de áudio: cada seek/reload do player gera nova requisição,
+    // sem cache cada uma refaria a extração inteira
+    private val urlCache = HashMap<String, Pair<String, Long>>()
+    private val cacheTtl = 4L * 60 * 60 * 1000
+
     fun search(query: String): String {
         val handler = youtube.searchQHFactory.fromQuery(query)
         val info = SearchInfo.getInfo(youtube, handler)
@@ -48,11 +53,32 @@ class MusicExtractor(context: Context) {
         return arr.toString()
     }
 
+    @Synchronized
     fun getStreamUrl(videoId: String): String {
+        val now = System.currentTimeMillis()
+        urlCache[videoId]?.let { (cachedUrl, time) ->
+            if (now - time < cacheTtl) return cachedUrl
+        }
+
         val url = "https://www.youtube.com/watch?v=$videoId"
         val info = StreamInfo.getInfo(youtube, url)
-        val best = info.audioStreams.maxByOrNull { it.averageBitrate }
-        return best?.content ?: ""
+
+        // Prefere m4a/AAC porque o WebView toca sem problema;
+        // webm/opus pode falhar em Androids antigos
+        val best = info.audioStreams
+            .filter { it.format?.suffix == "m4a" }
+            .maxByOrNull { it.averageBitrate }
+            ?: info.audioStreams.maxByOrNull { it.averageBitrate }
+
+        val result = best?.content ?: ""
+        if (result.isNotEmpty()) urlCache[videoId] = Pair(result, now)
+        return result
+    }
+
+    // Descarta a URL em cache (usado quando o YouTube recusa/expira a URL)
+    @Synchronized
+    fun invalidate(videoId: String) {
+        urlCache.remove(videoId)
     }
 
     fun getRelated(videoId: String): String {

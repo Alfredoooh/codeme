@@ -1,5 +1,9 @@
 package com.vibely.music.app
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -7,10 +11,13 @@ import android.view.View
 import android.view.WindowInsetsController
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 
@@ -45,7 +52,9 @@ class MainActivity : AppCompatActivity() {
             builtInZoomControls = false
             displayZoomControls = false
             setSupportZoom(false)
-            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            cacheMode = WebSettings.LOAD_DEFAULT
+            // Permite tocar áudio sem exigir toque do usuário a cada faixa
+            mediaPlaybackRequiresUserGesture = false
         }
 
         webView.overScrollMode = View.OVER_SCROLL_NEVER
@@ -64,7 +73,7 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
 
-            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 loadFailed = false
                 reloadBtn.visibility = View.GONE
@@ -103,15 +112,35 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(appUrl)
         }
 
-        Thread {
-            LocalServer(this).start()
-        }.start()
+        requestNotificationPermission()
+        startPlaybackService()
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
             webView.loadUrl(appUrl)
         }
+    }
+
+    // Android 13+ exige permissão para mostrar a notificação do serviço
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        }
+    }
+
+    private fun startPlaybackService() {
+        val intent = Intent(this, PlaybackService::class.java)
+        ContextCompat.startForegroundService(this, intent)
     }
 
     fun setStatusBarIcons(dark: Boolean) {
@@ -138,6 +167,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // Mantém o WebView (e o áudio) rodando com o app em segundo plano
+    override fun onPause() {
+        super.onPause()
+        webView.onResume()
+        webView.resumeTimers()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
