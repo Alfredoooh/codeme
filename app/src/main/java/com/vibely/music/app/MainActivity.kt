@@ -7,8 +7,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.WindowInsetsController
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -55,6 +58,9 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             // Permite tocar áudio sem exigir toque do usuário a cada faixa
             mediaPlaybackRequiresUserGesture = false
+            // O site é HTTPS e o áudio vem de http://localhost:8080.
+            // Sem isto o WebView bloqueia a mídia e o áudio nunca toca.
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
 
         webView.overScrollMode = View.OVER_SCROLL_NEVER
@@ -63,6 +69,14 @@ class MainActivity : AppCompatActivity() {
         webView.setBackgroundColor(Color.TRANSPARENT)
 
         webView.addJavascriptInterface(AndroidBridge(this), "Android")
+
+        // Manda os console.log/erros do site para o Logcat (filtro: VibelyWeb)
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                Log.d("VibelyWeb", "${message.message()} (${message.sourceId()}:${message.lineNumber()})")
+                return true
+            }
+        }
 
         webView.webViewClient = object : WebViewClient() {
 

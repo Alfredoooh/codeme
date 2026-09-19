@@ -1,12 +1,15 @@
 package com.vibely.music.app
 
 import android.content.Context
+import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 class LocalServer(context: Context) : NanoHTTPD(8080) {
+
+    private val tag = "VibelyServer"
 
     private val extractor = MusicExtractor(context)
 
@@ -19,6 +22,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
         val params = session.parameters
+        Log.d(tag, "${session.method} $uri ${session.headers["range"] ?: ""}")
 
         if (session.method == Method.OPTIONS) {
             return withCors(newFixedLengthResponse(Response.Status.OK, "text/plain", ""))
@@ -46,6 +50,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
                 else -> withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found"))
             }
         } catch (e: Exception) {
+            Log.e(tag, "Erro em $uri", e)
             withCors(
                 newFixedLengthResponse(
                     Response.Status.INTERNAL_ERROR,
@@ -61,6 +66,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
 
         // URL expirada ou recusada: descarta o cache e tenta uma vez com URL nova
         if (upstream == null || (!upstream.isSuccessful && upstream.code != 206)) {
+            Log.w(tag, "Upstream falhou (${upstream?.code}), tentando URL nova")
             upstream?.close()
             extractor.invalidate(videoId)
             upstream = openUpstream(videoId, rangeHeader)
@@ -68,6 +74,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
 
         if (upstream == null || (!upstream.isSuccessful && upstream.code != 206)) {
             val code = upstream?.code ?: 0
+            Log.e(tag, "Upstream falhou de vez: $code")
             upstream?.close()
             return withCors(
                 newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Upstream $code")
@@ -82,6 +89,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         val mime = upstream.header("Content-Type") ?: "audio/mp4"
         val length = body.contentLength()
         val status = if (upstream.code == 206) Response.Status.PARTIAL_CONTENT else Response.Status.OK
+        Log.d(tag, "Upstream OK: ${upstream.code} $mime length=$length")
 
         val resp = if (length >= 0) {
             newFixedLengthResponse(status, mime, body.byteStream(), length)
@@ -95,8 +103,16 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
     }
 
     private fun openUpstream(videoId: String, rangeHeader: String?): okhttp3.Response? {
-        val streamUrl = extractor.getStreamUrl(videoId)
-        if (streamUrl.isEmpty()) return null
+        val streamUrl = try {
+            extractor.getStreamUrl(videoId)
+        } catch (e: Exception) {
+            Log.e(tag, "Falha ao extrair URL de $videoId", e)
+            ""
+        }
+        if (streamUrl.isEmpty()) {
+            Log.e(tag, "URL de stream vazia para $videoId")
+            return null
+        }
 
         val rb = Request.Builder()
             .url(streamUrl)
@@ -110,6 +126,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         return try {
             http.newCall(rb.build()).execute()
         } catch (e: Exception) {
+            Log.e(tag, "Erro de rede no upstream", e)
             null
         }
     }
