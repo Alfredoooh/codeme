@@ -62,34 +62,36 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
     }
 
     private fun proxyAudio(videoId: String, rangeHeader: String?): Response {
-        var upstream = openUpstream(videoId, rangeHeader)
+        var opened = openUpstream(videoId, rangeHeader)
 
-        // URL expirada ou recusada: descarta o cache e tenta uma vez com URL nova
-        if (upstream == null || (!upstream.isSuccessful && upstream.code != 206)) {
-            Log.w(tag, "Upstream falhou (${upstream?.code}), tentando URL nova")
-            upstream?.close()
+        // Falhou: descarta o cache, refaz a cascata inteira e tenta de novo
+        if (opened == null || !isGood(opened.second)) {
+            Log.w(tag, "Upstream falhou (${opened?.second?.code}), refazendo a cascata")
+            opened?.second?.close()
             extractor.invalidate(videoId)
-            upstream = openUpstream(videoId, rangeHeader)
+            opened = openUpstream(videoId, rangeHeader)
         }
 
-        if (upstream == null || (!upstream.isSuccessful && upstream.code != 206)) {
-            val code = upstream?.code ?: 0
+        if (opened == null || !isGood(opened.second)) {
+            val code = opened?.second?.code ?: 0
             Log.e(tag, "Upstream falhou de vez: $code")
-            upstream?.close()
+            opened?.second?.close()
             return withCors(
-                newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Upstream $code")
+                newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Nenhum método de extração funcionou ($code)")
             )
         }
 
+        val (source, upstream) = opened
         val body = upstream.body ?: run {
             upstream.close()
             return withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Sem corpo"))
         }
 
-        val mime = upstream.header("Content-Type") ?: "audio/mp4"
+        val mime = upstream.header("Content-Type")?.takeIf { it.startsWith("audio/") || it.startsWith("video/") }
+            ?: source.mime
         val length = body.contentLength()
         val status = if (upstream.code == 206) Response.Status.PARTIAL_CONTENT else Response.Status.OK
-        Log.d(tag, "Upstream OK: ${upstream.code} $mime length=$length")
+        Log.d(tag, "Upstream OK via ${source.origin}: ${upstream.code} $mime length=$length")
 
         val resp = if (length >= 0) {
             newFixedLengthResponse(status, mime, body.byteStream(), length)
@@ -102,29 +104,26 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         return withCors(resp)
     }
 
-    private fun openUpstream(videoId: String, rangeHeader: String?): okhttp3.Response? {
-        val streamUrl = try {
-            extractor.getStreamUrl(videoId)
-        } catch (e: Exception) {
-            Log.e(tag, "Falha ao extrair URL de $videoId", e)
-            ""
-        }
-        if (streamUrl.isEmpty()) {
-            Log.e(tag, "URL de stream vazia para $videoId")
-            return null
-        }
+    private fun isGood(r: okhttp3.Response) = r.isSuccessful || r.code == 206
 
-        val rb = Request.Builder()
-            .url(streamUrl)
-            .header(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            )
+    private fun openUpstream(
+        videoId: String,
+        rangeHeader: String?
+    ): Pair<MusicExtractor.StreamSource, okhttp3.Response>? {
+        val source = try {
+            extractor.getStreamSource(videoId)
+        } catch (e: Exception) {
+            Log.e(tag, "Falha ao extrair de $videoId", e)
+            null
+        } ?: return null
+
+        val rb = Request.Builder().url(source.url)
+        source.headers.forEach { (k, v) -> rb.header(k, v) }
         // Sem Range o YouTube pode limitar/cortar o stream; força "bytes=0-" quando o player não manda
         rb.header("Range", rangeHeader ?: "bytes=0-")
 
         return try {
-            http.newCall(rb.build()).execute()
+            Pair(source, http.newCall(rb.build()).execute())
         } catch (e: Exception) {
             Log.e(tag, "Erro de rede no upstream", e)
             null
