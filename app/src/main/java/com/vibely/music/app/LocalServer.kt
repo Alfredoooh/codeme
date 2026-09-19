@@ -20,8 +20,11 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         .build()
 
     init {
-        // O plano grátis do Render dorme; acordar já na abertura evita esperar na 1ª música
-        Thread { extractor.wakeRender() }.start()
+        // Prepara o yt-dlp em segundo plano para a primeira música não esperar a extração dos binários
+        Thread {
+            extractor.initYtDlp()
+            extractor.updateYtDlp()
+        }.start()
     }
 
     override fun serve(session: IHTTPSession): Response {
