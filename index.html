@@ -420,7 +420,13 @@ let currentTrack = null;
 let currentQueueIndex = 0;
 let currentQueue = [];
 let audio = new Audio();
-let isPlaying = false;
+audio.preload = 'auto';
+
+// Token de cada tentativa de tocar: se o usuário trocar de faixa no meio,
+// a tentativa antiga é ignorada em vez de pausar/atropelar a nova
+let playToken = 0;
+let retryCount = 0;
+const MAX_RETRIES = 3;
 
 const miniPlayer = document.getElementById('mini-player');
 const playerThumb = document.getElementById('player-thumb');
@@ -434,8 +440,15 @@ const progressBar = document.getElementById('progress-bar');
 const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
 
+function setButton(iconName) {
+  btnPlayPause.innerHTML = `<ion-icon name="${iconName}"></ion-icon>`;
+}
+
 async function play(track, queueIndex) {
   if (!isApp) { alert('Player só disponível no app Vibely'); return; }
+
+  const token = ++playToken;
+  retryCount = 0;
   currentTrack = track;
   if (queueIndex !== undefined) currentQueueIndex = queueIndex;
 
@@ -443,7 +456,7 @@ async function play(track, queueIndex) {
   playerArtist.textContent = track.artist || '—';
   playerThumb.src = track.thumbnail || '';
   miniPlayer.classList.add('active');
-  btnPlayPause.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon>';
+  setButton('hourglass-outline');
   progressFill.style.width = '0%';
   timeCurrent.textContent = '0:00';
   timeTotal.textContent = fmtTime(track.duration || 0);
@@ -451,55 +464,109 @@ async function play(track, queueIndex) {
   addRecent(track);
   renderRecents();
   loadRelated(track.id);
+  updateMediaSession(track);
 
+  await startStream(track, token);
+}
+
+async function startStream(track, token) {
   try {
-    const res = await fetch(BASE + '/stream?id=' + track.id);
+    const res = await fetch(BASE + '/stream?id=' + encodeURIComponent(track.id));
     const { streamUrl } = await res.json();
+    if (token !== playToken) return;
     if (!streamUrl) throw new Error('sem stream');
+
     audio.pause();
     audio.src = streamUrl;
     audio.load();
     await audio.play();
-    isPlaying = true;
-    btnPlayPause.innerHTML = '<ion-icon name="pause"></ion-icon>';
-  } catch(e) {
-    btnPlayPause.innerHTML = '<ion-icon name="play"></ion-icon>';
+  } catch (e) {
+    // play() rejeitado por troca de faixa não é erro de verdade
+    if (token !== playToken) return;
     console.error('Erro stream:', e);
+    retryOrFail(token);
   }
 }
 
-btnPlayPause.addEventListener('click', () => {
-  if (!currentTrack) return;
-  if (isPlaying) {
-    audio.pause(); isPlaying = false;
-    btnPlayPause.innerHTML = '<ion-icon name="play"></ion-icon>';
-  } else {
-    audio.play(); isPlaying = true;
-    btnPlayPause.innerHTML = '<ion-icon name="pause"></ion-icon>';
+// Se o stream cair, tenta de novo (mantendo a posição) em vez de ficar mudo
+function retryOrFail(token) {
+  if (token !== playToken || !currentTrack) return;
+  if (retryCount >= MAX_RETRIES) {
+    setButton('play');
+    return;
   }
-});
+  retryCount++;
+  const resumeAt = audio.currentTime || 0;
+  setButton('hourglass-outline');
+  setTimeout(async () => {
+    if (token !== playToken) return;
+    try {
+      const res = await fetch(BASE + '/stream?id=' + encodeURIComponent(currentTrack.id));
+      const { streamUrl } = await res.json();
+      if (token !== playToken || !streamUrl) return;
+      audio.src = streamUrl;
+      audio.load();
+      if (resumeAt > 0) {
+        audio.addEventListener('loadedmetadata', function once() {
+          audio.removeEventListener('loadedmetadata', once);
+          try { audio.currentTime = resumeAt; } catch (_) {}
+        });
+      }
+      await audio.play();
+    } catch (e) {
+      retryOrFail(token);
+    }
+  }, 800 * retryCount);
+}
 
-btnNext.addEventListener('click', () => {
+function nextTrack() {
   if (!currentQueue.length) return;
   currentQueueIndex = (currentQueueIndex + 1) % currentQueue.length;
   play(currentQueue[currentQueueIndex], currentQueueIndex);
-});
+}
 
-btnPrev.addEventListener('click', () => {
+function prevTrack() {
   if (audio.currentTime > 3) { audio.currentTime = 0; return; }
   if (!currentQueue.length) return;
   currentQueueIndex = (currentQueueIndex - 1 + currentQueue.length) % currentQueue.length;
   play(currentQueue[currentQueueIndex], currentQueueIndex);
-});
+}
 
-audio.addEventListener('ended', () => {
-  if (!currentQueue.length) return;
-  currentQueueIndex = (currentQueueIndex + 1) % currentQueue.length;
-  play(currentQueue[currentQueueIndex], currentQueueIndex);
+function togglePlay() {
+  if (!currentTrack) return;
+  if (audio.paused) {
+    audio.play().catch(() => retryOrFail(playToken));
+  } else {
+    audio.pause();
+  }
+}
+
+btnPlayPause.addEventListener('click', togglePlay);
+btnNext.addEventListener('click', nextTrack);
+btnPrev.addEventListener('click', prevTrack);
+
+// O botão agora reflete o estado REAL do <audio>, não só os cliques.
+// Se o áudio pausar sozinho, o botão mostra play em vez de ficar mentindo.
+audio.addEventListener('play', () => setButton('pause'));
+audio.addEventListener('playing', () => { retryCount = 0; setButton('pause'); });
+audio.addEventListener('pause', () => {
+  // Fim de faixa dispara 'pause' antes de 'ended'; não mostra play nesse caso
+  if (!audio.ended) setButton('play');
 });
+audio.addEventListener('waiting', () => setButton('hourglass-outline'));
+audio.addEventListener('stalled', () => {
+  // Buffer travado: dá um tempo e, se continuar parado, força nova tentativa
+  const token = playToken;
+  setTimeout(() => {
+    if (token === playToken && audio.readyState < 3 && !audio.paused) retryOrFail(token);
+  }, 6000);
+});
+audio.addEventListener('error', () => retryOrFail(playToken));
+
+audio.addEventListener('ended', nextTrack);
 
 audio.addEventListener('timeupdate', () => {
-  if (!audio.duration) return;
+  if (!audio.duration || !isFinite(audio.duration)) return;
   const pct = (audio.currentTime / audio.duration) * 100;
   progressFill.style.width = pct + '%';
   timeCurrent.textContent = fmtTime(Math.floor(audio.currentTime));
@@ -507,11 +574,31 @@ audio.addEventListener('timeupdate', () => {
 });
 
 progressBar.addEventListener('click', e => {
-  if (!audio.duration) return;
+  if (!audio.duration || !isFinite(audio.duration)) return;
   const rect = progressBar.getBoundingClientRect();
   const pct = (e.clientX - rect.left) / rect.width;
   audio.currentTime = pct * audio.duration;
 });
+
+// ─── NOTIFICAÇÃO DE MÍDIA (controles na tela de bloqueio) ─
+function updateMediaSession(track) {
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.title || '',
+    artist: track.artist || '',
+    artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : []
+  });
+}
+
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => audio.play());
+  navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+  navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
+  navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
+  navigator.mediaSession.setActionHandler('seekto', d => {
+    if (d.seekTime != null) audio.currentTime = d.seekTime;
+  });
+}
 
 // ─── UTILS ───────────────────────────────────────────────
 function fmtTime(s) {
